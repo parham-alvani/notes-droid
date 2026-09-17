@@ -12,7 +12,7 @@ It is **read-only by design**. Editing on a phone means merge conflicts, and the
 
 ## Status
 
-Early. The build and module skeleton are in place; the sync layer is the current milestone. See the milestones below for what exists and what does not.
+All seven milestones are implemented and the app builds, lints and tests clean. What has **not** happened yet is a run against a real vault on a real device — every claim below is backed by unit tests and a compiling build, not by field use. Treat the first sync as the thing to verify.
 
 ## Features
 
@@ -64,7 +64,8 @@ The app is told which repository to read at runtime — nothing about the vault 
 | Owner | GitHub user or organisation |
 | Repository | The repository holding the vault |
 | Branch | Defaults to the repository's default branch |
-| Access token | A GitHub fine-grained personal access token |
+| Sync method | `REST` with a token (default), or `git over SSH` with an on-device key |
+| Access token | A GitHub fine-grained personal access token (REST only) |
 | Images | `on demand` (default), `prefetch on Wi-Fi`, or `never` |
 
 ### Access token
@@ -87,19 +88,33 @@ Afterwards each refresh asks only whether `HEAD` moved, using an `ETag`. If it d
 
 Images are recorded but not downloaded, so the default install carries the markdown alone. They are fetched individually when a note that embeds one is opened, and cached after that.
 
-> [!note]
->
-> Git-over-SSH is planned as an alternative transport for people who would rather use a key than a token. It is a full clone, so it trades the small footprint for not having to rotate a token.
+### git over SSH
+
+The alternative transport, chosen in Settings. The key is generated on the device and its private half never leaves; the public line is added to the repository as a **read-only deploy key**, so nothing expires and nothing secret is ever copied between machines.
+
+The trade is size. Git cannot fetch a subset of paths — there is no sparse-checkout or partial clone in JGit — so this is the full history and every attachment, where the REST transport takes the markdown alone. The clone is shallow, which helps but does not close the gap. REST remains the default.
 
 ## Milestones
 
-- [ ] **M1** — sync: token storage, GitHub client, incremental planner, resumable first sync
-- [ ] **M2** — reader: markdown rendering, folder browser, note screen
-- [ ] **M3** — vault: wikilinks, embeds, callouts, backlinks, outline
-- [ ] **M4** — search: full-text index with ranking and excerpts
-- [ ] **M5** — hard content: images, diagrams, maths, right-to-left
-- [ ] **M6** — release: background sync, settings, onboarding
-- [ ] **M7** — git-over-SSH as an alternative transport
+- [x] **M1** — sync: token storage, GitHub client, incremental planner, resumable first sync
+- [x] **M2** — reader: markdown rendering, folder browser, note screen
+- [x] **M3** — vault: wikilinks, embeds, callouts, backlinks, outline
+- [x] **M4** — search: full-text index with ranking and excerpts
+- [x] **M5** — hard content: images, diagrams, maths, right-to-left
+- [x] **M6** — release: background sync, settings, permissions
+- [x] **M7** — git-over-SSH as an alternative transport
+
+Not done: an onboarding flow (setup lives in Settings instead), syntax highlighting inside code blocks, and any on-device verification.
+
+## Testing
+
+```bash
+just test    # JVM unit tests: parser, link resolver, sync planner, transport
+just lint    # ktlint + Android lint (warnings are errors)
+just ci      # everything CI runs
+```
+
+There are no instrumentation tests and CI runs no emulator. The markdown and sync modules are pure JVM by construction, which is the point of keeping them free of Android — their tests run in seconds.
 
 ## Related
 
