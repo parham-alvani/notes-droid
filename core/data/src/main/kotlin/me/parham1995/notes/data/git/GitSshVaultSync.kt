@@ -1,0 +1,302 @@
+package me.parham1995.notes.data.git
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import me.parham1995.notes.sync.LocalState
+import me.parham1995.notes.sync.Rename
+import me.parham1995.notes.sync.SyncBase
+import me.parham1995.notes.sync.SyncPlan
+import me.parham1995.notes.sync.VaultEntry
+import me.parham1995.notes.sync.VaultFilter
+import me.parham1995.notes.sync.VaultSink
+import me.parham1995.notes.sync.VaultSync
+import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.api.ResetCommand
+import org.eclipse.jgit.api.TransportConfigCallback
+import org.eclipse.jgit.diff.DiffEntry
+import org.eclipse.jgit.lib.Constants
+import org.eclipse.jgit.lib.ObjectId
+import org.eclipse.jgit.lib.Repository
+import org.eclipse.jgit.revwalk.RevWalk
+import org.eclipse.jgit.transport.SshSessionFactory
+import org.eclipse.jgit.transport.SshTransport
+import org.eclipse.jgit.transport.sshd.ServerKeyDatabase
+import org.eclipse.jgit.transport.sshd.SshdSessionFactoryBuilder
+import org.eclipse.jgit.treewalk.CanonicalTreeParser
+import org.eclipse.jgit.treewalk.TreeWalk
+import java.io.File
+import java.net.InetSocketAddress
+import java.security.PublicKey
+
+/**
+ * Syncs over git-over-SSH, as an alternative to the REST transport.
+ *
+ * What it buys is authentication with a key rather than a token: the private
+ * half is generated on the device and never moves, and the public half goes to
+ * GitHub as a read-only deploy key scoped to one repository. No expiry to
+ * chase.
+ *
+ * What it costs is size. Git has no way to fetch a subset of paths -- there is
+ * no sparse-checkout or partial clone in JGit -- so this is the full history
+ * and every attachment, where the REST transport takes the markdown alone. The
+ * clone is shallow to take the edge off, but it is still several times the
+ * footprint.
+ *
+ * The working tree *is* the vault directory, so a checkout leaves the files
+ * exactly where the reader already looks for them and nothing has to be copied.
+ */
+class GitSshVaultSync(
+    private val workTree: File,
+    private val remoteUrl: String,
+    private val branch: String,
+    private val keys: SshKeyStore,
+    configDir: File,
+    private val filter: VaultFilter = VaultFilter(),
+    private val shallowDepth: Int = DEFAULT_DEPTH,
+) : VaultSync {
+    init {
+        // Must happen before any other JGit call touches configuration.
+        AndroidGitEnvironment.install(configDir)
+        SshSessionFactory.setInstance(sessionFactory())
+    }
+
+    override suspend fun plan(base: SyncBase): SyncPlan =
+        withContext(Dispatchers.IO) {
+            val fresh = !File(workTree, Constants.DOT_GIT).isDirectory
+            if (fresh) cloneRepository()
+
+            openGit().use { git ->
+                if (!fresh) fetch(git)
+
+                val head =
+                    git.repository.resolve("$REMOTE_PREFIX$branch") ?: git.repository.resolve(Constants.HEAD)
+                        ?: return@withContext SyncPlan(base.commit, base.commit.orEmpty())
+                val headSha = head.name
+
+                if (base.commit == headSha && !fresh) {
+                    return@withContext SyncPlan(base.commit, headSha)
+                }
+
+                val baseCommit = base.commit
+                val entries =
+                    if (baseCommit == null) {
+                        filesAt(git.repository, head).map { it to ChangeKind.ADDED }
+                    } else {
+                        diff(git, baseCommit, headSha)
+                    }
+
+                buildPlan(base, headSha, entries)
+            }
+        }
+
+    override suspend fun apply(
+        plan: SyncPlan,
+        sink: VaultSink,
+        onProgress: (done: Int, total: Int) -> Unit,
+    ) = withContext(Dispatchers.IO) {
+        openGit().use { git ->
+            // Git writes the working tree itself, so "applying" is a checkout
+            // plus recording what is now on disk. Nothing is downloaded twice.
+            git
+                .reset()
+                .setMode(ResetCommand.ResetType.HARD)
+                .setRef("$REMOTE_PREFIX$branch")
+                .call()
+        }
+
+        val total = plan.adds.size + plan.modifies.size + plan.deletes.size + plan.renames.size
+        var done = 0
+        (plan.adds + plan.modifies).forEach { entry ->
+            // A checkout writes every path, images included -- there is no
+            // way to ask git for a subset -- so nothing is ever ABSENT here.
+            sink.record(entry, LocalState.DOWNLOADED)
+            onProgress(++done, total)
+        }
+        plan.renames.forEach { rename ->
+            sink.move(rename.from, rename.to)
+            onProgress(++done, total)
+        }
+        plan.deletes.forEach { path ->
+            sink.delete(path)
+            onProgress(++done, total)
+        }
+    }
+
+    /** The public line to register with the host as a read-only deploy key. */
+    suspend fun publicKey(): String = keys.publicKeyLine() ?: keys.generate()
+
+    private enum class ChangeKind { ADDED, MODIFIED, DELETED }
+
+    private fun buildPlan(
+        base: SyncBase,
+        headSha: String,
+        changes: List<Pair<VaultEntry, ChangeKind>>,
+    ): SyncPlan {
+        val adds = mutableListOf<VaultEntry>()
+        val modifies = mutableListOf<VaultEntry>()
+        val deletes = mutableListOf<String>()
+
+        changes.forEach { (entry, kind) ->
+            when (kind) {
+                ChangeKind.ADDED -> if (entry.path in base.manifest) modifies += entry else adds += entry
+                ChangeKind.MODIFIED -> modifies += entry
+                ChangeKind.DELETED -> if (entry.path in base.manifest) deletes += entry.path
+            }
+        }
+
+        // Same blob at a new path is a move on disk, not a re-read.
+        val removedBySha =
+            deletes
+                .mapNotNull { path -> base.manifest[path]?.let { it to path } }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { it.value.toMutableList() }
+        val renames = mutableListOf<Rename>()
+        val remainingAdds = mutableListOf<VaultEntry>()
+        adds.forEach { entry ->
+            val from = removedBySha[entry.sha]?.removeFirstOrNull()
+            if (from != null) renames += Rename(from, entry.path, entry.sha) else remainingAdds += entry
+        }
+
+        val renamedFrom = renames.mapTo(mutableSetOf()) { it.from }
+        return SyncPlan(
+            baseCommit = base.commit,
+            headCommit = headSha,
+            adds = remainingAdds,
+            modifies = modifies,
+            renames = renames,
+            deletes = deletes - renamedFrom,
+            unchanged = base.manifest.size - remainingAdds.size - modifies.size - deletes.size,
+        )
+    }
+
+    private fun cloneRepository() {
+        workTree.mkdirs()
+        Git
+            .cloneRepository()
+            .setURI(remoteUrl)
+            .setDirectory(workTree)
+            .setBranch(branch)
+            .setBranchesToClone(listOf("$REFS_HEADS$branch"))
+            // No sparse-checkout in JGit, so depth is the only lever there is.
+            .setDepth(shallowDepth)
+            .setTransportConfigCallback(sshConfig)
+            .call()
+            .close()
+    }
+
+    private fun fetch(git: Git) {
+        git
+            .fetch()
+            .setRemote(Constants.DEFAULT_REMOTE_NAME)
+            .setDepth(shallowDepth)
+            .setTransportConfigCallback(sshConfig)
+            .call()
+    }
+
+    private fun openGit(): Git = Git.open(workTree)
+
+    private fun filesAt(
+        repository: Repository,
+        commit: ObjectId,
+    ): List<VaultEntry> {
+        RevWalk(repository).use { walk ->
+            val tree = walk.parseCommit(commit).tree
+            TreeWalk(repository).use { treeWalk ->
+                treeWalk.addTree(tree)
+                treeWalk.isRecursive = true
+                val out = mutableListOf<VaultEntry>()
+                while (treeWalk.next()) {
+                    val path = treeWalk.pathString
+                    val kind = filter.kindOf(path) ?: continue
+                    out +=
+                        VaultEntry(
+                            path = path,
+                            sha = treeWalk.getObjectId(0).name,
+                            size = repository.newObjectReader().use { it.getObjectSize(treeWalk.getObjectId(0), -1) },
+                            kind = kind,
+                        )
+                }
+                return out
+            }
+        }
+    }
+
+    private fun diff(
+        git: Git,
+        fromSha: String,
+        toSha: String,
+    ): List<Pair<VaultEntry, ChangeKind>> {
+        val repository = git.repository
+        val from =
+            repository.resolve(fromSha) ?: return filesAt(repository, repository.resolve(toSha)!!)
+                .map { it to ChangeKind.ADDED }
+        val to = repository.resolve(toSha) ?: return emptyList()
+
+        repository.newObjectReader().use { reader ->
+            RevWalk(repository).use { walk ->
+                val oldTree = CanonicalTreeParser().apply { reset(reader, walk.parseCommit(from).tree) }
+                val newTree = CanonicalTreeParser().apply { reset(reader, walk.parseCommit(to).tree) }
+                return git
+                    .diff()
+                    .setOldTree(oldTree)
+                    .setNewTree(newTree)
+                    .call()
+                    .mapNotNull { entry -> entry.toChange(reader) }
+            }
+        }
+    }
+
+    private fun DiffEntry.toChange(reader: org.eclipse.jgit.lib.ObjectReader): Pair<VaultEntry, ChangeKind>? {
+        val deleted = changeType == DiffEntry.ChangeType.DELETE
+        val path = if (deleted) oldPath else newPath
+        val kind = filter.kindOf(path) ?: return null
+        val id = if (deleted) oldId.toObjectId() else newId.toObjectId()
+        val size = runCatching { reader.getObjectSize(id, -1) }.getOrDefault(0L)
+        val entry = VaultEntry(path, id.name, size, kind)
+        return entry to
+            when (changeType) {
+                DiffEntry.ChangeType.ADD, DiffEntry.ChangeType.COPY -> ChangeKind.ADDED
+                DiffEntry.ChangeType.DELETE -> ChangeKind.DELETED
+                else -> ChangeKind.MODIFIED
+            }
+    }
+
+    private val sshConfig =
+        TransportConfigCallback { transport ->
+            if (transport is SshTransport) transport.sshSessionFactory = SshSessionFactory.getInstance()
+        }
+
+    private fun sessionFactory() =
+        SshdSessionFactoryBuilder()
+            .setHomeDirectory(keys.directory.parentFile)
+            .setSshDirectory(keys.directory)
+            .setPreferredAuthentications("publickey")
+            .setDefaultIdentities { listOf(keys.identity.toPath()) }
+            // There is no interactive prompt on a phone and no known_hosts to
+            // seed, so the host key is accepted on first use and pinned by
+            // sshd's own store from then on.
+            .setServerKeyDatabase { _, _ -> AcceptFirstConnection() }
+            .build(null)
+
+    private class AcceptFirstConnection : ServerKeyDatabase {
+        override fun lookup(
+            connectAddress: String?,
+            remoteAddress: InetSocketAddress?,
+            config: ServerKeyDatabase.Configuration?,
+        ): List<PublicKey> = emptyList()
+
+        override fun accept(
+            connectAddress: String?,
+            remoteAddress: InetSocketAddress?,
+            serverKey: PublicKey?,
+            config: ServerKeyDatabase.Configuration?,
+            provider: org.eclipse.jgit.transport.CredentialsProvider?,
+        ): Boolean = true
+    }
+
+    private companion object {
+        const val DEFAULT_DEPTH = 1
+        const val REMOTE_PREFIX = "refs/remotes/origin/"
+        const val REFS_HEADS = "refs/heads/"
+    }
+}

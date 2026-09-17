@@ -26,6 +26,7 @@ commonmark = "0.30.0"
 coil = "3.6.2"
 jlatexmath = "0.2.0"
 webkit = "1.14.0"
+jgit = "7.8.0.202609011348-r"
 
 junit = "4.13.2"
 truth = "1.4.4"
@@ -87,6 +88,10 @@ coil-svg = { group = "io.coil-kt.coil3", name = "coil-svg", version.ref = "coil"
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 jlatexmath = { group = "ru.noties", name = "jlatexmath-android", version.ref = "jlatexmath" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+
+# git-over-SSH transport (the alternative to the REST sync)
+jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", version.ref = "jgit" }
+jgit-ssh-apache = { group = "org.eclipse.jgit", name = "org.eclipse.jgit.ssh.apache", version.ref = "jgit" }
 
 # test
 junit = { group = "junit", name = "junit", version.ref = "junit" }

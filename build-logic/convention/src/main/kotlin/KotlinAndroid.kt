@@ -35,6 +35,12 @@ internal fun Project.configureKotlinAndroid(commonExtension: CommonExtension) {
         disable += "AndroidGradlePluginVersion"
         // Sideloaded to one arm64 phone; ChromeOS x86_64 is out of scope.
         disable += "ChromeOsAbiSupport"
+        // Fires on a permissive trust manager inside JGit's own jar, which
+        // backs its `http.sslVerify=false` option. This app never uses
+        // JGit's HTTP transport and never sets that config -- the git
+        // transport is SSH only -- so the class is present but unreachable.
+        // The check cannot be scoped to our own sources, hence disabling it.
+        disable += "TrustAllX509TrustManager"
     }
 
     extensions.configure<JavaPluginExtension> {

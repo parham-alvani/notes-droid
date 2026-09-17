@@ -10,13 +10,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncRepository
 import me.parham1995.notes.data.SyncScheduler
+import me.parham1995.notes.data.SyncTransport
 import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.TokenStore
 import me.parham1995.notes.data.VaultFileStore
 import me.parham1995.notes.data.VaultSettings
+import me.parham1995.notes.data.git.SshKeyStore
 import javax.inject.Inject
 
 data class SyncUiState(
@@ -33,6 +36,8 @@ data class SyncUiState(
     /** Result of the last "test connection", for immediate feedback. */
     val connectionMessage: String? = null,
     val tokenRejected: Boolean = false,
+    val sshPublicKey: String? = null,
+    val generatingKey: Boolean = false,
 )
 
 @HiltViewModel
@@ -44,6 +49,7 @@ class SyncViewModel
         private val repository: SyncRepository,
         private val scheduler: SyncScheduler,
         private val files: VaultFileStore,
+        private val sshKeys: SshKeyStore,
     ) : ViewModel() {
         private val local = MutableStateFlow(LocalState())
 
@@ -51,6 +57,8 @@ class SyncViewModel
             val hasToken: Boolean = false,
             val diskBytes: Long = 0,
             val connectionMessage: String? = null,
+            val sshPublicKey: String? = null,
+            val generatingKey: Boolean = false,
         )
 
         val state: StateFlow<SyncUiState> =
@@ -75,6 +83,8 @@ class SyncViewModel
                     total = active?.progress?.getInt(SyncWorker.KEY_TOTAL, 0) ?: 0,
                     diskBytes = extra.diskBytes,
                     connectionMessage = extra.connectionMessage,
+                    sshPublicKey = extra.sshPublicKey,
+                    generatingKey = extra.generatingKey,
                     tokenRejected =
                         failed?.outputData?.getString(SyncWorker.KEY_ERROR) == SyncWorker.TOKEN_REJECTED,
                 )
@@ -117,6 +127,21 @@ class SyncViewModel
                 local.value = local.value.copy(connectionMessage = message)
             }
 
+        fun setTransport(transport: SyncTransport) = viewModelScope.launch { settingsStore.setTransport(transport) }
+
+        fun setImagePolicy(policy: ImagePolicy) = viewModelScope.launch { settingsStore.setImagePolicy(policy) }
+
+        /**
+         * The private half never leaves the device; only this public line does,
+         * and it goes to GitHub as a read-only deploy key.
+         */
+        fun generateSshKey() =
+            viewModelScope.launch {
+                local.value = local.value.copy(generatingKey = true)
+                val line = runCatching { sshKeys.generate() }.getOrElse { it.message ?: "key generation failed" }
+                local.value = local.value.copy(sshPublicKey = line, generatingKey = false)
+            }
+
         fun syncNow() =
             viewModelScope.launch {
                 scheduler.syncNow(settingsStore.current().syncOnWifiOnly)
@@ -135,6 +160,7 @@ class SyncViewModel
                     local.value.copy(
                         hasToken = tokenStore.hasToken(),
                         diskBytes = files.sizeOnDisk(),
+                        sshPublicKey = sshKeys.publicKeyLine(),
                     )
             }
 

@@ -33,6 +33,24 @@ enum class ImagePolicy {
     }
 }
 
+/**
+ * How the vault is fetched.
+ *
+ * REST is the default and the light one: markdown only, and a quiet refresh
+ * costs a single unbilled request. SSH authenticates with an on-device key
+ * instead of a token that expires, but git cannot fetch a subset of paths, so
+ * it is the full history and every attachment.
+ */
+enum class SyncTransport {
+    REST,
+    SSH,
+    ;
+
+    companion object {
+        fun parse(raw: String?): SyncTransport = entries.firstOrNull { it.name == raw } ?: REST
+    }
+}
+
 /** Which repository to read and how. Nothing about the vault is compiled in. */
 data class VaultSettings(
     val owner: String = "",
@@ -40,6 +58,7 @@ data class VaultSettings(
     /** Null means "whatever the repository's default branch is". */
     val branch: String? = null,
     val imagePolicy: ImagePolicy = ImagePolicy.ON_DEMAND,
+    val transport: SyncTransport = SyncTransport.REST,
     val syncOnWifiOnly: Boolean = false,
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
@@ -58,6 +77,7 @@ class SettingsStore
                     repo = preferences[REPO].orEmpty(),
                     branch = preferences[BRANCH]?.takeIf { it.isNotBlank() },
                     imagePolicy = ImagePolicy.parse(preferences[IMAGE_POLICY]),
+                    transport = SyncTransport.parse(preferences[TRANSPORT]),
                     syncOnWifiOnly = preferences[WIFI_ONLY] ?: false,
                 )
             }
@@ -80,6 +100,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[IMAGE_POLICY] = policy.name }
         }
 
+        suspend fun setTransport(transport: SyncTransport) {
+            context.settingsDataStore.edit { it[TRANSPORT] = transport.name }
+        }
+
         suspend fun setSyncOnWifiOnly(enabled: Boolean) {
             context.settingsDataStore.edit { it[WIFI_ONLY] = enabled }
         }
@@ -90,5 +114,6 @@ class SettingsStore
             val BRANCH = stringPreferencesKey("repo_branch")
             val IMAGE_POLICY = stringPreferencesKey("image_policy")
             val WIFI_ONLY = booleanPreferencesKey("sync_wifi_only")
+            val TRANSPORT = stringPreferencesKey("sync_transport")
         }
     }

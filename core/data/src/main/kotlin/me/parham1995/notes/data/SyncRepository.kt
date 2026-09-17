@@ -1,10 +1,14 @@
 package me.parham1995.notes.data
 
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.data.database.SyncStateEntity
+import me.parham1995.notes.data.git.GitSshVaultSync
+import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.GitHubClient
 import me.parham1995.notes.sync.GitHubConfig
@@ -14,7 +18,9 @@ import me.parham1995.notes.sync.RestVaultSync
 import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.SyncPlan
 import me.parham1995.notes.sync.VaultFilter
+import me.parham1995.notes.sync.VaultSync
 import okhttp3.OkHttpClient
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -43,6 +49,9 @@ class SyncRepository
         private val syncState: SyncStateDao,
         private val sinkProvider: Provider<RoomVaultSink>,
         private val indexer: VaultIndexer,
+        private val files: VaultFileStore,
+        private val sshKeys: SshKeyStore,
+        @param:ApplicationContext private val context: Context,
         private val http: OkHttpClient,
     ) {
         val status: Flow<SyncStatus> =
@@ -62,9 +71,7 @@ class SyncRepository
          */
         suspend fun sync(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): SyncPlan {
             val current = settings.current()
-            val client = client()
-            val branch = current.branch ?: client.repository().defaultBranch
-            val transport = RestVaultSync(client, branch, VaultFilter())
+            val transport = transportFor(current)
 
             val stored = syncState.get()
             val base =
@@ -139,6 +146,33 @@ class SyncRepository
             blobs.clear()
             syncState.clear()
         }
+
+        private companion object {
+            const val DEFAULT_BRANCH = "main"
+        }
+
+        /**
+         * The chosen transport, built fresh each sync so a settings change
+         * takes effect on the next refresh rather than on the next launch.
+         */
+        private suspend fun transportFor(current: VaultSettings): VaultSync =
+            when (current.transport) {
+                SyncTransport.REST -> {
+                    val client = client()
+                    RestVaultSync(client, current.branch ?: client.repository().defaultBranch, VaultFilter())
+                }
+
+                SyncTransport.SSH -> {
+                    if (!sshKeys.exists()) throw NotConfiguredException("no SSH key generated yet")
+                    GitSshVaultSync(
+                        workTree = files.root,
+                        remoteUrl = "git@github.com:${current.owner}/${current.repo}.git",
+                        branch = current.branch ?: DEFAULT_BRANCH,
+                        keys = sshKeys,
+                        configDir = File(context.filesDir, "git"),
+                    )
+                }
+            }
 
         private suspend fun client(): GitHubClient {
             val current = settings.current()

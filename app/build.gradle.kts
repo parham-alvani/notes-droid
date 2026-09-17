@@ -36,6 +36,15 @@ android {
                 "/META-INF/{AL2.0,LGPL2.1}",
                 "/META-INF/DEPENDENCIES",
                 "/META-INF/LICENSE*",
+                "/META-INF/INDEX.LIST",
+            )
+        // JGit ships OSGi bundle metadata in every artifact, so its two jars
+        // collide on it. None of it means anything on Android.
+        resources.pickFirsts +=
+            setOf(
+                "OSGI-INF/l10n/plugin.properties",
+                "about.html",
+                "plugin.properties",
             )
     }
 }

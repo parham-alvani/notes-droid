@@ -1,6 +1,7 @@
 package me.parham1995.notes.feature.sync
 
 import android.app.Activity
+import android.content.ClipData
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -18,6 +20,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,16 +30,23 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import me.parham1995.notes.data.ImagePolicy
+import me.parham1995.notes.data.SyncTransport
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -66,7 +76,13 @@ fun SyncScreen(viewModel: SyncViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             RepositoryCard(state, viewModel)
-            TokenCard(state, viewModel)
+            TransportCard(state, viewModel)
+            if (state.settings.transport == SyncTransport.REST) {
+                TokenCard(state, viewModel)
+            } else {
+                SshKeyCard(state, viewModel)
+            }
+            ImagesCard(state, viewModel)
             StatusCard(state, viewModel)
         }
     }
@@ -250,4 +266,117 @@ private fun formatBytes(bytes: Long): String {
         index++
     }
     return String.format(Locale.US, "%.1f %s", value, units[index])
+}
+
+@Composable
+private fun TransportCard(
+    state: SyncUiState,
+    viewModel: SyncViewModel,
+) {
+    SectionCard("Sync method") {
+        SyncTransport.entries.forEach { option ->
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .selectable(
+                            selected = state.settings.transport == option,
+                            onClick = { viewModel.setTransport(option) },
+                        ).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RadioButton(selected = state.settings.transport == option, onClick = null)
+                Column {
+                    Text(
+                        text = if (option == SyncTransport.REST) "REST (token)" else "git over SSH (key)",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text =
+                            if (option == SyncTransport.REST) {
+                                "Markdown only. A refresh with nothing new costs one request."
+                            } else {
+                                "No token to rotate, but git cannot fetch a subset -- full history and all attachments."
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SshKeyCard(
+    state: SyncUiState,
+    viewModel: SyncViewModel,
+) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+
+    SectionCard("SSH key") {
+        Text(
+            "Generated on this device. The private half never leaves it -- add the public line below to the " +
+                "repository as a read-only deploy key.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        state.sshPublicKey?.let { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = viewModel::generateSshKey, enabled = !state.generatingKey) {
+                Text(if (state.sshPublicKey == null) "Generate key" else "Regenerate")
+            }
+            state.sshPublicKey?.let { line ->
+                OutlinedButton(onClick = {
+                    scope.launch {
+                        clipboard.setClipEntry(ClipData.newPlainText("ssh public key", line).toClipEntry())
+                    }
+                }) {
+                    Text("Copy")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImagesCard(
+    state: SyncUiState,
+    viewModel: SyncViewModel,
+) {
+    SectionCard("Images") {
+        ImagePolicy.entries.forEach { option ->
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .selectable(
+                            selected = state.settings.imagePolicy == option,
+                            onClick = { viewModel.setImagePolicy(option) },
+                        ).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RadioButton(selected = state.settings.imagePolicy == option, onClick = null)
+                Text(
+                    text =
+                        when (option) {
+                            ImagePolicy.ON_DEMAND -> "On demand"
+                            ImagePolicy.PREFETCH_ON_WIFI -> "Prefetch on Wi-Fi"
+                            ImagePolicy.NEVER -> "Never"
+                        },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
 }

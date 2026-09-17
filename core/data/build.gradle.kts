@@ -33,6 +33,14 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     implementation(libs.kotlinx.coroutines.android)
+    // git-over-SSH. JGit drags in a lot that Android neither needs nor can
+    // dex, so the transitive surface is trimmed hard.
+    implementation(libs.jgit) {
+        exclude(group = "org.slf4j")
+    }
+    implementation(libs.jgit.ssh.apache) {
+        exclude(group = "org.slf4j")
+    }
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
