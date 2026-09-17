@@ -59,6 +59,11 @@ data class VaultSettings(
     val branch: String? = null,
     val imagePolicy: ImagePolicy = ImagePolicy.ON_DEMAND,
     val transport: SyncTransport = SyncTransport.REST,
+    /**
+     * Reach GitHub's SSH over 443 instead of 22. Plenty of mobile networks
+     * block 22 outright, where a clone simply hangs until it times out.
+     */
+    val sshOverPort443: Boolean = false,
     val syncOnWifiOnly: Boolean = false,
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
@@ -78,6 +83,7 @@ class SettingsStore
                     branch = preferences[BRANCH]?.takeIf { it.isNotBlank() },
                     imagePolicy = ImagePolicy.parse(preferences[IMAGE_POLICY]),
                     transport = SyncTransport.parse(preferences[TRANSPORT]),
+                    sshOverPort443 = preferences[SSH_443] ?: false,
                     syncOnWifiOnly = preferences[WIFI_ONLY] ?: false,
                 )
             }
@@ -104,6 +110,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[TRANSPORT] = transport.name }
         }
 
+        suspend fun setSshOverPort443(enabled: Boolean) {
+            context.settingsDataStore.edit { it[SSH_443] = enabled }
+        }
+
         suspend fun setSyncOnWifiOnly(enabled: Boolean) {
             context.settingsDataStore.edit { it[WIFI_ONLY] = enabled }
         }
@@ -115,5 +125,6 @@ class SettingsStore
             val IMAGE_POLICY = stringPreferencesKey("image_policy")
             val WIFI_ONLY = booleanPreferencesKey("sync_wifi_only")
             val TRANSPORT = stringPreferencesKey("sync_transport")
+            val SSH_443 = booleanPreferencesKey("ssh_over_443")
         }
     }

@@ -4,9 +4,11 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.data.database.SyncStateEntity
+import me.parham1995.notes.data.git.GitProgress
 import me.parham1995.notes.data.git.GitSshVaultSync
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.BlobKind
@@ -192,12 +194,28 @@ class SyncRepository
                     if (!sshKeys.exists()) throw NotConfiguredException("no SSH key generated yet")
                     GitSshVaultSync(
                         workTree = files.root,
-                        remoteUrl = "git@github.com:${current.owner}/${current.repo}.git",
+                        remoteUrl = sshUrl(current),
                         branch = current.branch ?: DEFAULT_BRANCH,
                         keys = sshKeys,
                         configDir = File(context.filesDir, "git"),
+                        log = log::info,
+                        progress =
+                            GitProgress(
+                                onStage = { stage -> runBlocking { log.info(stage) } },
+                            ),
                     )
                 }
+            }
+
+        /**
+         * GitHub answers SSH on 443 as well as 22, which is the way round a
+         * network that blocks 22 -- otherwise the clone just hangs.
+         */
+        private fun sshUrl(current: VaultSettings): String =
+            if (current.sshOverPort443) {
+                "ssh://git@ssh.github.com:443/" + current.owner + "/" + current.repo + ".git"
+            } else {
+                "git@github.com:" + current.owner + "/" + current.repo + ".git"
             }
 
         private suspend fun client(): GitHubClient {

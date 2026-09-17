@@ -53,6 +53,9 @@ class GitSshVaultSync(
     configDir: File,
     private val filter: VaultFilter = VaultFilter(),
     private val shallowDepth: Int = DEFAULT_DEPTH,
+    /** Narrates each stage, so a long clone is visibly working. */
+    private val log: suspend (String) -> Unit = {},
+    private val progress: GitProgress = GitProgress({}),
 ) : VaultSync {
     init {
         // Must happen before any other JGit call touches configuration.
@@ -63,10 +66,17 @@ class GitSshVaultSync(
     override suspend fun plan(base: SyncBase): SyncPlan =
         withContext(Dispatchers.IO) {
             val fresh = !File(workTree, Constants.DOT_GIT).isDirectory
-            if (fresh) cloneRepository()
+            if (fresh) {
+                log("cloning $remoteUrl (depth $shallowDepth) - this is the full history and all attachments")
+                cloneRepository()
+                log("clone finished")
+            }
 
             openGit().use { git ->
-                if (!fresh) fetch(git)
+                if (!fresh) {
+                    log("fetching $branch")
+                    fetch(git)
+                }
 
                 val head =
                     git.repository.resolve("$REMOTE_PREFIX$branch") ?: git.repository.resolve(Constants.HEAD)
@@ -180,6 +190,10 @@ class GitSshVaultSync(
             // No sparse-checkout in JGit, so depth is the only lever there is.
             .setDepth(shallowDepth)
             .setTransportConfigCallback(sshConfig)
+            .setProgressMonitor(progress)
+            // Without a timeout a blocked port never fails, it just hangs --
+            // and port 22 is blocked on plenty of mobile networks.
+            .setTimeout(TIMEOUT_SECONDS)
             .call()
             .close()
     }
@@ -190,6 +204,8 @@ class GitSshVaultSync(
             .setRemote(Constants.DEFAULT_REMOTE_NAME)
             .setDepth(shallowDepth)
             .setTransportConfigCallback(sshConfig)
+            .setProgressMonitor(progress)
+            .setTimeout(TIMEOUT_SECONDS)
             .call()
     }
 
@@ -199,24 +215,30 @@ class GitSshVaultSync(
         repository: Repository,
         commit: ObjectId,
     ): List<VaultEntry> {
-        RevWalk(repository).use { walk ->
-            val tree = walk.parseCommit(commit).tree
-            TreeWalk(repository).use { treeWalk ->
-                treeWalk.addTree(tree)
-                treeWalk.isRecursive = true
-                val out = mutableListOf<VaultEntry>()
-                while (treeWalk.next()) {
-                    val path = treeWalk.pathString
-                    val kind = filter.kindOf(path) ?: continue
-                    out +=
-                        VaultEntry(
-                            path = path,
-                            sha = treeWalk.getObjectId(0).name,
-                            size = repository.newObjectReader().use { it.getObjectSize(treeWalk.getObjectId(0), -1) },
-                            kind = kind,
-                        )
+        // One reader for the whole walk. Opening one per file -- as this did
+        // -- means thousands of readers over a real vault, which crawls badly
+        // enough to look like a hang.
+        repository.newObjectReader().use { reader ->
+            RevWalk(repository).use { walk ->
+                val tree = walk.parseCommit(commit).tree
+                TreeWalk(repository).use { treeWalk ->
+                    treeWalk.addTree(tree)
+                    treeWalk.isRecursive = true
+                    val out = mutableListOf<VaultEntry>()
+                    while (treeWalk.next()) {
+                        val path = treeWalk.pathString
+                        val kind = filter.kindOf(path) ?: continue
+                        val id = treeWalk.getObjectId(0)
+                        out +=
+                            VaultEntry(
+                                path = path,
+                                sha = id.name,
+                                size = runCatching { reader.getObjectSize(id, -1) }.getOrDefault(0L),
+                                kind = kind,
+                            )
+                    }
+                    return out
                 }
-                return out
             }
         }
     }
@@ -296,6 +318,7 @@ class GitSshVaultSync(
 
     private companion object {
         const val DEFAULT_DEPTH = 1
+        const val TIMEOUT_SECONDS = 60
         const val REMOTE_PREFIX = "refs/remotes/origin/"
         const val REFS_HEADS = "refs/heads/"
     }

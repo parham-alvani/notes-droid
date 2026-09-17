@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -343,6 +344,29 @@ private fun SshKeyCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .selectable(
+                        selected = state.settings.sshOverPort443,
+                        onClick = { viewModel.setSshOverPort443(!state.settings.sshOverPort443) },
+                    ).padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Switch(checked = state.settings.sshOverPort443, onCheckedChange = null)
+            Column {
+                Text("Connect over port 443", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Many mobile networks block port 22, where a clone simply hangs. " +
+                        "GitHub answers SSH on 443 too.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = viewModel::generateSshKey, enabled = !state.generatingKey) {
                 Text(if (state.sshPublicKey == null) "Generate key" else "Regenerate")

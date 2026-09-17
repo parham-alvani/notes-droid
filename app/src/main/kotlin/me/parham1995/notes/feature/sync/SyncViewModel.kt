@@ -140,6 +140,8 @@ class SyncViewModel
 
         fun setTransport(transport: SyncTransport) = viewModelScope.launch { settingsStore.setTransport(transport) }
 
+        fun setSshOverPort443(enabled: Boolean) = viewModelScope.launch { settingsStore.setSshOverPort443(enabled) }
+
         fun setImagePolicy(policy: ImagePolicy) = viewModelScope.launch { settingsStore.setImagePolicy(policy) }
 
         /**
