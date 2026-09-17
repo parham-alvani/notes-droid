@@ -35,8 +35,10 @@ release *args:
     ./gradlew assembleRelease {{ args }}
 
 # run the unit tests
+# `test` rather than `testDebugUnitTest`: the latter is an Android-variant
+# task and does not exist on the pure-JVM modules, so it skips most of them.
 test *args:
-    ./gradlew testDebugUnitTest {{ args }}
+    ./gradlew test {{ args }}
 
 [group('lint')]
 [private]
