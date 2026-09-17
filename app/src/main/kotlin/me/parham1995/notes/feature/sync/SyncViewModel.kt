@@ -31,7 +31,11 @@ data class SyncUiState(
     val headCommit: String? = null,
     val lastSyncAt: Long? = null,
     val lastError: String? = null,
+    /** Actually working right now. */
     val running: Boolean = false,
+    /** Queued or backing off between retries -- not the same as working. */
+    val queued: Boolean = false,
+    val attempt: Int = 0,
     val done: Int = 0,
     val total: Int = 0,
     val diskBytes: Long = 0,
@@ -72,7 +76,8 @@ class SyncViewModel
                 scheduler.observe(),
                 local,
             ) { settings, status, notes, work, extra ->
-                val active = work.firstOrNull { !it.state.isFinished }
+                val running = work.firstOrNull { it.state == WorkInfo.State.RUNNING }
+                val pending = work.firstOrNull { !it.state.isFinished }
                 val failed = work.firstOrNull { it.state == WorkInfo.State.FAILED }
                 SyncUiState(
                     settings = settings,
@@ -81,9 +86,11 @@ class SyncViewModel
                     headCommit = status.headCommit,
                     lastSyncAt = status.lastSyncAt,
                     lastError = failed?.outputData?.getString(SyncWorker.KEY_ERROR) ?: status.lastError,
-                    running = active != null,
-                    done = active?.progress?.getInt(SyncWorker.KEY_DONE, 0) ?: 0,
-                    total = active?.progress?.getInt(SyncWorker.KEY_TOTAL, 0) ?: 0,
+                    running = running != null,
+                    queued = pending != null && running == null,
+                    attempt = pending?.runAttemptCount ?: 0,
+                    done = running?.progress?.getInt(SyncWorker.KEY_DONE, 0) ?: 0,
+                    total = running?.progress?.getInt(SyncWorker.KEY_TOTAL, 0) ?: 0,
                     diskBytes = extra.diskBytes,
                     connectionMessage = extra.connectionMessage,
                     sshPublicKey = extra.sshPublicKey,
@@ -154,6 +161,8 @@ class SyncViewModel
                 val line = runCatching { sshKeys.generate() }.getOrElse { it.message ?: "key generation failed" }
                 local.value = local.value.copy(sshPublicKey = line, generatingKey = false)
             }
+
+        fun cancelSync() = viewModelScope.launch { scheduler.cancel() }
 
         fun syncNow() =
             viewModelScope.launch {

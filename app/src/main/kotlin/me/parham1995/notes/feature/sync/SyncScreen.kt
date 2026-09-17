@@ -199,6 +199,21 @@ private fun StatusCard(
             state.lastSyncAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "-",
         )
 
+        if (state.queued) {
+            // A job waiting to retry is not a job doing work, and showing a
+            // spinner for it is what made a stuck sync look like a hang.
+            Text(
+                text =
+                    if (state.attempt > 0) {
+                        "Waiting to retry (attempt ${state.attempt + 1})"
+                    } else {
+                        "Queued - waiting for the network"
+                    },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+
         if (state.running) {
             if (state.total > 0) {
                 LinearProgressIndicator(
@@ -233,7 +248,11 @@ private fun StatusCard(
             ) {
                 Text("Sync now")
             }
-            OutlinedButton(onClick = viewModel::refreshLocal) { Text("Refresh") }
+            if (state.running || state.queued) {
+                OutlinedButton(onClick = viewModel::cancelSync) { Text("Cancel") }
+            } else {
+                OutlinedButton(onClick = viewModel::refreshLocal) { Text("Refresh") }
+            }
             TextButton(onClick = viewModel::reset, enabled = !state.running) { Text("Reset vault") }
         }
     }

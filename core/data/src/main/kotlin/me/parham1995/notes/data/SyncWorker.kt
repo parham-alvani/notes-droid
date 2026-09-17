@@ -58,8 +58,20 @@ class SyncWorker
                 Result.failure(errorData(failure.message))
             } catch (failure: Exception) {
                 // Rate limits, connectivity, a half-finished download: all worth
-                // another go, and the manifest makes resuming free.
-                Result.retry()
+                // another go, and the manifest makes resuming free. But not
+                // forever -- an unbounded retry backs off into the distance
+                // while the UI still calls it "syncing", which is
+                // indistinguishable from a hang.
+                if (runAttemptCount >= MAX_ATTEMPTS) {
+                    Result.failure(
+                        errorData(
+                            "gave up after $MAX_ATTEMPTS attempts - " +
+                                "${failure::class.simpleName}: ${failure.message}",
+                        ),
+                    )
+                } else {
+                    Result.retry()
+                }
             }
         }
 
@@ -105,6 +117,9 @@ class SyncWorker
             const val KEY_MODIFIED = "modified"
             const val KEY_RENAMED = "renamed"
             const val KEY_DELETED = "deleted"
+
+            /** Past this the failure is reported instead of retried forever. */
+            const val MAX_ATTEMPTS = 4
 
             /** Distinguishes an expired or revoked token from any other failure. */
             const val TOKEN_REJECTED = "token-rejected"

@@ -24,19 +24,27 @@ class SyncScheduler
         private val workManager = WorkManager.getInstance(context)
 
         /**
-         * Pull-to-refresh and the periodic job enqueue the same unique work, so
-         * a manual refresh during a running sync joins it rather than starting
-         * a second one.
+         * Starts a sync now, replacing anything already queued.
+         *
+         * REPLACE rather than KEEP, and the difference is not subtle. WorkManager
+         * persists its queue across process death, so force-stopping mid-sync
+         * leaves work that is neither running nor finished. Under KEEP every
+         * later tap on Sync was silently dropped in favour of that corpse, and
+         * the UI -- which called anything unfinished "syncing" -- showed a
+         * spinner forever. An explicit tap means now.
          */
         fun syncNow(wifiOnly: Boolean = false) {
             workManager.enqueueUniqueWork(
                 SyncWorker.UNIQUE_WORK,
-                ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.REPLACE,
                 OneTimeWorkRequestBuilder<SyncWorker>()
                     .setConstraints(constraints(wifiOnly))
                     .build(),
             )
         }
+
+        /** Stops a sync that is running or waiting to retry. */
+        fun cancel() = workManager.cancelUniqueWork(SyncWorker.UNIQUE_WORK)
 
         /**
          * Best-effort background refresh. Custom ROMs are aggressive about

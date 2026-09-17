@@ -2,6 +2,7 @@ package me.parham1995.notes.feature.browser
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -74,7 +75,11 @@ class BrowserViewModel
 
             viewModelScope.launch {
                 scheduler.observe().collect { infos ->
-                    val active = infos.firstOrNull { !it.state.isFinished }
+                    // Only a RUNNING job counts as syncing. Treating anything
+                    // unfinished as active meant a job backing off between
+                    // retries -- or one orphaned by a force-stop -- showed a
+                    // spinner indefinitely.
+                    val active = infos.firstOrNull { it.state == WorkInfo.State.RUNNING }
                     _state.value =
                         _state.value.copy(
                             syncing = active != null,
