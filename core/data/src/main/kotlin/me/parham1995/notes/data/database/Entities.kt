@@ -125,3 +125,19 @@ data class HeadingEntity(
     /** Index into the flattened block list, so an outline tap can scroll. */
     val blockIndex: Int,
 )
+
+/**
+ * One line of the sync journal.
+ *
+ * A sync is long, runs in the background and fails in ways a single "last
+ * error" string cannot explain -- which step, how many files, how long, whether
+ * it fell back. Keeping the trail on the device means diagnosing it does not
+ * need a cable and logcat.
+ */
+@Entity(tableName = "sync_log")
+data class SyncLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val at: Long,
+    val level: String,
+    val message: String,
+)

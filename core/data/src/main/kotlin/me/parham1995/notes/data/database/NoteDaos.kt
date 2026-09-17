@@ -167,3 +167,19 @@ data class SearchRow(
     val path: String,
     val snippet: String,
 )
+
+@Dao
+interface SyncLogDao {
+    @Insert
+    suspend fun insert(entry: SyncLogEntity)
+
+    @Query("SELECT * FROM sync_log ORDER BY id DESC LIMIT :limit")
+    fun recent(limit: Int): Flow<List<SyncLogEntity>>
+
+    /** Keeps the journal bounded; it is a diagnostic, not an archive. */
+    @Query("DELETE FROM sync_log WHERE id NOT IN (SELECT id FROM sync_log ORDER BY id DESC LIMIT :keep)")
+    suspend fun trim(keep: Int)
+
+    @Query("DELETE FROM sync_log")
+    suspend fun clear()
+}

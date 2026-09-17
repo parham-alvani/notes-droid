@@ -14,8 +14,9 @@ import androidx.sqlite.execSQL
         NoteEntity::class,
         LinkEntity::class,
         HeadingEntity::class,
+        SyncLogEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -31,6 +32,8 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun headingDao(): HeadingDao
 
     abstract fun searchDao(): SearchDao
+
+    abstract fun syncLogDao(): SyncLogDao
 
     companion object {
         const val NAME = "notes.db"
@@ -102,6 +105,18 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL("CREATE INDEX IF NOT EXISTS `index_headings_noteId` ON `headings` (`noteId`)")
 
                     createSearchIndex(connection)
+                }
+            }
+
+        /** Adds the on-device sync journal. */
+        val MIGRATION_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `sync_log` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`at` INTEGER NOT NULL, `level` TEXT NOT NULL, `message` TEXT NOT NULL)",
+                    )
                 }
             }
     }

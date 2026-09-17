@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SyncTransport
 import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -84,6 +85,7 @@ fun SyncScreen(viewModel: SyncViewModel = hiltViewModel()) {
             }
             ImagesCard(state, viewModel)
             StatusCard(state, viewModel)
+            LogCard(viewModel)
         }
     }
 }
@@ -408,3 +410,61 @@ private fun SyncUiState.blocker(): String? =
             "SSH sync needs a key. Generate one above and add it to the repository as a read-only deploy key."
         else -> null
     }
+
+/**
+ * The sync journal.
+ *
+ * A sync runs in the background and takes minutes on its first run, so "it did
+ * not work" is otherwise all there is to go on. This shows what each step
+ * actually did, on the device, without a cable.
+ */
+@Composable
+private fun LogCard(viewModel: SyncViewModel) {
+    val entries by viewModel.log.collectAsStateWithLifecycle()
+    var expanded by remember { mutableStateOf(false) }
+    val time = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
+    SectionCard("Sync log") {
+        if (entries.isEmpty()) {
+            Text(
+                "Nothing recorded yet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@SectionCard
+        }
+
+        val shown = if (expanded) entries else entries.take(COLLAPSED_LOG_LINES)
+        shown.forEach { entry ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = time.format(Date(entry.at)),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                Text(
+                    text = entry.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color =
+                        when (entry.level) {
+                            "ERROR" -> MaterialTheme.colorScheme.error
+                            "WARN" -> MaterialTheme.colorScheme.tertiary
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                )
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (entries.size > COLLAPSED_LOG_LINES) {
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Show less" else "Show all ${entries.size}")
+                }
+            }
+            TextButton(onClick = viewModel::clearLog) { Text("Clear") }
+        }
+    }
+}
+
+private const val COLLAPSED_LOG_LINES = 12

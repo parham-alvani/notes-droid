@@ -24,14 +24,18 @@ class RestVaultSync(
     private val branch: String,
     private val filter: VaultFilter = VaultFilter(),
     private val concurrency: Int = DEFAULT_CONCURRENCY,
+    /** Narrates the decisions a sync makes, for the on-device journal. */
+    private val log: suspend (String) -> Unit = {},
 ) : VaultSync {
     override suspend fun plan(base: SyncBase): SyncPlan {
         val head =
             when (val response = client.head(branch, base.etagRef)) {
-                is Conditional.NotModified ->
+                is Conditional.NotModified -> {
                     // Nothing moved. An empty plan at the same commit says so
                     // without inventing an exception for the common case.
+                    log("head unchanged (304) - one request, not billed")
                     return SyncPlan(base.commit, base.commit.orEmpty(), etagRef = base.etagRef)
+                }
 
                 is Conditional.Fresh -> response
             }
@@ -43,6 +47,7 @@ class RestVaultSync(
         incrementalPlan(base, head.value)?.let { return it.copy(etagRef = head.etag) }
 
         val remote = client.tree(head.value, filter)
+        log("tree at ${head.value.take(7)}: ${remote.size} vault files")
         return SyncPlanner.fromTree(base, head.value, remote).copy(etagRef = head.etag)
     }
 
@@ -61,10 +66,15 @@ class RestVaultSync(
                 client.compare(from, head)
             } catch (_: GitHubException.NotFound) {
                 // The base commit is gone -- force-push or a rewritten branch.
+                log("base commit unreachable - falling back to a full tree listing")
                 return null
             }
         // At the cap the response is truncated and would silently miss files.
-        if (changes.size >= COMPARE_FILE_LIMIT) return null
+        if (changes.size >= COMPARE_FILE_LIMIT) {
+            log("compare hit its ${COMPARE_FILE_LIMIT}-file cap - falling back to a full tree listing")
+            return null
+        }
+        log("compare returned ${changes.size} changed paths")
 
         val sizes = base.manifest
         return SyncPlanner.fromCompare(base, head, changes, filter) { path ->

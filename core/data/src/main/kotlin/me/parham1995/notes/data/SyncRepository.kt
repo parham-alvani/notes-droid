@@ -49,6 +49,7 @@ class SyncRepository
         private val syncState: SyncStateDao,
         private val sinkProvider: Provider<RoomVaultSink>,
         private val indexer: VaultIndexer,
+        private val log: SyncLog,
         private val files: VaultFileStore,
         private val sshKeys: SshKeyStore,
         @param:ApplicationContext private val context: Context,
@@ -70,7 +71,9 @@ class SyncRepository
          * sizes, so byte-level progress would be a guess.
          */
         suspend fun sync(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): SyncPlan {
+            val startedAt = System.currentTimeMillis()
             val current = settings.current()
+            log.info("sync started - ${current.owner}/${current.repo} over ${current.transport}")
             val transport = transportFor(current)
 
             val stored = syncState.get()
@@ -81,13 +84,28 @@ class SyncRepository
                     etagRef = stored?.etagRef,
                 )
 
+            log.info("at ${stored?.headCommit?.take(7) ?: "nothing yet"}, ${base.manifest.size} files tracked")
+
             try {
                 val plan = transport.plan(base)
+                if (plan.isEmpty) {
+                    log.info("nothing changed upstream")
+                } else {
+                    log.info(
+                        "plan: +${plan.adds.size} ~${plan.modifies.size} " +
+                            "moved ${plan.renames.size} -${plan.deletes.size} " +
+                            "(${plan.unchanged} unchanged) -> ${plan.headCommit.take(7)}",
+                    )
+                }
                 if (!plan.isEmpty) {
                     val sink = sinkProvider.get()
                     sink.plannedEntries = plan.downloads.associateBy { it.path }
                     transport.apply(plan, sink, onProgress)
+                    log.info("downloaded ${plan.downloads.size} files")
+
+                    val indexStart = System.currentTimeMillis()
                     index(plan, firstSync = stored?.headCommit == null)
+                    log.info("indexed in ${(System.currentTimeMillis() - indexStart) / 1000}s")
                 }
                 syncState.upsert(
                     SyncStateEntity(
@@ -97,8 +115,10 @@ class SyncRepository
                         lastError = null,
                     ),
                 )
+                log.info("sync finished in ${(System.currentTimeMillis() - startedAt) / 1000}s")
                 return plan
             } catch (failure: Exception) {
+                log.error("${failure::class.simpleName}: ${failure.message}")
                 syncState.upsert(
                     SyncStateEntity(
                         headCommit = stored?.headCommit,
@@ -145,6 +165,7 @@ class SyncRepository
         suspend fun reset() {
             blobs.clear()
             syncState.clear()
+            log.warn("vault reset - the next sync starts from nothing")
         }
 
         private companion object {
@@ -159,7 +180,12 @@ class SyncRepository
             when (current.transport) {
                 SyncTransport.REST -> {
                     val client = client()
-                    RestVaultSync(client, current.branch ?: client.repository().defaultBranch, VaultFilter())
+                    RestVaultSync(
+                        client = client,
+                        branch = current.branch ?: client.repository().defaultBranch,
+                        filter = VaultFilter(),
+                        log = log::info,
+                    )
                 }
 
                 SyncTransport.SSH -> {

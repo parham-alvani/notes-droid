@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SettingsStore
+import me.parham1995.notes.data.SyncLog
 import me.parham1995.notes.data.SyncRepository
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncTransport
@@ -19,6 +20,7 @@ import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.TokenStore
 import me.parham1995.notes.data.VaultFileStore
 import me.parham1995.notes.data.VaultSettings
+import me.parham1995.notes.data.database.SyncLogEntity
 import me.parham1995.notes.data.git.SshKeyStore
 import javax.inject.Inject
 
@@ -50,6 +52,7 @@ class SyncViewModel
         private val scheduler: SyncScheduler,
         private val files: VaultFileStore,
         private val sshKeys: SshKeyStore,
+        private val syncLog: SyncLog,
     ) : ViewModel() {
         private val local = MutableStateFlow(LocalState())
 
@@ -126,6 +129,14 @@ class SyncViewModel
                         )
                 local.value = local.value.copy(connectionMessage = message)
             }
+
+        /** The on-device sync journal, newest first. */
+        val log: StateFlow<List<SyncLogEntity>> =
+            syncLog
+                .recent()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+        fun clearLog() = viewModelScope.launch { syncLog.clear() }
 
         fun setTransport(transport: SyncTransport) = viewModelScope.launch { settingsStore.setTransport(transport) }
 

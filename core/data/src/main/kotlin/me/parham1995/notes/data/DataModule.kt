@@ -17,6 +17,7 @@ import me.parham1995.notes.data.database.LinkDao
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.SearchDao
+import me.parham1995.notes.data.database.SyncLogDao
 import me.parham1995.notes.data.database.SyncStateDao
 import okhttp3.OkHttpClient
 import java.time.Duration
@@ -38,7 +39,7 @@ object DataModule {
             // everywhere and lets the queries be tested on the JVM.
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
-            .addMigrations(NotesDatabase.MIGRATION_1_2)
+            .addMigrations(NotesDatabase.MIGRATION_1_2, NotesDatabase.MIGRATION_2_3)
             .addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
@@ -66,6 +67,9 @@ object DataModule {
 
     @Provides
     fun searchDao(database: NotesDatabase): SearchDao = database.searchDao()
+
+    @Provides
+    fun syncLogDao(database: NotesDatabase): SyncLogDao = database.syncLogDao()
 
     @Provides
     @Singleton
