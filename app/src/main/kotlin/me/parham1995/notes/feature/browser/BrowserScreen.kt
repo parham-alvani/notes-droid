@@ -1,0 +1,240 @@
+package me.parham1995.notes.feature.browser
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.parham1995.notes.data.VaultItem
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BrowserScreen(
+    onOpenNote: (Long) -> Unit,
+    viewModel: BrowserViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Inside a folder, back walks up the tree before it leaves the screen.
+    BackHandler(enabled = state.path.isNotEmpty()) { viewModel.up() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = state.path.substringAfterLast('/').ifEmpty { "Vault" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                navigationIcon = {
+                    if (state.path.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.up() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Up")
+                        }
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        PullToRefreshBox(
+            isRefreshing = state.syncing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                state.syncProgress?.let { (done, total) ->
+                    LinearProgressIndicator(
+                        progress = { done.toFloat() / total },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        "Syncing $done of $total",
+                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+
+                // At depth seven a plain title says nothing about where you are.
+                if (state.crumbs.isNotEmpty()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Crumb("Vault") { viewModel.open("") }
+                        state.crumbs.forEach { (name, target) ->
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                modifier = Modifier.padding(horizontal = 2.dp),
+                            )
+                            Crumb(name) { viewModel.open(target) }
+                        }
+                    }
+                    HorizontalDivider()
+                }
+
+                LazyColumn(Modifier.fillMaxSize()) {
+                    if (state.path.isEmpty() && state.recent.isNotEmpty()) {
+                        item {
+                            SectionLabel("Recently opened")
+                        }
+                        items(state.recent, key = { "recent-${it.id}" }) { note ->
+                            RowItem(
+                                title = note.title.ifBlank { note.name },
+                                subtitle = note.path.substringBeforeLast('/', ""),
+                                isFolder = false,
+                                onClick = { onOpenNote(note.id) },
+                            )
+                        }
+                        item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+                        item { SectionLabel("All notes - ${state.noteCount}") }
+                    }
+
+                    items(state.items, key = { it.path }) { item ->
+                        VaultRow(item, viewModel, onOpenNote)
+                    }
+
+                    if (!state.loading && state.items.isEmpty()) {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    "Nothing here yet. Pull down to sync.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VaultRow(
+    item: VaultItem,
+    viewModel: BrowserViewModel,
+    onOpenNote: (Long) -> Unit,
+) {
+    RowItem(
+        title = item.name,
+        subtitle = null,
+        isFolder = item.isFolder,
+        // A folder with its own note opens that note; the chevron descends.
+        hasOwnNote = item.isFolder && item.noteId != null,
+        onClick = {
+            when {
+                !item.isFolder -> item.noteId?.let(onOpenNote)
+                item.noteId != null -> item.noteId?.let(onOpenNote)
+                else -> viewModel.open(item.path)
+            }
+        },
+        onDescend = { viewModel.open(item.path) },
+    )
+}
+
+@Composable
+private fun RowItem(
+    title: String,
+    subtitle: String?,
+    isFolder: Boolean,
+    hasOwnNote: Boolean = false,
+    onClick: () -> Unit,
+    onDescend: (() -> Unit)? = null,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(if (isFolder) "📁" else "📄", style = MaterialTheme.typography.bodyLarge)
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                // Underlined the way Obsidian marks a folder that has a note.
+                textDecoration = if (hasOwnNote) TextDecoration.Underline else null,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            subtitle?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (isFolder && onDescend != null) {
+            IconButton(onClick = onDescend) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Open folder")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+private fun Crumb(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.clickable(onClick = onClick),
+    )
+}

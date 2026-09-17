@@ -1,0 +1,137 @@
+package me.parham1995.notes.data
+
+import androidx.room.useReaderConnection
+import androidx.room.useWriterConnection
+import me.parham1995.notes.data.database.NotesDatabase
+import javax.inject.Inject
+import javax.inject.Singleton
+
+data class SearchHit(
+    val noteId: Long,
+    val title: String,
+    val path: String,
+    val snippet: String,
+)
+
+/**
+ * The FTS5 index, driven through raw SQL.
+ *
+ * Room cannot own this table -- it only annotates FTS3 and FTS4, and neither
+ * can rank results. `bm25()` with the title weighted an order of magnitude
+ * above the body is what makes a search for a note's own name return that note
+ * first, and `snippet()` gives the excerpt for free rather than hand-rolling
+ * one from the body text.
+ */
+@Singleton
+class SearchIndex
+    @Inject
+    constructor(
+        private val database: NotesDatabase,
+    ) {
+        suspend fun upsert(
+            noteId: Long,
+            title: String,
+            body: String,
+        ) {
+            database.useWriterConnection { connection ->
+                connection.usePrepared("DELETE FROM $FTS WHERE rowid = ?") { statement ->
+                    statement.bindLong(1, noteId)
+                    statement.step()
+                }
+                connection.usePrepared("INSERT INTO $FTS(rowid, title, body) VALUES (?, ?, ?)") { statement ->
+                    statement.bindLong(1, noteId)
+                    statement.bindText(2, title)
+                    statement.bindText(3, body)
+                    statement.step()
+                }
+            }
+        }
+
+        suspend fun delete(noteId: Long) {
+            database.useWriterConnection { connection ->
+                connection.usePrepared("DELETE FROM $FTS WHERE rowid = ?") { statement ->
+                    statement.bindLong(1, noteId)
+                    statement.step()
+                }
+            }
+        }
+
+        suspend fun clear() {
+            database.useWriterConnection { connection ->
+                connection.usePrepared("DELETE FROM $FTS") { it.step() }
+            }
+        }
+
+        /** Merges the index's b-trees after a batch, keeping queries fast. */
+        suspend fun optimize() {
+            database.useWriterConnection { connection ->
+                connection.usePrepared("INSERT INTO $FTS($FTS) VALUES ('optimize')") { it.step() }
+            }
+        }
+
+        suspend fun search(
+            raw: String,
+            limit: Int = DEFAULT_LIMIT,
+        ): List<SearchHit> {
+            val query = FtsQuery.sanitize(raw) ?: return emptyList()
+            return database.useReaderConnection { connection ->
+                connection.usePrepared(SEARCH_SQL) { statement ->
+                    statement.bindText(1, query)
+                    statement.bindLong(2, limit.toLong())
+                    buildList {
+                        while (statement.step()) {
+                            add(
+                                SearchHit(
+                                    noteId = statement.getLong(0),
+                                    title = statement.getText(1),
+                                    path = statement.getText(2),
+                                    snippet = statement.getText(3),
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        private companion object {
+            const val FTS = NotesDatabase.FTS_TABLE
+            const val DEFAULT_LIMIT = 100
+
+            val SEARCH_SQL =
+                """
+                SELECT notes.id, notes.title, notes.path,
+                       snippet(note_fts, 1, '[', ']', '...', 14)
+                FROM note_fts
+                JOIN notes ON notes.id = note_fts.rowid
+                WHERE note_fts MATCH ?
+                ORDER BY bm25(note_fts, 10.0, 1.0)
+                LIMIT ?
+                """.trimIndent()
+        }
+    }
+
+/**
+ * Turns what someone types into something FTS5 will accept.
+ *
+ * This is not cosmetic. FTS5 treats `"`, `*`, `:`, `-`, `^`, `(`, `)` and the
+ * bare words `AND`, `OR`, `NOT` and `NEAR` as query syntax, so passing raw
+ * input through throws on entirely ordinary searches -- a hyphenated word, or
+ * a stray quote mid-typing.
+ */
+object FtsQuery {
+    private val TOKEN = Regex("""[\p{L}\p{N}_]+""")
+
+    /** Null when there is nothing left worth searching for. */
+    fun sanitize(raw: String): String? {
+        val tokens = TOKEN.findAll(raw).map { it.value }.toList()
+        if (tokens.isEmpty()) return null
+        // Quote every token so nothing is read as an operator, and make the
+        // last one a prefix so results appear while still typing.
+        return tokens
+            .mapIndexed { index, token ->
+                val quoted = "\"" + token + "\""
+                if (index == tokens.lastIndex) "$quoted*" else quoted
+            }.joinToString(" ")
+    }
+}

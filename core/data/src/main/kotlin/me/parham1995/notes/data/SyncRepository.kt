@@ -5,8 +5,10 @@ import kotlinx.coroutines.flow.map
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.data.database.SyncStateEntity
+import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.GitHubClient
 import me.parham1995.notes.sync.GitHubConfig
+import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.RepositoryInfo
 import me.parham1995.notes.sync.RestVaultSync
 import me.parham1995.notes.sync.SyncBase
@@ -40,6 +42,7 @@ class SyncRepository
         private val blobs: BlobDao,
         private val syncState: SyncStateDao,
         private val sinkProvider: Provider<RoomVaultSink>,
+        private val indexer: VaultIndexer,
         private val http: OkHttpClient,
     ) {
         val status: Flow<SyncStatus> =
@@ -47,7 +50,7 @@ class SyncRepository
                 SyncStatus(it?.headCommit, it?.lastSyncAt, it?.lastError)
             }
 
-        val noteCount: Flow<Int> = blobs.countOfKind(me.parham1995.notes.sync.BlobKind.MARKDOWN)
+        val noteCount: Flow<Int> = blobs.countOfKind(BlobKind.MARKDOWN)
 
         /** Confirms the token and repository before anything is synced. */
         suspend fun testConnection(): RepositoryInfo = client().repository()
@@ -77,6 +80,7 @@ class SyncRepository
                     val sink = sinkProvider.get()
                     sink.plannedEntries = plan.downloads.associateBy { it.path }
                     transport.apply(plan, sink, onProgress)
+                    index(plan, firstSync = stored?.headCommit == null)
                 }
                 syncState.upsert(
                     SyncStateEntity(
@@ -98,6 +102,36 @@ class SyncRepository
                 )
                 throw failure
             }
+        }
+
+        /**
+         * Parses what just arrived into the searchable index.
+         *
+         * A first sync indexes everything in one pass; afterwards only the
+         * files that actually changed are reparsed, which keeps a routine
+         * refresh to well under a second.
+         */
+        private suspend fun index(
+            plan: SyncPlan,
+            firstSync: Boolean,
+        ) {
+            val markdown =
+                blobs
+                    .byKindAndState(BlobKind.MARKDOWN, LocalState.DOWNLOADED)
+                    .map { PathAndSha(it.path, it.sha) }
+
+            if (firstSync) {
+                indexer.indexAll(markdown)
+                return
+            }
+
+            val touched =
+                (plan.adds + plan.modifies).map { it.path }.toSet() +
+                    plan.renames.map { it.to }.toSet()
+            indexer.indexChanged(
+                changed = markdown.filter { it.path in touched },
+                removed = plan.deletes + plan.renames.map { it.from },
+            )
         }
 
         /** Forgets everything so the next sync starts from nothing. */

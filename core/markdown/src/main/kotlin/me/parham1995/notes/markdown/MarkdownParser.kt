@@ -55,4 +55,14 @@ object MarkdownParser {
             .build()
 
     fun parse(markdown: String): Node = instance.parse(markdown)
+
+    /**
+     * Markdown straight to the render model. This is the entry point callers
+     * outside this module use, so commonmark stays an implementation detail
+     * rather than leaking into every consumer's classpath.
+     */
+    fun parseNote(
+        markdown: String,
+        imageResolver: (String) -> String = { it },
+    ): ParsedNote = BlockFlattener(imageResolver).flatten(instance.parse(markdown))
 }

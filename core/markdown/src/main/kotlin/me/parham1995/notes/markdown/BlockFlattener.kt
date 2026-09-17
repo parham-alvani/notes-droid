@@ -62,7 +62,7 @@ class BlockFlattener(
                 headings.firstOrNull { it.level == 1 }?.text
                     ?: headings.firstOrNull()?.text.orEmpty(),
             headings = headings.toList(),
-            links = links.toList(),
+            links = LinkExtraction.from(blocks),
             plainText = plainText,
             frontMatter = frontMatter.toMap(),
             isRtl = TextDirection.containsRtl(plainText),

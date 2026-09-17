@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script src="mermaid.min.js"></script>
+    <style>body { margin: 0; }</style>
+  </head>
+  <body>
+    <script>
+      // securityLevel 'strict' disables click handlers and inline HTML in
+      // labels. Diagrams come from a synced repository, so they are treated as
+      // untrusted input.
+      function setup(theme) {
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: 'base',
+          themeVariables: JSON.parse(theme),
+          fontFamily: 'sans-serif'
+        });
+      }
+
+      async function render(id, code) {
+        try {
+          const { svg } = await mermaid.render('d' + id, code);
+          return JSON.stringify({ ok: true, svg: svg });
+        } catch (e) {
+          return JSON.stringify({ ok: false, error: String(e && e.message || e) });
+        }
+      }
+    </script>
+  </body>
+</html>
