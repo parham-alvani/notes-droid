@@ -33,18 +33,22 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     implementation(libs.kotlinx.coroutines.android)
-    // git-over-SSH. JGit drags in a lot that Android neither needs nor can
-    // dex, so the transitive surface is trimmed hard.
-    implementation(libs.jgit) {
-        exclude(group = "org.slf4j")
-    }
-    implementation(libs.jgit.ssh.apache) {
-        exclude(group = "org.slf4j")
-    }
+    // git-over-SSH.
+    implementation(libs.jgit)
+    implementation(libs.jgit.ssh.apache)
+    // sshd carries EdDSA support classes but no implementation; without this
+    // Ed25519 is reported unsupported and key generation silently produces a
+    // different algorithm.
+    implementation(libs.eddsa)
+    // Not optional: JGit and sshd call LoggerFactory on their own code paths,
+    // so excluding slf4j makes them throw NoClassDefFoundError at runtime.
+    implementation(libs.slf4j.api)
+    runtimeOnly(libs.slf4j.simple)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.kotlinx.coroutines.test)
+    testRuntimeOnly(libs.slf4j.simple)
 }

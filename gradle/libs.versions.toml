@@ -27,6 +27,8 @@ coil = "3.6.2"
 jlatexmath = "0.2.0"
 webkit = "1.14.0"
 jgit = "7.8.0.202609011348-r"
+eddsa = "0.3.0"
+slf4j = "2.0.19"
 
 junit = "4.13.2"
 truth = "1.4.4"
@@ -92,6 +94,14 @@ androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "w
 # git-over-SSH transport (the alternative to the REST sync)
 jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", version.ref = "jgit" }
 jgit-ssh-apache = { group = "org.eclipse.jgit", name = "org.eclipse.jgit.ssh.apache", version.ref = "jgit" }
+# sshd carries EdDSA support but no implementation; without this it is inert
+# and Ed25519 key generation silently falls through to another algorithm.
+eddsa = { group = "net.i2p.crypto", name = "eddsa", version.ref = "eddsa" }
+# JGit and sshd log through slf4j and call LoggerFactory on their own paths,
+# so the API is required, not optional -- without it they throw
+# NoClassDefFoundError. slf4j-simple writes to stderr, which lands in logcat.
+slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
+slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4j" }
 
 # test
 junit = { group = "junit", name = "junit", version.ref = "junit" }

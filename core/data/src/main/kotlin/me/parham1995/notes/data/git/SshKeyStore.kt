@@ -4,11 +4,9 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.apache.sshd.common.config.keys.KeyUtils
 import org.apache.sshd.common.config.keys.PublicKeyEntry
 import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter
 import java.io.File
-import java.security.KeyPair
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,7 +40,8 @@ class SshKeyStore
 
         suspend fun generate(comment: String = "notes-droid"): String =
             withContext(Dispatchers.IO) {
-                val pair = generatePair()
+                val generated = SshKeyGenerator.generate()
+                val pair = generated.pair
 
                 privateKey.outputStream().use { out ->
                     OpenSSHKeyPairResourceWriter.INSTANCE.writePrivateKey(pair, comment, null, out)
@@ -58,24 +57,8 @@ class SshKeyStore
                 line
             }
 
-        /**
-         * Ed25519 where the platform has it, RSA otherwise. Android only gained
-         * an Ed25519 provider in API 33, and this app supports older devices;
-         * GitHub accepts both, and sshd signs RSA with SHA-2 rather than the
-         * SHA-1 GitHub no longer allows.
-         */
-        private fun generatePair(): KeyPair =
-            runCatching { KeyUtils.generateKeyPair(KeyUtils.EC_ALGORITHM, ED25519_SIZE) }
-                .recoverCatching { KeyUtils.generateKeyPair(KeyUtils.RSA_ALGORITHM, RSA_SIZE) }
-                .getOrThrow()
-
         fun delete() {
             privateKey.delete()
             publicKey.delete()
-        }
-
-        private companion object {
-            const val ED25519_SIZE = 256
-            const val RSA_SIZE = 4096
         }
     }
