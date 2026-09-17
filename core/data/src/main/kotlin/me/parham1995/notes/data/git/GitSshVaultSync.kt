@@ -170,7 +170,7 @@ class GitSshVaultSync(
     }
 
     private fun cloneRepository() {
-        workTree.mkdirs()
+        prepareCloneTarget(workTree)
         Git
             .cloneRepository()
             .setURI(remoteUrl)
@@ -299,4 +299,22 @@ class GitSshVaultSync(
         const val REMOTE_PREFIX = "refs/remotes/origin/"
         const val REFS_HEADS = "refs/heads/"
     }
+}
+
+/**
+ * Makes [target] safe to clone into.
+ *
+ * JGit refuses a destination that exists and is not empty, and the vault
+ * directory is full of markdown the moment a REST sync has run -- so switching
+ * transports would otherwise fail on the first attempt with
+ * "already exists and is not an empty directory".
+ *
+ * Clearing it is safe because the directory is purely a cache of the remote:
+ * the clone rebuilds every file, and the manifest is keyed by git blob sha, so
+ * it survives the switch unchanged.
+ */
+internal fun prepareCloneTarget(target: File) {
+    if (File(target, org.eclipse.jgit.lib.Constants.DOT_GIT).isDirectory) return
+    target.listFiles()?.forEach { it.deleteRecursively() }
+    target.mkdirs()
 }
