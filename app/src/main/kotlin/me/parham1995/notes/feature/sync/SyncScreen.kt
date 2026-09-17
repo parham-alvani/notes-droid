@@ -213,10 +213,20 @@ private fun StatusCard(
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
 
+        // Say why syncing is not possible yet. A greyed-out button with no
+        // reason reads as a missing button.
+        state.blocker()?.let { reason ->
+            Text(
+                text = reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = viewModel::syncNow,
-                enabled = state.settings.isConfigured && state.hasToken && !state.running,
+                enabled = state.blocker() == null && !state.running,
             ) {
                 Text("Sync now")
             }
@@ -380,3 +390,21 @@ private fun ImagesCard(
         }
     }
 }
+
+/**
+ * Why a sync cannot start, or null when it can.
+ *
+ * The credential depends on the transport: REST needs a token, SSH needs a
+ * generated key. Requiring a token in both cases -- as this did -- leaves the
+ * button permanently disabled for anyone using SSH, which is exactly the setup
+ * where there is deliberately no token to have.
+ */
+private fun SyncUiState.blocker(): String? =
+    when {
+        !settings.isConfigured -> "Set the repository owner and name first."
+        settings.transport == SyncTransport.REST && !hasToken ->
+            "REST sync needs an access token. Add one above, or switch to git over SSH."
+        settings.transport == SyncTransport.SSH && sshPublicKey == null ->
+            "SSH sync needs a key. Generate one above and add it to the repository as a read-only deploy key."
+        else -> null
+    }

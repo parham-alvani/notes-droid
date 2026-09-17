@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -64,6 +65,13 @@ fun BrowserScreen(
                         IconButton(onClick = { viewModel.up() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Up")
                         }
+                    }
+                },
+                actions = {
+                    // Pull-to-refresh alone is invisible until you already know
+                    // it is there, which makes the app look like it cannot sync.
+                    IconButton(onClick = { viewModel.refresh() }, enabled = !state.syncing) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Sync now")
                     }
                 },
             )
