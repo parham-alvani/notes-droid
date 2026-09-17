@@ -1,27 +1,35 @@
 package me.parham1995.notes.data.git
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.eclipse.jgit.lib.ProgressMonitor
 
 /**
  * Reports what a clone or fetch is doing.
  *
- * Without this a clone is completely silent: JGit counts objects, downloads a
- * pack and checks out thousands of files while the app shows nothing at all,
- * which is indistinguishable from a hang. A full clone of a real vault moves
- * over a hundred megabytes, so "slow and silent" is the normal case, not the
- * exception.
+ * Without it a clone is completely silent: JGit counts objects, downloads a
+ * pack and checks out thousands of files while the app shows nothing, which is
+ * indistinguishable from a hang. A full clone moves well over a hundred
+ * megabytes, so "slow and silent" is the normal case.
  *
- * Updates are throttled -- JGit calls [update] per object, which for a vault of
- * a few thousand files would otherwise mean thousands of writes to the journal.
+ * Publishing through a [StateFlow] rather than calling back into a suspending
+ * logger is deliberate. JGit invokes these methods from its own transport
+ * thread, and the previous version bridged that with `runBlocking`, which
+ * blocks a dispatcher thread on every stage change while a database write is
+ * dispatched elsewhere -- a plausible way to deadlock the very operation it was
+ * meant to narrate. Assigning to a StateFlow cannot block.
  */
-class GitProgress(
-    private val onStage: (String) -> Unit,
-    private val onProgress: (task: String, done: Int, total: Int) -> Unit = { _, _, _ -> },
-) : ProgressMonitor {
+class GitProgress : ProgressMonitor {
+    private val _stage = MutableStateFlow("")
+
+    /** The current stage, e.g. `Receiving objects (1204/3301)`. */
+    val stage: StateFlow<String> = _stage.asStateFlow()
+
     private var task: String = ""
     private var total: Int = 0
     private var done: Int = 0
-    private var lastReported: Long = 0
+    private var lastUpdate: Long = 0
 
     override fun start(totalTasks: Int) = Unit
 
@@ -29,23 +37,24 @@ class GitProgress(
         title: String?,
         totalWork: Int,
     ) {
-        task = title.orEmpty()
+        task = title.orEmpty().trim()
         total = totalWork
         done = 0
-        lastReported = 0
-        onStage(if (totalWork > 0) "$task (0/$totalWork)" else task)
+        lastUpdate = 0
+        publish()
     }
 
     override fun update(completed: Int) {
         done += completed
         val now = System.currentTimeMillis()
-        if (now - lastReported < THROTTLE_MS) return
-        lastReported = now
-        onProgress(task, done, total)
+        // JGit calls this per object; a vault has thousands.
+        if (now - lastUpdate < THROTTLE_MS) return
+        lastUpdate = now
+        publish()
     }
 
     override fun endTask() {
-        if (task.isNotEmpty()) onStage("$task done" + if (total > 0) " ($done/$total)" else "")
+        if (task.isNotEmpty()) _stage.value = "$task - done"
         task = ""
     }
 
@@ -53,7 +62,12 @@ class GitProgress(
 
     override fun showDuration(enabled: Boolean) = Unit
 
+    private fun publish() {
+        if (task.isEmpty()) return
+        _stage.value = if (total > 0) "$task ($done/$total)" else task
+    }
+
     private companion object {
-        const val THROTTLE_MS = 1_000L
+        const val THROTTLE_MS = 1_500L
     }
 }

@@ -25,7 +25,9 @@ import org.eclipse.jgit.transport.sshd.SshdSessionFactoryBuilder
 import org.eclipse.jgit.treewalk.CanonicalTreeParser
 import org.eclipse.jgit.treewalk.TreeWalk
 import java.io.File
+import java.io.IOException
 import java.net.InetSocketAddress
+import java.net.Socket
 import java.security.PublicKey
 
 /**
@@ -55,7 +57,7 @@ class GitSshVaultSync(
     private val shallowDepth: Int = DEFAULT_DEPTH,
     /** Narrates each stage, so a long clone is visibly working. */
     private val log: suspend (String) -> Unit = {},
-    private val progress: GitProgress = GitProgress({}),
+    val progress: GitProgress = GitProgress(),
 ) : VaultSync {
     init {
         // Must happen before any other JGit call touches configuration.
@@ -65,6 +67,8 @@ class GitSshVaultSync(
 
     override suspend fun plan(base: SyncBase): SyncPlan =
         withContext(Dispatchers.IO) {
+            checkReachable()
+
             val fresh = !File(workTree, Constants.DOT_GIT).isDirectory
             if (fresh) {
                 log("cloning $remoteUrl (depth $shallowDepth) - this is the full history and all attachments")
@@ -209,6 +213,52 @@ class GitSshVaultSync(
             .call()
     }
 
+    /**
+     * Confirms the SSH endpoint answers before handing over to JGit.
+     *
+     * Without this, a blocked port 22 -- which plenty of mobile networks do --
+     * looks exactly like a slow clone: no output, no error, nothing to act on.
+     * A short connect attempt turns that into a sentence naming the port and
+     * the way round it.
+     */
+    private suspend fun checkReachable() {
+        val (host, port) = endpoint()
+        log("checking $host:$port")
+        val reachable =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    Socket().use { socket ->
+                        socket.connect(InetSocketAddress(host, port), REACH_TIMEOUT_MS)
+                        true
+                    }
+                }.getOrDefault(false)
+            }
+        if (reachable) {
+            log("$host:$port reachable")
+            return
+        }
+        val hint =
+            if (port == DEFAULT_SSH_PORT) {
+                " - many mobile networks block port 22; turn on \"Connect over port 443\" in settings"
+            } else {
+                ""
+            }
+        throw IOException("cannot reach $host:$port$hint")
+    }
+
+    /** Host and port from either the scp-style or the ssh:// form of the URL. */
+    private fun endpoint(): Pair<String, Int> {
+        if (remoteUrl.startsWith("ssh://")) {
+            val authority = remoteUrl.removePrefix("ssh://").substringBefore('/')
+            val hostPart = authority.substringAfter('@', authority)
+            val host = hostPart.substringBefore(':')
+            val port = hostPart.substringAfter(':', "").toIntOrNull() ?: DEFAULT_SSH_PORT
+            return host to port
+        }
+        val host = remoteUrl.substringAfter('@').substringBefore(':')
+        return host to DEFAULT_SSH_PORT
+    }
+
     private fun openGit(): Git = Git.open(workTree)
 
     private fun filesAt(
@@ -319,6 +369,8 @@ class GitSshVaultSync(
     private companion object {
         const val DEFAULT_DEPTH = 1
         const val TIMEOUT_SECONDS = 60
+        const val REACH_TIMEOUT_MS = 10_000
+        const val DEFAULT_SSH_PORT = 22
         const val REMOTE_PREFIX = "refs/remotes/origin/"
         const val REFS_HEADS = "refs/heads/"
     }

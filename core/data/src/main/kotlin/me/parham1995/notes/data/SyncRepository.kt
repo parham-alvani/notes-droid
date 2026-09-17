@@ -2,13 +2,14 @@ package me.parham1995.notes.data
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.data.database.SyncStateEntity
-import me.parham1995.notes.data.git.GitProgress
 import me.parham1995.notes.data.git.GitSshVaultSync
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.BlobKind
@@ -72,7 +73,15 @@ class SyncRepository
          * honest measure here -- the compare endpoint does not carry file
          * sizes, so byte-level progress would be a guess.
          */
-        suspend fun sync(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): SyncPlan {
+        suspend fun sync(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): SyncPlan =
+            coroutineScope {
+                syncInScope(this, onProgress)
+            }
+
+        private suspend fun syncInScope(
+            scope: CoroutineScope,
+            onProgress: (done: Int, total: Int) -> Unit,
+        ): SyncPlan {
             val startedAt = System.currentTimeMillis()
             val current = settings.current()
             log.info("sync started - ${current.owner}/${current.repo} over ${current.transport}")
@@ -87,6 +96,19 @@ class SyncRepository
                 )
 
             log.info("at ${stored?.headCommit?.take(7) ?: "nothing yet"}, ${base.manifest.size} files tracked")
+
+            val narrator =
+                (transport as? GitSshVaultSync)?.let { git ->
+                    scope.launch {
+                        var previous = ""
+                        git.progress.stage.collect { stage ->
+                            if (stage.isNotEmpty() && stage != previous) {
+                                previous = stage
+                                log.info(stage)
+                            }
+                        }
+                    }
+                }
 
             try {
                 val plan = transport.plan(base)
@@ -130,6 +152,8 @@ class SyncRepository
                     ),
                 )
                 throw failure
+            } finally {
+                narrator?.cancel()
             }
         }
 
@@ -199,10 +223,6 @@ class SyncRepository
                         keys = sshKeys,
                         configDir = File(context.filesDir, "git"),
                         log = log::info,
-                        progress =
-                            GitProgress(
-                                onStage = { stage -> runBlocking { log.info(stage) } },
-                            ),
                     )
                 }
             }
