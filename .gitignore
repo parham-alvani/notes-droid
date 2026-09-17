@@ -1,0 +1,21 @@
+# Android / Gradle
+*.iml
+.gradle/
+build/
+local.properties
+.cxx/
+release/
+
+# Signing material never belongs in this repository.
+*.jks
+*.keystore
+keystore.properties
+
+# IDE
+.idea/
+.kotlin/
+captures/
+*.hprof
+
+# macOS
+.DS_Store

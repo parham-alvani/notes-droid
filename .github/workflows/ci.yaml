@@ -1,0 +1,49 @@
+---
+name: Continuous Integration
+on: push
+
+jobs:
+  lint:
+    name: Format and linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew ktlintCheck lintDebug
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew testDebugUnitTest
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/"
+
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v5
+        with:
+          name: notes-droid-debug
+          path: app/build/outputs/apk/debug/*.apk
