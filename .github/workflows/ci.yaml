@@ -12,7 +12,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew ktlintCheck lintDebug
 
   test:
@@ -24,7 +24,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew test
       - uses: actions/upload-artifact@v5
         if: failure()
@@ -41,7 +41,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew assembleDebug
       - uses: actions/upload-artifact@v5
         with:
