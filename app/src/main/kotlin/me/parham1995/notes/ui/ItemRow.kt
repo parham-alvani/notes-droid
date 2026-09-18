@@ -58,7 +58,7 @@ fun ItemRow(
             AutoDirection(title) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge.inScript(),
                     textDecoration = if (underline) TextDecoration.Underline else null,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

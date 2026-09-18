@@ -1,11 +1,14 @@
 package me.parham1995.notes.ui
 
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.LayoutDirection
 import me.parham1995.notes.markdown.MdDirection
 import me.parham1995.notes.markdown.TextDirection
+import me.parham1995.notes.ui.theme.Vazirmatn
 
 /**
  * Lays text out the way it reads.
@@ -27,10 +30,27 @@ fun AutoDirection(
     text: String,
     content: @Composable () -> Unit,
 ) {
-    val direction =
-        when (TextDirection.of(text)) {
-            MdDirection.RTL -> LayoutDirection.Rtl
-            MdDirection.LTR -> LayoutDirection.Ltr
-        }
-    CompositionLocalProvider(LocalLayoutDirection provides direction, content = content)
+    val rtl = TextDirection.of(text) == MdDirection.RTL
+    CompositionLocalProvider(
+        LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+        // Carried on the text style rather than applied here, because most
+        // callers pass a style of their own and a style parameter replaces the
+        // local rather than merging with it. `inScript()` is how they pick it
+        // back up.
+        LocalTextStyle provides
+            LocalTextStyle.current.copy(
+                fontFamily = if (rtl) Vazirmatn else null,
+            ),
+        content = content,
+    )
 }
+
+/**
+ * This style, in whatever font the surrounding script asked for.
+ *
+ * `Text(style = ...)` replaces `LocalTextStyle` outright, so a caller that
+ * names a typography role -- which is nearly all of them -- would otherwise
+ * discard the font [AutoDirection] just chose.
+ */
+@Composable
+fun TextStyle.inScript(): TextStyle = copy(fontFamily = LocalTextStyle.current.fontFamily)

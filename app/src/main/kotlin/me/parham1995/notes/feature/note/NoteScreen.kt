@@ -59,6 +59,7 @@ import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.icon.VaultIcon
+import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
 import me.parham1995.notes.ui.render.InlineActions
@@ -428,7 +429,7 @@ private fun ReferenceRow(
         AutoDirection(context.text) {
             Text(
                 text = context,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.inScript(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

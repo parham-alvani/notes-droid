@@ -556,6 +556,9 @@ private fun AboutCard() {
         LabelledValue("Commit", BuildConfig.GIT_SHA)
         LabelledValue("Author", BuildConfig.AUTHOR)
         LabelledValue("License", BuildConfig.LICENSE)
+        // The bundled font is separately licensed and the OFL asks that it be
+        // acknowledged wherever the software is.
+        LabelledValue("Persian type", "Vazirmatn, OFL 1.1")
         TextButton(
             onClick = {
                 runCatching {

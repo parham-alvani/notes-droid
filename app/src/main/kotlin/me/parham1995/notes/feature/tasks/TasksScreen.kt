@@ -32,6 +32,7 @@ import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.icon.LucideGlyph
+import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.theme.Naz
 
 /**
@@ -148,7 +149,7 @@ private fun TaskRowView(
             AutoDirection(row.text) {
                 Text(
                     text = row.text,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.inScript(),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )

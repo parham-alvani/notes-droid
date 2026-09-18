@@ -1,0 +1,5 @@
+Persian is set in Vazirmatn.
+
+Android already had every glyph; this is about how the script is drawn. Persian prose, Persian tasks and Persian excerpts are now set in Vazirmatn rather than the platform's calligraphic Naskh.
+
+Applied per block, like the direction: a Persian paragraph is set in it, the Latin paragraph after it is not, and the code block after that stays monospaced.

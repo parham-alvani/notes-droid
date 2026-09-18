@@ -206,3 +206,5 @@ There are no instrumentation tests and CI runs no emulator. The markdown and syn
 ## License
 
 [GPL-3.0](LICENSE)
+
+Persian text is set in [Vazirmatn](https://github.com/rastikerdar/vazirmatn), which is licensed separately under the SIL Open Font License 1.1 — see [`licenses/Vazirmatn-OFL.txt`](licenses/Vazirmatn-OFL.txt).

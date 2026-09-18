@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.icon.VaultIcon
+import me.parham1995.notes.ui.inScript
 
 @Composable
 fun SearchScreen(
@@ -104,7 +105,7 @@ fun SearchScreen(
                         AutoDirection(row.hit.snippet) {
                             Text(
                                 text = row.hit.snippet.highlighted(),
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodySmall.inScript(),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,

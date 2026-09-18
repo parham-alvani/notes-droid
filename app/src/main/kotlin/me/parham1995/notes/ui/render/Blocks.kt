@@ -55,8 +55,10 @@ import me.parham1995.notes.markdown.MdListItem
 import me.parham1995.notes.markdown.TaskMeta
 import me.parham1995.notes.markdown.TaskState
 import me.parham1995.notes.ui.icon.LucideGlyph
+import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.theme.Markup
 import me.parham1995.notes.ui.theme.Naz
+import me.parham1995.notes.ui.theme.Vazirmatn
 
 /** Everything a rendered block might need to hand back to the screen. */
 data class RenderActions(
@@ -75,8 +77,14 @@ fun MdBlockView(
 ) {
     // Direction is per block, so a Persian paragraph and the Latin code block
     // under it each read correctly in the same note.
-    val direction = if (block.direction == MdDirection.RTL) LayoutDirection.Rtl else LayoutDirection.Ltr
-    CompositionLocalProvider(LocalLayoutDirection provides direction) {
+    val rtl = block.direction == MdDirection.RTL
+    CompositionLocalProvider(
+        LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+        // Persian prose is set in Vazirmatn; the Latin paragraph after it, and
+        // the code block after that, are not. Per block, like the direction.
+        LocalTextStyle provides
+            LocalTextStyle.current.copy(fontFamily = if (rtl) Vazirmatn else null),
+    ) {
         when (block) {
             is MdBlock.Heading -> HeadingView(block, actions, brokenLinks, modifier)
             is MdBlock.Paragraph ->
@@ -86,9 +94,9 @@ fun MdBlockView(
                     // Carries the inherited slant so a quoted paragraph stays
                     // italic, while the colour arrives via LocalContentColor.
                     style =
-                        MaterialTheme.typography.bodyLarge.copy(
-                            fontStyle = LocalTextStyle.current.fontStyle,
-                        ),
+                        MaterialTheme.typography.bodyLarge
+                            .copy(fontStyle = LocalTextStyle.current.fontStyle)
+                            .inScript(),
                     actions = actions.inline,
                     brokenLinks = brokenLinks,
                 )
@@ -141,7 +149,7 @@ private fun HeadingView(
             modifier = Modifier.fillMaxWidth(),
             // naz gives @markup.heading.1 through .4 their own colours, and
             // this follows them rather than picking a scale.
-            style = style.copy(color = Markup.heading(block.level)),
+            style = style.copy(color = Markup.heading(block.level)).inScript(),
             actions = actions.inline,
             brokenLinks = brokenLinks,
         )
@@ -251,7 +259,7 @@ private fun CalloutView(
                 )
                 Text(
                     text = block.title.plainText().ifBlank { block.kind.label() },
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleSmall.inScript(),
                     color = accent,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -474,9 +482,11 @@ private fun TableRowView(
                 modifier = Modifier.width(widths.getOrElse(index) { MIN_CELL_WIDTH }).padding(8.dp),
                 style =
                     if (header) {
-                        MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                        MaterialTheme.typography.labelLarge
+                            .copy(fontWeight = FontWeight.SemiBold)
+                            .inScript()
                     } else {
-                        MaterialTheme.typography.bodyMedium
+                        MaterialTheme.typography.bodyMedium.inScript()
                     },
                 actions = actions.inline,
                 brokenLinks = brokenLinks,
