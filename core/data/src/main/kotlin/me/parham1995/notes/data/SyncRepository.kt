@@ -456,18 +456,19 @@ class SyncRepository
         suspend fun reindex() {
             log.info("reindexing everything on disk")
             val started = System.currentTimeMillis()
-            val markdown =
-                blobs
-                    .byKindAndState(BlobKind.MARKDOWN, LocalState.DOWNLOADED)
-                    .map { PathAndSha(it.path, it.sha) }
+            var total = 0
             vaults.all().forEach { vault ->
                 val theirs =
                     blobs
                         .byVaultKindAndState(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
                         .map { PathAndSha(it.path, it.sha) }
+                // Named in the journal per vault, because "reindexed 2,400
+                // notes" says nothing about which vault came out empty.
+                log.info("reindexing ${theirs.size} notes in ${vault.label}")
                 indexer.indexAll(vault.id, theirs)
+                total += theirs.size
             }
-            log.info("reindexed ${markdown.size} notes in ${(System.currentTimeMillis() - started) / 1000}s")
+            log.info("reindexed $total notes in ${(System.currentTimeMillis() - started) / 1000}s")
         }
 
         /** Forgets everything so the next sync starts from nothing. */
