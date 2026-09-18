@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import me.parham1995.notes.markdown.MdInline
+import me.parham1995.notes.ui.theme.Markup
 
 /** How a tapped link should be handled, decided by the screen rather than here. */
 data class InlineActions(
@@ -60,27 +61,34 @@ private fun appendInlines(
         when (node) {
             is MdInline.Text -> builder.append(node.text)
 
+            // @markup.raw
             is MdInline.Code ->
                 builder.withStyle(
                     SpanStyle(
                         fontFamily = FontFamily.Monospace,
                         background = colors.surfaceVariant,
-                        color = colors.onSurfaceVariant,
+                        color = Markup.Raw,
+                        fontStyle = FontStyle.Italic,
                     ),
                 ) { append(node.code) }
 
+            // @markup.italic
             is MdInline.Emphasis ->
-                builder.withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                builder.withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Markup.Italic)) {
                     appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
                 }
 
+            // @markup.strong
             is MdInline.Strong ->
-                builder.withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                builder.withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Markup.Strong)) {
                     appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
                 }
 
+            // @markup.strike
             is MdInline.Strikethrough ->
-                builder.withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+                builder.withStyle(
+                    SpanStyle(textDecoration = TextDecoration.LineThrough, color = Markup.Strike),
+                ) {
                     appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
                 }
 
@@ -112,7 +120,8 @@ private fun appendInlines(
                         // point.
                         SpanStyle(color = colors.outline, textDecoration = TextDecoration.LineThrough)
                     } else {
-                        SpanStyle(color = colors.primary)
+                        // @markup.link.label
+                        SpanStyle(color = Markup.Link)
                     }
                 val link =
                     LinkAnnotation.Clickable(tag = node.target, styles = TextLinkStyles(style)) {

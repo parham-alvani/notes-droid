@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -48,6 +51,7 @@ import me.parham1995.notes.markdown.MdDirection
 import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.markdown.MdListItem
 import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.ui.theme.Markup
 
 /** Everything a rendered block might need to hand back to the screen. */
 data class RenderActions(
@@ -74,7 +78,12 @@ fun MdBlockView(
                 RichText(
                     inlines = block.inlines,
                     modifier = modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.bodyLarge,
+                    // Carries the inherited slant so a quoted paragraph stays
+                    // italic, while the colour arrives via LocalContentColor.
+                    style =
+                        MaterialTheme.typography.bodyLarge.copy(
+                            fontStyle = LocalTextStyle.current.fontStyle,
+                        ),
                     actions = actions.inline,
                     brokenLinks = brokenLinks,
                 )
@@ -119,16 +128,16 @@ private fun HeadingView(
         RichText(
             inlines = block.inlines,
             modifier = Modifier.fillMaxWidth(),
-            // naz paints Title yellow; the deeper levels stay plain so the
-            // colour keeps meaning something.
-            style = style.copy(color = if (block.level <= 2) MaterialTheme.colorScheme.tertiary else Color.Unspecified),
+            // naz gives @markup.heading.1 through .4 their own colours, and
+            // this follows them rather than picking a scale.
+            style = style.copy(color = Markup.heading(block.level)),
             actions = actions.inline,
             brokenLinks = brokenLinks,
         )
         if (block.level <= 2) {
             HorizontalDivider(
                 Modifier.padding(top = 6.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
+                color = Markup.heading(block.level).copy(alpha = RULE_ALPHA),
             )
         }
     }
@@ -240,10 +249,16 @@ private fun QuoteView(
         Box(
             Modifier
                 .width(3.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(2.dp)),
+                .background(Markup.Quote, RoundedCornerShape(2.dp)),
         )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            block.children.forEach { MdBlockView(it, actions, brokenLinks) }
+        // @markup.quote paints the quoted text itself, not just the rule.
+        CompositionLocalProvider(
+            LocalContentColor provides Markup.Quote,
+            LocalTextStyle provides LocalTextStyle.current.copy(fontStyle = FontStyle.Italic),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                block.children.forEach { MdBlockView(it, actions, brokenLinks) }
+            }
         }
     }
 }
@@ -455,7 +470,7 @@ private fun MdListItem.markerColor(): Color =
     when (task) {
         TaskState.CHECKED, TaskState.CANCELLED -> MaterialTheme.colorScheme.outline
         TaskState.IN_PROGRESS -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurface
+        else -> Markup.ListMarker
     }
 
 @Composable
@@ -481,6 +496,7 @@ private fun CalloutKind.glyph(): String =
 private fun CalloutKind.label(): String = name.lowercase().replaceFirstChar { it.uppercase() }
 
 private const val CONTAINER_ALPHA = 0.10f
+private const val RULE_ALPHA = 0.35f
 private val CODE_LINE_HEIGHT = 18.sp
 private const val APPROX_CHAR_WIDTH = 8
 private val MIN_CELL_WIDTH = 72.dp
