@@ -1,0 +1,3 @@
+Search no longer reaches into a vault you are not reading.
+
+The quick switcher — the name matches that appear as you type — was the one query in the app that was never scoped to a vault, so typing a name offered notes from every repository at once. Full-text results were always scoped; this was the list above them.

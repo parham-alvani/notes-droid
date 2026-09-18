@@ -229,6 +229,20 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `the quick switcher only offers notes from the vault being read`() =
+        runTest {
+            // The one query in the app that was never scoped, and the one that
+            // answers on every keystroke -- so typing a name reached into a
+            // repository the reader is not even looking at.
+            indexInto(first, "Alpha/Kubernetes Networking.md" to "x")
+            indexInto(second, "Archive/Kubernetes Invoice.md" to "y")
+
+            val hits = repository.quickSwitch("kubernetes")
+
+            assertThat(hits.map { it.name }).containsExactly("Kubernetes Networking")
+        }
+
+    @Test
     fun `indexing lifts tasks out of the notes and orders them by when they are due`() =
         runTest {
             index(

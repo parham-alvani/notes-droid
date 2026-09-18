@@ -362,6 +362,7 @@ class VaultRepository
                 emptyList()
             } else {
                 notes.searchByName(
+                    active(),
                     me.parham1995.notes.markdown.Slugs
                         .fold(query.trim()),
                     QUICK_LIMIT,

@@ -72,16 +72,24 @@ interface NoteDao {
         at: Long,
     )
 
-    /** Fast prefix match on the name, for the quick switcher. */
+    /**
+     * Fast prefix match on the name, for the quick switcher.
+     *
+     * Scoped to one vault like everything else. It was the last query in the
+     * app that was not, so typing a name reached across every repository --
+     * which is the exact mixing the vaults were separated to stop, still
+     * happening in the one place that answers on every keystroke.
+     */
     @Query(
         """
         SELECT * FROM notes
-        WHERE slug LIKE :prefix || '%' OR slug LIKE '%' || :prefix || '%'
+        WHERE vaultId = :vaultId AND (slug LIKE :prefix || '%' OR slug LIKE '%' || :prefix || '%')
         ORDER BY (CASE WHEN slug LIKE :prefix || '%' THEN 0 ELSE 1 END), length(name), name COLLATE NOCASE
         LIMIT :limit
         """,
     )
     suspend fun searchByName(
+        vaultId: Long,
         prefix: String,
         limit: Int,
     ): List<NoteEntity>
