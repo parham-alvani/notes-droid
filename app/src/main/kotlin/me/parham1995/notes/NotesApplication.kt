@@ -1,9 +1,11 @@
 package me.parham1995.notes
 
 import android.app.Application
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,7 +41,23 @@ class NotesApplication :
     @Inject
     lateinit var scheduler: Provider<SyncScheduler>
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /**
+     * Startup scheduling runs here, and a failure in it must not be fatal.
+     *
+     * Both collectors below read settings, which touches the filesystem, and
+     * both reach WorkManager. Without this handler anything either of them
+     * throws is an uncaught exception on a background thread before a single
+     * screen exists -- so the app dies on launch, every launch, over work that
+     * is only ever about when the *next* refresh happens. Recording it and
+     * carrying on leaves an app that opens and a reason in the journal.
+     */
+    private val scope =
+        CoroutineScope(
+            SupervisorJob() + Dispatchers.Default +
+                CoroutineExceptionHandler { _, failure ->
+                    Log.e(TAG, "startup scheduling failed", failure)
+                },
+        )
 
     override fun onCreate() {
         super.onCreate()
@@ -106,6 +124,10 @@ class NotesApplication :
                     if (enabled) scheduler.get().scheduleDigest(hour) else scheduler.get().cancelDigest()
                 }
         }
+    }
+
+    private companion object {
+        const val TAG = "Daftar"
     }
 
     override val workManagerConfiguration: Configuration

@@ -1,0 +1,5 @@
+The app can no longer be locked out of starting.
+
+A half-written settings file used to throw on every read, and the first read happens while the app is still starting — so it could not be opened at all, and the only way out was clearing its data, which takes the synced vault, the token and the SSH key with it. The file is now replaced and the settings fall back to their defaults.
+
+Scheduling the background refresh can no longer be fatal either. It runs before any screen exists, and a failure there used to take the whole app down over nothing more than when the next sync should happen.

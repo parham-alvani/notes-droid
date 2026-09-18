@@ -2,9 +2,11 @@ package me.parham1995.notes.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -17,7 +19,25 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+/**
+ * Settings, and a way back from a truncated one.
+ *
+ * Without a corruption handler a half-written preferences file throws on every
+ * read, and the first read happens while the app is still starting -- so the
+ * app cannot be opened at all, and the only way out is clearing its data,
+ * which takes the synced vault, the token and the on-device SSH key with it.
+ * A device that fills up mid-sync is exactly how the file ends up truncated.
+ *
+ * Losing the settings is a bad outcome; losing the vault to recover from
+ * losing the settings is a worse one. So the file is replaced with an empty
+ * one and everything here falls back to its default. The token lives in this
+ * file too and goes with it, which is a token to paste again rather than a
+ * sync to run again.
+ */
+internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "settings",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
 
 /** When images are fetched. Markdown is always synced. */
 enum class ImagePolicy {
