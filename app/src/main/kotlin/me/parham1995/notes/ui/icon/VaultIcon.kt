@@ -87,6 +87,30 @@ fun VaultIcon(
     }
 }
 
+/**
+ * A Lucide glyph by name, for the places that know which icon they want --
+ * callout kinds, task states, the date chips on a task.
+ *
+ * Emoji would do the same job and this vault's notes are full of them, but at
+ * 14sp on a dark background they read as decoration rather than as part of the
+ * text. A stroked glyph in the accent colour is the same information without
+ * the sticker.
+ */
+@Composable
+fun LucideGlyph(
+    name: String,
+    modifier: Modifier = Modifier,
+    size: Dp = 16.dp,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    contentDescription: String? = null,
+) {
+    val slot =
+        modifier.size(size).semantics {
+            contentDescription?.let { this.contentDescription = it }
+        }
+    LucideIcon(name, tint, slot, null)
+}
+
 @Composable
 private fun LucideIcon(
     name: String,

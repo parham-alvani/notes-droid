@@ -1,0 +1,7 @@
+A colour pass over the reader.
+
+Callouts now carry a colour and an icon per kind rather than three Material accents shared between nineteen of them, with a bar down the side so it is clear where one starts and stops.
+
+Task checkboxes are drawn as icons instead of look-alike box characters, so open, done, cancelled and in-progress differ by shape and colour. The Tasks plugin's trailing dates are coloured by what they mean — done green, due orange, scheduled blue, cancelled red — instead of all being the same grey.
+
+Wide tables are striped, which is what makes a fourteen-column row readable across.
