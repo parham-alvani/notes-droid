@@ -26,6 +26,14 @@ class SshKeyStore
     constructor(
         @ApplicationContext context: Context,
     ) {
+        init {
+            // sshd classes load as soon as a key is generated, which happens in
+            // settings long before any transport exists. Its static
+            // initialisers throw on Android unless this has already run, and a
+            // poisoned class stays poisoned for the life of the process.
+            AndroidGitEnvironment.install(File(context.filesDir, "git"))
+        }
+
         private val sshDir = File(context.filesDir, "ssh").apply { mkdirs() }
         private val privateKey = File(sshDir, "id_notes")
         private val publicKey = File(sshDir, "id_notes.pub")

@@ -1,5 +1,6 @@
 package me.parham1995.notes.data.git
 
+import org.apache.sshd.common.util.io.PathUtils
 import org.eclipse.jgit.lib.Config
 import org.eclipse.jgit.storage.file.FileBasedConfig
 import org.eclipse.jgit.util.FS
@@ -8,17 +9,27 @@ import java.io.File
 import java.util.TimeZone
 
 /**
- * Makes JGit usable on Android.
+ * Makes JGit *and* Apache sshd usable on Android.
  *
- * JGit assumes a desktop: on its very first call it goes looking for
- * `$HOME/.gitconfig` and `/etc/gitconfig`. Android sets no usable `HOME` and
- * the paths it would guess are unwritable, so that first call throws before any
- * repository work begins. This points all three config files at the app's own
- * storage instead.
+ * Both assume a desktop, and each needs telling separately.
  *
- * [install] has to run before **any** JGit API is touched, which is why it is
- * idempotent and called from the transport's constructor rather than left to a
- * caller to remember.
+ * JGit goes looking for `${'$'}HOME/.gitconfig` and `/etc/gitconfig` on its very
+ * first call; Android sets no usable `HOME` and the paths it guesses are
+ * unwritable, so that call throws before any repository work begins. All three
+ * config files are pointed at the app's own storage instead.
+ *
+ * sshd has its own, unrelated requirement, and missing it is what made every
+ * SSH sync fail. `PathUtils.getUserHomeFolder()` throws outright on Android --
+ * the library's own message tells you to call
+ * [PathUtils.setUserHomeFolderResolver] -- and that throw happens inside a
+ * static initialiser. The first attempt fails with `ExceptionInInitializerError`
+ * and every attempt afterwards with `NoClassDefFoundError`, because a class
+ * whose initialiser threw once stays poisoned for the life of the process. What
+ * reaches JGit is "remote hung up unexpectedly", which describes none of that.
+ *
+ * [install] has to run before **any** JGit or sshd class is touched, which is
+ * why it is idempotent and called from the transport's constructor rather than
+ * left to a caller to remember.
  */
 object AndroidGitEnvironment {
     @Volatile
@@ -28,6 +39,10 @@ object AndroidGitEnvironment {
     fun install(configDir: File) {
         if (installed) return
         configDir.mkdirs()
+
+        // Must come before anything loads an sshd class, including indirectly.
+        PathUtils.setUserHomeFolderResolver { configDir.toPath() }
+
         SystemReader.setInstance(AndroidSystemReader(configDir))
         installed = true
     }

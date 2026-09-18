@@ -312,6 +312,17 @@ class GitSshVaultSync(
         }
         // Say exactly what the handshake did before interpreting it.
         log("authentication failed: " + failure.describeChain())
+
+        // An environment failure is not a rejected key, and saying so sent this
+        // hunt in the wrong direction for hours. Only claim rejection when the
+        // server actually rejected something.
+        val chain = generateSequence(failure) { it.cause }.take(CHAIN_DEPTH).toList()
+        if (chain.any { it is NoClassDefFoundError || it is ExceptionInInitializerError }) {
+            throw IOException(
+                "the SSH stack could not start on this device: " + failure.describeChain(),
+                failure,
+            )
+        }
         throw IOException(
             "the repository rejected this SSH key. Its fingerprint is " + keys.fingerprint() +
                 " - check that exact key is listed as a deploy key on the repository. " +
@@ -450,6 +461,7 @@ class GitSshVaultSync(
         const val TIMEOUT_SECONDS = 600
         const val REACH_TIMEOUT_MS = 10_000
         const val AUTH_TIMEOUT_MS = 20_000
+        const val CHAIN_DEPTH = 8
         const val DEFAULT_SSH_PORT = 22
         const val REMOTE_PREFIX = "refs/remotes/origin/"
         const val REFS_HEADS = "refs/heads/"
