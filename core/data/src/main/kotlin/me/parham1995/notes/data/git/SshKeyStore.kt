@@ -57,6 +57,29 @@ class SshKeyStore
                 line
             }
 
+        /**
+         * Writes the ssh config the session runs with, and returns it.
+         *
+         * Keepalives matter here rather than being a nicety: a mobile link goes
+         * quiet while the server compresses objects, and without them an idle
+         * connection is dropped part way through a transfer -- which surfaces
+         * as the remote hanging up unexpectedly.
+         */
+        fun configFile(): File {
+            val desired =
+                buildString {
+                    appendLine("Host *")
+                    appendLine("    ServerAliveInterval 20")
+                    appendLine("    ServerAliveCountMax 12")
+                    appendLine("    TCPKeepAlive yes")
+                    // There is no prompt on a phone and no known_hosts to seed.
+                    appendLine("    StrictHostKeyChecking no")
+                }
+            val file = File(sshDir, "config")
+            if (!file.isFile || file.readText() != desired) file.writeText(desired)
+            return file
+        }
+
         fun delete() {
             privateKey.delete()
             publicKey.delete()

@@ -71,8 +71,19 @@ class GitSshVaultSync(
 
             val fresh = !File(workTree, Constants.DOT_GIT).isDirectory
             if (fresh) {
-                log("cloning $remoteUrl (depth $shallowDepth) - this is the full history and all attachments")
-                cloneRepository()
+                log(
+                    "cloning $remoteUrl (depth $shallowDepth) - git cannot fetch a subset, so this is every attachment too",
+                )
+                try {
+                    cloneRepository()
+                } catch (failure: Exception) {
+                    // Name the stage it died at. "Remote hung up" says nothing
+                    // about whether it failed immediately or three quarters of
+                    // the way through a transfer, and those mean very different
+                    // things.
+                    log("clone failed during: " + progress.stage.value.ifEmpty { "connection setup" })
+                    throw enrich(failure)
+                }
                 log("clone finished")
             }
 
@@ -134,6 +145,27 @@ class GitSshVaultSync(
             sink.delete(path)
             onProgress(++done, total)
         }
+    }
+
+    /**
+     * Turns a transport failure into something worth reading.
+     *
+     * A dropped connection part way through is the expected failure on a phone:
+     * the transfer is large, git has no way to fetch less, and a clone cannot
+     * resume -- every retry starts from zero. Saying so is more use than
+     * repeating the remote's own words.
+     */
+    private fun enrich(failure: Exception): Exception {
+        val message = failure.message.orEmpty()
+        val dropped = "hung up" in message || "Connection reset" in message || "closed" in message
+        if (!dropped) return failure
+        return IOException(
+            "the connection dropped part way through the clone. This transfer is well over a " +
+                "hundred megabytes because git cannot fetch a subset, and a clone cannot resume, " +
+                "so each retry starts again. The REST transport pulls the markdown alone and " +
+                "resumes where it left off.",
+            failure,
+        )
     }
 
     /** The public line to register with the host as a read-only deploy key. */
@@ -344,6 +376,7 @@ class GitSshVaultSync(
             .setSshDirectory(keys.directory)
             .setPreferredAuthentications("publickey")
             .setDefaultIdentities { listOf(keys.identity.toPath()) }
+            .setConfigFile { keys.configFile() }
             // There is no interactive prompt on a phone and no known_hosts to
             // seed, so the host key is accepted on first use and pinned by
             // sshd's own store from then on.
@@ -368,7 +401,11 @@ class GitSshVaultSync(
 
     private companion object {
         const val DEFAULT_DEPTH = 1
-        const val TIMEOUT_SECONDS = 60
+
+        // Generous on purpose: this clone moves well over a hundred
+        // megabytes, and the client sits idle while the server compresses
+        // objects. At sixty seconds that silence alone aborted the transfer.
+        const val TIMEOUT_SECONDS = 600
         const val REACH_TIMEOUT_MS = 10_000
         const val DEFAULT_SSH_PORT = 22
         const val REMOTE_PREFIX = "refs/remotes/origin/"
