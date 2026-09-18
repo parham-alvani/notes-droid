@@ -1,7 +1,9 @@
 package me.parham1995.notes.data.database
 
 import androidx.room.Dao
+import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import me.parham1995.notes.sync.BlobKind
@@ -15,8 +17,8 @@ interface BlobDao {
     @Upsert
     suspend fun upsertAll(blobs: List<BlobEntity>)
 
-    @Query("SELECT path, sha FROM blobs")
-    suspend fun manifestRows(): List<ManifestRow>
+    @Query("SELECT path, sha FROM blobs WHERE vaultId = :vaultId")
+    suspend fun manifestRows(vaultId: Long): List<ManifestRow>
 
     @Query("SELECT * FROM blobs WHERE path = :path")
     suspend fun byPath(path: String): BlobEntity?
@@ -44,6 +46,28 @@ interface BlobDao {
 
     @Query("DELETE FROM blobs")
     suspend fun clear()
+
+    @Query("DELETE FROM blobs WHERE vaultId = :vaultId")
+    suspend fun clearVault(vaultId: Long)
+
+    /**
+     * Hands every row written before there were several repositories to the
+     * one they came from.
+     *
+     * The migration defaults `vaultId` to zero because it has nothing better
+     * to say, and an inserted vault gets id 1. Without this the seeded vault
+     * would look at an empty manifest and re-fetch a vault that is already on
+     * the device, in full.
+     */
+    @Query("UPDATE blobs SET vaultId = :vaultId WHERE vaultId = 0")
+    suspend fun adoptOrphans(vaultId: Long)
+
+    @Query("SELECT * FROM blobs WHERE vaultId = :vaultId AND kind = :kind AND localState = :state")
+    suspend fun byVaultKindAndState(
+        vaultId: Long,
+        kind: BlobKind,
+        state: LocalState,
+    ): List<BlobEntity>
 }
 
 /** Just the two columns the planner needs, so a sync does not load whole rows. */
@@ -100,4 +124,28 @@ interface TaskDao {
 
     @Query("DELETE FROM tasks")
     suspend fun clear()
+}
+
+@Dao
+interface VaultDao {
+    @Query("SELECT * FROM vaults ORDER BY ordinal, id")
+    fun observe(): Flow<List<VaultEntity>>
+
+    @Query("SELECT * FROM vaults ORDER BY ordinal, id")
+    suspend fun all(): List<VaultEntity>
+
+    @Query("SELECT * FROM vaults WHERE id = :id")
+    suspend fun byId(id: Long): VaultEntity?
+
+    @Query("SELECT COUNT(*) FROM vaults")
+    suspend fun count(): Int
+
+    @Insert
+    suspend fun insert(vault: VaultEntity): Long
+
+    @Update
+    suspend fun update(vault: VaultEntity)
+
+    @Query("DELETE FROM vaults WHERE id = :id")
+    suspend fun delete(id: Long)
 }

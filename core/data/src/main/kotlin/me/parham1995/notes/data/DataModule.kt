@@ -21,6 +21,7 @@ import me.parham1995.notes.data.database.SearchDao
 import me.parham1995.notes.data.database.SyncLogDao
 import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.data.database.TaskDao
+import me.parham1995.notes.data.database.VaultDao
 import okhttp3.OkHttpClient
 import java.time.Duration
 import javax.inject.Singleton
@@ -47,6 +48,7 @@ object DataModule {
                 NotesDatabase.MIGRATION_3_4,
                 NotesDatabase.MIGRATION_4_5,
                 NotesDatabase.MIGRATION_5_6,
+                NotesDatabase.MIGRATION_6_7,
             ).addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
@@ -83,6 +85,9 @@ object DataModule {
 
     @Provides
     fun taskDao(database: NotesDatabase): TaskDao = database.taskDao()
+
+    @Provides
+    fun vaultDao(database: NotesDatabase): VaultDao = database.vaultDao()
 
     @Provides
     @Singleton

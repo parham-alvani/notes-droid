@@ -27,6 +27,9 @@ class RoomVaultSink
         /** Filled in by the caller so kind and size survive into the manifest. */
         var plannedEntries: Map<String, VaultEntry> = emptyMap()
 
+        /** Which repository the rows being written belong to. */
+        var vaultId: Long = 0
+
         /**
          * Only used when a write arrives with no planned entry behind it. The
          * kind decides whether the file is later parsed as a note, so guessing
@@ -46,6 +49,7 @@ class RoomVaultSink
                     path = path,
                     sha = sha,
                     size = planned?.size?.takeIf { it > 0 } ?: bytes.size.toLong(),
+                    vaultId = vaultId,
                     kind = planned?.kind ?: filter.kindOf(path) ?: BlobKind.OTHER,
                     localState = LocalState.DOWNLOADED,
                 ),
@@ -59,6 +63,7 @@ class RoomVaultSink
             blobs.upsert(
                 BlobEntity(
                     path = entry.path,
+                    vaultId = vaultId,
                     sha = entry.sha,
                     size = entry.size,
                     kind = entry.kind,

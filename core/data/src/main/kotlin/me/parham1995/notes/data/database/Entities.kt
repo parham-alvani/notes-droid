@@ -8,6 +8,49 @@ import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 
 /**
+ * One repository the app reads.
+ *
+ * Mounted at [mount], which is a top-level folder name. Everything downstream
+ * -- the file store, the index, search, links, tasks -- addresses files by a
+ * path that already carries the mount, so none of it needed to learn about
+ * multiple repositories at all. Only syncing does, because each repository has
+ * its own head commit and its own manifest.
+ *
+ * An empty [mount] means the root, which is how the vault that existed before
+ * any of this keeps working untouched: its paths did not change, so nothing had
+ * to be moved on disk or rewritten in the database. Every repository added
+ * afterwards needs a name of its own.
+ */
+@Entity(tableName = "vaults", indices = [Index("mount", unique = true)])
+data class VaultEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val owner: String,
+    val repo: String,
+    val branch: String? = null,
+    val mount: String = "",
+    /** `REST` or `SSH`, named rather than typed so the row survives reordering. */
+    val transport: String = "REST",
+    val ordinal: Int = 0,
+    val enabled: Boolean = true,
+    val headCommit: String? = null,
+    val etagRef: String? = null,
+    val lastSyncAt: Long? = null,
+    val lastError: String? = null,
+    val filterVersion: Int = 0,
+    val indexVersion: Int = 0,
+) {
+    val label: String get() = mount.ifEmpty { repo }
+
+    /** A repository path, as this vault addresses it on the device. */
+    fun mounted(path: String): String = if (mount.isEmpty()) path else "$mount/$path"
+
+    /** The reverse, for handing a path back to the transport. */
+    fun unmounted(path: String): String = if (mount.isEmpty()) path else path.removePrefix("$mount/")
+
+    fun owns(path: String): Boolean = mount.isEmpty() || path == mount || path.startsWith("$mount/")
+}
+
+/**
  * The sync manifest: one row per file the vault contains upstream, whether or
  * not its bytes are on the device.
  *
@@ -15,9 +58,11 @@ import me.parham1995.notes.sync.LocalState
  * blob is written and its row upserted in the same transaction, so an
  * interrupted sync simply resumes from whatever the manifest already says.
  */
-@Entity(tableName = "blobs")
+@Entity(tableName = "blobs", indices = [Index("vaultId")])
 data class BlobEntity(
     @PrimaryKey val path: String,
+    /** Which repository this came from. Zero for the root vault. */
+    val vaultId: Long = 0,
     val sha: String,
     val size: Long,
     val kind: BlobKind,

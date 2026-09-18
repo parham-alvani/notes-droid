@@ -21,11 +21,13 @@ import me.parham1995.notes.data.TokenStore
 import me.parham1995.notes.data.VaultFileStore
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.data.database.SyncLogEntity
+import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
 import javax.inject.Inject
 
 data class SyncUiState(
     val settings: VaultSettings = VaultSettings(),
+    val vaults: List<VaultEntity> = emptyList(),
     val hasToken: Boolean = false,
     val noteCount: Int = 0,
     val headCommit: String? = null,
@@ -74,48 +76,84 @@ class SyncViewModel
 
         val state: StateFlow<SyncUiState> =
             combine(
-                settingsStore.settings,
-                repository.status,
-                repository.noteCount,
-                scheduler.observe(),
-                local,
-            ) { settings, status, notes, work, extra ->
-                val running = work.firstOrNull { it.state == WorkInfo.State.RUNNING }
-                val pending = work.firstOrNull { !it.state.isFinished }
-                val failed = work.firstOrNull { it.state == WorkInfo.State.FAILED }
-                SyncUiState(
-                    settings = settings,
-                    hasToken = extra.hasToken,
-                    noteCount = notes,
-                    headCommit = status.headCommit,
-                    lastSyncAt = status.lastSyncAt,
-                    lastError = failed?.outputData?.getString(SyncWorker.KEY_ERROR) ?: status.lastError,
-                    running = running != null,
-                    queued = pending != null && running == null,
-                    attempt = pending?.runAttemptCount ?: 0,
-                    done = running?.progress?.getInt(SyncWorker.KEY_DONE, 0) ?: 0,
-                    total = running?.progress?.getInt(SyncWorker.KEY_TOTAL, 0) ?: 0,
-                    diskBytes = extra.diskBytes,
-                    connectionMessage = extra.connectionMessage,
-                    sshPublicKey = extra.sshPublicKey,
-                    sshFingerprint = extra.sshFingerprint,
-                    generatingKey = extra.generatingKey,
-                    reindexing = extra.reindexing,
-                    tokenRejected =
-                        failed?.outputData?.getString(SyncWorker.KEY_ERROR) == SyncWorker.TOKEN_REJECTED,
-                )
+                combine(
+                    settingsStore.settings,
+                    repository.status,
+                    repository.noteCount,
+                    scheduler.observe(),
+                    local,
+                ) { settings, status, notes, work, extra ->
+                    val running = work.firstOrNull { it.state == WorkInfo.State.RUNNING }
+                    val pending = work.firstOrNull { !it.state.isFinished }
+                    val failed = work.firstOrNull { it.state == WorkInfo.State.FAILED }
+                    SyncUiState(
+                        settings = settings,
+                        hasToken = extra.hasToken,
+                        noteCount = notes,
+                        headCommit = status.headCommit,
+                        lastSyncAt = status.lastSyncAt,
+                        lastError = failed?.outputData?.getString(SyncWorker.KEY_ERROR) ?: status.lastError,
+                        running = running != null,
+                        queued = pending != null && running == null,
+                        attempt = pending?.runAttemptCount ?: 0,
+                        done = running?.progress?.getInt(SyncWorker.KEY_DONE, 0) ?: 0,
+                        total = running?.progress?.getInt(SyncWorker.KEY_TOTAL, 0) ?: 0,
+                        diskBytes = extra.diskBytes,
+                        connectionMessage = extra.connectionMessage,
+                        sshPublicKey = extra.sshPublicKey,
+                        sshFingerprint = extra.sshFingerprint,
+                        generatingKey = extra.generatingKey,
+                        reindexing = extra.reindexing,
+                        tokenRejected =
+                            failed?.outputData?.getString(SyncWorker.KEY_ERROR) == SyncWorker.TOKEN_REJECTED,
+                    )
+                },
+                // Nested rather than a sixth argument: `combine` is typed up to
+                // five, and the vararg form loses every type in the lambda.
+                repository.vaults(),
+            ) { base, vaults ->
+                base.copy(vaults = vaults)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SyncUiState())
 
         init {
             refreshLocal()
         }
 
-        fun saveRepository(
+        /**
+         * Adds a repository.
+         *
+         * The first one mounts at the root, so an install that only ever reads
+         * one looks and behaves exactly as it did before any of this existed.
+         * Everything after it needs a folder of its own, because two
+         * repositories cannot both own the top level.
+         */
+        fun addVault(
             owner: String,
             repo: String,
             branch: String,
+            mount: String,
         ) = viewModelScope.launch {
-            settingsStore.setRepository(owner, repo, branch.ifBlank { null })
+            val first = state.value.vaults.isEmpty()
+            val folder = if (first) mount.trim() else mount.trim().ifBlank { repo.trim() }
+            repository.addVault(
+                owner = owner,
+                repo = repo,
+                branch = branch.ifBlank { null },
+                mount = folder,
+                transport = state.value.settings.transport,
+            )
+            // Kept in step so the old single-repository settings still describe
+            // the first vault, which is what the token screen reads.
+            if (first) settingsStore.setRepository(owner, repo, branch.ifBlank { null })
+        }
+
+        fun removeVault(id: Long) = viewModelScope.launch { repository.removeVault(id) }
+
+        fun setVaultTransport(
+            vault: VaultEntity,
+            transport: SyncTransport,
+        ) = viewModelScope.launch {
+            repository.updateVault(vault.copy(transport = transport.name))
         }
 
         fun saveToken(token: String) =

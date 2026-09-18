@@ -16,8 +16,9 @@ import androidx.sqlite.execSQL
         HeadingEntity::class,
         SyncLogEntity::class,
         TaskEntity::class,
+        VaultEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -39,6 +40,8 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun indexDao(): IndexDao
 
     abstract fun taskDao(): TaskDao
+
+    abstract fun vaultDao(): VaultDao
 
     companion object {
         const val NAME = "notes.db"
@@ -192,6 +195,34 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL(
                         "ALTER TABLE `sync_state` ADD COLUMN `indexVersion` INTEGER NOT NULL DEFAULT 0",
                     )
+                }
+            }
+
+        /**
+         * Adds the table of repositories, and scopes the manifest to one.
+         *
+         * Existing rows get `vaultId = 0`, and the vault seeded from the old
+         * single-repository settings is given that id, so an install that has
+         * only ever read one repository carries on with the manifest it
+         * already had. Nothing moves on disk: that vault mounts at the root,
+         * so every path it has ever recorded is still correct.
+         */
+        val MIGRATION_6_7 =
+            object : Migration(6, 7) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `vaults` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`owner` TEXT NOT NULL, `repo` TEXT NOT NULL, `branch` TEXT, " +
+                            "`mount` TEXT NOT NULL, `transport` TEXT NOT NULL, " +
+                            "`ordinal` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, " +
+                            "`headCommit` TEXT, `etagRef` TEXT, `lastSyncAt` INTEGER, " +
+                            "`lastError` TEXT, `filterVersion` INTEGER NOT NULL, " +
+                            "`indexVersion` INTEGER NOT NULL)",
+                    )
+                    connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_vaults_mount` ON `vaults` (`mount`)")
+                    connection.execSQL("ALTER TABLE `blobs` ADD COLUMN `vaultId` INTEGER NOT NULL DEFAULT 0")
+                    connection.execSQL("CREATE INDEX IF NOT EXISTS `index_blobs_vaultId` ON `blobs` (`vaultId`)")
                 }
             }
 

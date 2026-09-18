@@ -12,10 +12,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SearchHit
+import me.parham1995.notes.data.VaultIcons
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.icons.IconSpec
-import me.parham1995.notes.icons.IconicConfig
 import javax.inject.Inject
 
 /** A quick-switcher row, with the icon Iconic gives the note. */
@@ -55,7 +55,7 @@ class SearchViewModel
          * and the assignments only change when the vault does, so waiting on
          * the flow inside the debounce would put a file read on the typing path.
          */
-        private var iconConfig: IconicConfig = IconicConfig.EMPTY
+        private var iconConfig: VaultIcons = VaultIcons.EMPTY
 
         init {
             viewModelScope.launch { icons.config.collect { iconConfig = it } }

@@ -21,6 +21,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -56,6 +58,8 @@ import me.parham1995.notes.BuildConfig
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SyncTransport
 import me.parham1995.notes.data.VaultSettings
+import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.ui.icon.LucideGlyph
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -107,11 +111,23 @@ private fun RepositoryCard(
     state: SyncUiState,
     viewModel: SyncViewModel,
 ) {
-    var owner by remember(state.settings.owner) { mutableStateOf(state.settings.owner) }
-    var repo by remember(state.settings.repo) { mutableStateOf(state.settings.repo) }
-    var branch by remember(state.settings.branch) { mutableStateOf(state.settings.branch.orEmpty()) }
+    var owner by remember { mutableStateOf("") }
+    var repo by remember { mutableStateOf("") }
+    var branch by remember { mutableStateOf("") }
+    var mount by remember { mutableStateOf("") }
+    val first = state.vaults.isEmpty()
 
-    SectionCard("Repository") {
+    SectionCard("Repositories") {
+        state.vaults.forEach { vault ->
+            VaultRow(vault, viewModel)
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+        }
+
+        Text(
+            if (first) "Add the repository your vault lives in." else "Add another",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         OutlinedTextField(
             value = owner,
             onValueChange = { owner = it },
@@ -134,11 +150,89 @@ private fun RepositoryCard(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        if (!first) {
+            OutlinedTextField(
+                value = mount,
+                onValueChange = { mount = it },
+                label = { Text("Folder") },
+                // Two repositories cannot both own the top level, so every one
+                // after the first is read as a folder inside the vault.
+                placeholder = { Text(repo.ifBlank { "where it appears in the tree" }) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Button(
-            onClick = { viewModel.saveRepository(owner, repo, branch) },
+            onClick = {
+                viewModel.addVault(owner, repo, branch, mount)
+                owner = ""
+                repo = ""
+                branch = ""
+                mount = ""
+            },
             enabled = owner.isNotBlank() && repo.isNotBlank(),
         ) {
-            Text("Save")
+            Text("Add")
+        }
+
+        if (state.vaults.size > 1) {
+            Text(
+                "One SSH key serves all of them: the same public line is added as a deploy key " +
+                    "on each repository.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun VaultRow(
+    vault: VaultEntity,
+    viewModel: SyncViewModel,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("${vault.owner}/${vault.repo}", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text =
+                    listOfNotNull(
+                        if (vault.mount.isEmpty()) "at the root" else vault.mount,
+                        vault.branch,
+                        vault.lastError?.let { "failed: " + it.take(ERROR_PREVIEW) },
+                    ).joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color =
+                    if (vault.lastError != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        // Per repository, because a public one over REST and a private one over
+        // SSH is a perfectly ordinary pair to want.
+        FilterChip(
+            selected = false,
+            onClick = {
+                val next =
+                    if (SyncTransport.parse(vault.transport) == SyncTransport.REST) {
+                        SyncTransport.SSH
+                    } else {
+                        SyncTransport.REST
+                    }
+                viewModel.setVaultTransport(vault, next)
+            },
+            label = { Text(vault.transport) },
+        )
+        IconButton(onClick = { viewModel.removeVault(vault.id) }) {
+            LucideGlyph("trash-2", size = 18.dp, contentDescription = "Remove ${vault.label}")
         }
     }
 }
@@ -461,6 +555,7 @@ private fun LabelledValue(
 
 private const val SHORT_SHA_LENGTH = 7
 private const val HOURS_IN_DAY = 24
+private const val ERROR_PREVIEW = 60
 private const val BYTES_PER_UNIT = 1024.0
 
 private fun formatBytes(bytes: Long): String {

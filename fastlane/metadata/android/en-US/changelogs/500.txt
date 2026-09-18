@@ -1,0 +1,7 @@
+Tasks, several repositories, and PDFs.
+
+A Tasks tab lists every open task in the vault grouped by when it is answerable — overdue, today, this week — and tapping one opens the note. An optional daily notification counts what is overdue and due, off by default.
+
+The app can now read more than one repository. Each is mounted at a folder and the result behaves as one vault: search, links and tasks span all of them. The first mounts at the root, so an existing install is unchanged. One SSH key serves every repository.
+
+PDFs open inside the reader, page by page. Other attachments are handed to whatever app opens that type — which is what the previous release claimed to do and did not: the wiring was missing entirely.

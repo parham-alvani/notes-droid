@@ -90,6 +90,20 @@ class VaultFileStore
                 pruneEmptyParents(file.parentFile)
             }
 
+        /**
+         * Removes a whole subtree -- the working tree of a repository that has
+         * been detached, including the `.git` directory a clone leaves behind.
+         */
+        suspend fun deleteTree(path: String) =
+            withContext(Dispatchers.IO) {
+                val target = fileFor(path)
+                // Never the vault root itself: `deleteTree("")` from a vault
+                // mounted at the root would take every other repository with it.
+                if (path.isBlank() || target == root) return@withContext
+                target.deleteRecursively()
+                pruneEmptyParents(target.parentFile)
+            }
+
         suspend fun exists(path: String): Boolean = withContext(Dispatchers.IO) { fileFor(path).isFile }
 
         /** Bytes currently occupied by the working tree. */

@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import me.parham1995.notes.data.database.SyncStateDao
+import me.parham1995.notes.data.database.VaultDao
+import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.icons.IconicConfig
 import me.parham1995.notes.sync.VaultFilter
 import javax.inject.Inject
@@ -32,13 +34,14 @@ class IconStore
     @Inject
     constructor(
         private val files: VaultFileStore,
+        private val vaults: VaultDao,
         syncState: SyncStateDao,
         private val log: SyncLog,
     ) {
         private val mutex = Mutex()
-        private var cached: Pair<Long?, IconicConfig>? = null
+        private var cached: Pair<Long?, VaultIcons>? = null
 
-        val config: Flow<IconicConfig> =
+        val config: Flow<VaultIcons> =
             syncState
                 .observe()
                 .map { it?.lastSyncAt }
@@ -46,18 +49,67 @@ class IconStore
                 .map { syncedAt -> configAt(syncedAt) }
                 .flowOn(Dispatchers.IO)
 
-        private suspend fun configAt(syncedAt: Long?): IconicConfig =
+        private suspend fun configAt(syncedAt: Long?): VaultIcons =
             mutex.withLock {
                 cached?.takeIf { it.first == syncedAt }?.second ?: load().also { cached = syncedAt to it }
             }
 
-        private suspend fun load(): IconicConfig {
-            val text = files.readText(VaultFilter.ICONIC_CONFIG) ?: return IconicConfig.EMPTY
-            return runCatching { IconicConfig.parse(text) }
-                .onFailure {
-                    // A plugin upgrade that changes the file's shape should cost
-                    // the icons, not the app.
-                    log.warn("could not read icon assignments: ${it.message}")
-                }.getOrDefault(IconicConfig.EMPTY)
+        /**
+         * One set of assignments per repository.
+         *
+         * Each repository carries its own plugin configuration, written in
+         * paths relative to itself -- a rule like `^Companies/[^/]*$` means
+         * nothing once the repository is mounted under a folder. Rather than
+         * rewriting the rules, the mount is stripped off the path before the
+         * repository's own config is asked about it.
+         */
+        private suspend fun load(): VaultIcons {
+            val mounted =
+                vaults.all().mapNotNull { vault ->
+                    val path = vault.mounted(VaultFilter.ICONIC_CONFIG)
+                    val text = files.readText(path) ?: return@mapNotNull null
+                    val parsed =
+                        runCatching { IconicConfig.parse(text) }
+                            .onFailure {
+                                // A plugin upgrade that changes the file's shape
+                                // should cost the icons, not the app.
+                                log.warn("could not read icon assignments for ${vault.label}: ${it.message}")
+                            }.getOrNull() ?: return@mapNotNull null
+                    vault.mount to parsed
+                }
+            return VaultIcons(mounted)
         }
     }
+
+/**
+ * The icon assignments of every repository, addressed by the paths the app
+ * actually uses.
+ *
+ * The longest matching mount wins, so a repository mounted at `work` answers
+ * for `work/...` and the root-mounted one answers for everything else. With a
+ * single repository this is exactly the one config it always was.
+ */
+class VaultIcons(
+    private val byMount: List<Pair<String, IconicConfig>>,
+) {
+    val isEmpty: Boolean get() = byMount.all { it.second.isEmpty }
+
+    fun forPath(
+        path: String,
+        isFolder: Boolean,
+    ): IconSpec? {
+        val (mount, config) =
+            byMount
+                .filter { (mount, _) -> mount.isEmpty() || path == mount || path.startsWith("$mount/") }
+                .maxByOrNull { (mount, _) -> mount.length }
+                ?: return null
+        val relative = if (mount.isEmpty()) path else path.removePrefix("$mount/")
+        return config.forPath(relative, isFolder)
+    }
+
+    fun forFile(path: String): IconSpec? = forPath(path, isFolder = false)
+
+    companion object {
+        val EMPTY = VaultIcons(emptyList())
+    }
+}

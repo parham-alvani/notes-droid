@@ -22,7 +22,10 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Obsidian flavour** — `[[wikilinks]]` with Obsidian's own resolution rules, callouts, `==highlight==`, wiki-embeds, tables, task lists
 - **Backlinks and outline** for every note
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts
-- **Folder notes** — a folder's `X/X.md` is treated as its landing page
+- **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
+- **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary
+- **Several repositories** — each mounted at a folder, one SSH key between them
+- **Attachments** — PDFs read in place; everything else opens in whatever app handles it
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Right-to-left support**, detected per block rather than declared, for vaults that mix scripts
 
@@ -62,12 +65,13 @@ The app is told which repository to read at runtime — nothing about the vault 
 
 | Setting | Meaning |
 | --- | --- |
-| Owner | GitHub user or organisation |
-| Repository | The repository holding the vault |
-| Branch | Defaults to the repository's default branch |
-| Sync method | `REST` with a token (default), or `git over SSH` with an on-device key |
+| Repositories | One or more, each with an owner, a name and a branch |
+| Folder | Where a repository appears in the tree. The first mounts at the root |
+| Sync method | Per repository: `REST` with a token (default), or `git over SSH` with an on-device key |
 | Access token | A GitHub fine-grained personal access token (REST only) |
 | Images | `on demand` (default), `prefetch on Wi-Fi`, or `never` |
+| Background sync | Off, or every 1/3/6/12/24 hours, optionally Wi-Fi only |
+| Daily task summary | Off by default; a single notification counting what is overdue and due |
 
 ### Access token
 
@@ -88,6 +92,16 @@ The first sync reads the repository tree at `HEAD`, keeps the markdown blobs, an
 Afterwards each refresh asks only whether `HEAD` moved, using an `ETag`. If it did not, that is the entire sync: one request, and a `304` does not even count against the rate limit. If it did, a single compare call returns exactly what changed, including renames, which cost nothing to apply because the content is unchanged.
 
 Images are recorded but not downloaded, so the default install carries the markdown alone. They are fetched individually when a note that embeds one is opened, and cached after that.
+
+### Several repositories
+
+Each repository is mounted at a folder and the app treats the result as one vault: the browser shows them side by side, search covers all of them, links resolve across them, and the task list is the union.
+
+The first repository mounts at the root, so a vault that has only ever read one is unchanged — nothing moved on disk and no path was rewritten. Every repository after it needs a folder name, because two of them cannot both own the top level.
+
+**One SSH key serves all of them.** The key is generated once on the device; its public line is added as a read-only deploy key on each repository. There is nothing per-repository to configure beyond the name.
+
+A repository that fails to sync does not stop the others, and its error is shown against it rather than as the vault's.
 
 ### git over SSH
 
@@ -112,8 +126,13 @@ Glyphs come from [Lucide](https://lucide.dev), flattened into a single asset by 
 - [x] **M5** — hard content: images, diagrams, maths, right-to-left
 - [x] **M6** — release: background sync, settings, permissions
 - [x] **M7** — git-over-SSH as an alternative transport
+- [x] **M8** — the vault's own icons, from the Iconic plugin
+- [x] **M9** — background sync that actually runs, and releases signed from a tag
+- [x] **M10** — attachments: PDFs read in place, everything else handed off
+- [x] **M11** — tasks across the whole vault, with a daily summary
+- [x] **M12** — several repositories, mounted side by side
 
-Not done: an onboarding flow (setup lives in Settings instead), syntax highlighting inside code blocks, and any on-device verification.
+Not done: an onboarding flow (setup lives in Settings instead), and editing, which remains out of scope.
 
 ## Releasing
 
