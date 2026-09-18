@@ -1,0 +1,3 @@
+Settings now has an About section: version, release date, the commit it was built from, author, licence and a link to the repository.
+
+The date is the commit's own rather than the moment of the build, so two builds of the same source describe themselves identically.

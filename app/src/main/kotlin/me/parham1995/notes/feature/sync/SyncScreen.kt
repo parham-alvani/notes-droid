@@ -44,9 +44,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import me.parham1995.notes.BuildConfig
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SyncTransport
 import java.text.DateFormat
@@ -88,6 +90,7 @@ fun SyncScreen(viewModel: SyncViewModel = hiltViewModel()) {
             ImagesCard(state, viewModel)
             StatusCard(state, viewModel)
             LogCard(viewModel)
+            AboutCard()
         }
     }
 }
@@ -261,6 +264,35 @@ private fun StatusCard(
                 Text(if (state.reindexing) "Reindexing..." else "Reindex")
             }
             TextButton(onClick = viewModel::reset, enabled = !state.running) { Text("Reset vault") }
+        }
+    }
+}
+
+/**
+ * What this build actually is.
+ *
+ * Useful when more than one APK is in circulation -- a release from the tag, a
+ * build handed over directly -- and the only way to tell them apart used to be
+ * to look at the file you installed from. The date is the commit's, not the
+ * moment of the build, so two builds of the same source say the same thing.
+ */
+@Composable
+private fun AboutCard() {
+    val context = LocalContext.current
+    SectionCard("About") {
+        LabelledValue("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+        LabelledValue("Released", BuildConfig.BUILD_DATE)
+        LabelledValue("Commit", BuildConfig.GIT_SHA)
+        LabelledValue("Author", BuildConfig.AUTHOR)
+        LabelledValue("License", BuildConfig.LICENSE)
+        TextButton(
+            onClick = {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, BuildConfig.REPOSITORY.toUri()))
+                }
+            },
+        ) {
+            Text(BuildConfig.REPOSITORY.removePrefix("https://"))
         }
     }
 }

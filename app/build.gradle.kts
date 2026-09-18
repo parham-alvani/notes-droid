@@ -34,6 +34,23 @@ fun signingValue(
 
 val releaseKeystore: String? = signingValue("storeFile", "DAFTAR_KEYSTORE")
 
+/**
+ * A value from git, or empty when this is not a checkout.
+ *
+ * Read through a provider rather than by shelling out directly, so the
+ * configuration cache knows the command is an input instead of silently
+ * serving a stale answer.
+ */
+fun gitValue(vararg args: String): String =
+    runCatching {
+        providers
+            .exec { commandLine(listOf("git") + args) }
+            .standardOutput
+            .asText
+            .get()
+            .trim()
+    }.getOrDefault("")
+
 android {
     namespace = "me.parham1995.notes"
 
@@ -43,8 +60,18 @@ android {
         // with a regex to decide an update is available, and a computed value
         // -- from the tag, from the commit count -- is invisible to it.
         // `just bump` keeps them in step; CI refuses a tag that disagrees.
-        versionCode = 200
-        versionName = "0.2.0"
+        versionCode = 201
+        versionName = "0.2.1"
+
+        // The commit's own date, not the moment of the build. A build stamped
+        // with `now` differs every time it runs, which breaks the build cache
+        // and makes two builds of the same source impossible to compare --
+        // exactly the property F-Droid checks for.
+        buildConfigField("String", "GIT_SHA", "\"${gitValue("rev-parse", "--short", "HEAD").ifEmpty { "unknown" }}\"")
+        buildConfigField("String", "BUILD_DATE", "\"${gitValue("log", "-1", "--format=%cs").ifEmpty { "unknown" }}\"")
+        buildConfigField("String", "REPOSITORY", "\"https://github.com/parham-alvani/notes-droid\"")
+        buildConfigField("String", "AUTHOR", "\"Parham Alvani\"")
+        buildConfigField("String", "LICENSE", "\"GPL-3.0\"")
     }
 
     signingConfigs {
