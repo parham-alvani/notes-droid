@@ -41,6 +41,16 @@ interface BlobDao {
     @Query("SELECT COUNT(*) FROM blobs WHERE kind = :kind")
     fun countOfKind(kind: BlobKind): Flow<Int>
 
+    /**
+     * Files the reader does not parse but can still open -- images, PDFs,
+     * recordings, documents.
+     *
+     * Re-emitted rather than sampled, because a repository of nothing but
+     * attachments has no notes to make the tree appear when it syncs.
+     */
+    @Query("SELECT path FROM blobs WHERE kind != :markdown ORDER BY path")
+    fun attachmentPaths(markdown: BlobKind = BlobKind.MARKDOWN): Flow<List<String>>
+
     @Query("SELECT COALESCE(SUM(size), 0) FROM blobs WHERE localState = :state")
     suspend fun bytesInState(state: LocalState): Long
 

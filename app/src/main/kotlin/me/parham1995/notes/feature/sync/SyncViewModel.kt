@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.ImagePolicy
@@ -24,6 +25,14 @@ import me.parham1995.notes.data.database.SyncLogEntity
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
 import javax.inject.Inject
+
+/** One repository's SSH key, since a deploy key serves exactly one. */
+data class VaultKey(
+    val mount: String,
+    val label: String,
+    val publicKey: String?,
+    val fingerprint: String?,
+)
 
 data class SyncUiState(
     val settings: VaultSettings = VaultSettings(),
@@ -44,8 +53,7 @@ data class SyncUiState(
     /** Result of the last "test connection", for immediate feedback. */
     val connectionMessage: String? = null,
     val tokenRejected: Boolean = false,
-    val sshPublicKey: String? = null,
-    val sshFingerprint: String? = null,
+    val sshKeys: List<VaultKey> = emptyList(),
     val generatingKey: Boolean = false,
     val reindexing: Boolean = false,
 )
@@ -68,8 +76,7 @@ class SyncViewModel
             val hasToken: Boolean = false,
             val diskBytes: Long = 0,
             val connectionMessage: String? = null,
-            val sshPublicKey: String? = null,
-            val sshFingerprint: String? = null,
+            val sshKeys: List<VaultKey> = emptyList(),
             val generatingKey: Boolean = false,
             val reindexing: Boolean = false,
         )
@@ -100,8 +107,7 @@ class SyncViewModel
                         total = running?.progress?.getInt(SyncWorker.KEY_TOTAL, 0) ?: 0,
                         diskBytes = extra.diskBytes,
                         connectionMessage = extra.connectionMessage,
-                        sshPublicKey = extra.sshPublicKey,
-                        sshFingerprint = extra.sshFingerprint,
+                        sshKeys = extra.sshKeys,
                         generatingKey = extra.generatingKey,
                         reindexing = extra.reindexing,
                         tokenRejected =
@@ -209,16 +215,12 @@ class SyncViewModel
          * The private half never leaves the device; only this public line does,
          * and it goes to GitHub as a read-only deploy key.
          */
-        fun generateSshKey() =
+        fun generateSshKey(mount: String) =
             viewModelScope.launch {
                 local.value = local.value.copy(generatingKey = true)
-                val line = runCatching { sshKeys.generate() }.getOrElse { it.message ?: "key generation failed" }
-                local.value =
-                    local.value.copy(
-                        sshPublicKey = line,
-                        sshFingerprint = sshKeys.fingerprint(),
-                        generatingKey = false,
-                    )
+                runCatching { sshKeys.generate(mount) }
+                local.value = local.value.copy(generatingKey = false)
+                refreshLocal()
             }
 
         fun reindex() =
@@ -249,8 +251,25 @@ class SyncViewModel
                     local.value.copy(
                         hasToken = tokenStore.hasToken(),
                         diskBytes = files.sizeOnDisk(),
-                        sshPublicKey = sshKeys.publicKeyLine(),
-                        sshFingerprint = sshKeys.publicKeyLine()?.let { sshKeys.fingerprint() },
+                        // One entry per repository set to SSH. GitHub refuses
+                        // the same deploy key on a second repository, so there
+                        // is a key each and each has to be registered.
+                        sshKeys =
+                            repository
+                                .vaults()
+                                .first()
+                                .filter { SyncTransport.parse(it.transport) == SyncTransport.SSH }
+                                .map { vault ->
+                                    VaultKey(
+                                        mount = vault.mount,
+                                        label = vault.label,
+                                        publicKey = sshKeys.publicKeyLine(vault.mount),
+                                        fingerprint =
+                                            sshKeys
+                                                .publicKeyLine(vault.mount)
+                                                ?.let { sshKeys.fingerprint(vault.mount) },
+                                    )
+                                },
                     )
             }
 

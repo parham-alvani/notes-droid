@@ -1,0 +1,5 @@
+Files you can see, and a key per repository.
+
+The browser only ever showed markdown, so a repository of scanned documents looked like an empty tree. Images, PDFs and other attachments now appear alongside notes, folders are derived from them too, and tapping one opens it — PDFs in place, everything else in whatever app handles that type.
+
+SSH keys are now one per repository. GitHub allows a deploy key on exactly one repository and refuses the same public line a second time, which the previous release assumed otherwise. The repository at the root keeps the key it already had; every other one gets its own, listed separately in Settings.

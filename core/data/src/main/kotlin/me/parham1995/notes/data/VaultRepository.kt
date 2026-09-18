@@ -3,9 +3,11 @@ package me.parham1995.notes.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.BacklinkRow
+import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.HeadingDao
 import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.data.database.LinkDao
@@ -20,7 +22,7 @@ import me.parham1995.notes.markdown.MdBlock
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** One row in the browser: a folder, or a note. */
+/** One row in the browser. */
 data class VaultItem(
     val path: String,
     val name: String,
@@ -28,6 +30,15 @@ data class VaultItem(
     /** For a folder, the id of its `X/X.md` landing page when it has one. */
     val noteId: Long? = null,
     val isRtl: Boolean = false,
+    /**
+     * True for a file the reader hands to a viewer rather than renders -- a
+     * PDF, an image, a recording.
+     *
+     * Without these the browser could only show markdown, which is fine for a
+     * vault of notes and shows an empty tree for a repository of scanned
+     * documents.
+     */
+    val isAttachment: Boolean = false,
 )
 
 /** A note prepared for display. */
@@ -68,6 +79,7 @@ class VaultRepository
         private val files: VaultFileStore,
         private val search: SearchIndex,
         private val tasks: TaskDao,
+        private val blobs: BlobDao,
     ) {
         val noteCount: Flow<Int> = notes.count()
 
@@ -89,13 +101,17 @@ class VaultRepository
          * worked perfectly.
          */
         fun childrenFlow(parent: String): Flow<List<VaultItem>> =
-            combine(notes.allParentsFlow(), notes.childrenOfFlow(parent)) { parents, childNotes ->
-                buildChildren(parent, parents, childNotes)
+            combine(
+                notes.allParentsFlow(),
+                notes.childrenOfFlow(parent),
+                blobs.attachmentPaths(),
+            ) { parents, childNotes, attachments ->
+                buildChildren(parent, parents, childNotes, attachments)
             }.flowOn(Dispatchers.Default)
 
         suspend fun children(parent: String): List<VaultItem> =
             withContext(Dispatchers.Default) {
-                buildChildren(parent, notes.allParents(), notes.childrenOf(parent))
+                buildChildren(parent, notes.allParents(), notes.childrenOf(parent), blobs.attachmentPaths().first())
             }
 
         /**
@@ -106,11 +122,15 @@ class VaultRepository
             parent: String,
             parents: List<String>,
             childNotes: List<NoteEntity>,
+            attachmentPaths: List<String>,
         ): List<VaultItem> {
             val prefix = if (parent.isEmpty()) "" else "$parent/"
+            val under = attachmentPaths.filter { it.startsWith(prefix) }
+            // Folders come from the attachments as well as the notes: a
+            // repository of scanned documents has directories full of PDFs and
+            // not one note to imply them.
             val folders =
-                parents
-                    .asSequence()
+                (parents.asSequence() + under.asSequence().map { it.substringBeforeLast('/', "") })
                     .filter { it.startsWith(prefix) && it != parent }
                     .map { it.removePrefix(prefix).substringBefore('/') }
                     .filter { it.isNotEmpty() }
@@ -137,7 +157,19 @@ class VaultRepository
                     .filterNot { it.isFolderNote && it.name == parent.substringAfterLast('/') }
                     .map { VaultItem(it.path, it.name, isFolder = false, noteId = it.id, isRtl = it.isRtl) }
 
-            return folderItems + noteItems
+            val attachmentItems =
+                under
+                    .filter { !it.removePrefix(prefix).contains('/') }
+                    .map { path ->
+                        VaultItem(
+                            path = path,
+                            name = path.substringAfterLast('/'),
+                            isFolder = false,
+                            isAttachment = true,
+                        )
+                    }.sortedBy { it.name.lowercase() }
+
+            return folderItems + noteItems + attachmentItems
         }
 
         suspend fun note(id: Long): RenderedNote? =

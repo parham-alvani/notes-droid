@@ -397,7 +397,12 @@ class SyncRepository
                 }
 
                 SyncTransport.SSH -> {
-                    if (!sshKeys.exists()) throw NotConfiguredException("no SSH key generated yet")
+                    if (!sshKeys.exists(vault.mount)) {
+                        throw NotConfiguredException(
+                            "no SSH key for ${vault.label} yet - generate one in Settings and add it " +
+                                "as a deploy key on that repository",
+                        )
+                    }
                     GitSshVaultSync(
                         // Each repository gets its own working tree, which is
                         // what lets one key serve all of them without their
@@ -406,6 +411,7 @@ class SyncRepository
                         remoteUrl = sshUrl(vault),
                         branch = vault.branch ?: DEFAULT_BRANCH,
                         keys = sshKeys,
+                        keyMount = vault.mount,
                         configDir = File(context.filesDir, "git"),
                         log = log::info,
                     )

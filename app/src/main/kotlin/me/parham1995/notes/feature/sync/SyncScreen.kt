@@ -620,33 +620,66 @@ private fun SshKeyCard(
 
     SectionCard("SSH key") {
         Text(
-            "Generated on this device. The private half never leaves it -- add the public line below to the " +
-                "repository as a read-only deploy key.",
+            "Generated on this device. The private half never leaves it -- add each public line below to " +
+                "that repository as a read-only deploy key.",
             style = MaterialTheme.typography.bodySmall,
         )
-        state.sshFingerprint?.let { fingerprint ->
-            // The one thing that tells a key that was never registered from one
-            // replaced by a reinstall. Both fail identically without it.
+        if (state.sshKeys.size > 1) {
             Text(
-                text = "Fingerprint: $fingerprint",
+                "A key each, because GitHub allows a deploy key on exactly one repository -- the same " +
+                    "line pasted a second time is refused.",
                 style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                "It must appear in the repository's deploy keys on GitHub.",
-                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        state.sshPublicKey?.let { line ->
-            Text(
-                text = line,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-            )
+
+        state.sshKeys.forEach { key ->
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            Text(key.label, style = MaterialTheme.typography.labelLarge)
+            if (key.publicKey == null) {
+                Text(
+                    "No key yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                // The one thing that tells a key that was never registered from
+                // one replaced by a reinstall. Both fail identically without it.
+                Text(
+                    text = "Fingerprint: ${key.fingerprint}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = key.publicKey,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { viewModel.generateSshKey(key.mount) },
+                    enabled = !state.generatingKey,
+                ) {
+                    Text(if (key.publicKey == null) "Generate" else "Regenerate")
+                }
+                key.publicKey?.let { line ->
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                clipboard.setClipEntry(
+                                    ClipData.newPlainText("ssh public key", line).toClipEntry(),
+                                )
+                            }
+                        },
+                    ) {
+                        Text("Copy")
+                    }
+                }
+            }
         }
         Row(
             modifier =
@@ -668,21 +701,6 @@ private fun SshKeyCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = viewModel::generateSshKey, enabled = !state.generatingKey) {
-                Text(if (state.sshPublicKey == null) "Generate key" else "Regenerate")
-            }
-            state.sshPublicKey?.let { line ->
-                OutlinedButton(onClick = {
-                    scope.launch {
-                        clipboard.setClipEntry(ClipData.newPlainText("ssh public key", line).toClipEntry())
-                    }
-                }) {
-                    Text("Copy")
-                }
             }
         }
     }
@@ -729,15 +747,19 @@ private fun ImagesCard(
  * button permanently disabled for anyone using SSH, which is exactly the setup
  * where there is deliberately no token to have.
  */
-private fun SyncUiState.blocker(): String? =
-    when {
-        !settings.isConfigured -> "Set the repository owner and name first."
-        settings.transport == SyncTransport.REST && !hasToken ->
-            "REST sync needs an access token. Add one above, or switch to git over SSH."
-        settings.transport == SyncTransport.SSH && sshPublicKey == null ->
-            "SSH sync needs a key. Generate one above and add it to the repository as a read-only deploy key."
+private fun SyncUiState.blocker(): String? {
+    val overRest = vaults.any { SyncTransport.parse(it.transport) == SyncTransport.REST }
+    val keyless = sshKeys.firstOrNull { it.publicKey == null }
+    return when {
+        vaults.isEmpty() -> "Add a repository first."
+        overRest && !hasToken ->
+            "Syncing over REST needs an access token. Add one above, or switch that repository to SSH."
+        keyless != null ->
+            "${keyless.label} has no SSH key yet. Generate one above and add it to that repository " +
+                "as a read-only deploy key."
         else -> null
     }
+}
 
 /**
  * The sync journal.

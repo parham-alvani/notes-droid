@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.browser
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -29,15 +30,24 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.pdf.PdfViewer
+import me.parham1995.notes.ui.render.Attachments
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +62,42 @@ fun BrowserScreen(
     // composition means walking up the tree afterwards is not undone on the
     // next recomposition.
     LaunchedEffect(initialPath) { if (initialPath.isNotEmpty()) viewModel.open(initialPath) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // A PDF is read here; anything else goes to whatever app owns that type.
+    var reading by remember { mutableStateOf<File?>(null) }
+
+    val openAttachment: (String) -> Unit = { path ->
+        scope.launch {
+            val file = viewModel.attachment(path)
+            val message =
+                when {
+                    file == null -> "Could not fetch " + path.substringAfterLast('/')
+                    Attachments.isPdf(path) -> {
+                        reading = file
+                        null
+                    }
+                    Attachments.open(context, file) -> null
+                    else -> "Nothing on this phone opens that file"
+                }
+            message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    reading?.let { file ->
+        PdfViewer(
+            file = file,
+            title = file.name,
+            onDismiss = { reading = null },
+            onOpenExternally = {
+                reading = null
+                if (!Attachments.open(context, file)) {
+                    Toast.makeText(context, "Nothing on this phone opens that file", Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+    }
 
     // Inside a folder, back walks up the tree before it leaves the screen.
     BackHandler(enabled = state.path.isNotEmpty()) { viewModel.up() }
@@ -143,7 +189,7 @@ fun BrowserScreen(
                     }
 
                     items(state.items, key = { it.item.path }) { row ->
-                        BrowserRow(row, viewModel, onOpenNote)
+                        BrowserRow(row, viewModel, onOpenNote, openAttachment)
                     }
 
                     if (!state.loading && state.items.isEmpty()) {
@@ -168,19 +214,31 @@ private fun BrowserRow(
     row: VaultRowItem,
     viewModel: BrowserViewModel,
     onOpenNote: (Long) -> Unit,
+    onOpenAttachment: (String) -> Unit,
 ) {
     val item = row.item
     ItemRow(
         title = item.name,
         icon = row.icon,
-        defaultIcon = if (item.isFolder) "folder" else "file-text",
-        iconDescription = if (item.isFolder) "Folder" else "Note",
+        defaultIcon =
+            when {
+                item.isFolder -> "folder"
+                item.isAttachment -> Attachments.iconOf(item.path)
+                else -> "file-text"
+            },
+        iconDescription =
+            when {
+                item.isFolder -> "Folder"
+                item.isAttachment -> "File"
+                else -> "Note"
+            },
         // A folder with its own note opens that note; the chevron descends.
         underline = item.isFolder && item.noteId != null,
         onClick = {
             val note = item.noteId
             when {
                 note != null -> onOpenNote(note)
+                item.isAttachment -> onOpenAttachment(item.path)
                 else -> viewModel.open(item.path)
             }
         },

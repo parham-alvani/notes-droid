@@ -12,13 +12,23 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The SSH key the git transport authenticates with.
+ * The SSH keys the git transport authenticates with -- one per repository.
  *
- * The key is generated **on the device** and the private half never leaves it:
+ * A key is generated **on the device** and the private half never leaves it:
  * what gets copied out is the public line, which is pasted into GitHub as a
  * read-only deploy key. That is the whole appeal of this transport over a
  * token -- nothing secret has to be moved between machines, and a deploy key
  * cannot reach any other repository.
+ *
+ * One key per repository, because GitHub allows a deploy key on exactly one
+ * repository: registering the same public line a second time is refused with
+ * "key is already in use". The alternative -- a key on the account rather than
+ * the repository -- would be one key, and would also grant write access to
+ * everything the account can reach, which is a poor trade for a reader.
+ *
+ * Keys are named after the mount so that the vault mounted at the root keeps
+ * the file it already had, and an existing install does not have to register
+ * anything again.
  */
 @Singleton
 class SshKeyStore
@@ -35,20 +45,33 @@ class SshKeyStore
         }
 
         private val sshDir = File(context.filesDir, "ssh").apply { mkdirs() }
-        private val privateKey = File(sshDir, "id_notes")
-        private val publicKey = File(sshDir, "id_notes.pub")
 
         val directory: File get() = sshDir
 
-        val identity: File get() = privateKey
+        /**
+         * `id_notes` for the root-mounted vault -- the name it has always had,
+         * so the key already registered on GitHub keeps working -- and a name
+         * derived from the mount for every other repository.
+         */
+        private fun baseName(mount: String): String =
+            if (mount.isEmpty()) "id_notes" else "id_" + mount.lowercase().replace(UNSAFE, "_")
 
-        fun exists(): Boolean = privateKey.isFile && publicKey.isFile
+        fun identity(mount: String = ""): File = File(sshDir, baseName(mount))
+
+        private fun publicFile(mount: String): File = File(sshDir, baseName(mount) + ".pub")
+
+        fun exists(mount: String = ""): Boolean = identity(mount).isFile && publicFile(mount).isFile
 
         /** The line to paste into GitHub's deploy-key box. */
-        fun publicKeyLine(): String? = publicKey.takeIf { it.isFile }?.readText()?.trim()
+        fun publicKeyLine(mount: String = ""): String? = publicFile(mount).takeIf { it.isFile }?.readText()?.trim()
 
-        suspend fun generate(comment: String = "notes-droid"): String =
+        suspend fun generate(
+            mount: String = "",
+            comment: String = "notes-droid",
+        ): String =
             withContext(Dispatchers.IO) {
+                val privateKey = identity(mount)
+                val publicKey = publicFile(mount)
                 val generated = SshKeyGenerator.generate()
                 val pair = generated.pair
 
@@ -95,14 +118,19 @@ class SshKeyStore
          * Without it there is no way to tell a key that was never registered
          * from one that was replaced by a reinstall, and both fail identically.
          */
-        fun fingerprint(): String =
+        fun fingerprint(mount: String = ""): String =
             runCatching {
-                val line = publicKeyLine() ?: return "no key"
+                val line = publicKeyLine(mount) ?: return "no key"
                 KeyUtils.getFingerPrint(PublicKeyEntry.parsePublicKeyEntry(line).resolvePublicKey(null, null, null))
             }.getOrDefault("unreadable")
 
-        fun delete() {
-            privateKey.delete()
-            publicKey.delete()
+        fun delete(mount: String = "") {
+            identity(mount).delete()
+            publicFile(mount).delete()
+        }
+
+        private companion object {
+            /** Anything a file name should not carry, whatever a folder is called. */
+            val UNSAFE = Regex("[^a-z0-9._-]")
         }
     }

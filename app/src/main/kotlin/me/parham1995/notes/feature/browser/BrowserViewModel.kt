@@ -16,11 +16,13 @@ import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
+import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.VaultRowItem
+import java.io.File
 import javax.inject.Inject
 
 /** A recently-opened note, likewise. */
@@ -55,6 +57,7 @@ class BrowserViewModel
     @Inject
     constructor(
         private val repository: VaultRepository,
+        private val files: VaultFileSource,
         private val icons: IconStore,
         private val scheduler: SyncScheduler,
         private val settings: SettingsStore,
@@ -123,6 +126,12 @@ class BrowserViewModel
                 }
             }
         }
+
+        /**
+         * The file on disk, fetching it first if this install has only ever
+         * recorded it. Null when it cannot be had at all.
+         */
+        suspend fun attachment(path: String): File? = files.localFile(path)
 
         fun open(next: String) {
             path.value = next

@@ -57,6 +57,8 @@ class GitSshVaultSync(
     private val keys: SshKeyStore,
     configDir: File,
     private val filter: VaultFilter = VaultFilter(),
+    /** Names this repository's own key, since a deploy key serves only one. */
+    private val keyMount: String = "",
     private val shallowDepth: Int = DEFAULT_DEPTH,
     /** Narrates each stage, so a long clone is visibly working. */
     private val log: suspend (String) -> Unit = {},
@@ -176,7 +178,7 @@ class GitSshVaultSync(
     }
 
     /** The public line to register with the host as a read-only deploy key. */
-    suspend fun publicKey(): String = keys.publicKeyLine() ?: keys.generate()
+    suspend fun publicKey(): String = keys.publicKeyLine(keyMount) ?: keys.generate(keyMount)
 
     private enum class ChangeKind { ADDED, MODIFIED, DELETED }
 
@@ -330,11 +332,11 @@ class GitSshVaultSync(
         // the natural response is to go and replace a deploy key that was
         // never the problem. A key the device cannot read is a local fault and
         // has to say so.
-        val fingerprint = keys.fingerprint()
+        val fingerprint = keys.fingerprint(keyMount)
         if (NO_KEY_OFFERED in failure.describeChain() || fingerprint in UNUSABLE_KEY) {
             throw IOException(
                 "this device could not use its own SSH key, so nothing was sent to the server " +
-                    "and nothing was refused. The key is at ${keys.identity.name} and reads as " +
+                    "and nothing was refused. The key is at ${keys.identity(keyMount).name} and reads as " +
                     "\"$fingerprint\". Generating a new one in Settings will not help if the old " +
                     "one was readable before: " + failure.describeChain(),
                 failure,
@@ -446,7 +448,7 @@ class GitSshVaultSync(
             .setHomeDirectory(keys.directory.parentFile)
             .setSshDirectory(keys.directory)
             .setPreferredAuthentications("publickey")
-            .setDefaultIdentities { listOf(keys.identity.toPath()) }
+            .setDefaultIdentities { listOf(keys.identity(keyMount).toPath()) }
             .setConfigFile { keys.configFile() }
             // There is no interactive prompt on a phone and no known_hosts to
             // seed, so the host key is accepted on first use and pinned by

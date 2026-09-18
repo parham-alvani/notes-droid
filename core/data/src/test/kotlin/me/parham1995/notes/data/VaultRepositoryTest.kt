@@ -48,6 +48,7 @@ class VaultRepositoryTest {
                 files = files,
                 search = search,
                 tasks = database.taskDao(),
+                blobs = database.blobDao(),
             )
     }
 
@@ -63,6 +64,19 @@ class VaultRepositoryTest {
                 PathAndSha(path, "sha-" + path.hashCode())
             }
         indexer.indexAll(entries)
+    }
+
+    /** Records a file the reader does not parse, as a sync would. */
+    private suspend fun attachment(path: String) {
+        database.blobDao().upsert(
+            me.parham1995.notes.data.database.BlobEntity(
+                path = path,
+                sha = "sha-" + path.hashCode(),
+                size = 1,
+                kind = me.parham1995.notes.sync.BlobKind.OTHER,
+                localState = me.parham1995.notes.sync.LocalState.ABSENT,
+            ),
+        )
     }
 
     @Test
@@ -234,5 +248,36 @@ class VaultRepositoryTest {
             indexer.indexChanged(changed = emptyList(), removed = listOf("Work/Apollo.md"))
 
             assertThat(repository.openTasks().first()).isEmpty()
+        }
+
+    @Test
+    fun `a repository of documents is not an empty tree`() =
+        runTest {
+            // The case this was missing entirely: 63 PDFs, 82 images and one
+            // markdown file. Building the browser from notes alone showed a
+            // folder with one note in it and nothing else.
+            attachment("Papers/2024/lease.pdf")
+            attachment("Papers/passport.jpg")
+            attachment("loose.pdf")
+
+            val root = repository.children("")
+            assertThat(root.map { it.name }).containsExactly("Papers", "loose.pdf")
+            assertThat(root.single { it.name == "Papers" }.isFolder).isTrue()
+            assertThat(root.single { it.name == "loose.pdf" }.isAttachment).isTrue()
+
+            val papers = repository.children("Papers")
+            // A folder implied only by the attachments below it still appears.
+            assertThat(papers.map { it.name }).containsExactly("2024", "passport.jpg")
+            assertThat(papers.single { it.name == "2024" }.isFolder).isTrue()
+        }
+
+    @Test
+    fun `notes and files share a folder without hiding each other`() =
+        runTest {
+            index("Papers/Notes.md" to "a note")
+            attachment("Papers/lease.pdf")
+
+            assertThat(repository.children("Papers").map { it.name })
+                .containsExactly("Notes", "lease.pdf")
         }
 }
