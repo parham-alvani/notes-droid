@@ -13,7 +13,6 @@ import me.parham1995.notes.data.database.LinkEntity
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.NoteWrite
-import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
@@ -37,7 +36,6 @@ import javax.inject.Singleton
 class VaultIndexer
     @Inject
     constructor(
-        private val database: NotesDatabase,
         private val files: VaultFileStore,
         private val notes: NoteDao,
         private val links: LinkDao,

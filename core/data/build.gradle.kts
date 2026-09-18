@@ -7,6 +7,16 @@ plugins {
 android {
     namespace = "me.parham1995.notes.data"
 
+    testOptions {
+        unitTests {
+            // Room and DataStore want a real Context and real resources;
+            // Robolectric supplies both on the JVM, which keeps the suite
+            // emulator-free.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
+
     defaultConfig {
         // Room schemas are checked in so migrations can be tested without a device.
         ksp { arg("room.schemaLocation", "$projectDir/schemas") }
@@ -50,5 +60,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.room.testing)
+    testImplementation(libs.sqlite.bundled.jvm)
     testRuntimeOnly(libs.slf4j.simple)
 }
