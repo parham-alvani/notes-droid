@@ -87,3 +87,31 @@ ci: lint test build
 
 clean:
     ./gradlew clean
+
+# set the release version everywhere (e.g. `just bump 0.2.0`)
+[group('release')]
+bump version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # A monotonic integer derived from the version, so it can never go
+    # backwards and never needs remembering. 0.2.0 -> 200, 1.12.3 -> 11203.
+    code=$(echo "{{ version }}" | awk -F. '{ printf "%d", $1 * 10000 + $2 * 100 + $3 }')
+    perl -pi -e "s/versionCode = \d+/versionCode = $code/" app/build.gradle.kts
+    perl -pi -e 's/versionName = "[^"]*"/versionName = "{{ version }}"/' app/build.gradle.kts
+    log="fastlane/metadata/android/en-US/changelogs/$code.txt"
+    [ -f "$log" ] || printf 'Describe what changed in {{ version }}.\n' > "$log"
+    echo "version {{ version }}, code $code"
+    echo
+    echo "next:"
+    echo "  1. write $log"
+    echo "  2. git commit -am 'chore: release {{ version }}'"
+    echo "  3. git tag v{{ version }} && git push --follow-tags"
+
+# what the release workflow checks before it publishes anything
+[group('release')]
+release-check:
+    @declared=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts); \
+     code=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts); \
+     echo "versionName $declared / versionCode $code"; \
+     test -f "fastlane/metadata/android/en-US/changelogs/$code.txt" \
+       && echo "changelog      ok" || echo "changelog      MISSING - run 'just bump $declared'"

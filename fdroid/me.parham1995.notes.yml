@@ -1,0 +1,52 @@
+# The metadata for an F-Droid submission. It is kept here so it is versioned
+# alongside what it describes; F-Droid itself reads it from a copy in
+# https://gitlab.com/fdroid/fdroiddata, submitted as a merge request at
+# metadata/me.parham1995.notes.yml.
+#
+# The user-facing text is NOT here. F-Droid reads the title, description,
+# changelogs and screenshots straight out of this repository's
+# fastlane/metadata/android/en-US/, so there is only ever one copy of it.
+
+Categories:
+  - Reading
+License: GPL-3.0-only
+AuthorName: Parham Alvani
+SourceCode: https://github.com/parham-alvani/notes-droid
+IssueTracker: https://github.com/parham-alvani/notes-droid/issues
+Changelog: https://github.com/parham-alvani/notes-droid/releases
+
+# Honest rather than convenient: the app reads a vault over the GitHub API or
+# from github.com over SSH, and cannot be used without an account there.
+# Declaring this is also what stops a reviewer finding it themselves.
+AntiFeatures:
+  NonFreeNet:
+    en-US: >-
+      The vault is read from GitHub, a proprietary hosting service, and the app
+      cannot be used without an account there.
+
+RepoType: git
+Repo: https://github.com/parham-alvani/notes-droid.git
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 100
+    commit: v0.1.0
+    subdir: app
+    gradle:
+      - yes
+    # Mermaid ships as a single pre-bundled, minified file, which F-Droid's
+    # scanner flags as a binary in the source tree -- correctly, since minified
+    # output is not the preferred form for modification. It is the unmodified
+    # MIT-licensed dist from https://www.npmjs.com/package/mermaid, at the
+    # version in app/src/main/assets/mermaid/VERSION, and it is what renders
+    # diagrams offline.
+    #
+    # Expect a reviewer to push back on this. See the Releasing section of the
+    # README for the three ways out.
+    scanignore:
+      - app/src/main/assets/mermaid/mermaid.min.js
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.1.0
+CurrentVersionCode: 100

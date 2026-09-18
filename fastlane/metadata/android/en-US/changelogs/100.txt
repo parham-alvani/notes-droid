@@ -1,0 +1,5 @@
+First release.
+
+Reads an Obsidian vault from a Git repository over the GitHub API or Git over SSH, and renders it offline: wikilinks, callouts, highlights, tables, task lists, folder notes, Mermaid, LaTeX, syntax highlighting, right-to-left text, and the icons assigned by the Iconic plugin.
+
+Full-text search over the whole vault, with backlinks and an outline for every note.

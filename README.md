@@ -12,7 +12,7 @@ It is **read-only by design**. Editing on a phone means merge conflicts, and the
 
 ## Status
 
-All seven milestones are implemented and the app builds, lints and tests clean. What has **not** happened yet is a run against a real vault on a real device — every claim below is backed by unit tests and a compiling build, not by field use. Treat the first sync as the thing to verify.
+All seven milestones are implemented, and the app has been running against a real vault — roughly 2,300 notes — on a real device. It is used daily by one person on one phone, which is the honest scope of the field testing behind it.
 
 ## Features
 
@@ -114,6 +114,56 @@ Glyphs come from [Lucide](https://lucide.dev), flattened into a single asset by 
 - [x] **M7** — git-over-SSH as an alternative transport
 
 Not done: an onboarding flow (setup lives in Settings instead), syntax highlighting inside code blocks, and any on-device verification.
+
+## Releasing
+
+Releases are cut from a tag and built by CI. Nothing is published by hand.
+
+```bash
+just bump 0.2.0                 # versionName, versionCode, changelog stub
+$EDITOR fastlane/metadata/android/en-US/changelogs/200.txt
+git commit -am "chore: release 0.2.0"
+git tag v0.2.0 && git push --follow-tags
+```
+
+`versionCode` is derived from the version — `0.2.0` is `200`, `1.12.3` is `11203` — so it can never go backwards. Both are literals in `app/build.gradle.kts` rather than computed, because F-Droid reads them out of that file to decide an update exists. The workflow refuses a tag that disagrees with what the file says.
+
+### Signing
+
+An app's identity is its signing key. Change it and the only way to update an installed copy is to uninstall it, which takes the synced vault, the access token and the on-device SSH key with it. So the key is generated once and kept:
+
+```bash
+keytool -genkeypair -v -keystore daftar-release.jks \
+    -alias daftar -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Keep the `.jks` and its passwords somewhere they survive losing the machine. Locally, point the build at them with a `keystore.properties` at the repository root — gitignored, alongside `*.jks`:
+
+```properties
+storeFile=/absolute/path/to/daftar-release.jks
+storePassword=…
+keyAlias=daftar
+keyPassword=…
+```
+
+In CI the same four values come from repository secrets `KEYSTORE_BASE64` (`base64 -w0 daftar-release.jks`), `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`. **With none of them present the release build falls back to the debug key**, which is what keeps this repository buildable by anyone who clones it — and is why the release workflow refuses to run without `KEYSTORE_BASE64` rather than quietly publishing something that can never be updated.
+
+Every release carries its certificate's SHA-256 fingerprint in the notes. Check it matches the copy you already have before installing an update:
+
+```bash
+apksigner verify --print-certs daftar-0.2.0.apk
+```
+
+### F-Droid
+
+`fdroid/me.parham1995.notes.yml` is the metadata to submit as a merge request against [fdroiddata](https://gitlab.com/fdroid/fdroiddata). The description, changelogs and screenshots are not in it — F-Droid reads those from `fastlane/metadata/` in this repository, so there is only one copy of that text.
+
+Two things to know before submitting:
+
+- The app is declared `NonFreeNet`. It reads the vault from GitHub and cannot be used without an account there. That is accurate, and declaring it is better than a reviewer finding it.
+- **`mermaid.min.js` is the likely sticking point.** F-Droid's scanner flags it as a binary in the source tree, correctly — minified output is not the preferred form for modification. It is the unmodified MIT-licensed npm dist, and the metadata carries a `scanignore` for it, but expect pushback. The ways out, in increasing order of effort: argue the exception, build Mermaid from source in a `prebuild` step, or ship diagrams as plain code blocks in the F-Droid build.
+
+F-Droid signs with its own key, so an F-Droid install and a GitHub-release install are different app identities and cannot update each other.
 
 ## Testing
 

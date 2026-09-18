@@ -1,0 +1,1 @@
+Read your Obsidian vault from a Git repository, offline

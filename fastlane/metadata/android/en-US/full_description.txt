@@ -1,0 +1,29 @@
+Daftar reads an Obsidian vault that lives in a Git repository. It syncs the notes onto the phone and renders them the way Obsidian does, including the parts plain Markdown gets wrong.
+
+There is no server in between and no Obsidian account. You point it at a repository, and the notes are then on the device — so everything works with no connection.
+
+It is read-only by design. Editing on a phone means merge conflicts, and the thing worth having on a phone is the reading.
+
+<b>What it renders</b>
+
+* [[wikilinks]], resolved with Obsidian's own rules, including links that name only part of a path
+* Callouts, ==highlights==, wiki-embeds, tables, task lists
+* Folder notes — a folder's X/X.md is its landing page
+* Mermaid diagrams, LaTeX maths, and syntax-highlighted code
+* Icons assigned by the Iconic plugin, glyphs and colours included
+* Right-to-left text, detected per block rather than declared, for vaults that mix scripts
+
+<b>What it does for every note</b>
+
+* Full-text search over the whole vault, ranked, with highlighted excerpts
+* Backlinks and an outline
+
+<b>Syncing</b>
+
+The first sync fetches the vault; after that a refresh usually costs a single request, and a renamed note transfers no bytes at all. Images are fetched when a note that embeds one is opened, so a default install carries the Markdown alone.
+
+Two transports: the GitHub API with a read-only token, or Git over SSH with a key generated on the device whose private half never leaves it.
+
+<b>What it sends</b>
+
+Nothing, to anyone but the host your repository is on. No analytics, no crash reporting, no accounts. The access token is encrypted with a key held in the Android keystore, and the SSH private key is generated on the device and never leaves it.
