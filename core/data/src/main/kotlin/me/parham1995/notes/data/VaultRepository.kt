@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.BlobDao
@@ -139,6 +140,10 @@ class VaultRepository
         suspend fun overdueCount(today: String): Int = tasks.overdueCount(today)
 
         suspend fun dueTodayCount(today: String): Int = tasks.dueTodayCount(today)
+
+        /** Open tasks in every vault, keyed by vault. */
+        fun openTaskCounts(): Flow<Map<Long, Int>> =
+            tasks.openCountsByVault().map { rows -> rows.associate { it.vaultId to it.count } }
 
         fun recentlyOpened(limit: Int = RECENT_LIMIT): Flow<List<NoteEntity>> =
             activeVaultId.flatMapLatest { notes.recentlyOpened(it, limit) }

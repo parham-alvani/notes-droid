@@ -123,6 +123,12 @@ data class ManifestRow(
     val sha: String,
 )
 
+/** How many open tasks one vault holds. */
+data class VaultTaskCount(
+    val vaultId: Long,
+    val count: Int,
+)
+
 @Dao
 interface SyncStateDao {
     @Query("SELECT * FROM sync_state WHERE id = :id")
@@ -167,11 +173,26 @@ interface TaskDao {
      * count is what a widget and a notification show, and being late on
      * something in another vault is still being late.
      */
+
     @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn IS NOT NULL AND actionableOn < :today")
     suspend fun overdueCount(today: String): Int
 
     @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn = :today")
     suspend fun dueTodayCount(today: String): Int
+
+    /**
+     * Open tasks per vault, for telling someone their list is empty because
+     * they are reading the wrong one.
+     */
+    @Query(
+        """
+        SELECT n.vaultId AS vaultId, COUNT(*) AS count FROM tasks t
+        JOIN notes n ON n.id = t.noteId
+        WHERE t.open = 1
+        GROUP BY n.vaultId
+        """,
+    )
+    fun openCountsByVault(): Flow<List<VaultTaskCount>>
 
     @Query("DELETE FROM tasks WHERE noteId = :noteId")
     suspend fun deleteByNote(noteId: Long)

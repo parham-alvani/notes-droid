@@ -34,10 +34,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import me.parham1995.notes.R
 import me.parham1995.notes.ui.icon.LucideGlyph
 import java.io.File
 
@@ -90,12 +92,16 @@ fun PdfViewer(
                     title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) {
-                            LucideGlyph("x", size = 22.dp, contentDescription = "Close")
+                            LucideGlyph("x", size = 22.dp, contentDescription = stringResource(R.string.action_close))
                         }
                     },
                     actions = {
                         IconButton(onClick = onOpenExternally) {
-                            LucideGlyph("external-link", size = 20.dp, contentDescription = "Open in another app")
+                            LucideGlyph(
+                                "external-link",
+                                size = 20.dp,
+                                contentDescription = stringResource(R.string.action_open_externally),
+                            )
                         }
                     },
                 )
@@ -113,10 +119,10 @@ fun PdfViewer(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            "This PDF could not be read here.",
+                            stringResource(R.string.pdf_unreadable),
                             style = MaterialTheme.typography.bodyMedium,
                         )
-                        TextButton(onClick = onOpenExternally) { Text("Open in another app") }
+                        TextButton(onClick = onOpenExternally) { Text(stringResource(R.string.action_open_externally)) }
                     }
 
                 document == null ->
@@ -175,7 +181,7 @@ private fun PdfPage(
         bitmap?.let {
             Image(
                 bitmap = it,
-                contentDescription = "Page ${index + 1}",
+                contentDescription = stringResource(R.string.pdf_page, index + 1),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
             )

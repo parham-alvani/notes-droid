@@ -9,25 +9,35 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.parham1995.notes.R
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.ui.AutoDirection
@@ -59,27 +69,60 @@ fun TasksScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("Tasks")
+                        Text(stringResource(R.string.tasks_title))
                         if (state.total > 0) {
                             Text(
-                                text = "${state.total} open",
+                                text = pluralStringResource(R.plurals.tasks_open_count, state.total, state.total),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 },
+                actions = {
+                    // Only worth the chrome once there is something to choose
+                    // between. This vault keeps tasks in a file per context,
+                    // so the file is the project.
+                    if (state.sources.size > 1) {
+                        SourceFilter(state, viewModel)
+                    }
+                },
             )
         },
     ) { padding ->
         if (!state.loading && state.groups.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            // It used to offer two explanations and not the right one: "either
+            // the vault is quiet or it has not synced yet", said to someone
+            // reading a fully synced document archive that simply has no tasks
+            // in it. Naming the vault is what makes the empty list make sense,
+            // and saying where the tasks actually are is what makes it useful.
+            Column(
+                Modifier.fillMaxSize().padding(padding).padding(32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Text(
-                    "Nothing open. Either the vault is quiet or it has not synced yet.",
-                    Modifier.padding(32.dp),
+                    text =
+                        if (state.vaultLabel.isBlank()) {
+                            stringResource(R.string.tasks_empty)
+                        } else {
+                            stringResource(R.string.tasks_empty_in, state.vaultLabel)
+                        },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                state.elsewhere.forEach { other ->
+                    TextButton(onClick = { viewModel.switchTo(other.id) }) {
+                        Text(
+                            pluralStringResource(
+                                R.plurals.tasks_open_in_vault,
+                                other.count,
+                                other.count,
+                                other.label,
+                            ),
+                        )
+                    }
+                }
             }
             return@Scaffold
         }
@@ -188,3 +231,75 @@ private fun TaskBucket.accent(): Color =
         TaskBucket.LATER -> Naz.Blue
         TaskBucket.UNDATED -> Naz.Grey
     }
+
+/**
+ * Narrows the list to one file.
+ *
+ * The vault this was built for keeps tasks in a file per context -- one for
+ * each job, one for the flat, one for the course -- so filtering by file is
+ * filtering by which part of a life is being looked at. The count beside each
+ * name is what makes it possible to choose without opening them one by one.
+ */
+@Composable
+private fun SourceFilter(
+    state: TasksUiState,
+    viewModel: TasksViewModel,
+) {
+    var open by remember { mutableStateOf(false) }
+    val chosen = state.sources.firstOrNull { it.path == state.selectedPath }
+
+    Box {
+        TextButton(onClick = { open = true }) {
+            Text(
+                text = chosen?.name ?: stringResource(R.string.tasks_all_files),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = FILTER_LABEL_WIDTH),
+            )
+            LucideGlyph("chevron-down", size = 16.dp, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.tasks_all_files)) },
+                onClick = {
+                    viewModel.filterBy(null)
+                    open = false
+                },
+                trailingIcon = {
+                    Text(
+                        state.sources.sumOf { it.count }.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+            )
+            HorizontalDivider()
+            state.sources.forEach { source ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            source.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = FILTER_MENU_WIDTH),
+                        )
+                    },
+                    onClick = {
+                        viewModel.filterBy(source.path)
+                        open = false
+                    },
+                    trailingIcon = {
+                        Text(
+                            source.count.toString(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+private val FILTER_LABEL_WIDTH = 120.dp
+private val FILTER_MENU_WIDTH = 220.dp

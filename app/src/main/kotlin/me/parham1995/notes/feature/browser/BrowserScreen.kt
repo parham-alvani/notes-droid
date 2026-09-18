@@ -27,7 +27,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -40,12 +42,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import me.parham1995.notes.R
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -57,6 +61,7 @@ import java.io.File
 @Composable
 fun BrowserScreen(
     onOpenNote: (Long) -> Unit,
+    onOpenAdvancedSettings: () -> Unit,
     initialPath: String = "",
     viewModel: BrowserViewModel = hiltViewModel(),
 ) {
@@ -68,6 +73,7 @@ fun BrowserScreen(
     LaunchedEffect(initialPath) { if (initialPath.isNotEmpty()) viewModel.open(initialPath) }
 
     val context = LocalContext.current
+    val nothingOpens = stringResource(R.string.error_nothing_opens)
     val scope = rememberCoroutineScope()
     // A PDF is read here; anything else goes to whatever app owns that type.
     var reading by remember { mutableStateOf<File?>(null) }
@@ -83,7 +89,7 @@ fun BrowserScreen(
                         null
                     }
                     Attachments.open(context, file) -> null
-                    else -> "Nothing on this phone opens that file"
+                    else -> nothingOpens
                 }
             message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
         }
@@ -97,7 +103,7 @@ fun BrowserScreen(
             onOpenExternally = {
                 reading = null
                 if (!Attachments.open(context, file)) {
-                    Toast.makeText(context, "Nothing on this phone opens that file", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, nothingOpens, Toast.LENGTH_SHORT).show()
                 }
             },
         )
@@ -125,12 +131,16 @@ fun BrowserScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.randomNote(onOpenNote) }) {
-                        LucideGlyph("shuffle", size = 20.dp, contentDescription = "Open a note at random")
+                        LucideGlyph(
+                            "shuffle",
+                            size = 20.dp,
+                            contentDescription = stringResource(R.string.browse_random),
+                        )
                     }
                     // Pull-to-refresh alone is invisible until you already know
                     // it is there, which makes the app look like it cannot sync.
                     IconButton(onClick = { viewModel.refresh() }, enabled = !state.syncing) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Sync now")
+                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.browse_sync_now))
                     }
                 },
             )
@@ -142,6 +152,21 @@ fun BrowserScreen(
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             Column(Modifier.fillMaxSize()) {
+                // Where it can be seen. The trace has always been recorded and
+                // has always been two taps into Advanced, which is nowhere at
+                // all when the thing being explained is why the app kept
+                // disappearing -- it crashed on every launch for a day and
+                // never once said so.
+                if (state.crashed) {
+                    CrashNotice(
+                        onOpen = {
+                            viewModel.dismissCrashNotice()
+                            onOpenAdvancedSettings()
+                        },
+                        onDismiss = viewModel::dismissCrashNotice,
+                    )
+                }
+
                 state.syncProgress?.let { (done, total) ->
                     LinearProgressIndicator(
                         progress = { done.toFloat() / total },
@@ -194,7 +219,7 @@ fun BrowserScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Crumb("Vault") { viewModel.open("") }
+                        Crumb(stringResource(R.string.browse_root)) { viewModel.open("") }
                         state.crumbs.forEach { (name, target) ->
                             Icon(
                                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -288,7 +313,7 @@ private fun BrowserRow(
                     IconButton(onClick = { viewModel.open(item.path) }) {
                         Icon(
                             Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = "Open folder",
+                            contentDescription = stringResource(R.string.browse_open_folder),
                         )
                     }
                 }
@@ -318,4 +343,32 @@ private fun Crumb(
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+/** Says the previous run ended badly, and where the reason is kept. */
+@Composable
+private fun CrashNotice(
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(
+                stringResource(R.string.browse_crash_title),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                stringResource(R.string.browse_crash_body),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onOpen) { Text(stringResource(R.string.browse_crash_open)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_dismiss)) }
+            }
+        }
+    }
 }

@@ -178,6 +178,11 @@ fun NotesNavHost(
                 BrowserScreen(
                     initialPath = entry.toRoute<BrowseRoute>().path,
                     onOpenNote = { navController.navigate(NoteRoute(it)) },
+                    onOpenAdvancedSettings = {
+                        navController.navigate(
+                            SettingsSectionRoute(SettingsSection.ADVANCED.name),
+                        )
+                    },
                 )
             }
             composable<TasksRoute> {

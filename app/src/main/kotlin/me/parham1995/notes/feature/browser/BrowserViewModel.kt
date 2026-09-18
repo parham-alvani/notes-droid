@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.BrowserSort
+import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
@@ -39,6 +40,8 @@ data class BrowserUiState(
     val path: String = "",
     val items: List<VaultRowItem> = emptyList(),
     val recent: List<RecentRow> = emptyList(),
+    /** The previous run ended in a crash and nobody has been told. */
+    val crashed: Boolean = false,
     val noteCount: Int = 0,
     /**
      * The repositories, when there is more than one. Empty otherwise, which is
@@ -67,6 +70,7 @@ class BrowserViewModel
     @Inject
     constructor(
         private val repository: VaultRepository,
+        private val crashLog: CrashLog,
         private val files: VaultFileSource,
         private val icons: IconStore,
         private val scheduler: SyncScheduler,
@@ -121,15 +125,38 @@ class BrowserViewModel
                 path.value = ""
             }
 
+        /**
+         * The few notes worth jumping straight back to.
+         *
+         * Three, not twelve. Twelve plus its heading and the "All notes"
+         * heading below it filled the whole first screen, so opening the app
+         * to browse always began with a scroll past what was read yesterday.
+         */
         private val recent: Flow<List<RecentRow>> =
-            combine(repository.recentlyOpened(), icons.config) { notes, config ->
+            combine(repository.recentlyOpened(limit = RECENT_ON_ROOT), icons.config) { notes, config ->
                 notes.map { RecentRow(it, config.forFile(it.vaultId, it.path)) }
             }
+
+        /**
+         * Whether the app died last time it ran.
+         *
+         * Read once at startup rather than observed: what matters is that the
+         * previous run ended badly, and that does not change while this one is
+         * open. The card in Settings holds the trace; this only says to go and
+         * look, because for three days it crashed on launch and nothing
+         * anywhere said so.
+         */
+        private val crashed = MutableStateFlow(false)
+
+        fun dismissCrashNotice() {
+            crashed.value = false
+        }
 
         private val _state = MutableStateFlow(BrowserUiState())
         val state: StateFlow<BrowserUiState> = _state.asStateFlow()
 
         init {
+            viewModelScope.launch { crashed.value = crashLog.read() != null }
             viewModelScope.launch {
                 combine(
                     path,
@@ -146,6 +173,7 @@ class BrowserViewModel
                         vaults = repositories,
                         activeVaultId = active,
                         loading = false,
+                        crashed = crashed.value,
                     )
                 }.collect { next ->
                     _state.value = next.copy(syncing = _state.value.syncing, syncProgress = _state.value.syncProgress)
@@ -201,3 +229,6 @@ class BrowserViewModel
                 scheduler.syncNow(settings.current().syncOnWifiOnly)
             }
     }
+
+/** Kept short on purpose; see [BrowserViewModel.recent]. */
+private const val RECENT_ON_ROOT = 3

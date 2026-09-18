@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.parham1995.notes.R
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.theme.Naz
 import kotlin.math.cos
@@ -78,7 +80,11 @@ fun GraphScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        LucideGlyph("arrow-left", size = 22.dp, contentDescription = "Back")
+                        LucideGlyph(
+                            "arrow-left",
+                            size = 22.dp,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )

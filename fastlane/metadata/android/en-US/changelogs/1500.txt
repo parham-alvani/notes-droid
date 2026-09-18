@@ -1,0 +1,13 @@
+Tasks can be filtered by the file they came from. This vault keeps a file per context, so that is a filter by which part of life you are looking at, with a count beside each name.
+
+An empty task list now names the vault it is empty for, and says which vault does have tasks, instead of guessing that the vault might not have synced.
+
+Diagrams open full screen like images do, with the same pinch, pan and double tap. Pinching them in place made them bigger without letting them be moved, which is half of what a wide diagram needs.
+
+An image opened full screen can be handed to another app, the way a PDF already could.
+
+"Recently opened" is three notes rather than twelve, so opening the app to browse no longer starts with a scroll past what you read yesterday.
+
+If the app crashed last time it ran, it says so on the first screen instead of leaving the reason two taps deep in Advanced.
+
+Every label, button and message in the app is now translated to Persian, on a device set to Persian.

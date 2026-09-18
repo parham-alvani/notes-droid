@@ -25,6 +25,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import me.parham1995.notes.R
 import me.parham1995.notes.ui.icon.LucideGlyph
 import kotlin.math.abs
 
@@ -54,17 +56,45 @@ fun ImageViewer(
     path: String,
     alt: String?,
     onDismiss: () -> Unit,
+    onOpenExternally: () -> Unit,
+) {
+    val image by rememberVaultImageBytes(vaultId, path)
+    ZoomableViewer(
+        model = image.bytes,
+        unavailable =
+            stringResource(R.string.image_unavailable, path.substringAfterLast('/'))
+                .takeIf { image.failed },
+        caption = alt,
+        contentDescription = alt ?: path.substringAfterLast('/'),
+        onDismiss = onDismiss,
+        onOpenExternally = onOpenExternally,
+    )
+}
+
+/**
+ * Anything flat, full screen and zoomable: a vault image, a rendered diagram.
+ *
+ * [model] is handed straight to Coil, so it can be bytes or a file. Null means
+ * it is still coming, unless [unavailable] says it is not coming at all.
+ */
+@Composable
+fun ZoomableViewer(
+    model: Any?,
+    unavailable: String?,
+    caption: String?,
+    contentDescription: String?,
+    onDismiss: () -> Unit,
+    onOpenExternally: (() -> Unit)? = null,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         val context = LocalContext.current
-        val image by rememberVaultImageBytes(vaultId, path)
 
-        var scale by remember(path) { mutableFloatStateOf(1f) }
-        var offsetX by remember(path) { mutableFloatStateOf(0f) }
-        var offsetY by remember(path) { mutableFloatStateOf(0f) }
+        var scale by remember(model) { mutableFloatStateOf(1f) }
+        var offsetX by remember(model) { mutableFloatStateOf(0f) }
+        var offsetY by remember(model) { mutableFloatStateOf(0f) }
         var frame by remember { mutableStateOf(IntSize.Zero) }
 
         fun clamp() {
@@ -79,14 +109,10 @@ fun ImageViewer(
                 .onSizeChanged { frame = it },
             contentAlignment = Alignment.Center,
         ) {
-            when (val loaded = image.bytes) {
+            when (val loaded = model) {
                 null ->
-                    if (image.failed) {
-                        Text(
-                            "Image unavailable - " + path.substringAfterLast('/'),
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                    if (unavailable != null) {
+                        Text(unavailable, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                     } else {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
@@ -94,7 +120,7 @@ fun ImageViewer(
                 else ->
                     AsyncImage(
                         model = ImageRequest.Builder(context).data(loaded).build(),
-                        contentDescription = alt ?: path.substringAfterLast('/'),
+                        contentDescription = contentDescription,
                         contentScale = ContentScale.Fit,
                         modifier =
                             Modifier
@@ -104,7 +130,7 @@ fun ImageViewer(
                                     scaleY = scale,
                                     translationX = offsetX,
                                     translationY = offsetY,
-                                ).pointerInput(path) {
+                                ).pointerInput(model) {
                                     detectTransformGestures { _, pan, zoom, _ ->
                                         scale = (scale * zoom).coerceIn(MIN_ZOOM, MAX_ZOOM)
                                         // Panning at rest would slide a
@@ -119,7 +145,7 @@ fun ImageViewer(
                                         }
                                         clamp()
                                     }
-                                }.pointerInput(path) {
+                                }.pointerInput(model) {
                                     detectTapGestures(
                                         // Back to fitted if it is zoomed at
                                         // all, rather than only from exactly
@@ -143,10 +169,33 @@ fun ImageViewer(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
             ) {
-                LucideGlyph("x", size = 22.dp, contentDescription = "Close", tint = Color.White)
+                LucideGlyph(
+                    "x",
+                    size = 22.dp,
+                    contentDescription = stringResource(R.string.action_close),
+                    tint = Color.White,
+                )
             }
 
-            alt?.takeIf { it.isNotBlank() }?.let {
+            // The same way out the PDF viewer offers. An image in a note is
+            // often the thing being taken somewhere else -- sent to someone,
+            // marked up, saved -- and a viewer with no exit makes that a trip
+            // through the file manager.
+            onOpenExternally?.let { open ->
+                IconButton(
+                    onClick = open,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                ) {
+                    LucideGlyph(
+                        "external-link",
+                        size = 20.dp,
+                        contentDescription = stringResource(R.string.action_open_externally),
+                        tint = Color.White,
+                    )
+                }
+            }
+
+            caption?.takeIf { it.isNotBlank() }?.let {
                 Text(
                     text = it,
                     color = Color.White,

@@ -46,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.toClipEntry
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -58,6 +60,7 @@ import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import me.parham1995.notes.R
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
@@ -85,6 +88,8 @@ fun NoteScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val nothingOpens = stringResource(R.string.error_nothing_opens)
+    val noteMissing = stringResource(R.string.note_missing)
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -135,7 +140,10 @@ fun NoteScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
                 actions = {
@@ -147,7 +155,12 @@ fun NoteScreen(
                             scope.launch {
                                 val text = viewModel.markdown()
                                 if (text == null) {
-                                    Toast.makeText(context, "That note is not on the device", Toast.LENGTH_SHORT).show()
+                                    Toast
+                                        .makeText(
+                                            context,
+                                            noteMissing,
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
                                 } else {
                                     context.startActivity(
                                         Intent.createChooser(
@@ -165,7 +178,7 @@ fun NoteScreen(
                         },
                         enabled = state.note != null,
                     ) {
-                        LucideGlyph("share-2", size = 20.dp, contentDescription = "Share")
+                        LucideGlyph("share-2", size = 20.dp, contentDescription = stringResource(R.string.action_share))
                     }
                     IconButton(
                         onClick = {
@@ -177,23 +190,27 @@ fun NoteScreen(
                         LucideGlyph(
                             if (finding) "x" else "text-search",
                             size = 20.dp,
-                            contentDescription = if (finding) "Close find" else "Find in note",
+                            contentDescription = if (finding) "Close find" else stringResource(R.string.note_find),
                         )
                     }
                     IconButton(
                         onClick = { state.note?.id?.let(onOpenGraph) },
                         enabled = state.note != null,
                     ) {
-                        LucideGlyph("waypoints", size = 20.dp, contentDescription = "Connections")
+                        LucideGlyph(
+                            "waypoints",
+                            size = 20.dp,
+                            contentDescription = stringResource(R.string.note_connections),
+                        )
                     }
                     IconButton(onClick = { showOutline = true }, enabled = state.note != null) {
-                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Outline")
+                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.note_outline))
                     }
                     // The count is more use than an icon here: it says
                     // whether opening the sheet is worth it.
                     if (state.backlinks.isNotEmpty()) {
                         TextButton(onClick = { showBacklinks = true }) {
-                            Text("${state.backlinks.size} links")
+                            Text(pluralStringResource(R.plurals.note_links, state.backlinks.size, state.backlinks.size))
                         }
                     }
                 },
@@ -210,14 +227,14 @@ fun NoteScreen(
                     Tab(
                         selected = !showContents,
                         onClick = { showContents = false },
-                        text = { Text("Note") },
+                        text = { Text(stringResource(R.string.note_kind)) },
                     )
                     Tab(
                         selected = showContents,
                         onClick = { showContents = true },
                         // The count is the useful part: it says whether the
                         // folder holds anything the note does not mention.
-                        text = { Text("Contents · ${state.contents.size}") },
+                        text = { Text(stringResource(R.string.note_contents, state.contents.size)) },
                     )
                 }
             }
@@ -295,7 +312,7 @@ fun NoteScreen(
                                                                 null
                                                             }
                                                             Attachments.open(context, file) -> null
-                                                            else -> "Nothing on this phone opens that file"
+                                                            else -> nothingOpens
                                                         }
                                                     message?.let {
                                                         Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
@@ -320,6 +337,21 @@ fun NoteScreen(
                 path = path,
                 alt = alt,
                 onDismiss = { zoomed = null },
+                onOpenExternally = {
+                    scope.launch {
+                        val file = viewModel.attachment(path)
+                        val opened = file != null && Attachments.open(context, file)
+                        if (!opened) {
+                            Toast
+                                .makeText(
+                                    context,
+                                    nothingOpens,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                        }
+                        zoomed = null
+                    }
+                },
             )
         }
     }
@@ -332,7 +364,7 @@ fun NoteScreen(
             onOpenExternally = {
                 reading = null
                 if (!Attachments.open(context, file)) {
-                    Toast.makeText(context, "Nothing on this phone opens that file", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, nothingOpens, Toast.LENGTH_SHORT).show()
                 }
             },
         )
@@ -342,7 +374,11 @@ fun NoteScreen(
         ModalBottomSheet(onDismissRequest = { showOutline = false }) {
             val headings = state.note?.headings.orEmpty()
             if (headings.isEmpty()) {
-                Text("No headings", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.note_no_headings),
+                    Modifier.padding(24.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             } else {
                 LazyColumn {
                     items(headings, key = { it.id }) { heading ->
@@ -455,7 +491,7 @@ private fun FolderContents(
                 title = item.name,
                 icon = row.icon,
                 defaultIcon = if (item.isFolder) "folder" else "file-text",
-                iconDescription = if (item.isFolder) "Folder" else "Note",
+                iconDescription = if (item.isFolder) "Folder" else stringResource(R.string.note_kind),
                 underline = item.isFolder && item.noteId != null,
                 onClick = {
                     val note = item.noteId
@@ -568,7 +604,7 @@ private fun FindBar(
                 value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Find in note") },
+                placeholder = { Text(stringResource(R.string.note_find)) },
                 singleLine = true,
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -589,7 +625,11 @@ private fun FindBar(
                 },
                 enabled = matches > 0,
             ) {
-                LucideGlyph("chevron-up", size = 20.dp, contentDescription = "Previous match")
+                LucideGlyph(
+                    "chevron-up",
+                    size = 20.dp,
+                    contentDescription = stringResource(R.string.note_find_previous),
+                )
             }
             IconButton(
                 onClick = {
@@ -599,7 +639,7 @@ private fun FindBar(
                 },
                 enabled = matches > 0,
             ) {
-                LucideGlyph("chevron-down", size = 20.dp, contentDescription = "Next match")
+                LucideGlyph("chevron-down", size = 20.dp, contentDescription = stringResource(R.string.note_find_next))
             }
         }
     }

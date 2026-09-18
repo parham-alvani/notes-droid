@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.parham1995.notes.R
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.icon.VaultIcon
@@ -54,12 +56,12 @@ fun SearchScreen(
             value = state.query,
             onValueChange = viewModel::onQueryChange,
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            placeholder = { Text("Search the vault") },
+            placeholder = { Text(stringResource(R.string.search_hint)) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             trailingIcon = {
                 if (state.query.isNotEmpty()) {
                     IconButton(onClick = viewModel::clear) {
-                        Icon(Icons.Filled.Clear, contentDescription = "Clear")
+                        Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.action_clear))
                     }
                 }
             },

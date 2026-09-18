@@ -33,12 +33,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.toClipEntry
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import me.parham1995.notes.R
 import me.parham1995.notes.data.git.StoredKey
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.theme.Naz
@@ -62,16 +64,21 @@ fun SshScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val clipboard = LocalClipboard.current
+    val clipLabel = stringResource(R.string.ssh_public_key)
     val scope = rememberCoroutineScope()
     var replacing by remember { mutableStateOf<SshKeyRow?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SSH keys") },
+                title = { Text(stringResource(R.string.ssh_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        LucideGlyph("arrow-left", size = 22.dp, contentDescription = "Back")
+                        LucideGlyph(
+                            "arrow-left",
+                            size = 22.dp,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
@@ -121,7 +128,9 @@ fun SshScreen(
                     onTest = { viewModel.test(row) },
                     onCopy = { line ->
                         scope.launch {
-                            clipboard.setClipEntry(ClipData.newPlainText("ssh public key", line).toClipEntry())
+                            clipboard.setClipEntry(
+                                ClipData.newPlainText(clipLabel, line).toClipEntry(),
+                            )
                         }
                     },
                 )
@@ -138,7 +147,7 @@ fun SshScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Connect over port 443", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.ssh_port_443), style = MaterialTheme.typography.bodyMedium)
                         Text(
                             "Many mobile networks block port 22, where a clone simply hangs with no " +
                                 "error at all. GitHub answers SSH on 443 too.",
@@ -157,7 +166,7 @@ fun SshScreen(
     replacing?.let { row ->
         AlertDialog(
             onDismissRequest = { replacing = null },
-            title = { Text("Replace the key for ${row.label}?") },
+            title = { Text(stringResource(R.string.ssh_replace_question, row.label)) },
             text = {
                 Text(
                     "The key currently registered on ${row.remote} stops working immediately. " +
@@ -170,10 +179,14 @@ fun SshScreen(
                     viewModel.generate(row.vault.name)
                     replacing = null
                 }) {
-                    Text("Replace")
+                    Text(stringResource(R.string.action_replace))
                 }
             },
-            dismissButton = { TextButton(onClick = { replacing = null }) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(
+                    onClick = { replacing = null },
+                ) { Text(stringResource(R.string.action_cancel)) }
+            },
         )
     }
 }
@@ -203,7 +216,7 @@ private fun KeyCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(onClick = onGenerate, enabled = !busy) { Text("Generate") }
+                Button(onClick = onGenerate, enabled = !busy) { Text(stringResource(R.string.action_generate)) }
                 return@Column
             }
 
@@ -233,8 +246,8 @@ private fun KeyCard(
                 Button(onClick = onTest, enabled = row.check != KeyCheck.Running) {
                     Text(if (row.check == KeyCheck.Running) "Testing..." else "Test")
                 }
-                OutlinedButton(onClick = { onCopy(key.publicKey) }) { Text("Copy") }
-                TextButton(onClick = onReplace, enabled = !busy) { Text("Replace") }
+                OutlinedButton(onClick = { onCopy(key.publicKey) }) { Text(stringResource(R.string.action_copy)) }
+                TextButton(onClick = onReplace, enabled = !busy) { Text(stringResource(R.string.action_replace)) }
             }
 
             when (val check = row.check) {
@@ -265,7 +278,7 @@ private fun OrphanCard(
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Unused keys", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.ssh_unused), style = MaterialTheme.typography.titleMedium)
             Text(
                 "Left behind by a repository that was removed or switched to REST. Still private keys " +
                     "sitting in the app's storage, and the deploy keys they match are probably still " +
@@ -292,7 +305,11 @@ private fun OrphanCard(
                         )
                     }
                     IconButton(onClick = { onDelete(key.fileName) }) {
-                        LucideGlyph("trash-2", size = 18.dp, contentDescription = "Delete ${key.fileName}")
+                        LucideGlyph(
+                            "trash-2",
+                            size = 18.dp,
+                            contentDescription = stringResource(R.string.ssh_delete, key.fileName),
+                        )
                     }
                 }
             }

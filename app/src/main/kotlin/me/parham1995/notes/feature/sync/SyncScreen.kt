@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -53,6 +54,7 @@ import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.BuildConfig
+import me.parham1995.notes.R
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.ReadingSettings
@@ -97,7 +99,7 @@ fun SettingsHomeScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Settings") }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.settings_title)) }) }) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
         ) {
@@ -168,7 +170,11 @@ fun SyncScreen(
                 title = { Text(section.title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        LucideGlyph("arrow-left", size = 22.dp, contentDescription = "Back")
+                        LucideGlyph(
+                            "arrow-left",
+                            size = 22.dp,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
@@ -239,29 +245,29 @@ private fun RepositoryCard(
         OutlinedTextField(
             value = owner,
             onValueChange = { owner = it },
-            label = { Text("Owner") },
+            label = { Text(stringResource(R.string.settings_owner)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = repo,
             onValueChange = { repo = it },
-            label = { Text("Repository") },
+            label = { Text(stringResource(R.string.settings_repository)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = branch,
             onValueChange = { branch = it },
-            label = { Text("Branch") },
-            placeholder = { Text("default branch") },
+            label = { Text(stringResource(R.string.settings_branch)) },
+            placeholder = { Text(stringResource(R.string.settings_default_branch)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = vaultName,
             onValueChange = { vaultName = it },
-            label = { Text("Name") },
+            label = { Text(stringResource(R.string.settings_name)) },
             // For reading only. It does not decide where anything is stored, so
             // it can be changed later without moving the files.
             placeholder = { Text(repo.ifBlank { "what to call it" }) },
@@ -278,7 +284,7 @@ private fun RepositoryCard(
             },
             enabled = owner.isNotBlank() && repo.isNotBlank(),
         ) {
-            Text("Add")
+            Text(stringResource(R.string.action_add))
         }
 
         if (state.vaults.size > 1) {
@@ -338,7 +344,11 @@ private fun VaultRow(
             label = { Text(vault.transport) },
         )
         IconButton(onClick = { viewModel.removeVault(vault.id) }) {
-            LucideGlyph("trash-2", size = 18.dp, contentDescription = "Remove ${vault.label}")
+            LucideGlyph(
+                "trash-2",
+                size = 18.dp,
+                contentDescription = stringResource(R.string.settings_remove_vault, vault.label),
+            )
         }
     }
 }
@@ -373,13 +383,13 @@ private fun TokenCard(
                 },
                 enabled = token.isNotBlank(),
             ) {
-                Text("Save")
+                Text(stringResource(R.string.action_save))
             }
             OutlinedButton(onClick = viewModel::testConnection, enabled = state.hasToken) {
-                Text("Test connection")
+                Text(stringResource(R.string.settings_test_connection))
             }
             if (state.hasToken) {
-                TextButton(onClick = viewModel::clearToken) { Text("Clear") }
+                TextButton(onClick = viewModel::clearToken) { Text(stringResource(R.string.action_clear)) }
             }
         }
         if (state.tokenRejected) {
@@ -431,10 +441,13 @@ private fun StatusCard(
                     progress = { state.done.toFloat() / state.total },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("${state.done} of ${state.total}", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    stringResource(R.string.settings_sync_progress, state.done, state.total),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             } else {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text("Checking for changes", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.settings_checking), style = MaterialTheme.typography.bodySmall)
             }
         }
 
@@ -457,12 +470,12 @@ private fun StatusCard(
                 onClick = viewModel::syncNow,
                 enabled = state.blocker() == null && !state.running,
             ) {
-                Text("Sync now")
+                Text(stringResource(R.string.browse_sync_now))
             }
             if (state.running || state.queued) {
-                OutlinedButton(onClick = viewModel::cancelSync) { Text("Cancel") }
+                OutlinedButton(onClick = viewModel::cancelSync) { Text(stringResource(R.string.action_cancel)) }
             } else {
-                OutlinedButton(onClick = viewModel::refreshLocal) { Text("Refresh") }
+                OutlinedButton(onClick = viewModel::refreshLocal) { Text(stringResource(R.string.action_refresh)) }
             }
             TextButton(
                 onClick = viewModel::reindex,
@@ -470,7 +483,10 @@ private fun StatusCard(
             ) {
                 Text(if (state.reindexing) "Reindexing..." else "Reindex")
             }
-            TextButton(onClick = viewModel::reset, enabled = !state.running) { Text("Reset vault") }
+            TextButton(
+                onClick = viewModel::reset,
+                enabled = !state.running,
+            ) { Text(stringResource(R.string.settings_reset_vault)) }
         }
     }
 }
@@ -499,7 +515,7 @@ private fun BackgroundSyncCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Refresh on a schedule", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_schedule), style = MaterialTheme.typography.bodyMedium)
             Switch(
                 checked = state.settings.backgroundSync,
                 onCheckedChange = viewModel::setBackgroundSync,
@@ -507,7 +523,7 @@ private fun BackgroundSyncCard(
         }
 
         if (state.settings.backgroundSync) {
-            Text("How often", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.settings_how_often), style = MaterialTheme.typography.labelMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 VaultSettings.INTERVAL_CHOICES.forEach { hours ->
                     FilterChip(
@@ -523,7 +539,7 @@ private fun BackgroundSyncCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Only on Wi-Fi", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.settings_wifi_only), style = MaterialTheme.typography.bodyMedium)
                 Switch(
                     checked = state.settings.syncOnWifiOnly,
                     onCheckedChange = viewModel::setSyncOnWifiOnly,
@@ -550,7 +566,7 @@ private fun BackgroundSyncCard(
                         }
                     },
                 ) {
-                    Text("Battery settings")
+                    Text(stringResource(R.string.settings_battery))
                 }
             }
         }
@@ -575,7 +591,7 @@ private fun TaskDigestCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Notify once a day", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_digest), style = MaterialTheme.typography.bodyMedium)
             Switch(checked = state.settings.taskDigest, onCheckedChange = viewModel::setTaskDigest)
         }
 
@@ -586,7 +602,7 @@ private fun TaskDigestCard(
                     FilterChip(
                         selected = state.settings.taskDigestHour == hour,
                         onClick = { viewModel.setTaskDigestHour(hour) },
-                        label = { Text("%02d:00".format(hour)) },
+                        label = { Text(stringResource(R.string.settings_hour, hour)) },
                     )
                 }
             }
@@ -616,6 +632,7 @@ private fun CrashCard(
     viewModel: SyncViewModel,
 ) {
     val context = LocalContext.current
+    val crashSubject = stringResource(R.string.settings_crash_subject)
     SectionCard("The app crashed") {
         Text(
             crash.lineSequence().take(CRASH_PREVIEW_LINES).joinToString("\n"),
@@ -631,7 +648,7 @@ private fun CrashCard(
                         Intent.createChooser(
                             Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, "Daftar crash")
+                                putExtra(Intent.EXTRA_SUBJECT, crashSubject)
                                 putExtra(Intent.EXTRA_TEXT, crash)
                             },
                             "Share the crash",
@@ -639,9 +656,9 @@ private fun CrashCard(
                     )
                 }
             }) {
-                Text("Share")
+                Text(stringResource(R.string.action_share))
             }
-            OutlinedButton(onClick = viewModel::dismissCrash) { Text("Dismiss") }
+            OutlinedButton(onClick = viewModel::dismissCrash) { Text(stringResource(R.string.action_dismiss)) }
         }
     }
 }
@@ -799,7 +816,7 @@ private fun SshKeyCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Button(onClick = onManage) { Text("Manage keys") }
+        Button(onClick = onManage) { Text(stringResource(R.string.settings_manage_keys)) }
     }
 }
 
@@ -818,18 +835,18 @@ private fun ReadingCard(
     val reading = state.settings.reading
 
     SectionCard("Text") {
-        Text("Size", style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.settings_size), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReadingSettings.TEXT_SCALES.forEach { scale ->
                 FilterChip(
                     selected = reading.textScale == scale,
                     onClick = { viewModel.setTextScale(scale) },
-                    label = { Text("${(scale * PERCENT).toInt()}%") },
+                    label = { Text(stringResource(R.string.settings_percent, (scale * PERCENT).toInt())) },
                 )
             }
         }
 
-        Text("Line spacing", style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.settings_line_spacing), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReadingSettings.LINE_SPACINGS.forEach { spacing ->
                 FilterChip(
@@ -856,7 +873,7 @@ private fun ReadingCard(
     }
 
     SectionCard("Appearance") {
-        Text("Theme", style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.settings_theme), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ThemeChoice.entries.forEach { choice ->
                 FilterChip(
@@ -879,7 +896,7 @@ private fun ReadingCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Set Persian in Vazirmatn", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.settings_persian_font), style = MaterialTheme.typography.bodyMedium)
                 Text(
                     "Off uses the platform's Naskh, which has every glyph and draws them differently.",
                     style = MaterialTheme.typography.bodySmall,
@@ -891,7 +908,7 @@ private fun ReadingCard(
     }
 
     SectionCard("Behaviour") {
-        Text("Open on", style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.settings_open_on), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StartScreen.entries.forEach { screen ->
                 FilterChip(
@@ -902,7 +919,7 @@ private fun ReadingCard(
             }
         }
 
-        Text("Order folders by", style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.settings_folder_order), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BrowserSort.entries.forEach { sort ->
                 FilterChip(
@@ -984,6 +1001,7 @@ private fun LogCard(viewModel: SyncViewModel) {
     val time = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val stamp = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US) }
     val context = LocalContext.current
+    val logSubject = stringResource(R.string.settings_log_subject)
 
     SectionCard("Sync log") {
         if (entries.isEmpty()) {
@@ -1033,14 +1051,14 @@ private fun LogCard(viewModel: SyncViewModel) {
                 val send =
                     Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_SUBJECT, "notes-droid sync log")
+                        putExtra(Intent.EXTRA_SUBJECT, logSubject)
                         putExtra(Intent.EXTRA_TEXT, text)
                     }
                 context.startActivity(Intent.createChooser(send, "Share sync log"))
             }) {
-                Text("Share")
+                Text(stringResource(R.string.action_share))
             }
-            TextButton(onClick = viewModel::clearLog) { Text("Clear") }
+            TextButton(onClick = viewModel::clearLog) { Text(stringResource(R.string.action_clear)) }
         }
     }
 }

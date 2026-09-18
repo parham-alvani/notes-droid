@@ -16,9 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import me.parham1995.notes.R
 import me.parham1995.notes.ui.image.rememberVaultImageBytes
 
 /**
@@ -72,7 +74,7 @@ fun VaultImage(
                                     '/',
                                 )}"
                             } else {
-                                "Loading image..."
+                                stringResource(R.string.image_loading)
                             },
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.labelMedium,

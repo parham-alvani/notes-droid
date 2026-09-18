@@ -1,6 +1,6 @@
 package me.parham1995.notes.ui.render
 
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,22 +14,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import dagger.hilt.android.EntryPointAccessors
+import me.parham1995.notes.R
 import me.parham1995.notes.di.RendererEntryPoint
+import me.parham1995.notes.ui.image.ZoomableViewer
 import me.parham1995.notes.ui.mermaid.MermaidRenderer
 import me.parham1995.notes.ui.mermaid.MermaidTheme
 import java.io.File
@@ -81,10 +81,11 @@ fun MermaidBlockView(
         }
     }
 
-    // Diagrams are routinely wider than a phone, so pinch-to-zoom earns its
-    // place. Driven from the raw gesture rather than TransformableState, whose
-    // remember helper is deprecated.
-    var scale by remember { mutableFloatStateOf(1f) }
+    // Diagrams are routinely wider than a phone. Pinching in place used to be
+    // the answer and was half of one: it made the diagram bigger without
+    // letting it be moved, so the corner that was wanted stayed off screen.
+    // Tapping opens the same viewer an image opens, which pans and clamps.
+    var opened by remember(code) { mutableStateOf(false) }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -97,16 +98,8 @@ fun MermaidBlockView(
                 file != null ->
                     AsyncImage(
                         model = ImageRequest.Builder(context).data(file).build(),
-                        contentDescription = "diagram",
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .graphicsLayer(scaleX = scale, scaleY = scale)
-                                .pointerInput(Unit) {
-                                    detectTransformGestures { _, _, zoom, _ ->
-                                        scale = (scale * zoom).coerceIn(MIN_ZOOM, MAX_ZOOM)
-                                    }
-                                },
+                        contentDescription = stringResource(R.string.diagram),
+                        modifier = Modifier.fillMaxWidth().clickable { opened = true },
                     )
 
                 error != null ->
@@ -125,6 +118,18 @@ fun MermaidBlockView(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
             }
+        }
+    }
+
+    if (opened) {
+        svg?.let { file ->
+            ZoomableViewer(
+                model = file,
+                unavailable = null,
+                caption = null,
+                contentDescription = stringResource(R.string.diagram),
+                onDismiss = { opened = false },
+            )
         }
     }
 }
