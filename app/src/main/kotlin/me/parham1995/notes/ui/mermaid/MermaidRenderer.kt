@@ -2,8 +2,12 @@ package me.parham1995.notes.ui.mermaid
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewClientCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.android.awaitFrame
@@ -104,13 +108,7 @@ class MermaidRenderer
                         .Builder()
                         .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context))
                         .build()
-                view.webViewClient =
-                    object : android.webkit.WebViewClient() {
-                        override fun shouldInterceptRequest(
-                            view: WebView,
-                            request: android.webkit.WebResourceRequest,
-                        ) = loader.shouldInterceptRequest(request.url)
-                    }
+                view.webViewClient = AssetClient(loader) { dead -> discard(dead) }
 
                 if (existing == null || themeKey == null) {
                     view.loadUrl("https://appassets.androidplatform.net/assets/mermaid/index.html")
@@ -120,6 +118,50 @@ class MermaidRenderer
                 themeKey = theme.key
                 view
             }
+
+        /** Forgets a WebView whose render process died, so the next call rebuilds. */
+        private fun discard(dead: WebView) {
+            if (webView === dead) {
+                webView = null
+                themeKey = null
+            }
+        }
+
+        /**
+         * Serves the bundled assets and survives the render process dying.
+         *
+         * The suppression is narrow and deliberate: `onRenderProcessGone` is
+         * implemented directly below with the framework signature, on a
+         * WebViewClientCompat, as a named class rather than an object
+         * expression. androidx.webkit's check still does not see it.
+         * Suppressing here rather than disabling the rule keeps it live for any
+         * other WebViewClient.
+         */
+        @SuppressLint("MissingOnRenderProcessGone")
+        private class AssetClient(
+            private val loader: WebViewAssetLoader,
+            private val onGone: (WebView) -> Unit,
+        ) : WebViewClientCompat() {
+            override fun shouldInterceptRequest(
+                view: WebView,
+                request: WebResourceRequest,
+            ): WebResourceResponse? = loader.shouldInterceptRequest(request.url)
+
+            /**
+             * The render process is a separate process and can be killed under
+             * memory pressure -- likely here, since mermaid is several megabytes of
+             * script. Unhandled, it takes the whole app down. Returning true keeps
+             * the app alive and drops the dead view.
+             */
+            override fun onRenderProcessGone(
+                view: WebView,
+                detail: RenderProcessGoneDetail,
+            ): Boolean {
+                view.destroy()
+                onGone(view)
+                return true
+            }
+        }
 
         private suspend fun awaitLoad(view: WebView) {
             // The asset page is local, so this settles almost immediately; the
