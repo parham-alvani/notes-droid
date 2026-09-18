@@ -48,9 +48,8 @@ class VaultFilterTest {
 
     @Test
     fun `everything else is ignored`() {
-        assertThat(filter.kindOf("justfile")).isNull()
-        assertThat(filter.kindOf("package.json")).isNull()
-        assertThat(filter.kindOf("uploads/clip.mp4")).isNull()
+        assertThat(filter.kindOf("notes/diagram.excalidraw")).isNull()
+        assertThat(filter.kindOf("notes/data.sqlite")).isNull()
         assertThat(filter.kindOf("noextension")).isNull()
         assertThat(filter.kindOf("")).isNull()
     }
@@ -69,5 +68,26 @@ class VaultFilterTest {
         // Not a prefix match either: a note that happens to be named this way
         // inside the vault proper is still a note.
         assertThat(filter.kindOf("notes/.obsidian/plugins/iconic/data.json")).isNull()
+    }
+
+    @Test
+    fun `attachments are recorded so they can be opened later`() {
+        assertThat(filter.kindOf("uploads/manual.pdf")).isEqualTo(BlobKind.OTHER)
+        assertThat(filter.kindOf("uploads/clip.mp4")).isEqualTo(BlobKind.OTHER)
+        assertThat(filter.kindOf("uploads/voice.ogg")).isEqualTo(BlobKind.OTHER)
+        assertThat(filter.kindOf("uploads/sheet.xlsx")).isEqualTo(BlobKind.OTHER)
+        // Case is as irrelevant here as it is for images.
+        assertThat(filter.kindOf("uploads/MANUAL.PDF")).isEqualTo(BlobKind.OTHER)
+    }
+
+    @Test
+    fun `the source of tooling checked in beside the notes is still ignored`() {
+        // A vault repository often carries the plugins it uses. None of it is
+        // something a reader can open, and all of it would be manifest rows.
+        assertThat(filter.kindOf("some-plugin/src/main.ts")).isNull()
+        assertThat(filter.kindOf("some-plugin/manifest.json")).isNull()
+        assertThat(filter.kindOf("some-plugin/esbuild.config.mjs")).isNull()
+        assertThat(filter.kindOf("package.json")).isNull()
+        assertThat(filter.kindOf("justfile")).isNull()
     }
 }

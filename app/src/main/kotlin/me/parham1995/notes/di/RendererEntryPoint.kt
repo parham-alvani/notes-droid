@@ -3,7 +3,7 @@ package me.parham1995.notes.di
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import me.parham1995.notes.data.VaultImageSource
+import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.ui.mermaid.MermaidRenderer
 
 /**
@@ -13,8 +13,8 @@ import me.parham1995.notes.ui.mermaid.MermaidRenderer
  */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
-interface VaultImageEntryPoint {
-    fun imageSource(): VaultImageSource
+interface RendererEntryPoint {
+    fun fileSource(): VaultFileSource
 
     fun mermaidRenderer(): MermaidRenderer
 }

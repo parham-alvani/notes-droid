@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only the vault, and only for reading. The app's own directory also holds
+    the SSH key and the git metadata, and none of that should be reachable
+    through a content URI handed to another application.
+-->
+<paths>
+    <files-path
+        name="vault"
+        path="vault/" />
+</paths>

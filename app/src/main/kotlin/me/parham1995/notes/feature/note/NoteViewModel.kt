@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.RenderedNote
+import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.VaultRowItem
+import java.io.File
 import javax.inject.Inject
 
 data class NoteUiState(
@@ -40,6 +42,7 @@ class NoteViewModel
     constructor(
         private val repository: VaultRepository,
         private val icons: IconStore,
+        private val files: VaultFileSource,
     ) : ViewModel() {
         private val _state = MutableStateFlow(NoteUiState())
         val state: StateFlow<NoteUiState> = _state.asStateFlow()
@@ -75,6 +78,15 @@ class NoteViewModel
                     )
             }
         }
+
+        /**
+         * The attachment on disk, downloading it first if this install has only
+         * ever recorded it.
+         *
+         * Null means it could not be had at all -- no network, no token, or a
+         * path the manifest has never heard of.
+         */
+        suspend fun attachment(path: String): File? = files.localFile(path)
 
         /** The note a wikilink points at, or null when it is broken. */
         fun targetOf(target: String): Long? =

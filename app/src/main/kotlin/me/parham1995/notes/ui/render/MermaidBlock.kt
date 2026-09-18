@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import dagger.hilt.android.EntryPointAccessors
-import me.parham1995.notes.di.VaultImageEntryPoint
+import me.parham1995.notes.di.RendererEntryPoint
 import me.parham1995.notes.ui.mermaid.MermaidRenderer
 import me.parham1995.notes.ui.mermaid.MermaidTheme
 import java.io.File
@@ -54,7 +54,7 @@ fun MermaidBlockView(
     val renderer =
         remember {
             EntryPointAccessors
-                .fromApplication(context.applicationContext, VaultImageEntryPoint::class.java)
+                .fromApplication(context.applicationContext, RendererEntryPoint::class.java)
                 .mermaidRenderer()
         }
 

@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import dagger.hilt.android.EntryPointAccessors
-import me.parham1995.notes.di.VaultImageEntryPoint
+import me.parham1995.notes.di.RendererEntryPoint
 
 /**
  * An embedded image.
@@ -46,8 +46,8 @@ fun VaultImage(
             EntryPointAccessors
                 .fromApplication(
                     context.applicationContext,
-                    VaultImageEntryPoint::class.java,
-                ).imageSource()
+                    RendererEntryPoint::class.java,
+                ).fileSource()
         }
     var bytes by remember(path) { mutableStateOf<ByteArray?>(null) }
     var failed by remember(path) { mutableStateOf(false) }

@@ -26,6 +26,22 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Hands a vault file to whatever app opens that type. A file:// URI
+            out of the app's private storage is refused outright by Android,
+            so a content URI with a one-shot read grant is the only way for a
+            PDF or a video to reach a viewer.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- NotesApplication is a Configuration.Provider, so WorkManager is
              initialised on demand and androidx.startup must not do it first. -->
         <provider

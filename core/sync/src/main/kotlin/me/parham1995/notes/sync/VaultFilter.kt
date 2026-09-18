@@ -46,6 +46,7 @@ class VaultFilter(
         return when {
             extension == "md" -> BlobKind.MARKDOWN
             includeImages && extension in IMAGE_EXTENSIONS -> BlobKind.IMAGE
+            extension in ATTACHMENT_EXTENSIONS -> BlobKind.OTHER
             else -> null
         }
     }
@@ -64,8 +65,9 @@ class VaultFilter(
          * picks up exactly what is missing.
          *
          * 2: the Iconic plugin's icon assignments.
+         * 3: attachments -- PDFs, video, audio, archives, office documents.
          */
-        const val VERSION = 2
+        const val VERSION = 3
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -85,10 +87,56 @@ class VaultFilter(
         val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG)
 
         /**
-         * Only formats that can actually be shown inline. Video and audio are
-         * left out on purpose -- they are handed to another app rather than
-         * rendered, so there is no reason to sync them.
+         * Formats the reader draws itself. Everything else it can offer is in
+         * [ATTACHMENT_EXTENSIONS] and gets handed to another app instead.
          */
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "svg", "webp")
+
+        /**
+         * Files the vault holds that another app can open.
+         *
+         * Recorded in the manifest but, like images, not downloaded until
+         * something asks for one -- so a path and a sha is all a default
+         * install carries for a 40MB video.
+         *
+         * A list rather than "anything that is not markdown", because a vault
+         * repository also contains the source of whatever tooling lives beside
+         * the notes. This vault checks in two Obsidian plugins; syncing their
+         * `.ts` and `.json` would be filling the manifest with things no reader
+         * can do anything with.
+         */
+        val ATTACHMENT_EXTENSIONS =
+            setOf(
+                "pdf",
+                "epub",
+                "mp4",
+                "mov",
+                "mkv",
+                "webm",
+                "avi",
+                "mp3",
+                "m4a",
+                "ogg",
+                "opus",
+                "wav",
+                "flac",
+                "zip",
+                "tar",
+                "gz",
+                "7z",
+                "doc",
+                "docx",
+                "odt",
+                "rtf",
+                "xls",
+                "xlsx",
+                "ods",
+                "csv",
+                "ppt",
+                "pptx",
+                "odp",
+                "drawio",
+                "txt",
+            )
     }
 }

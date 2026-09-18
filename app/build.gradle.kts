@@ -60,8 +60,8 @@ android {
         // with a regex to decide an update is available, and a computed value
         // -- from the tag, from the commit count -- is invisible to it.
         // `just bump` keeps them in step; CI refuses a tag that disagrees.
-        versionCode = 300
-        versionName = "0.3.0"
+        versionCode = 400
+        versionName = "0.4.0"
 
         // The commit's own date, not the moment of the build. A build stamped
         // with `now` differs every time it runs, which breaks the build cache
@@ -87,6 +87,15 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    testOptions {
+        unitTests {
+            // Without this the android.jar stubs throw rather than returning a
+            // default, and a pure function that merely *mentions* a platform
+            // class becomes untestable off a device.
+            isReturnDefaultValues = true
+        }
     }
 
     buildTypes {

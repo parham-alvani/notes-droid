@@ -516,7 +516,11 @@ private fun AttachmentView(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("▶", style = MaterialTheme.typography.titleMedium)
+            LucideGlyph(
+                name = Attachments.iconOf(block.path),
+                size = ATTACHMENT_ICON,
+                tint = MaterialTheme.colorScheme.primary,
+            )
             Column {
                 Text(block.label, style = MaterialTheme.typography.bodyMedium)
                 Text(
@@ -609,6 +613,7 @@ private const val STRIPE_ALPHA = 0.35f
 private val ACCENT_BAR = 3.dp
 private val CALLOUT_ICON = 16.dp
 private val CHIP_ICON = 11.dp
+private val ATTACHMENT_ICON = 22.dp
 private val MARKER_ICON = 16.dp
 private val MARKER_NUDGE = 3.dp
 private const val RULE_ALPHA = 0.35f

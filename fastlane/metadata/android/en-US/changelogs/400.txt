@@ -1,0 +1,5 @@
+Attachments open now.
+
+Tapping a PDF, video, audio file, archive or office document in a note hands it to whatever app on the phone opens that kind of file. The card has always been there and tapping it did nothing; nothing was wired behind it, and the files were not synced either.
+
+They are recorded during sync and fetched the first time one is asked for, the same way images already worked, so a default install still carries only the markdown.
