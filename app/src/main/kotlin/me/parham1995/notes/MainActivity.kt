@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.AndroidEntryPoint
 import me.parham1995.notes.navigation.NotesNavHost
+import me.parham1995.notes.ui.icon.ProvideLucide
 import me.parham1995.notes.ui.theme.NotesTheme
 
 @AndroidEntryPoint
@@ -31,7 +32,9 @@ class MainActivity : ComponentActivity() {
         askForNotifications()
         setContent {
             NotesTheme {
-                NotesNavHost()
+                ProvideLucide {
+                    NotesNavHost()
+                }
             }
         }
     }

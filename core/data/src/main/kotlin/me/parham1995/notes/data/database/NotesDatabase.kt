@@ -16,7 +16,7 @@ import androidx.sqlite.execSQL
         HeadingEntity::class,
         SyncLogEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -139,6 +139,23 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL(
                         "UPDATE note_fts SET title = " +
                             "(SELECT title FROM notes WHERE notes.id = note_fts.rowid)",
+                    )
+                }
+            }
+
+        /**
+         * Records which filter version built the manifest.
+         *
+         * Existing rows get 0, which is deliberately not the current version:
+         * every device that synced before the Iconic config was vault content
+         * has a manifest missing it, and zero is how the next sync knows to go
+         * and look.
+         */
+        val MIGRATION_4_5 =
+            object : Migration(4, 5) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL(
+                        "ALTER TABLE `sync_state` ADD COLUMN `filterVersion` INTEGER NOT NULL DEFAULT 0",
                     )
                 }
             }

@@ -23,6 +23,7 @@ All seven milestones are implemented and the app builds, lints and tests clean. 
 - **Backlinks and outline** for every note
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts
 - **Folder notes** — a folder's `X/X.md` is treated as its landing page
+- **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Right-to-left support**, detected per block rather than declared, for vaults that mix scripts
 
 ## Requirements
@@ -93,6 +94,14 @@ Images are recorded but not downloaded, so the default install carries the markd
 The alternative transport, chosen in Settings. The key is generated on the device and its private half never leaves; the public line is added to the repository as a **read-only deploy key**, so nothing expires and nothing secret is ever copied between machines.
 
 The trade is size. Git cannot fetch a subset of paths — there is no sparse-checkout or partial clone in JGit — so this is the full history and every attachment, where the REST transport takes the markdown alone. The clone is shallow, which helps but does not close the gap. REST remains the default.
+
+### Icons
+
+If the vault uses Obsidian's [Iconic](https://github.com/gfxholo/iconic) plugin, the browser, search results and a note's own header show the icons it assigns, in the colours it assigns them.
+
+The assignments are read from the vault itself, at `.obsidian/plugins/iconic/data.json` — the one file under a dot-directory that syncs, because it is part of how the vault reads rather than editor configuration. Changing an icon in Obsidian and committing is all it takes; nothing is compiled in.
+
+Glyphs come from [Lucide](https://lucide.dev), flattened into a single asset by `tools/lucide.py` rather than shipped as 2,112 drawables. Emoji assignments render as themselves. An icon the set does not have falls back to the default rather than leaving a gap.
 
 ## Milestones
 

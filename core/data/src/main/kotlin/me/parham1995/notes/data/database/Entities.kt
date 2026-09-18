@@ -35,6 +35,11 @@ data class SyncStateEntity(
     val etagRef: String? = null,
     val lastSyncAt: Long? = null,
     val lastError: String? = null,
+    /**
+     * Which [me.parham1995.notes.sync.VaultFilter] built this manifest. Zero
+     * means "before the filter was versioned", which is treated as out of date.
+     */
+    val filterVersion: Int = 0,
 ) {
     companion object {
         const val SINGLETON_ID = 0

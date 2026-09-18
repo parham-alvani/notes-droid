@@ -6,16 +6,20 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.BacklinkRow
+import me.parham1995.notes.icons.IconSpec
 import javax.inject.Inject
 
 data class NoteUiState(
     val loading: Boolean = true,
     val note: RenderedNote? = null,
     val backlinks: List<BacklinkRow> = emptyList(),
+    val icon: IconSpec? = null,
     val missing: Boolean = false,
 ) {
     /** Targets with no destination, so the renderer can style them as broken. */
@@ -27,6 +31,7 @@ class NoteViewModel
     @Inject
     constructor(
         private val repository: VaultRepository,
+        private val icons: IconStore,
     ) : ViewModel() {
         private val _state = MutableStateFlow(NoteUiState())
         val state: StateFlow<NoteUiState> = _state.asStateFlow()
@@ -46,6 +51,7 @@ class NoteViewModel
                         loading = false,
                         note = note,
                         backlinks = repository.backlinks(id),
+                        icon = icons.config.first().forFile(note.path),
                     )
             }
         }

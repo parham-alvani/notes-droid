@@ -88,14 +88,24 @@ class SyncRepository
             val transport = transportFor(current)
 
             val stored = syncState.get()
+            // A manifest built by an older filter is missing whatever the
+            // filter has since started accepting, and no incremental refresh
+            // will ever mention those files -- they did not change, the rule
+            // did. Forgetting the commit for this one run plans from the full
+            // tree instead, which still diffs against the manifest, so it adds
+            // only what is absent rather than re-fetching the vault.
+            val staleFilter = stored != null && stored.filterVersion != VaultFilter.VERSION
             val base =
                 SyncBase(
-                    commit = stored?.headCommit,
+                    commit = stored?.headCommit?.takeUnless { staleFilter },
                     manifest = blobs.manifestRows().associate { it.path to it.sha },
-                    etagRef = stored?.etagRef,
+                    etagRef = stored?.etagRef?.takeUnless { staleFilter },
                 )
 
             log.info("at ${stored?.headCommit?.take(7) ?: "nothing yet"}, ${base.manifest.size} files tracked")
+            if (staleFilter) {
+                log.info("what counts as vault content changed - reading the full tree once to catch up")
+            }
 
             val narrator =
                 (transport as? GitSshVaultSync)?.let { git ->
@@ -128,6 +138,9 @@ class SyncRepository
                     log.info("downloaded ${plan.downloads.size} files")
 
                     val indexStart = System.currentTimeMillis()
+                    // Still incremental: a stale filter drops the base commit
+                    // to get a full listing, but the vault itself has not been
+                    // re-fetched, so reindexing all of it would be for nothing.
                     index(plan, firstSync = stored?.headCommit == null)
                     log.info("indexed in ${(System.currentTimeMillis() - indexStart) / 1000}s")
                 }
@@ -137,6 +150,7 @@ class SyncRepository
                         etagRef = plan.etagRef,
                         lastSyncAt = System.currentTimeMillis(),
                         lastError = null,
+                        filterVersion = VaultFilter.VERSION,
                     ),
                 )
                 log.info("sync finished in ${(System.currentTimeMillis() - startedAt) / 1000}s")
@@ -149,6 +163,8 @@ class SyncRepository
                         etagRef = stored?.etagRef,
                         lastSyncAt = stored?.lastSyncAt,
                         lastError = failure.message ?: failure::class.simpleName,
+                        // Unchanged on failure, so the catch-up is retried.
+                        filterVersion = stored?.filterVersion ?: 0,
                     ),
                 )
                 throw failure

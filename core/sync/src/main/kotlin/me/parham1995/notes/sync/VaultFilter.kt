@@ -23,10 +23,17 @@ class VaultFilter(
      * tens of thousands of files.
      */
     private val excludedRoots: Set<String> = DEFAULT_EXCLUDED_ROOTS,
+    /**
+     * Files under a dot-directory that are content anyway. Matched exactly, so
+     * this cannot widen into "sync `.obsidian`".
+     */
+    private val configPaths: Set<String> = DEFAULT_CONFIG_PATHS,
 ) {
     /** The kind of [path], or null when it is not vault content at all. */
     fun kindOf(path: String): BlobKind? {
         if (path.isEmpty()) return null
+
+        if (path in configPaths) return BlobKind.CONFIG
 
         val segments = path.split('/')
         // Anything under a dot-directory is tooling, not notes: .obsidian,
@@ -46,7 +53,36 @@ class VaultFilter(
     fun accepts(path: String): Boolean = kindOf(path) != null
 
     companion object {
+        /**
+         * Bumped whenever this class starts or stops accepting a path.
+         *
+         * A device only ever learns about files that *changed* since its last
+         * sync, so widening the filter is invisible to it: the newly-eligible
+         * file did not change, so no refresh will ever mention it. Recording
+         * the version the manifest was built with lets a sync notice it is out
+         * of date and plan from the full tree once, which costs one request and
+         * picks up exactly what is missing.
+         *
+         * 2: the Iconic plugin's icon assignments.
+         */
+        const val VERSION = 2
+
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
+
+        /**
+         * Where the Iconic plugin records which icon belongs to which note or
+         * folder.
+         *
+         * This is the one file under `.obsidian` the app wants, and the reason
+         * is that it is not editor configuration in the usual sense -- it is
+         * part of how the vault reads, the same way a note's title is. Leaving
+         * it out would mean either shipping a second copy of the assignments
+         * with the app, which goes stale the moment an icon changes, or
+         * dropping the feature. It is a few tens of kilobytes.
+         */
+        const val ICONIC_CONFIG = ".obsidian/plugins/iconic/data.json"
+
+        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG)
 
         /**
          * Only formats that can actually be shown inline. Video and audio are

@@ -37,7 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.parham1995.notes.data.VaultItem
+import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.ui.icon.VaultIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,20 +123,21 @@ fun BrowserScreen(
                         item {
                             SectionLabel("Recently opened")
                         }
-                        items(state.recent, key = { "recent-${it.id}" }) { note ->
+                        items(state.recent, key = { "recent-${it.note.id}" }) { row ->
                             RowItem(
-                                title = note.title.ifBlank { note.name },
-                                subtitle = note.path.substringBeforeLast('/', ""),
+                                title = row.note.title.ifBlank { row.note.name },
+                                subtitle = row.note.path.substringBeforeLast('/', ""),
                                 isFolder = false,
-                                onClick = { onOpenNote(note.id) },
+                                icon = row.icon,
+                                onClick = { onOpenNote(row.note.id) },
                             )
                         }
                         item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
                         item { SectionLabel("All notes - ${state.noteCount}") }
                     }
 
-                    items(state.items, key = { it.path }) { item ->
-                        VaultRow(item, viewModel, onOpenNote)
+                    items(state.items, key = { it.item.path }) { row ->
+                        VaultRow(row, viewModel, onOpenNote)
                     }
 
                     if (!state.loading && state.items.isEmpty()) {
@@ -157,14 +159,16 @@ fun BrowserScreen(
 
 @Composable
 private fun VaultRow(
-    item: VaultItem,
+    row: BrowserRow,
     viewModel: BrowserViewModel,
     onOpenNote: (Long) -> Unit,
 ) {
+    val item = row.item
     RowItem(
         title = item.name,
         subtitle = null,
         isFolder = item.isFolder,
+        icon = row.icon,
         // A folder with its own note opens that note; the chevron descends.
         hasOwnNote = item.isFolder && item.noteId != null,
         onClick = {
@@ -183,6 +187,7 @@ private fun RowItem(
     title: String,
     subtitle: String?,
     isFolder: Boolean,
+    icon: IconSpec? = null,
     hasOwnNote: Boolean = false,
     onClick: () -> Unit,
     onDescend: (() -> Unit)? = null,
@@ -195,7 +200,11 @@ private fun RowItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(if (isFolder) "📁" else "📄", style = MaterialTheme.typography.bodyLarge)
+        VaultIcon(
+            spec = icon,
+            default = if (isFolder) "folder" else "file-text",
+            contentDescription = if (isFolder) "Folder" else "Note",
+        )
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,

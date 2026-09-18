@@ -10,15 +10,30 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SearchHit
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
+import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.icons.IconicConfig
 import javax.inject.Inject
+
+/** A quick-switcher row, with the icon Iconic gives the note. */
+data class QuickRow(
+    val note: NoteEntity,
+    val icon: IconSpec? = null,
+)
+
+/** A full-text result, likewise. */
+data class HitRow(
+    val hit: SearchHit,
+    val icon: IconSpec? = null,
+)
 
 data class SearchUiState(
     val query: String = "",
-    val quick: List<NoteEntity> = emptyList(),
-    val hits: List<SearchHit> = emptyList(),
+    val quick: List<QuickRow> = emptyList(),
+    val hits: List<HitRow> = emptyList(),
     val searching: Boolean = false,
 )
 
@@ -28,13 +43,23 @@ class SearchViewModel
     @Inject
     constructor(
         private val repository: VaultRepository,
+        icons: IconStore,
     ) : ViewModel() {
         private val _state = MutableStateFlow(SearchUiState())
         val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
         private val queries = MutableStateFlow("")
 
+        /**
+         * Held rather than collected per query. Search runs on every keystroke
+         * and the assignments only change when the vault does, so waiting on
+         * the flow inside the debounce would put a file read on the typing path.
+         */
+        private var iconConfig: IconicConfig = IconicConfig.EMPTY
+
         init {
+            viewModelScope.launch { icons.config.collect { iconConfig = it } }
+
             viewModelScope.launch {
                 queries
                     .debounce(DEBOUNCE_MS)
@@ -47,9 +72,9 @@ class SearchViewModel
                         _state.value = _state.value.copy(searching = true)
                         // The quick switcher is what answers most searches, so
                         // it runs first and the full-text pass fills in under it.
-                        val quick = repository.quickSwitch(query)
+                        val quick = repository.quickSwitch(query).map { QuickRow(it, iconConfig.forFile(it.path)) }
                         _state.value = _state.value.copy(quick = quick)
-                        val hits = repository.search(query)
+                        val hits = repository.search(query).map { HitRow(it, iconConfig.forFile(it.path)) }
                         _state.value = _state.value.copy(hits = hits, searching = false)
                     }
             }

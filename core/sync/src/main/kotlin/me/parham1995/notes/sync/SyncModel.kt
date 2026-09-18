@@ -4,6 +4,13 @@ package me.parham1995.notes.sync
 enum class BlobKind {
     MARKDOWN,
     IMAGE,
+
+    /**
+     * A vault file that shapes how notes are presented rather than being one --
+     * currently only the Iconic plugin's icon assignments. Downloaded like
+     * markdown, never indexed as a note.
+     */
+    CONFIG,
     OTHER,
 }
 

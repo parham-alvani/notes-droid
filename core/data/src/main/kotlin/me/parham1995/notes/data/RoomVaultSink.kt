@@ -2,8 +2,10 @@ package me.parham1995.notes.data
 
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.BlobEntity
+import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.VaultEntry
+import me.parham1995.notes.sync.VaultFilter
 import me.parham1995.notes.sync.VaultSink
 import javax.inject.Inject
 
@@ -25,6 +27,13 @@ class RoomVaultSink
         /** Filled in by the caller so kind and size survive into the manifest. */
         var plannedEntries: Map<String, VaultEntry> = emptyMap()
 
+        /**
+         * Only used when a write arrives with no planned entry behind it. The
+         * kind decides whether the file is later parsed as a note, so guessing
+         * markdown here would index the Iconic config as one.
+         */
+        private val filter = VaultFilter()
+
         override suspend fun write(
             path: String,
             bytes: ByteArray,
@@ -37,7 +46,7 @@ class RoomVaultSink
                     path = path,
                     sha = sha,
                     size = planned?.size?.takeIf { it > 0 } ?: bytes.size.toLong(),
-                    kind = planned?.kind ?: me.parham1995.notes.sync.BlobKind.MARKDOWN,
+                    kind = planned?.kind ?: filter.kindOf(path) ?: BlobKind.OTHER,
                     localState = LocalState.DOWNLOADED,
                 ),
             )

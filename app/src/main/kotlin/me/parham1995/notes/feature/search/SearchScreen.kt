@@ -3,6 +3,8 @@ package me.parham1995.notes.feature.search
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -30,9 +33,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.ui.icon.VaultIcon
 
 @Composable
 fun SearchScreen(
@@ -66,16 +72,14 @@ fun SearchScreen(
             // so it sits above the full-text results rather than below them.
             if (state.quick.isNotEmpty()) {
                 item { Label("Notes") }
-                items(state.quick, key = { "q-${it.id}" }) { note ->
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenNote(note.id) }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                items(state.quick, key = { "q-${it.note.id}" }) { row ->
+                    ResultRow(
+                        icon = row.icon,
+                        onClick = { onOpenNote(row.note.id) },
                     ) {
-                        Text(note.title.ifBlank { note.name }, style = MaterialTheme.typography.bodyLarge)
+                        Text(row.note.title.ifBlank { row.note.name }, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            note.path,
+                            row.note.path,
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.outline,
@@ -89,17 +93,15 @@ fun SearchScreen(
 
             if (state.hits.isNotEmpty()) {
                 item { Label("Full text") }
-                items(state.hits, key = { "h-${it.noteId}" }) { hit ->
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenNote(hit.noteId) }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                items(state.hits, key = { "h-${it.hit.noteId}" }) { row ->
+                    ResultRow(
+                        icon = row.icon,
+                        onClick = { onOpenNote(row.hit.noteId) },
+                        spacing = 2.dp,
                     ) {
-                        Text(hit.title, style = MaterialTheme.typography.bodyMedium)
+                        Text(row.hit.title, style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            text = hit.snippet.highlighted(),
+                            text = row.hit.snippet.highlighted(),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 3,
@@ -157,5 +159,26 @@ private fun String.highlighted(): AnnotatedString {
             }
             rest = rest.substring(close + 1)
         }
+    }
+}
+
+/** A result line: the note's icon, then whatever the caller puts beside it. */
+@Composable
+private fun ResultRow(
+    icon: IconSpec?,
+    onClick: () -> Unit,
+    spacing: Dp = 0.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        VaultIcon(spec = icon, default = "file-text")
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
     }
 }

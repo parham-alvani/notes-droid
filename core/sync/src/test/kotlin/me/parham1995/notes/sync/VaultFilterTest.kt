@@ -54,4 +54,20 @@ class VaultFilterTest {
         assertThat(filter.kindOf("noextension")).isNull()
         assertThat(filter.kindOf("")).isNull()
     }
+
+    @Test
+    fun `the icon assignments come through despite living under a dot-directory`() {
+        assertThat(filter.kindOf(VaultFilter.ICONIC_CONFIG)).isEqualTo(BlobKind.CONFIG)
+    }
+
+    @Test
+    fun `the exception is that one file and does not open up its directory`() {
+        assertThat(filter.kindOf(".obsidian/plugins/iconic/manifest.json")).isNull()
+        assertThat(filter.kindOf(".obsidian/plugins/iconic/data.json.bak")).isNull()
+        assertThat(filter.kindOf(".obsidian/app.json")).isNull()
+        assertThat(filter.kindOf(".obsidian/plugins/other/data.json")).isNull()
+        // Not a prefix match either: a note that happens to be named this way
+        // inside the vault proper is still a note.
+        assertThat(filter.kindOf("notes/.obsidian/plugins/iconic/data.json")).isNull()
+    }
 }

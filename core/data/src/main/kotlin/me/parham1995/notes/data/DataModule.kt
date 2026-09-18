@@ -44,6 +44,7 @@ object DataModule {
                 NotesDatabase.MIGRATION_1_2,
                 NotesDatabase.MIGRATION_2_3,
                 NotesDatabase.MIGRATION_3_4,
+                NotesDatabase.MIGRATION_4_5,
             ).addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)

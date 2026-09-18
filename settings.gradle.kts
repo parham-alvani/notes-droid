@@ -41,4 +41,5 @@ rootProject.name = "notes-droid"
 include(":app")
 include(":core:markdown")
 include(":core:sync")
+include(":core:icons")
 include(":core:data")

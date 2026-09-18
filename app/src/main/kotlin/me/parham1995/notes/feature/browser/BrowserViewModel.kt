@@ -12,18 +12,32 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
+import me.parham1995.notes.icons.IconSpec
 import javax.inject.Inject
+
+/** A row, with its icon already resolved. */
+data class BrowserRow(
+    val item: VaultItem,
+    val icon: IconSpec? = null,
+)
+
+/** A recently-opened note, likewise. */
+data class RecentRow(
+    val note: NoteEntity,
+    val icon: IconSpec? = null,
+)
 
 data class BrowserUiState(
     val path: String = "",
-    val items: List<VaultItem> = emptyList(),
-    val recent: List<NoteEntity> = emptyList(),
+    val items: List<BrowserRow> = emptyList(),
+    val recent: List<RecentRow> = emptyList(),
     val noteCount: Int = 0,
     val loading: Boolean = true,
     val syncing: Boolean = false,
@@ -46,6 +60,7 @@ class BrowserViewModel
     @Inject
     constructor(
         private val repository: VaultRepository,
+        private val icons: IconStore,
         private val scheduler: SyncScheduler,
         private val settings: SettingsStore,
     ) : ViewModel() {
@@ -58,6 +73,19 @@ class BrowserViewModel
         private val items: Flow<List<VaultItem>> =
             path.flatMapLatest { current -> repository.childrenFlow(current) }
 
+        // Resolving here rather than in the row composable keeps the rule
+        // regexes off the composition: a rule is tested against every visible
+        // item, and the browser recomposes on every scroll.
+        private val rows: Flow<List<BrowserRow>> =
+            combine(items, icons.config) { current, config ->
+                current.map { BrowserRow(it, config.forPath(it.path, it.isFolder)) }
+            }
+
+        private val recent: Flow<List<RecentRow>> =
+            combine(repository.recentlyOpened(), icons.config) { notes, config ->
+                notes.map { RecentRow(it, config.forFile(it.path)) }
+            }
+
         private val _state = MutableStateFlow(BrowserUiState())
         val state: StateFlow<BrowserUiState> = _state.asStateFlow()
 
@@ -65,14 +93,14 @@ class BrowserViewModel
             viewModelScope.launch {
                 combine(
                     path,
-                    items,
-                    repository.recentlyOpened(),
+                    rows,
+                    recent,
                     repository.noteCount,
-                ) { currentPath, currentItems, recent, count ->
+                ) { currentPath, currentItems, recentRows, count ->
                     BrowserUiState(
                         path = currentPath,
                         items = currentItems,
-                        recent = recent,
+                        recent = recentRows,
                         noteCount = count,
                         loading = false,
                     )
