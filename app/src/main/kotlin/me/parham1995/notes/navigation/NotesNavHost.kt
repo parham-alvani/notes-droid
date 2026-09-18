@@ -27,6 +27,7 @@ import kotlinx.serialization.Serializable
 import me.parham1995.notes.feature.browser.BrowserScreen
 import me.parham1995.notes.feature.note.NoteScreen
 import me.parham1995.notes.feature.search.SearchScreen
+import me.parham1995.notes.feature.ssh.SshScreen
 import me.parham1995.notes.feature.sync.SyncScreen
 import me.parham1995.notes.feature.tasks.TasksScreen
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -55,6 +56,9 @@ object SearchRoute
 
 @Serializable
 object SettingsRoute
+
+@Serializable
+object SshRoute
 
 @Serializable
 data class NoteRoute(
@@ -144,7 +148,12 @@ fun NotesNavHost(openTasks: StateFlow<Boolean> = MutableStateFlow(false)) {
             composable<SearchRoute> {
                 SearchScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
             }
-            composable<SettingsRoute> { SyncScreen() }
+            composable<SettingsRoute> {
+                SyncScreen(onManageSshKeys = { navController.navigate(SshRoute) })
+            }
+            composable<SshRoute> {
+                SshScreen(onBack = { navController.popBackStack() })
+            }
             composable<NoteRoute> { entry ->
                 val route = entry.toRoute<NoteRoute>()
                 NoteScreen(

@@ -1,0 +1,7 @@
+An SSH key panel.
+
+Settings now has a screen for the keys: what each one is, which repository it belongs to, when it was made, its fingerprint, and a Test button that authenticates against the host without syncing anything.
+
+That last part is the point. Until now the only way to find out whether a deploy key had actually been registered was to start a sync and interpret the failure, and those failures are ambiguous enough to send you after the wrong thing.
+
+Keys left behind by a repository that was removed are listed separately, with the means to delete them. Replacing a key asks first, because it stops the registered one working immediately.

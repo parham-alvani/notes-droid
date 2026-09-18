@@ -1,7 +1,6 @@
 package me.parham1995.notes.feature.sync
 
 import android.app.Activity
-import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
@@ -38,13 +37,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -53,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import me.parham1995.notes.BuildConfig
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SyncTransport
@@ -67,7 +62,10 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SyncScreen(viewModel: SyncViewModel = hiltViewModel()) {
+fun SyncScreen(
+    onManageSshKeys: () -> Unit = {},
+    viewModel: SyncViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // The access token is on screen here, so keep it out of the recents
@@ -94,7 +92,7 @@ fun SyncScreen(viewModel: SyncViewModel = hiltViewModel()) {
             if (state.settings.transport == SyncTransport.REST) {
                 TokenCard(state, viewModel)
             } else {
-                SshKeyCard(state, viewModel)
+                SshKeyCard(state, onManageSshKeys)
             }
             ImagesCard(state, viewModel)
             BackgroundSyncCard(state, viewModel)
@@ -613,96 +611,39 @@ private fun TransportCard(
 @Composable
 private fun SshKeyCard(
     state: SyncUiState,
-    viewModel: SyncViewModel,
+    onManage: () -> Unit,
 ) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
-
-    SectionCard("SSH key") {
+    // A summary and a way through, rather than the keys themselves. The panel
+    // owns the detail; two screens showing the same thing is two screens to
+    // keep in step.
+    SectionCard("SSH keys") {
+        val missing = state.sshKeys.count { it.publicKey == null }
         Text(
-            "Generated on this device. The private half never leaves it -- add each public line below to " +
-                "that repository as a read-only deploy key.",
-            style = MaterialTheme.typography.bodySmall,
+            text =
+                when {
+                    state.sshKeys.isEmpty() -> "No repository syncs over SSH."
+                    missing > 0 -> "$missing of ${state.sshKeys.size} still need a key."
+                    state.sshKeys.size == 1 -> "One key, for ${state.sshKeys.first().label}."
+                    else -> "${state.sshKeys.size} keys, one per repository."
+                },
+            style = MaterialTheme.typography.bodyMedium,
         )
-        if (state.sshKeys.size > 1) {
+        state.sshKeys.forEach { key ->
             Text(
-                "A key each, because GitHub allows a deploy key on exactly one repository -- the same " +
-                    "line pasted a second time is refused.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = key.label + " · " + (key.fingerprint ?: "no key yet"),
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color =
+                    if (key.publicKey == null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-
-        state.sshKeys.forEach { key ->
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-            Text(key.label, style = MaterialTheme.typography.labelLarge)
-            if (key.publicKey == null) {
-                Text(
-                    "No key yet.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                // The one thing that tells a key that was never registered from
-                // one replaced by a reinstall. Both fail identically without it.
-                Text(
-                    text = "Fingerprint: ${key.fingerprint}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = key.publicKey,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { viewModel.generateSshKey(key.mount) },
-                    enabled = !state.generatingKey,
-                ) {
-                    Text(if (key.publicKey == null) "Generate" else "Regenerate")
-                }
-                key.publicKey?.let { line ->
-                    OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                clipboard.setClipEntry(
-                                    ClipData.newPlainText("ssh public key", line).toClipEntry(),
-                                )
-                            }
-                        },
-                    ) {
-                        Text("Copy")
-                    }
-                }
-            }
-        }
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .selectable(
-                        selected = state.settings.sshOverPort443,
-                        onClick = { viewModel.setSshOverPort443(!state.settings.sshOverPort443) },
-                    ).padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Switch(checked = state.settings.sshOverPort443, onCheckedChange = null)
-            Column {
-                Text("Connect over port 443", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "Many mobile networks block port 22, where a clone simply hangs. " +
-                        "GitHub answers SSH on 443 too.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        Button(onClick = onManage) { Text("Manage keys") }
     }
 }
 

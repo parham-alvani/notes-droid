@@ -288,6 +288,18 @@ class GitSshVaultSync(
     }
 
     /**
+     * Reaches the host and authenticates, and does nothing else.
+     *
+     * Exposed because "is this key registered?" is the question that is
+     * otherwise only answered by starting a sync and reading the failure --
+     * which is how a perfectly good deploy key came to be replaced twice.
+     */
+    suspend fun authenticate() {
+        checkReachable()
+        checkAuthentication()
+    }
+
+    /**
      * Opens an SSH session and authenticates, without transferring anything.
      *
      * GitHub answers a rejected key by closing the connection, which JGit

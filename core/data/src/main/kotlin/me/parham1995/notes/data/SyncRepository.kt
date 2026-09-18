@@ -154,6 +154,35 @@ class SyncRepository
             log.warn("removed ${vault.owner}/${vault.repo}")
         }
 
+        /**
+         * Authenticates one repository's SSH key against its host and reports
+         * what happened, without transferring anything.
+         *
+         * This is the check that was missing all along. A key that was never
+         * registered and a key the host refused fail identically once a clone
+         * is under way, and telling them apart by reading a transfer error is
+         * how a working deploy key was thrown away and replaced. Twenty
+         * seconds and a handshake answers it outright.
+         */
+        suspend fun testSshKey(vault: VaultEntity): Result<String> =
+            runCatching {
+                if (!sshKeys.exists(vault.mount)) {
+                    error("no key for ${vault.label} yet")
+                }
+                val transport =
+                    GitSshVaultSync(
+                        workTree = files.fileFor(vault.mount),
+                        remoteUrl = sshUrl(vault),
+                        branch = vault.branch ?: DEFAULT_BRANCH,
+                        keys = sshKeys,
+                        keyMount = vault.mount,
+                        configDir = File(context.filesDir, "git"),
+                        log = log::info,
+                    )
+                transport.authenticate()
+                "authenticated against ${vault.owner}/${vault.repo}"
+            }
+
         /** Confirms the token and repository before anything is synced. */
         suspend fun testConnection(): RepositoryInfo {
             ensureSeeded()

@@ -118,11 +118,42 @@ class SshKeyStore
          * Without it there is no way to tell a key that was never registered
          * from one that was replaced by a reinstall, and both fail identically.
          */
-        fun fingerprint(mount: String = ""): String =
+        fun fingerprint(mount: String = ""): String = fingerprintOf(publicKeyLine(mount) ?: return "no key")
+
+        private fun fingerprintOf(line: String): String =
             runCatching {
-                val line = publicKeyLine(mount) ?: return "no key"
                 KeyUtils.getFingerPrint(PublicKeyEntry.parsePublicKeyEntry(line).resolvePublicKey(null, null, null))
             }.getOrDefault("unreadable")
+
+        /**
+         * Every key on the device, whether or not a repository still claims it.
+         *
+         * Listed by file rather than derived from the configured repositories,
+         * because the interesting case is the key left behind when a
+         * repository is removed: nothing else would ever mention it, and it is
+         * still a private key sitting in storage.
+         */
+        fun stored(): List<StoredKey> =
+            sshDir
+                .listFiles()
+                .orEmpty()
+                .filter { it.isFile && it.name.endsWith(PUBLIC_SUFFIX) }
+                .map { file ->
+                    val base = file.name.removeSuffix(PUBLIC_SUFFIX)
+                    StoredKey(
+                        fileName = base,
+                        publicKey = file.readText().trim(),
+                        fingerprint = fingerprintOf(file.readText().trim()),
+                        createdAt = identityFile(base).lastModified().takeIf { it > 0 },
+                    )
+                }.sortedBy { it.fileName }
+
+        fun deleteByFileName(fileName: String) {
+            identityFile(fileName).delete()
+            File(sshDir, fileName + PUBLIC_SUFFIX).delete()
+        }
+
+        private fun identityFile(base: String): File = File(sshDir, base)
 
         fun delete(mount: String = "") {
             identity(mount).delete()
@@ -132,5 +163,17 @@ class SshKeyStore
         private companion object {
             /** Anything a file name should not carry, whatever a folder is called. */
             val UNSAFE = Regex("[^a-z0-9._-]")
+            const val PUBLIC_SUFFIX = ".pub"
         }
     }
+
+/** A key as it sits on disk, for the management screen. */
+data class StoredKey(
+    val fileName: String,
+    val publicKey: String,
+    val fingerprint: String,
+    val createdAt: Long?,
+) {
+    /** `ssh-ed25519`, `ssh-rsa` -- whatever the line declares. */
+    val algorithm: String get() = publicKey.substringBefore(' ')
+}
