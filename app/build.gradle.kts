@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
     implementation(libs.jlatexmath)
+    implementation(libs.highlights)
     implementation(libs.androidx.webkit)
 
     testImplementation(libs.junit)

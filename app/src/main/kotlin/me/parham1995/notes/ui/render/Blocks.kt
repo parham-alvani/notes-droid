@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -21,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,11 +33,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.parham1995.notes.markdown.CalloutKind
 import me.parham1995.notes.markdown.MdAlign
 import me.parham1995.notes.markdown.MdBlock
@@ -105,13 +112,26 @@ private fun HeadingView(
             4 -> MaterialTheme.typography.titleMedium
             else -> MaterialTheme.typography.titleSmall
         }
-    RichText(
-        inlines = block.inlines,
-        modifier = modifier.fillMaxWidth().padding(top = if (block.level <= 2) 12.dp else 8.dp),
-        style = style.copy(fontWeight = FontWeight.SemiBold),
-        actions = actions.inline,
-        brokenLinks = brokenLinks,
-    )
+    Column(modifier.fillMaxWidth()) {
+        // More space above than below, so a heading belongs to what follows it
+        // rather than floating between two sections.
+        Spacer(Modifier.height(if (block.level <= 2) 18.dp else 12.dp))
+        RichText(
+            inlines = block.inlines,
+            modifier = Modifier.fillMaxWidth(),
+            // naz paints Title yellow; the deeper levels stay plain so the
+            // colour keeps meaning something.
+            style = style.copy(color = if (block.level <= 2) MaterialTheme.colorScheme.tertiary else Color.Unspecified),
+            actions = actions.inline,
+            brokenLinks = brokenLinks,
+        )
+        if (block.level <= 2) {
+            HorizontalDivider(
+                Modifier.padding(top = 6.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+        }
+    }
 }
 
 @Composable
@@ -120,22 +140,34 @@ private fun CodeBlockView(
     actions: RenderActions,
     modifier: Modifier,
 ) {
+    var highlighted by remember(block.id) { mutableStateOf<AnnotatedString?>(null) }
+    LaunchedEffect(block.id) {
+        highlighted = CodeHighlighter.highlight(block.code, block.language)
+    }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(8.dp),
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             block.language?.let { language ->
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = language,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // Dimmer when the label is only a label: nothing is
+                        // being highlighted for it.
+                        color =
+                            if (CodeHighlighter.isKnown(language)) {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                MaterialTheme.colorScheme.outline
+                            },
                     )
                     Text(
                         text = "copy",
@@ -146,13 +178,13 @@ private fun CodeBlockView(
                 }
             }
             // Code is left-to-right whatever the surrounding prose does, and
-            // scrolls on its own rather than wrapping.
+            // scrolls on its own rather than wrapping mid-statement.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Text(
-                    text = block.code,
+                    text = highlighted ?: AnnotatedString(block.code),
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = CODE_LINE_HEIGHT),
                 )
             }
         }
@@ -230,9 +262,15 @@ private fun ListBlockView(
                     text = item.marker(block.ordered, block.start + index),
                     style = MaterialTheme.typography.bodyLarge,
                     color = item.markerColor(),
+                    modifier = Modifier.widthIn(min = MARKER_WIDTH),
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    item.blocks.forEach { MdBlockView(it, actions, brokenLinks) }
+                    item.blocks.forEach { child ->
+                        // A nested list indents; anything else sits flush with
+                        // the item's own text.
+                        val indent = if (child is MdBlock.ListBlock) NESTED_LIST_INDENT else 0.dp
+                        MdBlockView(child, actions, brokenLinks, Modifier.padding(start = indent))
+                    }
                     if (item.taskMeta.isNotEmpty()) TaskChips(item)
                 }
             }
@@ -265,6 +303,21 @@ private fun TableView(
     brokenLinks: Set<String>,
     modifier: Modifier,
 ) {
+    // Columns sized from their own content rather than all alike. A
+    // two-column table of short values looked absurd at a fixed width, and a
+    // fourteen-column one needs every column it can get.
+    val widths =
+        remember(block.id) {
+            val columns = maxOf(block.header.size, block.rows.maxOfOrNull { it.size } ?: 0)
+            List(columns) { column ->
+                val longest =
+                    (listOf(block.header.getOrNull(column)) + block.rows.map { it.getOrNull(column) })
+                        .filterNotNull()
+                        .maxOfOrNull { cell -> cell.textLength() } ?: 0
+                (longest * APPROX_CHAR_WIDTH).dp.coerceIn(MIN_CELL_WIDTH, MAX_CELL_WIDTH)
+            }
+        }
+
     // The scroll is on this block alone, never the page: tables run to a dozen
     // columns and would otherwise make the whole note scroll sideways.
     Column(
@@ -274,11 +327,11 @@ private fun TableView(
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp)),
     ) {
         if (block.header.isNotEmpty()) {
-            TableRowView(block.header, block.alignments, actions, brokenLinks, header = true)
-            HorizontalDivider()
+            TableRowView(block.header, block.alignments, widths, actions, brokenLinks, header = true)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
         block.rows.forEachIndexed { index, row ->
-            TableRowView(row, block.alignments, actions, brokenLinks, header = false)
+            TableRowView(row, block.alignments, widths, actions, brokenLinks, header = false)
             if (index != block.rows.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
@@ -288,6 +341,7 @@ private fun TableView(
 private fun TableRowView(
     cells: List<List<MdInline>>,
     alignments: List<MdAlign>,
+    widths: List<Dp>,
     actions: RenderActions,
     brokenLinks: Set<String>,
     header: Boolean,
@@ -296,7 +350,7 @@ private fun TableRowView(
         cells.forEachIndexed { index, cell ->
             RichText(
                 inlines = cell,
-                modifier = Modifier.width(CELL_WIDTH).padding(8.dp),
+                modifier = Modifier.width(widths.getOrElse(index) { MIN_CELL_WIDTH }).padding(8.dp),
                 style =
                     if (header) {
                         MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
@@ -315,6 +369,22 @@ private fun TableRowView(
         }
     }
 }
+
+private fun List<MdInline>.textLength(): Int =
+    sumOf { node ->
+        when (node) {
+            is MdInline.Text -> node.text.length
+            is MdInline.Code -> node.code.length
+            is MdInline.Emphasis -> node.children.textLength()
+            is MdInline.Strong -> node.children.textLength()
+            is MdInline.Strikethrough -> node.children.textLength()
+            is MdInline.Highlight -> node.children.textLength()
+            is MdInline.Link -> node.children.textLength()
+            is MdInline.WikiLink -> node.display.length
+            is MdInline.InlineMath -> node.latex.length
+            else -> 1
+        }
+    }
 
 @Composable
 private fun AttachmentView(
@@ -411,4 +481,9 @@ private fun CalloutKind.glyph(): String =
 private fun CalloutKind.label(): String = name.lowercase().replaceFirstChar { it.uppercase() }
 
 private const val CONTAINER_ALPHA = 0.10f
-private val CELL_WIDTH = 160.dp
+private val CODE_LINE_HEIGHT = 18.sp
+private const val APPROX_CHAR_WIDTH = 8
+private val MIN_CELL_WIDTH = 72.dp
+private val MAX_CELL_WIDTH = 240.dp
+private val NESTED_LIST_INDENT = 12.dp
+private val MARKER_WIDTH = 18.dp

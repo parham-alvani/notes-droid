@@ -128,7 +128,10 @@ class VaultIndexer
                                 parent = parent,
                                 name = name,
                                 slug = Slugs.fold(name),
-                                title = indexed.note.title.ifBlank { name },
+                                // In Obsidian a note's title is its file
+                                // name. The first heading is part of the
+                                // body and is rendered as one.
+                                title = name,
                                 blobSha = indexed.sha,
                                 size = indexed.size,
                                 // `X/X.md` is the folder's landing page.
@@ -174,7 +177,7 @@ class VaultIndexer
             ids.forEachIndexed { position, id ->
                 val indexed = batch[position]
                 val name = indexed.path.substringAfterLast('/').removeSuffix(MD)
-                search.upsert(id, indexed.note.title.ifBlank { name }, indexed.note.plainText)
+                search.upsert(id, name, indexed.note.plainText)
             }
         }
 

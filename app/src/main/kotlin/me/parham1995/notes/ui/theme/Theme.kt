@@ -63,5 +63,5 @@ private val NazScheme =
 
 @Composable
 fun NotesTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = NazScheme, content = content)
+    MaterialTheme(colorScheme = NazScheme, typography = NazTypography, content = content)
 }
