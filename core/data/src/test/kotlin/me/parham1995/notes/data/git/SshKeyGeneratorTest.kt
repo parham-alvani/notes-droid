@@ -5,8 +5,20 @@ import org.apache.sshd.common.config.keys.PublicKeyEntry
 import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter
 import org.apache.sshd.common.util.security.SecurityUtils
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import java.io.ByteArrayOutputStream
 
+/**
+ * Runs under Robolectric, like everything else here that touches sshd.
+ *
+ * Not because it needs Android -- it does not -- but because sshd resolves its
+ * EdDSA implementation through a static registry, and the first classloader to
+ * initialise that registry wins for the whole JVM. With one test in
+ * Robolectric's sandbox and another on the application classloader, the same
+ * class arrives under two loaders and the cast between them fails.
+ */
+@RunWith(RobolectricTestRunner::class)
 class SshKeyGeneratorTest {
     @Test
     fun `eddsa is actually available, not merely referenced`() {
