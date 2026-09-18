@@ -20,13 +20,28 @@
         });
       }
 
-      async function render(id, code) {
-        try {
-          const { svg } = await mermaid.render('d' + id, code);
-          return JSON.stringify({ ok: true, svg: svg });
-        } catch (e) {
-          return JSON.stringify({ ok: false, error: String(e && e.message || e) });
-        }
+      // Started here, collected by polling `result`.
+      //
+      // `evaluateJavascript` hands back the JSON encoding of whatever the
+      // expression evaluates to, and it does not wait on promises. An `async`
+      // function here therefore returned a Promise, which encodes as `{}` --
+      // an object with no `ok` in it, so every diagram ever rendered was
+      // reported as invalid and shown as its own source.
+      function render(id, code) {
+        window.__result = null;
+        mermaid
+          .render('d' + id, code)
+          .then(function (out) {
+            window.__result = JSON.stringify({ ok: true, svg: out.svg });
+          })
+          .catch(function (e) {
+            window.__result = JSON.stringify({ ok: false, error: String((e && e.message) || e) });
+          });
+        return 'started';
+      }
+
+      function result() {
+        return window.__result;
       }
     </script>
   </body>

@@ -74,6 +74,7 @@ class MermaidRenderer
                 val json =
                     withTimeoutOrNull(RENDER_TIMEOUT_MS) {
                         evaluate(view, "render(${key.take(8).quoted()}, ${code.quoted()})")
+                        awaitResult(view)
                     } ?: return@withLock Result.Failed("timed out")
 
                 val parsed =
@@ -170,6 +171,22 @@ class MermaidRenderer
                 awaitFrame()
                 val ready = evaluate(view, "typeof mermaid !== 'undefined'")
                 if (ready == "true") return
+            }
+        }
+
+        /**
+         * Waits for the diagram mermaid is drawing.
+         *
+         * `mermaid.render` is asynchronous and `evaluateJavascript` will not
+         * wait for a promise, so the page leaves its answer in a global and
+         * this reads it once it appears. A frame at a time, because that is
+         * the rate the page can make progress at anyway.
+         */
+        private suspend fun awaitResult(view: WebView): String {
+            while (true) {
+                val value = evaluate(view, "result()")
+                if (value.isNotEmpty() && value != "null") return value
+                awaitFrame()
             }
         }
 

@@ -94,4 +94,5 @@
         <item quantity="one">%1$d باز</item>
         <item quantity="other">%1$d باز</item>
     </plurals>
+    <string name="diagram_failed">نمودار رسم نشد: %1$s</string>
 </resources>

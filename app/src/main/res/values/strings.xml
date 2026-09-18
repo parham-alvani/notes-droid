@@ -93,4 +93,5 @@
         <item quantity="one">%1$d open</item>
         <item quantity="other">%1$d open</item>
     </plurals>
+    <string name="diagram_failed">Diagram could not be drawn: %1$s</string>
 </resources>

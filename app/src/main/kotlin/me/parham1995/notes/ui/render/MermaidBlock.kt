@@ -3,6 +3,7 @@ package me.parham1995.notes.ui.render
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -103,12 +104,22 @@ fun MermaidBlockView(
                     )
 
                 error != null ->
-                    Text(
-                        text = code,
-                        modifier = Modifier.padding(12.dp).horizontalScroll(rememberScrollState()),
-                        fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Column(Modifier.padding(12.dp)) {
+                        // Saying so. A diagram that quietly became its own
+                        // source looks like the vault is written that way,
+                        // and for every diagram in it, it was.
+                        Text(
+                            text = stringResource(R.string.diagram_failed, error.orEmpty()),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            text = code,
+                            modifier = Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
 
                 else ->
                     Text(

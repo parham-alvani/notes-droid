@@ -1,0 +1,3 @@
+Mermaid diagrams render. They never have: the page's render function was asynchronous, and the bridge that calls it does not wait for a promise, so every diagram in the vault came back reported as invalid and was shown as its own source instead.
+
+A diagram that genuinely cannot be drawn now says so, and why, above its source.
