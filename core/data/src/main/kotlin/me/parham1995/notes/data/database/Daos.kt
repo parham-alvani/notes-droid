@@ -9,6 +9,14 @@ import kotlinx.coroutines.flow.Flow
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 
+/**
+ * The kinds a person can open from the tree.
+ *
+ * Markdown is a note and is listed as one; `CONFIG` shapes how notes are
+ * presented and belongs to no folder anyone browses.
+ */
+internal val BROWSABLE_KINDS = listOf(BlobKind.IMAGE, BlobKind.OTHER)
+
 @Dao
 interface BlobDao {
     @Upsert
@@ -61,11 +69,23 @@ interface BlobDao {
      *
      * Re-emitted rather than sampled, because a repository of nothing but
      * attachments has no notes to make the tree appear when it syncs.
+     *
+     * Named kinds rather than "everything that is not markdown", because that
+     * swept in the one config file the vault syncs and the browser derived a
+     * folder from its path -- so `.obsidian` sat at the top of the tree,
+     * offering to open the icon assignments. A kind that shapes how notes are
+     * presented is not a file anyone browses to.
      */
-    @Query("SELECT path FROM blobs WHERE vaultId = :vaultId AND kind != :markdown ORDER BY path")
+    @Query(
+        """
+        SELECT path FROM blobs
+        WHERE vaultId = :vaultId AND kind IN (:kinds)
+        ORDER BY path
+        """,
+    )
     fun attachmentPaths(
         vaultId: Long,
-        markdown: BlobKind = BlobKind.MARKDOWN,
+        kinds: List<BlobKind> = BROWSABLE_KINDS,
     ): Flow<List<String>>
 
     @Query("SELECT COALESCE(SUM(size), 0) FROM blobs WHERE localState = :state")

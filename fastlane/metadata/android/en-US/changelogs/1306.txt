@@ -1,0 +1,3 @@
+The tree no longer shows an ".obsidian" folder.
+
+The vault syncs one file from under ".obsidian" — the Iconic plugin's icon assignments — and the browser was listing it as something you could open, so a folder appeared at the top of the tree for it. It is read, not browsed.

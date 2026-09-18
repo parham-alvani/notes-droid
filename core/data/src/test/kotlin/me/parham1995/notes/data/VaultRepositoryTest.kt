@@ -86,6 +86,21 @@ class VaultRepositoryTest {
         indexer.indexAll(vaultId, entries)
     }
 
+    /** Records the one config file the vault syncs, as a sync would. */
+    private suspend fun config(path: String) {
+        ensureVault(first)
+        database.blobDao().upsert(
+            me.parham1995.notes.data.database.BlobEntity(
+                path = path,
+                vaultId = first,
+                sha = "sha-" + path.hashCode(),
+                size = 1,
+                kind = me.parham1995.notes.sync.BlobKind.CONFIG,
+                localState = me.parham1995.notes.sync.LocalState.DOWNLOADED,
+            ),
+        )
+    }
+
     /** Records a file the reader does not parse, as a sync would. */
     private suspend fun attachment(path: String) {
         // The vault has to exist for anything to be active, and a repository of
@@ -307,6 +322,21 @@ class VaultRepositoryTest {
             // A folder implied only by the attachments below it still appears.
             assertThat(papers.map { it.name }).containsExactly("2024", "passport.jpg")
             assertThat(papers.single { it.name == "2024" }.isFolder).isTrue()
+        }
+
+    @Test
+    fun `the icon assignments are not a folder in the tree`() =
+        runTest {
+            // `.obsidian` is not vault content, but the one file under it that
+            // syncs was being listed as an attachment -- so the browser
+            // derived a folder from its path and put it at the top of the
+            // tree, offering to open the plugin's config.
+            config(me.parham1995.notes.sync.VaultFilter.ICONIC_CONFIG)
+            attachment("uploads/logo.png")
+
+            val root = repository.children("")
+
+            assertThat(root.map { it.name }).containsExactly("uploads")
         }
 
     @Test
