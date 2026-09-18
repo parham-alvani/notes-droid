@@ -21,7 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,8 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -119,15 +119,19 @@ private fun PdfPage(
     document: PdfPages,
     index: Int,
 ) {
+    // Rendered at the window's own width rather than the page's natural size:
+    // a page at 300dpi is 2,500 pixels wide and would be scaled straight back
+    // down. The window, not `Configuration.screenWidthDp`, because that one
+    // rounds to whole dp and treats insets differently per target SDK.
+    val density = LocalDensity.current
+    val containerWidth = LocalWindowInfo.current.containerSize.width
     val widthPx =
-        with(LocalDensity.current) {
-            // Rendered at the screen's own width rather than the bitmap's
-            // natural size: a page at 300dpi is 2,500 pixels wide and would be
-            // scaled straight back down.
-            (LocalConfiguration.current.screenWidthDp.dp - PAGE_MARGIN).roundToPx()
+        remember(containerWidth, density) {
+            val margin = with(density) { PAGE_MARGIN.roundToPx() }
+            (containerWidth - margin).coerceAtLeast(1)
         }
 
-    var ratio by remember(index) { mutableStateOf(DEFAULT_RATIO) }
+    var ratio by remember(index) { mutableFloatStateOf(DEFAULT_RATIO) }
     LaunchedEffect(index) { ratio = document.aspectRatio(index) }
 
     val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, index, widthPx) {
