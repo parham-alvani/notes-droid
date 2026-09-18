@@ -35,17 +35,17 @@ class MigrationTest {
     private fun schema(version: Int): JSONObject =
         JSONObject(File(schemas, "$version.json").readText()).getJSONObject("database")
 
-    private val migrations: List<Pair<IntRange, Migration>> =
-        listOf(
-            1..2 to NotesDatabase.MIGRATION_1_2,
-            2..3 to NotesDatabase.MIGRATION_2_3,
-            3..4 to NotesDatabase.MIGRATION_3_4,
-            4..5 to NotesDatabase.MIGRATION_4_5,
-            5..6 to NotesDatabase.MIGRATION_5_6,
-            6..7 to NotesDatabase.MIGRATION_6_7,
-            7..8 to NotesDatabase.MIGRATION_7_8,
-            8..9 to NotesDatabase.MIGRATION_8_9,
-        )
+    private val migrations = MIGRATIONS
+
+    @Test
+    fun `the schema and the migrations agree on the version`() {
+        // Room exports one file per declared version, so the highest on disk
+        // is what `@Database` says. A version bumped without a migration to
+        // reach it leaves the two apart, and every device already installed
+        // has no way forward.
+        val exported = schemas.listFiles().orEmpty().mapNotNull { it.nameWithoutExtension.toIntOrNull() }
+        assertThat(exported.max()).isEqualTo(CURRENT)
+    }
 
     @Test
     fun `the schemas are all checked in`() {
@@ -94,6 +94,50 @@ class MigrationTest {
                     indices.getJSONObject(position).getString("createSql").replace(TABLE_NAME, table),
                 )
             }
+        }
+    }
+
+    @Test
+    fun `two vaults keep a file they both name the same`() {
+        // The crash this exists for: one vault mounted at the root and one in
+        // a folder, both holding `uploads/logo.png`. Making the paths relative
+        // dropped the folder that told them apart, `blobs.path` was the whole
+        // key, and the migration could not commit -- so the database never
+        // opened again and the app could not start.
+        val file = File.createTempFile("two-vaults-", ".db").also { it.delete() }
+        try {
+            BundledSQLiteDriver().open(file.path).use { connection ->
+                build(connection, schema(8))
+                NotesDatabase.createSearchIndex(connection)
+                connection.execSQL(
+                    "INSERT INTO vaults " +
+                        "(id, owner, repo, mount, transport, ordinal, enabled, filterVersion, indexVersion) " +
+                        "VALUES (1, 'o', 'notes', '', 'REST', 0, 1, 0, 0), " +
+                        "(2, 'o', 'documents', 'documents', 'REST', 1, 1, 0, 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO blobs (path, vaultId, sha, size, kind, localState) VALUES " +
+                        "('uploads/logo.png', 1, 'a', 1, 'IMAGE', 'DOWNLOADED'), " +
+                        "('documents/uploads/logo.png', 2, 'b', 2, 'IMAGE', 'DOWNLOADED')",
+                )
+
+                migrations
+                    .filter { (range, _) -> range.first >= 8 }
+                    .forEach { (_, migration) -> migration.migrate(connection) }
+
+                val rows = mutableListOf<Pair<Long, String>>()
+                connection.prepare("SELECT vaultId, path FROM blobs ORDER BY vaultId").use {
+                    while (it.step()) rows += it.getLong(0) to it.getText(1)
+                }
+                // Both survive, both relative, and the one that was mounted in
+                // a folder has lost it.
+                assertThat(rows).containsExactly(
+                    1L to "uploads/logo.png",
+                    2L to "uploads/logo.png",
+                )
+            }
+        } finally {
+            file.delete()
         }
     }
 
@@ -160,8 +204,30 @@ class MigrationTest {
         }
 
     private companion object {
-        /** Kept alongside the `@Database(version = …)` it mirrors. */
-        const val CURRENT = 9
+        /**
+         * Derived from the migrations, never written down twice.
+         *
+         * It used to be a literal kept "alongside" the `@Database` version,
+         * which is to say kept until someone forgot -- and a stale one quietly
+         * checks every migration against an older schema, so the test passes
+         * while the thing it exists to catch walks past it. `the schema and
+         * the migrations agree on the version` is what notices a bump that
+         * arrived without a migration.
+         */
+        private val MIGRATIONS: List<Pair<IntRange, Migration>> =
+            listOf(
+                1..2 to NotesDatabase.MIGRATION_1_2,
+                2..3 to NotesDatabase.MIGRATION_2_3,
+                3..4 to NotesDatabase.MIGRATION_3_4,
+                4..5 to NotesDatabase.MIGRATION_4_5,
+                5..6 to NotesDatabase.MIGRATION_5_6,
+                6..7 to NotesDatabase.MIGRATION_6_7,
+                7..8 to NotesDatabase.MIGRATION_7_8,
+                8..9 to NotesDatabase.MIGRATION_8_9,
+                9..10 to NotesDatabase.MIGRATION_9_10,
+            )
+
+        val CURRENT = MIGRATIONS.maxOf { (range, _) -> range.last }
         const val TABLE_NAME = "\${TABLE_NAME}"
 
         /** Column positions in `PRAGMA table_info`. */

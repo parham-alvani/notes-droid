@@ -38,7 +38,14 @@ interface BlobDao {
         path: String,
     )
 
-    @Query("UPDATE blobs SET path = :to WHERE vaultId = :vaultId AND path = :from")
+    /**
+     * `OR REPLACE` because a rename can land on a path the manifest already
+     * holds -- a commit that renames A onto B while also deleting B, applied
+     * in either order. The row being replaced is the one being overwritten
+     * upstream, and the key is the whole row's identity now, so failing here
+     * would abort a sync over a file that is about to be correct anyway.
+     */
+    @Query("UPDATE OR REPLACE blobs SET path = :to WHERE vaultId = :vaultId AND path = :from")
     suspend fun rename(
         vaultId: Long,
         from: String,
@@ -79,7 +86,7 @@ interface BlobDao {
      * would look at an empty manifest and re-fetch a vault that is already on
      * the device, in full.
      */
-    @Query("UPDATE blobs SET vaultId = :vaultId WHERE vaultId = 0")
+    @Query("UPDATE OR REPLACE blobs SET vaultId = :vaultId WHERE vaultId = 0")
     suspend fun adoptOrphans(vaultId: Long)
 
     @Query("SELECT * FROM blobs WHERE vaultId = :vaultId AND kind = :kind AND localState = :state")

@@ -48,10 +48,20 @@ data class VaultEntity(
  * blob is written and its row upserted in the same transaction, so an
  * interrupted sync simply resumes from whatever the manifest already says.
  */
-@Entity(tableName = "blobs", indices = [Index("vaultId")])
+@Entity(tableName = "blobs", primaryKeys = ["vaultId", "path"])
 data class BlobEntity(
-    @PrimaryKey val path: String,
-    /** Which repository this came from. Zero for the root vault. */
+    val path: String,
+    /**
+     * Which repository this came from.
+     *
+     * Part of the key, not a column beside it. Paths are relative to their own
+     * vault, so two vaults holding a `README.md` -- or a `LICENSE`, or an
+     * `uploads/` of their own -- both call it the same thing. Keyed by path
+     * alone the second vault's row silently replaced the first's, and the
+     * migration that made paths relative could not even run: stripping the
+     * prefixes collided two rows onto one key and failed, which left the
+     * database unopenable and the app unable to start at all.
+     */
     val vaultId: Long = 0,
     val sha: String,
     val size: Long,

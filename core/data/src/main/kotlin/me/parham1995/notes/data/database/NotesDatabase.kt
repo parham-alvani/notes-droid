@@ -18,7 +18,7 @@ import androidx.sqlite.execSQL
         TaskEntity::class,
         VaultEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -261,12 +261,13 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL("DROP INDEX IF EXISTS `index_vaults_mount`")
                     connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_vaults_name` ON `vaults` (`name`)")
 
-                    // Paths become relative to their vault.
-                    connection.execSQL(
-                        "UPDATE blobs SET path = substr(path, length(" +
-                            "(SELECT name FROM vaults WHERE vaults.id = blobs.vaultId)) + 2) " +
-                            "WHERE (SELECT name FROM vaults WHERE vaults.id = blobs.vaultId) != ''",
-                    )
+                    // Paths are made relative to their vault in 9 -> 10, not
+                    // here. `blobs.path` is still the whole primary key at
+                    // this version, and stripping the prefixes lands two
+                    // vaults' files on one key -- so this step could not
+                    // commit, the database stayed unopenable, and the app
+                    // could not start. The rewrite belongs with the key that
+                    // makes it legal.
                     connection.execSQL("UPDATE `vaults` SET `name` = `repo` WHERE `name` = ''")
 
                     connection.execSQL("DROP TABLE IF EXISTS `tasks`")
@@ -275,6 +276,47 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL("DROP TABLE IF EXISTS `notes`")
                     createNotes(connection)
                     connection.execSQL("DELETE FROM note_fts")
+                }
+            }
+
+        /**
+         * Keys the manifest by its vault as well as its path, and makes the
+         * paths relative at the same time.
+         *
+         * These are one change, not two. A path only stops being unique once
+         * it loses the folder that named its repository, and it can only lose
+         * that folder once the vault is part of the key -- which is why
+         * `blobs` is rebuilt rather than updated in place. SQLite cannot add a
+         * column to a primary key.
+         *
+         * `INSERT OR REPLACE` rather than a plain insert: within one vault two
+         * different paths cannot strip to the same one, so there is nothing to
+         * lose, and a manifest row is rebuilt by the next sync in any case. It
+         * is not worth another version that cannot open.
+         */
+        val MIGRATION_9_10 =
+            object : Migration(9, 10) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `blobs_new` (" +
+                            "`path` TEXT NOT NULL, `vaultId` INTEGER NOT NULL, `sha` TEXT NOT NULL, " +
+                            "`size` INTEGER NOT NULL, `kind` TEXT NOT NULL, `localState` TEXT NOT NULL, " +
+                            "PRIMARY KEY(`vaultId`, `path`))",
+                    )
+                    // Only a path that still carries its vault's folder is
+                    // shortened. An install that reached 9 with one vault had
+                    // nothing to strip, and running it twice would eat a real
+                    // directory that happens to share the vault's name.
+                    connection.execSQL(
+                        "INSERT OR REPLACE INTO `blobs_new` (`path`, `vaultId`, `sha`, `size`, `kind`, `localState`) " +
+                            "SELECT CASE WHEN v.name != '' AND b.path LIKE v.name || '/%' " +
+                            "THEN substr(b.path, length(v.name) + 2) ELSE b.path END, " +
+                            "b.vaultId, b.sha, b.size, b.kind, b.localState " +
+                            "FROM blobs b LEFT JOIN vaults v ON v.id = b.vaultId",
+                    )
+                    connection.execSQL("DROP TABLE `blobs`")
+                    connection.execSQL("ALTER TABLE `blobs_new` RENAME TO `blobs`")
+                    connection.execSQL("DROP INDEX IF EXISTS `index_blobs_vaultId`")
                 }
             }
 

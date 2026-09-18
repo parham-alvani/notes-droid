@@ -1,0 +1,5 @@
+Fixes the app refusing to start.
+
+Separating the vaults made each file's path relative to the vault holding it, which means two vaults can both hold an "uploads/logo.png". The manifest was still keyed by path alone, so the step that shortened the paths collided two files onto one key and could not be applied — and a database that cannot finish migrating cannot be opened, so the app never got as far as drawing anything. It has been keyed by vault and path since, and the paths are shortened in the same step that introduces the key.
+
+Nothing to re-sync: the manifest is carried across intact.
