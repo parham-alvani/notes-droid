@@ -11,14 +11,17 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SettingsStore
+import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.data.SyncLog
 import me.parham1995.notes.data.SyncRepository
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncTransport
 import me.parham1995.notes.data.SyncWorker
+import me.parham1995.notes.data.ThemeChoice
 import me.parham1995.notes.data.TokenStore
 import me.parham1995.notes.data.VaultFileStore
 import me.parham1995.notes.data.VaultSettings
@@ -216,6 +219,18 @@ class SyncViewModel
         fun setTaskDigest(enabled: Boolean) = viewModelScope.launch { settingsStore.setTaskDigest(enabled) }
 
         fun setTaskDigestHour(hour: Int) = viewModelScope.launch { settingsStore.setTaskDigestHour(hour) }
+
+        fun setTextScale(scale: Float) = viewModelScope.launch { settingsStore.setTextScale(scale) }
+
+        fun setLineSpacing(spacing: Float) = viewModelScope.launch { settingsStore.setLineSpacing(spacing) }
+
+        fun setTheme(theme: ThemeChoice) = viewModelScope.launch { settingsStore.setTheme(theme) }
+
+        fun setPersianFont(enabled: Boolean) = viewModelScope.launch { settingsStore.setPersianFont(enabled) }
+
+        fun setStartScreen(screen: StartScreen) = viewModelScope.launch { settingsStore.setStartScreen(screen) }
+
+        fun setBrowserSort(sort: BrowserSort) = viewModelScope.launch { settingsStore.setBrowserSort(sort) }
 
         /**
          * The private half never leaves the device; only this public line does,

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The languages the app itself is translated into, so Android 13 and up can
+    offer a per-app language and the system can choose sensibly when the device
+    is set to something else. It says nothing about the vault, which is read in
+    whatever it is written in.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="fa" />
+</locale-config>

@@ -1,8 +1,11 @@
 package me.parham1995.notes.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import me.parham1995.notes.data.ThemeChoice
 
 /**
  * The app wears the vault's own colours.
@@ -12,10 +15,11 @@ import androidx.compose.runtime.Composable
  * orange; `Title` and `Search` are yellow, so headings and highlights are
  * yellow; `Comment` is grey, so secondary text is grey.
  *
- * There is no light variant, and that is deliberate -- naz sets
- * `background = "dark"` and defines no light palette, so a light mode would
- * mean inventing colours it does not have. Better to be the editor's theme
- * than an approximation of it.
+ * naz defines no light palette -- it sets `background = "dark"` and stops --
+ * so the light scheme below is not naz and does not pretend to be. It keeps
+ * naz's accents, which are what carry meaning here, and darkens the ones that
+ * were chosen to glow on black and would otherwise be invisible on paper. It
+ * exists because a phone gets read outdoors; dark stays the default.
  */
 private val NazScheme =
     darkColorScheme(
@@ -61,7 +65,64 @@ private val NazScheme =
         scrim = Naz.DarkBlack,
     )
 
+/**
+ * naz's accents against paper.
+ *
+ * Four of them are re-picked rather than reused: yellow, chartreuse, spring
+ * green and aqua are legible on `#323232` and disappear on white. The rest are
+ * naz's own, because a heading being orange is the part worth keeping.
+ */
+private val DaylightScheme =
+    lightColorScheme(
+        background = Daylight.Paper,
+        onBackground = Daylight.Ink,
+        surface = Daylight.Paper,
+        onSurface = Daylight.Ink,
+        surfaceVariant = Daylight.Panel,
+        onSurfaceVariant = Daylight.FadedInk,
+        surfaceContainer = Daylight.Panel,
+        surfaceContainerHigh = Daylight.Panel,
+        surfaceContainerHighest = Daylight.Panel,
+        surfaceContainerLow = Daylight.Paper,
+        surfaceContainerLowest = Daylight.Paper,
+        primary = Daylight.Orange,
+        onPrimary = Daylight.Paper,
+        primaryContainer = Daylight.Panel,
+        onPrimaryContainer = Daylight.Orange,
+        secondary = Daylight.Blue,
+        onSecondary = Daylight.Paper,
+        secondaryContainer = Daylight.Panel,
+        onSecondaryContainer = Daylight.Blue,
+        tertiary = Daylight.Amber,
+        onTertiary = Daylight.Paper,
+        tertiaryContainer = Daylight.Amber,
+        onTertiaryContainer = Daylight.Ink,
+        error = Daylight.Red,
+        onError = Daylight.Paper,
+        errorContainer = Daylight.Panel,
+        onErrorContainer = Daylight.Red,
+        outline = Daylight.FadedInk,
+        outlineVariant = Daylight.Rule,
+        inverseSurface = Naz.Black,
+        inverseOnSurface = Naz.White,
+        inversePrimary = Daylight.Orange,
+        scrim = Daylight.Rule,
+    )
+
 @Composable
-fun NotesTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = NazScheme, typography = NazTypography, content = content)
+fun NotesTheme(
+    theme: ThemeChoice = ThemeChoice.DARK,
+    content: @Composable () -> Unit,
+) {
+    val dark =
+        when (theme) {
+            ThemeChoice.DARK -> true
+            ThemeChoice.LIGHT -> false
+            ThemeChoice.SYSTEM -> isSystemInDarkTheme()
+        }
+    MaterialTheme(
+        colorScheme = if (dark) NazScheme else DaylightScheme,
+        typography = NazTypography,
+        content = content,
+    )
 }

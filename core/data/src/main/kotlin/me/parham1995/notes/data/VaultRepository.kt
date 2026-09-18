@@ -41,6 +41,9 @@ data class VaultItem(
      * documents.
      */
     val isAttachment: Boolean = false,
+    /** When it was last opened, and when it last changed -- for ordering. */
+    val openedAt: Long? = null,
+    val changedAt: Long = 0,
 )
 
 /** A note prepared for display. */
@@ -57,6 +60,8 @@ data class RenderedNote(
      */
     val isFolderNote: Boolean,
     val headings: List<HeadingEntity>,
+    /** The block this note was last left at, so reopening it resumes. */
+    val scrollIndex: Int,
     /** Raw wikilink target to note id, so a tap can navigate without re-resolving. */
     val linkTargets: Map<String, Long>,
     /**
@@ -161,7 +166,17 @@ class VaultRepository
             val noteItems =
                 childNotes
                     .filterNot { it.isFolderNote && it.name == parent.substringAfterLast('/') }
-                    .map { VaultItem(it.path, it.name, isFolder = false, noteId = it.id, isRtl = it.isRtl) }
+                    .map {
+                        VaultItem(
+                            path = it.path,
+                            name = it.name,
+                            isFolder = false,
+                            noteId = it.id,
+                            isRtl = it.isRtl,
+                            openedAt = it.openedAt,
+                            changedAt = it.indexedAt,
+                        )
+                    }
 
             val attachmentItems =
                 under
@@ -216,6 +231,7 @@ class VaultRepository
                     isRtl = entity.isRtl,
                     isFolderNote = entity.isFolderNote,
                     headings = headings.byNote(entity.id),
+                    scrollIndex = entity.scrollIndex,
                     linkTargets = targets,
                     brokenTargets = allTargets - targets.keys,
                 )
@@ -251,6 +267,15 @@ class VaultRepository
 
         /** A note exactly as it is written, for sharing it somewhere else. */
         suspend fun markdown(id: Long): String? = notes.byId(id)?.let { files.readText(it.path) }
+
+        /** Records where a note was left, so opening it again resumes there. */
+        suspend fun rememberScroll(
+            id: Long,
+            block: Int,
+        ) = notes.rememberScroll(id, block)
+
+        /** One note at random, for a vault large enough to have forgotten some. */
+        suspend fun randomNote(): NoteEntity? = notes.random()
 
         /**
          * Notes that say this one's name without linking to it.

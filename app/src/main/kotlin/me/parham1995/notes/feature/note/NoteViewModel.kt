@@ -15,6 +15,8 @@ import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.markdown.NoteMatch
+import me.parham1995.notes.markdown.NoteSearch
 import me.parham1995.notes.ui.VaultRowItem
 import java.io.File
 import javax.inject.Inject
@@ -26,6 +28,9 @@ data class NoteUiState(
     /** Notes that name this one without linking to it. Loaded on demand. */
     val mentions: List<SearchHit> = emptyList(),
     val mentionsLoaded: Boolean = false,
+    /** What is being looked for inside this note, and where it is. */
+    val findQuery: String = "",
+    val matches: List<NoteMatch> = emptyList(),
     val icon: IconSpec? = null,
     /**
      * What the folder holds, when this note is a folder's landing page. Empty
@@ -81,6 +86,40 @@ class NoteViewModel
                             },
                     )
             }
+        }
+
+        /**
+         * Finds [query] inside the note that is open.
+         *
+         * Run on every keystroke against blocks already in memory, which for
+         * the largest note here is a scan of 89KB of text -- fast enough that
+         * debouncing it would only add latency.
+         */
+        fun find(query: String) {
+            val blocks =
+                _state.value.note
+                    ?.blocks
+                    .orEmpty()
+            _state.value =
+                _state.value.copy(
+                    findQuery = query,
+                    matches = if (query.isBlank()) emptyList() else NoteSearch.find(blocks, query),
+                )
+        }
+
+        fun clearFind() {
+            _state.value = _state.value.copy(findQuery = "", matches = emptyList())
+        }
+
+        /**
+         * Records where the note was left.
+         *
+         * Called as the screen goes away rather than on every scroll: this is a
+         * write per note read, not one per frame.
+         */
+        fun rememberScroll(block: Int) {
+            val id = _state.value.note?.id ?: return
+            viewModelScope.launch { repository.rememberScroll(id, block) }
         }
 
         /** The note's own markdown, for handing to another app. */

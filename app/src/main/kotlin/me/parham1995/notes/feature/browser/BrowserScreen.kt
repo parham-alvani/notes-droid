@@ -124,6 +124,9 @@ fun BrowserScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.randomNote(onOpenNote) }) {
+                        LucideGlyph("shuffle", size = 20.dp, contentDescription = "Open a note at random")
+                    }
                     // Pull-to-refresh alone is invisible until you already know
                     // it is there, which makes the app look like it cannot sync.
                     IconButton(onClick = { viewModel.refresh() }, enabled = !state.syncing) {

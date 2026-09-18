@@ -54,6 +54,7 @@ import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.markdown.MdListItem
 import me.parham1995.notes.markdown.TaskMeta
 import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.theme.Markup
@@ -83,7 +84,9 @@ fun MdBlockView(
         // Persian prose is set in Vazirmatn; the Latin paragraph after it, and
         // the code block after that, are not. Per block, like the direction.
         LocalTextStyle provides
-            LocalTextStyle.current.copy(fontFamily = if (rtl) Vazirmatn else null),
+            LocalTextStyle.current.copy(
+                fontFamily = if (rtl && LocalReading.current.persianFont) Vazirmatn else null,
+            ),
     ) {
         when (block) {
             is MdBlock.Heading -> HeadingView(block, actions, brokenLinks, modifier)

@@ -24,15 +24,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -90,8 +94,22 @@ fun NoteScreen(
     var showContents by remember(noteId) { mutableStateOf(false) }
     // A PDF opens in place; everything else is handed to another app.
     var reading by remember(noteId) { mutableStateOf<File?>(null) }
+    var finding by remember(noteId) { mutableStateOf(false) }
 
     LaunchedEffect(noteId) { viewModel.load(noteId) }
+
+    // Resume where this note was left. Keyed on the note's own id rather than
+    // the argument, so it runs once the note has actually loaded.
+    val loadedId = state.note?.id
+    LaunchedEffect(loadedId) {
+        val block = state.note?.scrollIndex ?: 0
+        if (block > 0) listState.scrollToItem(block)
+    }
+    DisposableEffect(loadedId) {
+        onDispose {
+            if (loadedId != null) viewModel.rememberScroll(listState.firstVisibleItemIndex)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -145,6 +163,19 @@ fun NoteScreen(
                     ) {
                         LucideGlyph("share-2", size = 20.dp, contentDescription = "Share")
                     }
+                    IconButton(
+                        onClick = {
+                            finding = !finding
+                            if (!finding) viewModel.clearFind()
+                        },
+                        enabled = state.note != null,
+                    ) {
+                        LucideGlyph(
+                            if (finding) "x" else "text-search",
+                            size = 20.dp,
+                            contentDescription = if (finding) "Close find" else "Find in note",
+                        )
+                    }
                     IconButton(onClick = { showOutline = true }, enabled = state.note != null) {
                         Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Outline")
                     }
@@ -179,6 +210,16 @@ fun NoteScreen(
                         text = { Text("Contents · ${state.contents.size}") },
                     )
                 }
+            }
+
+            if (finding) {
+                FindBar(
+                    query = state.findQuery,
+                    matches = state.matches.size,
+                    onQueryChange = viewModel::find,
+                    onJump = { index -> scope.launch { listState.animateScrollToItem(index) } },
+                    matchBlocks = state.matches.map { it.blockIndex },
+                )
             }
 
             if (showContents) {
@@ -467,3 +508,70 @@ private fun String.highlighted(): AnnotatedString =
         }
         append(rest)
     }
+
+/**
+ * Find inside the note that is open.
+ *
+ * Distinct from search, which answers "which note". 129 of this vault's notes
+ * run past 20KB and the longest is 89KB, which is long enough that knowing a
+ * word is in there is not the same as being able to reach it.
+ *
+ * The arrows step between hits rather than listing them: a list of forty
+ * matches is another thing to read, and what is wanted is the next one.
+ */
+@Composable
+private fun FindBar(
+    query: String,
+    matches: Int,
+    matchBlocks: List<Int>,
+    onQueryChange: (String) -> Unit,
+    onJump: (Int) -> Unit,
+) {
+    var at by remember(matchBlocks) { mutableIntStateOf(0) }
+
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Find in note") },
+                singleLine = true,
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        Text(
+                            text = if (matches == 0) "none" else "${at + 1}/$matches",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    }
+                },
+            )
+            IconButton(
+                onClick = {
+                    if (matchBlocks.isEmpty()) return@IconButton
+                    at = (at - 1 + matchBlocks.size) % matchBlocks.size
+                    onJump(matchBlocks[at])
+                },
+                enabled = matches > 0,
+            ) {
+                LucideGlyph("chevron-up", size = 20.dp, contentDescription = "Previous match")
+            }
+            IconButton(
+                onClick = {
+                    if (matchBlocks.isEmpty()) return@IconButton
+                    at = (at + 1) % matchBlocks.size
+                    onJump(matchBlocks[at])
+                },
+                enabled = matches > 0,
+            ) {
+                LucideGlyph("chevron-down", size = 20.dp, contentDescription = "Next match")
+            }
+        }
+    }
+}

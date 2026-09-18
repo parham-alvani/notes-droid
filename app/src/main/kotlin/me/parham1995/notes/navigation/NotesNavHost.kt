@@ -24,10 +24,13 @@ import androidx.navigation.toRoute
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
+import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.feature.browser.BrowserScreen
 import me.parham1995.notes.feature.note.NoteScreen
 import me.parham1995.notes.feature.search.SearchScreen
 import me.parham1995.notes.feature.ssh.SshScreen
+import me.parham1995.notes.feature.sync.SettingsHomeScreen
+import me.parham1995.notes.feature.sync.SettingsSection
 import me.parham1995.notes.feature.sync.SyncScreen
 import me.parham1995.notes.feature.tasks.TasksScreen
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -60,6 +63,12 @@ object SettingsRoute
 @Serializable
 object SshRoute
 
+/** One group of settings. Carried by name, which is stable across reordering. */
+@Serializable
+data class SettingsSectionRoute(
+    val section: String,
+)
+
 @Serializable
 data class NoteRoute(
     val id: Long,
@@ -76,6 +85,7 @@ private data class Tab(
 fun NotesNavHost(
     openScreen: StateFlow<String?> = MutableStateFlow(null),
     openNote: StateFlow<Long?> = MutableStateFlow(null),
+    startScreen: StartScreen = StartScreen.BROWSE,
 ) {
     val navController = rememberNavController()
 
@@ -150,7 +160,12 @@ fun NotesNavHost(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = BrowseRoute(),
+            startDestination =
+                when (startScreen) {
+                    StartScreen.BROWSE -> BrowseRoute()
+                    StartScreen.TASKS -> TasksRoute
+                    StartScreen.SEARCH -> SearchRoute
+                },
             modifier = Modifier.fillMaxSize().padding(if (showBar) padding else PaddingValues()),
         ) {
             composable<BrowseRoute> { entry ->
@@ -166,7 +181,20 @@ fun NotesNavHost(
                 SearchScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
             }
             composable<SettingsRoute> {
-                SyncScreen(onManageSshKeys = { navController.navigate(SshRoute) })
+                SettingsHomeScreen(
+                    onOpenSection = { navController.navigate(SettingsSectionRoute(it.name)) },
+                )
+            }
+            composable<SettingsSectionRoute> { entry ->
+                val section =
+                    SettingsSection.entries
+                        .firstOrNull { it.name == entry.toRoute<SettingsSectionRoute>().section }
+                        ?: SettingsSection.REPOSITORIES
+                SyncScreen(
+                    section = section,
+                    onBack = { navController.popBackStack() },
+                    onManageSshKeys = { navController.navigate(SshRoute) },
+                )
             }
             composable<SshRoute> {
                 SshScreen(onBack = { navController.popBackStack() })

@@ -71,6 +71,23 @@ interface NoteDao {
         limit: Int,
     ): List<NoteEntity>
 
+    @Query("UPDATE notes SET scrollIndex = :block WHERE id = :id")
+    suspend fun rememberScroll(
+        id: Long,
+        block: Int,
+    )
+
+    /**
+     * One note at random.
+     *
+     * A vault of 2,400 notes accumulates writing nobody goes looking for --
+     * the value of having written it down is only realised by meeting it
+     * again. `ORDER BY RANDOM()` is a full scan, which at this size is
+     * microseconds and only happens when asked.
+     */
+    @Query("SELECT * FROM notes ORDER BY RANDOM() LIMIT 1")
+    suspend fun random(): NoteEntity?
+
     @Query("SELECT COUNT(*) FROM notes")
     fun count(): Flow<Int>
 

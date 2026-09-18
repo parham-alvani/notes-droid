@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.WindowManager
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -28,6 +30,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,19 +53,98 @@ import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.BuildConfig
+import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.ImagePolicy
+import me.parham1995.notes.data.ReadingSettings
+import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.data.SyncTransport
+import me.parham1995.notes.data.ThemeChoice
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.ui.icon.LucideGlyph
+import me.parham1995.notes.ui.inScript
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * What settings there are, grouped.
+ *
+ * They used to be one scroll of eleven cards, which was tolerable at five and
+ * stopped being so as reading, notifications and several repositories arrived.
+ * Grouping is not decoration here: the sync settings are configured once and
+ * the reading settings are adjusted often, and a list that shows both at once
+ * makes you scroll past the ones you never touch to reach the ones you do.
+ */
+enum class SettingsSection(
+    val title: String,
+    val summary: String,
+    val icon: String,
+) {
+    REPOSITORIES("Repositories", "Where the notes come from, and how", "folder-git-2"),
+    READING("Reading", "Text size, theme, where the app opens", "book-open-text"),
+    SYNC("Sync", "When it refreshes, and what it fetches", "refresh-cw"),
+    NOTIFICATIONS("Notifications", "The daily task summary", "bell"),
+    ADVANCED("Advanced", "The journal, storage, and what this build is", "wrench"),
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsHomeScreen(
+    onOpenSection: (SettingsSection) -> Unit,
+    viewModel: SyncViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    Scaffold(topBar = { TopAppBar(title = { Text("Settings") }) }) { padding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
+        ) {
+            // Anything actively wrong is said here rather than hidden one level
+            // down: a vault that cannot sync should not need exploring to find
+            // out why.
+            state.blocker()?.let { blocker ->
+                Text(
+                    text = blocker,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                HorizontalDivider()
+            }
+
+            SettingsSection.entries.forEach { section ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenSection(section) }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LucideGlyph(section.icon, size = 22.dp, tint = MaterialTheme.colorScheme.primary)
+                    Column(Modifier.weight(1f)) {
+                        Text(section.title, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            section.summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    LucideGlyph("chevron-right", size = 18.dp)
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncScreen(
+    section: SettingsSection,
+    onBack: () -> Unit,
     onManageSshKeys: () -> Unit = {},
     viewModel: SyncViewModel = hiltViewModel(),
 ) {
@@ -71,13 +153,27 @@ fun SyncScreen(
     // The access token is on screen here, so keep it out of the recents
     // thumbnail and out of screenshots.
     val context = LocalContext.current
-    DisposableEffect(Unit) {
+    DisposableEffect(section) {
+        val secret = section == SettingsSection.REPOSITORIES
         val window = (context as? Activity)?.window
-        window?.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        if (secret) {
+            window?.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose { if (secret) window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Vault sync") }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(section.title) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        LucideGlyph("arrow-left", size = 22.dp, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
         Column(
             modifier =
                 Modifier
@@ -87,20 +183,33 @@ fun SyncScreen(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            RepositoryCard(state, viewModel)
-            TransportCard(state, viewModel)
-            if (state.settings.transport == SyncTransport.REST) {
-                TokenCard(state, viewModel)
-            } else {
-                SshKeyCard(state, onManageSshKeys)
+            when (section) {
+                SettingsSection.REPOSITORIES -> {
+                    RepositoryCard(state, viewModel)
+                    TransportCard(state, viewModel)
+                    if (state.settings.transport == SyncTransport.REST) {
+                        TokenCard(state, viewModel)
+                    } else {
+                        SshKeyCard(state, onManageSshKeys)
+                    }
+                }
+
+                SettingsSection.READING -> ReadingCard(state, viewModel)
+
+                SettingsSection.SYNC -> {
+                    BackgroundSyncCard(state, viewModel)
+                    ImagesCard(state, viewModel)
+                    StatusCard(state, viewModel)
+                }
+
+                SettingsSection.NOTIFICATIONS -> TaskDigestCard(state, viewModel)
+
+                SettingsSection.ADVANCED -> {
+                    state.lastCrash?.let { CrashCard(it, viewModel) }
+                    LogCard(viewModel)
+                    AboutCard()
+                }
             }
-            ImagesCard(state, viewModel)
-            BackgroundSyncCard(state, viewModel)
-            TaskDigestCard(state, viewModel)
-            StatusCard(state, viewModel)
-            LogCard(viewModel)
-            state.lastCrash?.let { CrashCard(it, viewModel) }
-            AboutCard()
         }
     }
 }
@@ -602,6 +711,7 @@ private const val SHORT_SHA_LENGTH = 7
 private const val HOURS_IN_DAY = 24
 private const val ERROR_PREVIEW = 60
 private const val CRASH_PREVIEW_LINES = 8
+private const val PERCENT = 100
 private const val BYTES_PER_UNIT = 1024.0
 
 private fun formatBytes(bytes: Long): String {
@@ -692,6 +802,118 @@ private fun SshKeyCard(
             )
         }
         Button(onClick = onManage) { Text("Manage keys") }
+    }
+}
+
+/**
+ * How notes are set.
+ *
+ * The first settings in this app that are about reading rather than syncing,
+ * which for a reader was an odd gap: nine settings, all of them about how the
+ * vault arrives and none about how it looks once it has.
+ */
+@Composable
+private fun ReadingCard(
+    state: SyncUiState,
+    viewModel: SyncViewModel,
+) {
+    val reading = state.settings.reading
+
+    SectionCard("Text") {
+        Text("Size", style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ReadingSettings.TEXT_SCALES.forEach { scale ->
+                FilterChip(
+                    selected = reading.textScale == scale,
+                    onClick = { viewModel.setTextScale(scale) },
+                    label = { Text("${(scale * PERCENT).toInt()}%") },
+                )
+            }
+        }
+
+        Text("Line spacing", style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ReadingSettings.LINE_SPACINGS.forEach { spacing ->
+                FilterChip(
+                    selected = reading.lineSpacing == spacing,
+                    onClick = { viewModel.setLineSpacing(spacing) },
+                    label = { Text(if (spacing == 1f) "normal" else "${(spacing * PERCENT).toInt()}%") },
+                )
+            }
+        }
+
+        // Shown at the size and spacing chosen, so the choice is visible where
+        // it is made rather than two screens away.
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                "The quick brown fox. " + (if (reading.persianFont) "روباه قهوه‌ای چابک." else "روباه قهوه‌ای چابک."),
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodyLarge.inScript(),
+            )
+        }
+    }
+
+    SectionCard("Appearance") {
+        Text("Theme", style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ThemeChoice.entries.forEach { choice ->
+                FilterChip(
+                    selected = reading.theme == choice,
+                    onClick = { viewModel.setTheme(choice) },
+                    label = { Text(choice.name.lowercase()) },
+                )
+            }
+        }
+        Text(
+            "naz is a dark colourscheme and defines no light palette, so light keeps its accents " +
+                "against paper rather than pretending to be it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Set Persian in Vazirmatn", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Off uses the platform's Naskh, which has every glyph and draws them differently.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = reading.persianFont, onCheckedChange = viewModel::setPersianFont)
+        }
+    }
+
+    SectionCard("Behaviour") {
+        Text("Open on", style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StartScreen.entries.forEach { screen ->
+                FilterChip(
+                    selected = reading.startScreen == screen,
+                    onClick = { viewModel.setStartScreen(screen) },
+                    label = { Text(screen.name.lowercase()) },
+                )
+            }
+        }
+
+        Text("Order folders by", style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BrowserSort.entries.forEach { sort ->
+                FilterChip(
+                    selected = reading.browserSort == sort,
+                    onClick = { viewModel.setBrowserSort(sort) },
+                    label = { Text(sort.name.lowercase().replace('_', ' ')) },
+                )
+            }
+        }
     }
 }
 

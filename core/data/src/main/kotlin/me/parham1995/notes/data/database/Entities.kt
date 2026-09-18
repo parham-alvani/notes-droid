@@ -144,6 +144,14 @@ data class NoteEntity(
     val hasMath: Boolean,
     val indexedAt: Long,
     val openedAt: Long? = null,
+    /**
+     * The block this note was last left at.
+     *
+     * Kept per note rather than for the last one only: reading a vault is
+     * moving between a handful of long notes, and coming back to the top of a
+     * 89KB one because you followed a link out of it is its own small defeat.
+     */
+    val scrollIndex: Int = 0,
 )
 
 @Entity(

@@ -33,3 +33,29 @@ internal object Naz {
     val LimeGreen = Color(0xFFB8FFD0)
     val VividYellow = Color(0xFFFFE040)
 }
+
+/**
+ * The light scheme's palette.
+ *
+ * Not naz -- naz has no light variant. These are its accents adjusted to sit on
+ * paper: the four that were chosen to glow against `#323232` are darkened until
+ * they read on white, and the rest are left alone.
+ */
+internal object Daylight {
+    val Paper = Color(0xFFFAF9F5)
+    val Panel = Color(0xFFEFEDE6)
+    val Ink = Color(0xFF2A2A28)
+    val FadedInk = Color(0xFF6A6A62)
+    val Rule = Color(0xFFD8D5CC)
+
+    /** naz's own, legible either way. */
+    val Orange = Color(0xFFC06000)
+    val Red = Color(0xFFC01030)
+
+    /** Darkened: the originals vanish on white. */
+    val Blue = Color(0xFF0070A0)
+    val Amber = Color(0xFF8A6A00)
+    val Green = Color(0xFF0A7A48)
+    val Teal = Color(0xFF00707A)
+    val Purple = Color(0xFF8040A0)
+}

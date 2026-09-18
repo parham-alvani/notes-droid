@@ -18,7 +18,7 @@ import androidx.sqlite.execSQL
         TaskEntity::class,
         VaultEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -223,6 +223,14 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_vaults_mount` ON `vaults` (`mount`)")
                     connection.execSQL("ALTER TABLE `blobs` ADD COLUMN `vaultId` INTEGER NOT NULL DEFAULT 0")
                     connection.execSQL("CREATE INDEX IF NOT EXISTS `index_blobs_vaultId` ON `blobs` (`vaultId`)")
+                }
+            }
+
+        /** Remembers where each note was left. */
+        val MIGRATION_7_8 =
+            object : Migration(7, 8) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `notes` ADD COLUMN `scrollIndex` INTEGER NOT NULL DEFAULT 0")
                 }
             }
 

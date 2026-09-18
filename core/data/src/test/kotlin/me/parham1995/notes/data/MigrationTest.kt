@@ -43,6 +43,7 @@ class MigrationTest {
             4..5 to NotesDatabase.MIGRATION_4_5,
             5..6 to NotesDatabase.MIGRATION_5_6,
             6..7 to NotesDatabase.MIGRATION_6_7,
+            7..8 to NotesDatabase.MIGRATION_7_8,
         )
 
     @Test
@@ -159,7 +160,7 @@ class MigrationTest {
 
     private companion object {
         /** Kept alongside the `@Database(version = …)` it mirrors. */
-        const val CURRENT = 7
+        const val CURRENT = 8
         const val TABLE_NAME = "\${TABLE_NAME}"
 
         /** Column positions in `PRAGMA table_info`. */

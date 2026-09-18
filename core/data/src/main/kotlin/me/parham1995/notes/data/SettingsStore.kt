@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -52,6 +53,70 @@ enum class SyncTransport {
     }
 }
 
+/** Where the app opens. */
+enum class StartScreen {
+    BROWSE,
+    TASKS,
+    SEARCH,
+    ;
+
+    companion object {
+        fun parse(raw: String?): StartScreen = entries.firstOrNull { it.name == raw } ?: BROWSE
+    }
+}
+
+/** How the browser orders what it lists. */
+enum class BrowserSort {
+    NAME,
+    RECENTLY_OPENED,
+    RECENTLY_CHANGED,
+    ;
+
+    companion object {
+        fun parse(raw: String?): BrowserSort = entries.firstOrNull { it.name == raw } ?: NAME
+    }
+}
+
+/**
+ * Which palette to draw in.
+ *
+ * naz is a dark colourscheme and this app was built in it, so dark is the
+ * default and the one the vault's own author reads in. Light exists because a
+ * phone is read outdoors, and follows naz's accents rather than inventing a
+ * second palette.
+ */
+enum class ThemeChoice {
+    DARK,
+    LIGHT,
+    SYSTEM,
+    ;
+
+    companion object {
+        fun parse(raw: String?): ThemeChoice = entries.firstOrNull { it.name == raw } ?: DARK
+    }
+}
+
+/** How a note is set. */
+data class ReadingSettings(
+    /** Multiplies every text size in the reader. */
+    val textScale: Float = 1f,
+    /** Multiplies line height, for prose that runs long. */
+    val lineSpacing: Float = 1f,
+    val theme: ThemeChoice = ThemeChoice.DARK,
+    /**
+     * Set Persian in Vazirmatn rather than the platform's Naskh. On by
+     * default, because that is why it is bundled.
+     */
+    val persianFont: Boolean = true,
+    val startScreen: StartScreen = StartScreen.BROWSE,
+    val browserSort: BrowserSort = BrowserSort.NAME,
+) {
+    companion object {
+        val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
+        val LINE_SPACINGS = listOf(1f, 1.15f, 1.35f, 1.6f)
+    }
+}
+
 /** Which repository to read and how. Nothing about the vault is compiled in. */
 data class VaultSettings(
     val owner: String = "",
@@ -84,6 +149,7 @@ data class VaultSettings(
     val taskDigest: Boolean = false,
     /** Local hour to post it, 0-23. */
     val taskDigestHour: Int = DEFAULT_DIGEST_HOUR,
+    val reading: ReadingSettings = ReadingSettings(),
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
 
@@ -117,6 +183,15 @@ class SettingsStore
                         preferences[INTERVAL_HOURS] ?: VaultSettings.DEFAULT_INTERVAL_HOURS,
                     taskDigest = preferences[TASK_DIGEST] ?: false,
                     taskDigestHour = preferences[DIGEST_HOUR] ?: VaultSettings.DEFAULT_DIGEST_HOUR,
+                    reading =
+                        ReadingSettings(
+                            textScale = preferences[TEXT_SCALE] ?: 1f,
+                            lineSpacing = preferences[LINE_SPACING] ?: 1f,
+                            theme = ThemeChoice.parse(preferences[THEME]),
+                            persianFont = preferences[PERSIAN_FONT] ?: true,
+                            startScreen = StartScreen.parse(preferences[START_SCREEN]),
+                            browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
+                        ),
                 )
             }
 
@@ -166,6 +241,30 @@ class SettingsStore
             context.settingsDataStore.edit { it[DIGEST_HOUR] = hour }
         }
 
+        suspend fun setTextScale(scale: Float) {
+            context.settingsDataStore.edit { it[TEXT_SCALE] = scale }
+        }
+
+        suspend fun setLineSpacing(spacing: Float) {
+            context.settingsDataStore.edit { it[LINE_SPACING] = spacing }
+        }
+
+        suspend fun setTheme(theme: ThemeChoice) {
+            context.settingsDataStore.edit { it[THEME] = theme.name }
+        }
+
+        suspend fun setPersianFont(enabled: Boolean) {
+            context.settingsDataStore.edit { it[PERSIAN_FONT] = enabled }
+        }
+
+        suspend fun setStartScreen(screen: StartScreen) {
+            context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
+        }
+
+        suspend fun setBrowserSort(sort: BrowserSort) {
+            context.settingsDataStore.edit { it[BROWSER_SORT] = sort.name }
+        }
+
         private companion object {
             val OWNER = stringPreferencesKey("repo_owner")
             val REPO = stringPreferencesKey("repo_name")
@@ -178,5 +277,11 @@ class SettingsStore
             val INTERVAL_HOURS = intPreferencesKey("sync_interval_hours")
             val TASK_DIGEST = booleanPreferencesKey("task_digest")
             val DIGEST_HOUR = intPreferencesKey("task_digest_hour")
+            val TEXT_SCALE = floatPreferencesKey("reading_text_scale")
+            val LINE_SPACING = floatPreferencesKey("reading_line_spacing")
+            val THEME = stringPreferencesKey("reading_theme")
+            val PERSIAN_FONT = booleanPreferencesKey("reading_persian_font")
+            val START_SCREEN = stringPreferencesKey("start_screen")
+            val BROWSER_SORT = stringPreferencesKey("browser_sort")
         }
     }

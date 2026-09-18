@@ -4,7 +4,6 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.LayoutDirection
 import me.parham1995.notes.markdown.MdDirection
 import me.parham1995.notes.markdown.TextDirection
@@ -39,18 +38,8 @@ fun AutoDirection(
         // back up.
         LocalTextStyle provides
             LocalTextStyle.current.copy(
-                fontFamily = if (rtl) Vazirmatn else null,
+                fontFamily = if (rtl && LocalReading.current.persianFont) Vazirmatn else null,
             ),
         content = content,
     )
 }
-
-/**
- * This style, in whatever font the surrounding script asked for.
- *
- * `Text(style = ...)` replaces `LocalTextStyle` outright, so a caller that
- * names a typography role -- which is nearly all of them -- would otherwise
- * discard the font [AutoDirection] just chose.
- */
-@Composable
-fun TextStyle.inScript(): TextStyle = copy(fontFamily = LocalTextStyle.current.fontFamily)

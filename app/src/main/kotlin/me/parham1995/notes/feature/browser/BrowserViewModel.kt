@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
@@ -82,9 +83,26 @@ class BrowserViewModel
         // regexes off the composition: a rule is tested against every visible
         // item, and the browser recomposes on every scroll.
         private val rows: Flow<List<VaultRowItem>> =
-            combine(items, icons.config) { current, config ->
-                current.map { VaultRowItem(it, config.forPath(it.path, it.isFolder)) }
+            combine(items, icons.config, settings.settings) { current, config, preferences ->
+                current
+                    .sortedWith(preferences.reading.browserSort.comparator())
+                    .map { VaultRowItem(it, config.forPath(it.path, it.isFolder)) }
             }
+
+        /**
+         * Folders stay above files whatever the order, because a folder is
+         * somewhere to go rather than something to read, and mixing the two by
+         * date makes the tree unusable as a tree.
+         */
+        private fun BrowserSort.comparator(): Comparator<VaultItem> =
+            compareByDescending<VaultItem> { it.isFolder }
+                .thenBy {
+                    when (this) {
+                        BrowserSort.NAME -> 0L
+                        BrowserSort.RECENTLY_OPENED -> -(it.openedAt ?: 0L)
+                        BrowserSort.RECENTLY_CHANGED -> -it.changedAt
+                    }
+                }.thenBy { it.name.lowercase() }
 
         private val vaults: Flow<List<VaultEntity>> =
             repository.vaults().map { found -> if (found.size > 1) found else emptyList() }
@@ -156,6 +174,12 @@ class BrowserViewModel
             open(current.substringBeforeLast('/', ""))
             return true
         }
+
+        /** Somewhere in the vault you have not been for a while. */
+        fun randomNote(onOpen: (Long) -> Unit) =
+            viewModelScope.launch {
+                repository.randomNote()?.let { onOpen(it.id) }
+            }
 
         fun refresh() =
             viewModelScope.launch {

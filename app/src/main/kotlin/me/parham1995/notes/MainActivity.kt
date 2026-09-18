@@ -11,15 +11,23 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
+import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.TaskDigestWorker
+import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.navigation.NotesNavHost
+import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.icon.ProvideLucide
 import me.parham1995.notes.ui.theme.NotesTheme
 import me.parham1995.notes.widget.RecentNotesWidget
+import javax.inject.Inject
+import javax.inject.Provider
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -38,6 +46,9 @@ class MainActivity : ComponentActivity() {
 
     /** A note id from a widget row. */
     private val openNote = MutableStateFlow<Long?>(null)
+
+    @Inject
+    lateinit var settingsStore: Provider<SettingsStore>
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -71,9 +82,23 @@ class MainActivity : ComponentActivity() {
         )
         askForNotifications()
         setContent {
-            NotesTheme {
-                ProvideLucide {
-                    NotesNavHost(openScreen = openScreen, openNote = openNote)
+            // Read here rather than in each screen: the theme and the reading
+            // settings apply to everything below, and a screen that had to ask
+            // for them would be a screen that could forget to.
+            val settings by settingsStore
+                .get()
+                .settings
+                .collectAsStateWithLifecycle(initialValue = VaultSettings())
+
+            NotesTheme(theme = settings.reading.theme) {
+                CompositionLocalProvider(LocalReading provides settings.reading) {
+                    ProvideLucide {
+                        NotesNavHost(
+                            openScreen = openScreen,
+                            openNote = openNote,
+                            startScreen = settings.reading.startScreen,
+                        )
+                    }
                 }
             }
         }
