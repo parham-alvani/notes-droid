@@ -8,4 +8,5 @@
     <string name="shortcut_tasks_long">کارهای باز</string>
     <string name="shortcut_search_short">جستجو</string>
     <string name="shortcut_search_long">جستجو در دفتر</string>
+    <string name="widget_recent_description">آخرین یادداشت‌هایی که خواندید</string>
 </resources>

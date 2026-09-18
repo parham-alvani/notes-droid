@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SettingsStore
@@ -20,6 +21,7 @@ import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
+import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.VaultRowItem
 import java.io.File
@@ -36,6 +38,11 @@ data class BrowserUiState(
     val items: List<VaultRowItem> = emptyList(),
     val recent: List<RecentRow> = emptyList(),
     val noteCount: Int = 0,
+    /**
+     * The repositories, when there is more than one. Empty otherwise, which is
+     * what keeps the switcher off screen for a single-repository vault.
+     */
+    val vaults: List<VaultEntity> = emptyList(),
     val loading: Boolean = true,
     val syncing: Boolean = false,
     val syncProgress: Pair<Int, Int>? = null,
@@ -79,6 +86,9 @@ class BrowserViewModel
                 current.map { VaultRowItem(it, config.forPath(it.path, it.isFolder)) }
             }
 
+        private val vaults: Flow<List<VaultEntity>> =
+            repository.vaults().map { found -> if (found.size > 1) found else emptyList() }
+
         private val recent: Flow<List<RecentRow>> =
             combine(repository.recentlyOpened(), icons.config) { notes, config ->
                 notes.map { RecentRow(it, config.forFile(it.path)) }
@@ -94,12 +104,14 @@ class BrowserViewModel
                     rows,
                     recent,
                     repository.noteCount,
-                ) { currentPath, currentItems, recentRows, count ->
+                    vaults,
+                ) { currentPath, currentItems, recentRows, count, repositories ->
                     BrowserUiState(
                         path = currentPath,
                         items = currentItems,
                         recent = recentRows,
                         noteCount = count,
+                        vaults = repositories,
                         loading = false,
                     )
                 }.collect { next ->

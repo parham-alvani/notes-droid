@@ -7,4 +7,5 @@
     <string name="shortcut_tasks_long">What is open</string>
     <string name="shortcut_search_short">Search</string>
     <string name="shortcut_search_long">Search the vault</string>
+    <string name="widget_recent_description">The notes you were last reading</string>
 </resources>

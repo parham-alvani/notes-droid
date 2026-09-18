@@ -14,6 +14,7 @@ import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
+import me.parham1995.notes.widget.RecentNotesWidget
 import me.parham1995.notes.widget.TasksWidget
 import javax.inject.Inject
 import javax.inject.Provider
@@ -54,7 +55,10 @@ class NotesApplication :
         }
         scheduleBackgroundSync()
         scheduleTaskDigest()
-        SyncWorker.afterSync = { TasksWidget.refresh(this) }
+        SyncWorker.afterSync = {
+            TasksWidget.refresh(this)
+            RecentNotesWidget.refresh(this)
+        }
     }
 
     /**

@@ -73,7 +73,10 @@ private data class Tab(
 )
 
 @Composable
-fun NotesNavHost(openScreen: StateFlow<String?> = MutableStateFlow(null)) {
+fun NotesNavHost(
+    openScreen: StateFlow<String?> = MutableStateFlow(null),
+    openNote: StateFlow<Long?> = MutableStateFlow(null),
+) {
     val navController = rememberNavController()
 
     // A one-shot: consumed so that rotating the phone afterwards does not yank
@@ -89,6 +92,14 @@ fun NotesNavHost(openScreen: StateFlow<String?> = MutableStateFlow(null)) {
         if (destination != null) {
             navController.navigate(destination) { launchSingleTop = true }
             (openScreen as? MutableStateFlow)?.value = null
+        }
+    }
+
+    val requestedNote by openNote.collectAsStateWithLifecycle()
+    LaunchedEffect(requestedNote) {
+        requestedNote?.let { id ->
+            navController.navigate(NoteRoute(id)) { launchSingleTop = true }
+            (openNote as? MutableStateFlow)?.value = null
         }
     }
     val tabs =

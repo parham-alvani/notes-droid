@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,10 +19,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
 import java.io.File
@@ -145,6 +149,39 @@ fun BrowserScreen(
                         Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
+                }
+
+                // Only with more than one repository: a switcher over a single
+                // vault is a row of chrome that says the same thing every time.
+                if (state.vaults.isNotEmpty()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        state.vaults.forEach { vault ->
+                            FilterChip(
+                                // The root-mounted repository is selected when
+                                // nothing below it is, which is also where
+                                // "everything" lives.
+                                selected =
+                                    state.path == vault.mount ||
+                                        (vault.mount.isNotEmpty() && state.path.startsWith(vault.mount + "/")),
+                                onClick = { viewModel.open(vault.mount) },
+                                label = { Text(vault.label) },
+                                leadingIcon = {
+                                    LucideGlyph(
+                                        name = if (vault.mount.isEmpty()) "house" else "folder-git-2",
+                                        size = 16.dp,
+                                        tint = LocalContentColor.current,
+                                    )
+                                },
+                            )
+                        }
+                    }
                 }
 
                 // At depth seven a plain title says nothing about where you are.

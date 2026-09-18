@@ -19,6 +19,7 @@ import me.parham1995.notes.data.TaskDigestWorker
 import me.parham1995.notes.navigation.NotesNavHost
 import me.parham1995.notes.ui.icon.ProvideLucide
 import me.parham1995.notes.ui.theme.NotesTheme
+import me.parham1995.notes.widget.RecentNotesWidget
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -35,11 +36,18 @@ class MainActivity : ComponentActivity() {
      */
     private val openScreen = MutableStateFlow<String?>(null)
 
+    /** A note id from a widget row. */
+    private val openNote = MutableStateFlow<Long?>(null)
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         openScreen.value = requestedScreen(intent)
+        openNote.value = requestedNote(intent)
     }
+
+    private fun requestedNote(intent: Intent?): Long? =
+        intent?.getLongExtra(RecentNotesWidget.EXTRA_NOTE, 0L)?.takeIf { it > 0 }
 
     /** The shortcut's string form, or the notification's older boolean. */
     private fun requestedScreen(intent: Intent?): String? =
@@ -65,7 +73,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NotesTheme {
                 ProvideLucide {
-                    NotesNavHost(openScreen = openScreen)
+                    NotesNavHost(openScreen = openScreen, openNote = openNote)
                 }
             }
         }

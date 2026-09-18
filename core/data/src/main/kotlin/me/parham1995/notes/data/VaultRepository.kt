@@ -15,6 +15,8 @@ import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.TaskDao
 import me.parham1995.notes.data.database.TaskRow
+import me.parham1995.notes.data.database.VaultDao
+import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
@@ -80,8 +82,12 @@ class VaultRepository
         private val search: SearchIndex,
         private val tasks: TaskDao,
         private val blobs: BlobDao,
+        private val vaults: VaultDao,
     ) {
         val noteCount: Flow<Int> = notes.count()
+
+        /** The repositories making up this vault, for the browser's switcher. */
+        fun vaults(): Flow<List<VaultEntity>> = vaults.observe()
 
         /** Every open task in the vault, soonest first, undated last. */
         fun openTasks(): Flow<List<TaskRow>> = tasks.open()

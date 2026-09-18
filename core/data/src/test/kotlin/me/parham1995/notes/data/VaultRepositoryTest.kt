@@ -49,6 +49,7 @@ class VaultRepositoryTest {
                 search = search,
                 tasks = database.taskDao(),
                 blobs = database.blobDao(),
+                vaults = database.vaultDao(),
             )
     }
 

@@ -1,0 +1,7 @@
+Colour where there was none, a second widget, and a way between repositories.
+
+YAML, SQL, HCL, JSON, PowerShell, Zig, TOML and PromQL are now coloured. The syntax library has grammars for about twenty-five languages and this vault writes in ninety-two; those seven alone were a quarter of all the code in it, sitting there in one colour.
+
+A second widget shows the notes you were last reading, and each row opens its own note.
+
+With more than one repository, the browser gets a row of chips to move between them.

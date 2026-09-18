@@ -13,6 +13,8 @@ import dev.snipme.highlights.model.SyntaxLanguage
 import dev.snipme.highlights.model.SyntaxTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.parham1995.notes.markdown.CodeGrammars
+import me.parham1995.notes.markdown.TokenKind
 import me.parham1995.notes.ui.theme.Naz
 
 /**
@@ -80,7 +82,17 @@ object CodeHighlighter {
         )
 
     /** True when the fence has a grammar rather than falling back to defaults. */
-    fun isKnown(language: String?): Boolean = language?.lowercase() in languages
+    fun isKnown(language: String?): Boolean = language?.lowercase() in languages || CodeGrammars.handles(language)
+
+    /** naz's groups again, for the scanners this app carries itself. */
+    private fun TokenKind.colour(): Color =
+        when (this) {
+            TokenKind.COMMENT -> Naz.Grey
+            TokenKind.STRING -> Naz.Chartreuse
+            TokenKind.NUMBER -> Naz.Purple
+            TokenKind.KEYWORD -> Naz.Aqua
+            TokenKind.KEY -> Naz.Orange
+        }
 
     suspend fun highlight(
         code: String,
@@ -92,6 +104,22 @@ object CodeHighlighter {
         // Long fences are not rare in a technical vault, and tokenising one on
         // the frame that scrolls to it is visible.
         return withContext(Dispatchers.Default) {
+            // Ours first where we have one: the syntax library has no grammar
+            // for yaml, sql, hcl, json, powershell, zig or promql, which
+            // between them are about a quarter of the code in this vault.
+            CodeGrammars.tokenize(code, language)?.let { tokens ->
+                return@withContext AnnotatedString
+                    .Builder(code)
+                    .apply {
+                        tokens.forEach { token ->
+                            val start = token.start.coerceIn(0, code.length)
+                            val end = token.end.coerceIn(start, code.length)
+                            if (start != end) addStyle(SpanStyle(color = token.kind.colour()), start, end)
+                        }
+                    }.toAnnotatedString()
+                    .also { cache.put(key, it) }
+            }
+
             runCatching {
                 val highlights =
                     Highlights
