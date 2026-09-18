@@ -2,6 +2,7 @@ package me.parham1995.notes.ui.pdf
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.core.graphics.createBitmap
@@ -80,12 +81,21 @@ class PdfPages private constructor(
                     renderer.openPage(index).use { page ->
                         val height = (widthPx.toFloat() / page.width * page.height).toInt().coerceAtLeast(1)
                         val bitmap = createBitmap(widthPx, height)
-                        // A PDF page assumes paper. Without this, anything the
-                        // page does not draw stays transparent and composites
-                        // to black against a dark theme -- which looks like a
-                        // rendering failure rather than a margin.
-                        bitmap.eraseColor(Color.WHITE)
+
                         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+
+                        // The paper goes on *after*, not before.
+                        //
+                        // A PDF page draws only its ink and leaves the rest
+                        // transparent, and `render` clears the bitmap before it
+                        // starts -- so erasing it white first is thrown away,
+                        // which is what made every page come out black. Filling
+                        // with DST_OVER puts the white underneath what was
+                        // drawn instead of over it.
+                        android.graphics.Canvas(bitmap).drawColor(Color.WHITE, PorterDuff.Mode.DST_OVER)
+                        // Opaque from here on, so nothing downstream composites
+                        // it against whatever happens to be behind.
+                        bitmap.setHasAlpha(false)
                         bitmap
                     }
                 }.getOrNull()
