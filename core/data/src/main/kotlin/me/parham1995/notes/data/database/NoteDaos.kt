@@ -30,12 +30,23 @@ interface NoteDao {
     suspend fun childrenOf(parent: String): List<NoteEntity>
 
     /**
+     * The same, as a Flow. Room re-emits when the table changes, which is what
+     * makes the browser fill in as a sync lands instead of showing whatever
+     * happened to be there when the screen opened.
+     */
+    @Query("SELECT * FROM notes WHERE parent = :parent ORDER BY name COLLATE NOCASE")
+    fun childrenOfFlow(parent: String): Flow<List<NoteEntity>>
+
+    /**
      * Every distinct directory. Only a few hundred rows even for a large vault,
      * so the browser builds its folder tree from this once instead of running a
      * recursive query per level.
      */
     @Query("SELECT DISTINCT parent FROM notes WHERE parent != ''")
     suspend fun allParents(): List<String>
+
+    @Query("SELECT DISTINCT parent FROM notes WHERE parent != ''")
+    fun allParentsFlow(): Flow<List<String>>
 
     @Query("SELECT * FROM notes WHERE openedAt IS NOT NULL ORDER BY openedAt DESC LIMIT :limit")
     fun recentlyOpened(limit: Int): Flow<List<NoteEntity>>

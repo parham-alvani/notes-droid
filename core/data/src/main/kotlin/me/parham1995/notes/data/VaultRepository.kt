@@ -2,6 +2,8 @@ package me.parham1995.notes.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.HeadingDao
@@ -63,49 +65,64 @@ class VaultRepository
         fun recentlyOpened(limit: Int = RECENT_LIMIT): Flow<List<NoteEntity>> = notes.recentlyOpened(limit)
 
         /**
-         * One level of the tree. Folders are derived from the notes' parents
-         * rather than stored, so there is no second structure to keep in sync
-         * with the manifest.
+         * One level of the tree, re-emitted whenever the notes table changes.
+         *
+         * The browser used to run this once when the screen opened. Before the
+         * first sync that is an empty vault, and nothing ever asked again --
+         * so the tree stayed empty while search, which queries per keystroke,
+         * worked perfectly.
          */
+        fun childrenFlow(parent: String): Flow<List<VaultItem>> =
+            combine(notes.allParentsFlow(), notes.childrenOfFlow(parent)) { parents, childNotes ->
+                buildChildren(parent, parents, childNotes)
+            }.flowOn(Dispatchers.Default)
+
         suspend fun children(parent: String): List<VaultItem> =
             withContext(Dispatchers.Default) {
-                val prefix = if (parent.isEmpty()) "" else "$parent/"
-                val folders =
-                    notes
-                        .allParents()
-                        .asSequence()
-                        .filter { it.startsWith(prefix) && it != parent }
-                        .map { it.removePrefix(prefix).substringBefore('/') }
-                        .filter { it.isNotEmpty() }
-                        .distinct()
-                        .sortedBy { it.lowercase() }
-                        .toList()
-
-                val childNotes = notes.childrenOf(parent)
-
-                val folderItems =
-                    folders.map { name ->
-                        // A folder's own note is `Folder/Folder.md`; it opens
-                        // when the label is tapped and is hidden from the list.
-                        val own = notes.byPath("$prefix$name/$name.md")
-                        VaultItem(
-                            path = "$prefix$name",
-                            name = name,
-                            isFolder = true,
-                            noteId = own?.id,
-                            isRtl = own?.isRtl ?: false,
-                        )
-                    }
-
-                // A folder's own note is reached by tapping the folder, so it
-                // is not listed again inside it.
-                val noteItems =
-                    childNotes
-                        .filterNot { it.isFolderNote && it.name == parent.substringAfterLast('/') }
-                        .map { VaultItem(it.path, it.name, isFolder = false, noteId = it.id, isRtl = it.isRtl) }
-
-                folderItems + noteItems
+                buildChildren(parent, notes.allParents(), notes.childrenOf(parent))
             }
+
+        /**
+         * Folders are derived from the notes' parents rather than stored, so
+         * there is no second structure to keep in step with the manifest.
+         */
+        private suspend fun buildChildren(
+            parent: String,
+            parents: List<String>,
+            childNotes: List<NoteEntity>,
+        ): List<VaultItem> {
+            val prefix = if (parent.isEmpty()) "" else "$parent/"
+            val folders =
+                parents
+                    .asSequence()
+                    .filter { it.startsWith(prefix) && it != parent }
+                    .map { it.removePrefix(prefix).substringBefore('/') }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .sortedBy { it.lowercase() }
+                    .toList()
+
+            val folderItems =
+                folders.map { name ->
+                    // A folder's own note is `Folder/Folder.md`; it opens when
+                    // the label is tapped and is hidden from the list inside.
+                    val own = notes.byPath("$prefix$name/$name.md")
+                    VaultItem(
+                        path = "$prefix$name",
+                        name = name,
+                        isFolder = true,
+                        noteId = own?.id,
+                        isRtl = own?.isRtl ?: false,
+                    )
+                }
+
+            val noteItems =
+                childNotes
+                    .filterNot { it.isFolderNote && it.name == parent.substringAfterLast('/') }
+                    .map { VaultItem(it.path, it.name, isFolder = false, noteId = it.id, isRtl = it.isRtl) }
+
+            return folderItems + noteItems
+        }
 
         suspend fun note(id: Long): RenderedNote? =
             withContext(Dispatchers.Default) {

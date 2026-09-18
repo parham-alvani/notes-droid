@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Notes" parent="android:Theme.Material.NoActionBar" />
+    <!-- The window background matches naz's Normal background, so launching
+         does not flash white before Compose draws. -->
+    <style name="Theme.Notes" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/naz_background</item>
+        <item name="android:colorBackground">@color/naz_background</item>
+    </style>
 </resources>

@@ -2,9 +2,11 @@ package me.parham1995.notes
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color.TRANSPARENT
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,7 +22,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // naz is a dark colorscheme, so the system bars take light icons
+        // regardless of what the device is set to.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(TRANSPARENT),
+        )
         askForNotifications()
         setContent {
             NotesTheme {

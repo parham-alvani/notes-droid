@@ -4,10 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
@@ -37,6 +40,7 @@ data class BrowserUiState(
         }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class BrowserViewModel
     @Inject
@@ -46,8 +50,13 @@ class BrowserViewModel
         private val settings: SettingsStore,
     ) : ViewModel() {
         private val path = MutableStateFlow("")
-        private val items = MutableStateFlow<List<VaultItem>>(emptyList())
-        private val loading = MutableStateFlow(true)
+
+        // Follows the database rather than sampling it once. The previous
+        // version queried in init, which before the first sync is an empty
+        // vault, and nothing asked again -- so the tree stayed empty while
+        // search, which queries per keystroke, worked fine.
+        private val items: Flow<List<VaultItem>> =
+            path.flatMapLatest { current -> repository.childrenFlow(current) }
 
         private val _state = MutableStateFlow(BrowserUiState())
         val state: StateFlow<BrowserUiState> = _state.asStateFlow()
@@ -57,16 +66,15 @@ class BrowserViewModel
                 combine(
                     path,
                     items,
-                    loading,
                     repository.recentlyOpened(),
                     repository.noteCount,
-                ) { currentPath, currentItems, isLoading, recent, count ->
+                ) { currentPath, currentItems, recent, count ->
                     BrowserUiState(
                         path = currentPath,
                         items = currentItems,
                         recent = recent,
                         noteCount = count,
-                        loading = isLoading,
+                        loading = false,
                     )
                 }.collect { next ->
                     _state.value = next.copy(syncing = _state.value.syncing, syncProgress = _state.value.syncProgress)
@@ -91,17 +99,10 @@ class BrowserViewModel
                         )
                 }
             }
-
-            open("")
         }
 
         fun open(next: String) {
-            viewModelScope.launch {
-                loading.value = true
-                path.value = next
-                items.value = repository.children(next)
-                loading.value = false
-            }
+            path.value = next
         }
 
         /** Up one level; returns false at the root so the caller can exit. */
