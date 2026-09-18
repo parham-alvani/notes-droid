@@ -20,10 +20,12 @@ import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.transport.SshSessionFactory
 import org.eclipse.jgit.transport.SshTransport
+import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.transport.sshd.ServerKeyDatabase
 import org.eclipse.jgit.transport.sshd.SshdSessionFactoryBuilder
 import org.eclipse.jgit.treewalk.CanonicalTreeParser
 import org.eclipse.jgit.treewalk.TreeWalk
+import org.eclipse.jgit.util.FS
 import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -68,6 +70,7 @@ class GitSshVaultSync(
     override suspend fun plan(base: SyncBase): SyncPlan =
         withContext(Dispatchers.IO) {
             checkReachable()
+            checkAuthentication()
 
             val fresh = !File(workTree, Constants.DOT_GIT).isDirectory
             if (fresh) {
@@ -158,7 +161,9 @@ class GitSshVaultSync(
     private fun enrich(failure: Exception): Exception {
         val message = failure.message.orEmpty()
         val dropped = "hung up" in message || "Connection reset" in message || "closed" in message
-        if (!dropped) return failure
+        // Only a drop once bytes were moving. Claiming "part way through" for a
+        // failure at connection setup, as this did, actively misleads.
+        if (!dropped || progress.stage.value.isEmpty()) return failure
         return IOException(
             "the connection dropped part way through the clone. This transfer is well over a " +
                 "hundred megabytes because git cannot fetch a subset, and a clone cannot resume, " +
@@ -276,6 +281,39 @@ class GitSshVaultSync(
                 ""
             }
         throw IOException("cannot reach $host:$port$hint")
+    }
+
+    /**
+     * Opens an SSH session and authenticates, without transferring anything.
+     *
+     * GitHub answers a rejected key by closing the connection, which JGit
+     * reports as the remote hanging up unexpectedly -- a message that is
+     * indistinguishable from a network failure mid-transfer and sent me looking
+     * at timeouts and keepalives for hours. Doing the handshake on its own
+     * separates the two: if this step fails, the key is the problem, and no
+     * amount of retrying will help.
+     */
+    private suspend fun checkAuthentication() {
+        log("authenticating with the SSH key")
+        val failure =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    SshSessionFactory
+                        .getInstance()
+                        .getSession(URIish(remoteUrl), null, FS.DETECTED, AUTH_TIMEOUT_MS)
+                        .disconnect()
+                }.exceptionOrNull()
+            }
+        if (failure == null) {
+            log("authenticated")
+            return
+        }
+        throw IOException(
+            "the repository rejected this SSH key. Its fingerprint is " + keys.fingerprint() +
+                " - check that exact key is listed as a deploy key on the repository. " +
+                "Reinstalling the app or clearing its data generates a new one.",
+            failure,
+        )
     }
 
     /** Host and port from either the scp-style or the ssh:// form of the URL. */
@@ -407,6 +445,7 @@ class GitSshVaultSync(
         // objects. At sixty seconds that silence alone aborted the transfer.
         const val TIMEOUT_SECONDS = 600
         const val REACH_TIMEOUT_MS = 10_000
+        const val AUTH_TIMEOUT_MS = 20_000
         const val DEFAULT_SSH_PORT = 22
         const val REMOTE_PREFIX = "refs/remotes/origin/"
         const val REFS_HEADS = "refs/heads/"

@@ -4,6 +4,7 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.sshd.common.config.keys.KeyUtils
 import org.apache.sshd.common.config.keys.PublicKeyEntry
 import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter
 import java.io.File
@@ -79,6 +80,18 @@ class SshKeyStore
             if (!file.isFile || file.readText() != desired) file.writeText(desired)
             return file
         }
+
+        /**
+         * The key's SHA-256 fingerprint, in the form GitHub shows.
+         *
+         * Without it there is no way to tell a key that was never registered
+         * from one that was replaced by a reinstall, and both fail identically.
+         */
+        fun fingerprint(): String =
+            runCatching {
+                val line = publicKeyLine() ?: return "no key"
+                KeyUtils.getFingerPrint(PublicKeyEntry.parsePublicKeyEntry(line).resolvePublicKey(null, null, null))
+            }.getOrDefault("unreadable")
 
         fun delete() {
             privateKey.delete()

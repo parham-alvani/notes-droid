@@ -355,6 +355,21 @@ private fun SshKeyCard(
                 "repository as a read-only deploy key.",
             style = MaterialTheme.typography.bodySmall,
         )
+        state.sshFingerprint?.let { fingerprint ->
+            // The one thing that tells a key that was never registered from one
+            // replaced by a reinstall. Both fail identically without it.
+            Text(
+                text = "Fingerprint: $fingerprint",
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                "It must appear in the repository's deploy keys on GitHub.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         state.sshPublicKey?.let { line ->
             Text(
                 text = line,

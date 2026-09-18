@@ -43,6 +43,7 @@ data class SyncUiState(
     val connectionMessage: String? = null,
     val tokenRejected: Boolean = false,
     val sshPublicKey: String? = null,
+    val sshFingerprint: String? = null,
     val generatingKey: Boolean = false,
 )
 
@@ -65,6 +66,7 @@ class SyncViewModel
             val diskBytes: Long = 0,
             val connectionMessage: String? = null,
             val sshPublicKey: String? = null,
+            val sshFingerprint: String? = null,
             val generatingKey: Boolean = false,
         )
 
@@ -94,6 +96,7 @@ class SyncViewModel
                     diskBytes = extra.diskBytes,
                     connectionMessage = extra.connectionMessage,
                     sshPublicKey = extra.sshPublicKey,
+                    sshFingerprint = extra.sshFingerprint,
                     generatingKey = extra.generatingKey,
                     tokenRejected =
                         failed?.outputData?.getString(SyncWorker.KEY_ERROR) == SyncWorker.TOKEN_REJECTED,
@@ -159,7 +162,12 @@ class SyncViewModel
             viewModelScope.launch {
                 local.value = local.value.copy(generatingKey = true)
                 val line = runCatching { sshKeys.generate() }.getOrElse { it.message ?: "key generation failed" }
-                local.value = local.value.copy(sshPublicKey = line, generatingKey = false)
+                local.value =
+                    local.value.copy(
+                        sshPublicKey = line,
+                        sshFingerprint = sshKeys.fingerprint(),
+                        generatingKey = false,
+                    )
             }
 
         fun cancelSync() = viewModelScope.launch { scheduler.cancel() }
@@ -183,6 +191,7 @@ class SyncViewModel
                         hasToken = tokenStore.hasToken(),
                         diskBytes = files.sizeOnDisk(),
                         sshPublicKey = sshKeys.publicKeyLine(),
+                        sshFingerprint = sshKeys.publicKeyLine()?.let { sshKeys.fingerprint() },
                     )
             }
 
