@@ -323,8 +323,26 @@ class GitSshVaultSync(
                 failure,
             )
         }
+
+        // Nothing was offered, so nothing can have been refused. This is the
+        // third distinct cause this one message has been blamed on, and the
+        // expensive one: it reads as a key the repository does not know, so
+        // the natural response is to go and replace a deploy key that was
+        // never the problem. A key the device cannot read is a local fault and
+        // has to say so.
+        val fingerprint = keys.fingerprint()
+        if (NO_KEY_OFFERED in failure.describeChain() || fingerprint in UNUSABLE_KEY) {
+            throw IOException(
+                "this device could not use its own SSH key, so nothing was sent to the server " +
+                    "and nothing was refused. The key is at ${keys.identity.name} and reads as " +
+                    "\"$fingerprint\". Generating a new one in Settings will not help if the old " +
+                    "one was readable before: " + failure.describeChain(),
+                failure,
+            )
+        }
+
         throw IOException(
-            "the repository rejected this SSH key. Its fingerprint is " + keys.fingerprint() +
+            "the repository rejected this SSH key. Its fingerprint is " + fingerprint +
                 " - check that exact key is listed as a deploy key on the repository. " +
                 "Reinstalling the app or clearing its data generates a new one.",
             failure,
@@ -454,6 +472,12 @@ class GitSshVaultSync(
 
     private companion object {
         const val DEFAULT_DEPTH = 1
+
+        /** sshd's wording when the client had no identity to present at all. */
+        const val NO_KEY_OFFERED = "no keys to try"
+
+        /** What [SshKeyStore.fingerprint] returns when it cannot read the key. */
+        val UNUSABLE_KEY = setOf("unreadable", "no key")
 
         // Generous on purpose: this clone moves well over a hundred
         // megabytes, and the client sits idle while the server compresses

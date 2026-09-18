@@ -55,6 +55,12 @@ jobs:
           DAFTAR_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
+      # R8 only runs on release builds, so this is the only place the check
+      # can happen -- and an APK that fails it looks perfectly healthy until
+      # someone tries to sync.
+      - name: The SSH transport's reflective classes survived R8
+        run: ./tools/verify-apk.sh app/build/outputs/apk/release/app-release.apk
+
       - name: Collect the artifact and its fingerprint
         run: |
           version="${GITHUB_REF_NAME#v}"

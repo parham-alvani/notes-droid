@@ -88,6 +88,11 @@ ci: lint test build
 clean:
     ./gradlew clean
 
+# check a release apk still carries what R8 cannot see
+[group('release')]
+verify-apk apk="app/build/outputs/apk/release/app-release.apk":
+    ./tools/verify-apk.sh {{ apk }}
+
 # set the release version everywhere (e.g. `just bump 0.2.0`)
 [group('release')]
 bump version:

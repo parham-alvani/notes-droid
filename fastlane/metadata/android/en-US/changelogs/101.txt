@@ -1,0 +1,5 @@
+Fixes SSH sync on release builds.
+
+R8 renamed the Ed25519 implementation that Apache sshd looks up by name, so the app could neither read the key it had generated nor offer it to the server. It reported this as a key the repository had refused, which it never was. Debug builds were unaffected, which is why it only appeared once releases started being published.
+
+The release build now checks that the classes the SSH transport finds reflectively are still present before publishing, and an SSH key the device cannot read says so instead of blaming the server.

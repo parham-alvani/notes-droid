@@ -43,8 +43,8 @@ android {
         // with a regex to decide an update is available, and a computed value
         // -- from the tag, from the commit count -- is invisible to it.
         // `just bump` keeps them in step; CI refuses a tag that disagrees.
-        versionCode = 100
-        versionName = "0.1.0"
+        versionCode = 101
+        versionName = "0.1.1"
     }
 
     signingConfigs {
