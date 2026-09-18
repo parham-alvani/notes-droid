@@ -1,6 +1,5 @@
 package me.parham1995.notes.data
 
-import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -8,10 +7,12 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.HeadingDao
 import me.parham1995.notes.data.database.HeadingEntity
+import me.parham1995.notes.data.database.IndexDao
 import me.parham1995.notes.data.database.LinkDao
 import me.parham1995.notes.data.database.LinkEntity
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NoteEntity
+import me.parham1995.notes.data.database.NoteWrite
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
@@ -41,6 +42,7 @@ class VaultIndexer
         private val notes: NoteDao,
         private val links: LinkDao,
         private val headings: HeadingDao,
+        private val index: IndexDao,
         private val search: SearchIndex,
     ) {
         data class Progress(
@@ -114,16 +116,14 @@ class VaultIndexer
 
         private suspend fun writeBatch(batch: List<Indexed>) {
             if (batch.isEmpty()) return
-            val fts = mutableListOf<Triple<Long, String, String>>()
 
-            database.withTransaction {
-                batch.forEach { indexed ->
+            val writes =
+                batch.map { indexed ->
                     val name = indexed.path.substringAfterLast('/').removeSuffix(MD)
                     val parent = indexed.path.substringBeforeLast('/', "")
-                    val id =
-                        notes.upsert(
+                    NoteWrite(
+                        note =
                             NoteEntity(
-                                id = notes.idOf(indexed.path) ?: 0,
                                 path = indexed.path,
                                 parent = parent,
                                 name = name,
@@ -138,47 +138,44 @@ class VaultIndexer
                                 hasMath = indexed.note.hasMath,
                                 indexedAt = System.currentTimeMillis(),
                             ),
-                        )
-
-                    headings.deleteByNote(id)
-                    headings.insertAll(
-                        indexed.note.headings.mapIndexed { ordinal, heading ->
-                            HeadingEntity(
-                                noteId = id,
-                                level = heading.level,
-                                text = heading.text,
-                                slug = heading.slug,
-                                ordinal = ordinal,
-                                blockIndex = heading.blockIndex,
-                            )
-                        },
-                    )
-
-                    links.deleteBySource(id)
-                    links.insertAll(
-                        indexed.note.links
-                            .filter { it.kind == LinkKind.WIKILINK || it.kind == LinkKind.WIKI_EMBED }
-                            .mapIndexed { ordinal, link ->
-                                LinkEntity(
-                                    srcId = id,
-                                    kind = link.kind.name,
-                                    rawTarget = link.rawTarget,
-                                    alias = link.alias,
-                                    heading = link.heading,
-                                    targetId = null,
-                                    context = link.context,
+                        headings =
+                            indexed.note.headings.mapIndexed { ordinal, heading ->
+                                HeadingEntity(
+                                    noteId = 0,
+                                    level = heading.level,
+                                    text = heading.text,
+                                    slug = heading.slug,
                                     ordinal = ordinal,
+                                    blockIndex = heading.blockIndex,
                                 )
                             },
+                        links =
+                            indexed.note.links
+                                .filter { it.kind == LinkKind.WIKILINK || it.kind == LinkKind.WIKI_EMBED }
+                                .mapIndexed { ordinal, link ->
+                                    LinkEntity(
+                                        srcId = 0,
+                                        kind = link.kind.name,
+                                        rawTarget = link.rawTarget,
+                                        alias = link.alias,
+                                        heading = link.heading,
+                                        targetId = null,
+                                        context = link.context,
+                                        ordinal = ordinal,
+                                    )
+                                },
                     )
-
-                    fts += Triple(id, indexed.note.title.ifBlank { name }, indexed.note.plainText)
                 }
-            }
 
-            // Outside the Room transaction: the FTS table is not one of Room's,
-            // and nesting its own writer connection inside would deadlock.
-            fts.forEach { (id, title, body) -> search.upsert(id, title, body) }
+            val ids = index.writeBatch(writes)
+
+            // Outside the transaction: the FTS table is not one of Room's, and
+            // taking its writer connection from inside would deadlock.
+            ids.forEachIndexed { position, id ->
+                val indexed = batch[position]
+                val name = indexed.path.substringAfterLast('/').removeSuffix(MD)
+                search.upsert(id, indexed.note.title.ifBlank { name }, indexed.note.plainText)
+            }
         }
 
         /**
@@ -192,16 +189,15 @@ class VaultIndexer
                 val resolver = LinkResolver(byPath.keys)
                 val sources = refs.associate { it.id to it.path }
 
-                val pending = links.unresolved()
-                database.withTransaction {
-                    pending.forEach { link ->
-                        val source = sources[link.srcId] ?: return@forEach
+                val targets =
+                    links.unresolved().mapNotNull { link ->
+                        val source = sources[link.srcId] ?: return@mapNotNull null
                         val path = resolver.resolve(link.rawTarget, source)
                         // Deliberately left null when nothing matches: a broken
                         // link is shown as broken rather than silently dropped.
-                        links.setTarget(link.id, path?.let(byPath::get))
+                        link.id to path?.let(byPath::get)
                     }
-                }
+                targets.chunked(BATCH).forEach { index.applyTargets(it) }
             }
 
         private companion object {

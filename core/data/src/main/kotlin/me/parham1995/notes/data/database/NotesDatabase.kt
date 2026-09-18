@@ -35,6 +35,8 @@ abstract class NotesDatabase : RoomDatabase() {
 
     abstract fun syncLogDao(): SyncLogDao
 
+    abstract fun indexDao(): IndexDao
+
     companion object {
         const val NAME = "notes.db"
         const val FTS_TABLE = "note_fts"

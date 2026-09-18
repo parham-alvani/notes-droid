@@ -13,6 +13,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.Dispatchers
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.HeadingDao
+import me.parham1995.notes.data.database.IndexDao
 import me.parham1995.notes.data.database.LinkDao
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NotesDatabase
@@ -70,6 +71,9 @@ object DataModule {
 
     @Provides
     fun syncLogDao(database: NotesDatabase): SyncLogDao = database.syncLogDao()
+
+    @Provides
+    fun indexDao(database: NotesDatabase): IndexDao = database.indexDao()
 
     @Provides
     @Singleton
