@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -65,8 +66,21 @@ data class VaultSettings(
      */
     val sshOverPort443: Boolean = false,
     val syncOnWifiOnly: Boolean = false,
+    /** Refresh on a schedule as well as on demand. */
+    val backgroundSync: Boolean = true,
+    /**
+     * Hours between background refreshes. WorkManager will not go below
+     * fifteen minutes, and a quiet refresh costs one request, so the floor
+     * here is about politeness rather than capability.
+     */
+    val syncIntervalHours: Int = DEFAULT_INTERVAL_HOURS,
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
+
+    companion object {
+        const val DEFAULT_INTERVAL_HOURS = 6
+        val INTERVAL_CHOICES = listOf(1, 3, 6, 12, 24)
+    }
 }
 
 @Singleton
@@ -85,6 +99,9 @@ class SettingsStore
                     transport = SyncTransport.parse(preferences[TRANSPORT]),
                     sshOverPort443 = preferences[SSH_443] ?: false,
                     syncOnWifiOnly = preferences[WIFI_ONLY] ?: false,
+                    backgroundSync = preferences[BACKGROUND_SYNC] ?: true,
+                    syncIntervalHours =
+                        preferences[INTERVAL_HOURS] ?: VaultSettings.DEFAULT_INTERVAL_HOURS,
                 )
             }
 
@@ -118,6 +135,14 @@ class SettingsStore
             context.settingsDataStore.edit { it[WIFI_ONLY] = enabled }
         }
 
+        suspend fun setBackgroundSync(enabled: Boolean) {
+            context.settingsDataStore.edit { it[BACKGROUND_SYNC] = enabled }
+        }
+
+        suspend fun setSyncIntervalHours(hours: Int) {
+            context.settingsDataStore.edit { it[INTERVAL_HOURS] = hours }
+        }
+
         private companion object {
             val OWNER = stringPreferencesKey("repo_owner")
             val REPO = stringPreferencesKey("repo_name")
@@ -126,5 +151,7 @@ class SettingsStore
             val WIFI_ONLY = booleanPreferencesKey("sync_wifi_only")
             val TRANSPORT = stringPreferencesKey("sync_transport")
             val SSH_443 = booleanPreferencesKey("ssh_over_443")
+            val BACKGROUND_SYNC = booleanPreferencesKey("background_sync")
+            val INTERVAL_HOURS = intPreferencesKey("sync_interval_hours")
         }
     }

@@ -41,21 +41,30 @@ class SyncWorker
             runCatching { createChannel() }
                 .onFailure { log.warn("notification channel unavailable: ${it.message}") }
 
-            // Deliberately not fatal. This used to be the first statement in
-            // the try, so a denied notification permission -- or any of the
-            // foreground-service restrictions on recent Android -- threw here,
-            // was caught as a generic failure, and retried forever. The sync
-            // never ran and never logged a thing, which is indistinguishable
-            // from a hang. Running without a notification risks being killed in
-            // the background; not running at all is worse.
+            // A foreground service is for the sync somebody is waiting on, and
+            // only that one. A scheduled refresh is ordinary background work
+            // that Android runs happily as a job -- and an app in the
+            // background is not permitted to start a foreground service, so
+            // asking anyway threw ForegroundServiceStartNotAllowedException on
+            // every scheduled run. It was caught and the sync continued, but it
+            // filled the journal with a warning about a thing that was never
+            // needed.
+            //
+            // Still not fatal when it does fail. This used to be the first
+            // statement in the try, so a denied notification permission threw
+            // before the sync began, was caught as a generic failure, and
+            // retried forever -- the sync never ran and never logged a thing,
+            // which is indistinguishable from a hang.
+            val userInitiated = inputData.getBoolean(KEY_USER_INITIATED, false)
             val foreground =
-                runCatching { setForeground(foregroundInfo(0, 0)) }
-                    .onFailure {
-                        log.warn(
-                            "cannot run in the foreground (${it::class.simpleName}): " +
-                                "syncing anyway, but Android may kill it if you leave the app",
-                        )
-                    }.isSuccess
+                userInitiated &&
+                    runCatching { setForeground(foregroundInfo(0, 0)) }
+                        .onFailure {
+                            log.warn(
+                                "cannot run in the foreground (${it::class.simpleName}): " +
+                                    "syncing anyway, but Android may kill it if you leave the app",
+                            )
+                        }.isSuccess
 
             return try {
                 val plan =
@@ -64,7 +73,7 @@ class SyncWorker
                             setProgressAsync(workDataOf(KEY_DONE to done, KEY_TOTAL to total))
                         }
                     }
-                if (foreground) log.info("ran in the foreground")
+                log.info(if (foreground) "ran in the foreground" else "ran as a background job")
                 Result.success(
                     workDataOf(
                         KEY_ADDED to plan.adds.size,
@@ -104,6 +113,16 @@ class SyncWorker
             }
         }
 
+        /**
+         * Used by WorkManager itself for expedited work below API 31, where an
+         * expedited job does not exist and it runs one as a foreground service.
+         * Above that it is never called.
+         */
+        override suspend fun getForegroundInfo(): ForegroundInfo {
+            runCatching { createChannel() }
+            return foregroundInfo(0, 0)
+        }
+
         private fun errorData(message: String?): Data = workDataOf(KEY_ERROR to (message ?: "sync failed"))
 
         private fun foregroundInfo(
@@ -138,6 +157,13 @@ class SyncWorker
             const val UNIQUE_WORK = "vault-sync"
             const val CHANNEL_ID = "vault-sync"
             const val NOTIFICATION_ID = 1
+
+            /**
+             * Set when a person asked for this sync, as opposed to the
+             * schedule doing it. Decides whether a foreground service is worth
+             * asking for.
+             */
+            const val KEY_USER_INITIATED = "user_initiated"
 
             const val KEY_DONE = "done"
             const val KEY_TOTAL = "total"

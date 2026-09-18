@@ -157,6 +157,12 @@ class SyncViewModel
 
         fun setImagePolicy(policy: ImagePolicy) = viewModelScope.launch { settingsStore.setImagePolicy(policy) }
 
+        fun setBackgroundSync(enabled: Boolean) = viewModelScope.launch { settingsStore.setBackgroundSync(enabled) }
+
+        fun setSyncIntervalHours(hours: Int) = viewModelScope.launch { settingsStore.setSyncIntervalHours(hours) }
+
+        fun setSyncOnWifiOnly(enabled: Boolean) = viewModelScope.launch { settingsStore.setSyncOnWifiOnly(enabled) }
+
         /**
          * The private half never leaves the device; only this public line does,
          * and it goes to GitHub as a read-only deploy key.

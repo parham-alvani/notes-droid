@@ -2,7 +2,10 @@ package me.parham1995.notes.feature.sync
 
 import android.app.Activity
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -51,6 +55,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.BuildConfig
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SyncTransport
+import me.parham1995.notes.data.VaultSettings
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -88,6 +93,7 @@ fun SyncScreen(viewModel: SyncViewModel = hiltViewModel()) {
                 SshKeyCard(state, viewModel)
             }
             ImagesCard(state, viewModel)
+            BackgroundSyncCard(state, viewModel)
             StatusCard(state, viewModel)
             LogCard(viewModel)
             AboutCard()
@@ -269,6 +275,91 @@ private fun StatusCard(
 }
 
 /**
+ * The scheduled refresh.
+ *
+ * Unlike a tap, this runs as an ordinary background job with no notification --
+ * which is what Android actually permits a backgrounded app to do, and the
+ * reason a scheduled sync no longer reports a foreground-service error it was
+ * never going to get.
+ *
+ * The battery row is here because on a phone that aggressively dozes, this is
+ * the single setting that decides whether any of it happens. Saying so is
+ * better than a schedule that silently never fires.
+ */
+@Composable
+private fun BackgroundSyncCard(
+    state: SyncUiState,
+    viewModel: SyncViewModel,
+) {
+    val context = LocalContext.current
+    SectionCard("Background sync") {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Refresh on a schedule", style = MaterialTheme.typography.bodyMedium)
+            Switch(
+                checked = state.settings.backgroundSync,
+                onCheckedChange = viewModel::setBackgroundSync,
+            )
+        }
+
+        if (state.settings.backgroundSync) {
+            Text("How often", style = MaterialTheme.typography.labelMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                VaultSettings.INTERVAL_CHOICES.forEach { hours ->
+                    FilterChip(
+                        selected = state.settings.syncIntervalHours == hours,
+                        onClick = { viewModel.setSyncIntervalHours(hours) },
+                        label = { Text(if (hours == HOURS_IN_DAY) "daily" else "${hours}h") },
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Only on Wi-Fi", style = MaterialTheme.typography.bodyMedium)
+                Switch(
+                    checked = state.settings.syncOnWifiOnly,
+                    onCheckedChange = viewModel::setSyncOnWifiOnly,
+                )
+            }
+
+            val exempt = remember { context.ignoresBatteryOptimisations() }
+            if (!exempt) {
+                Text(
+                    "Battery optimisation is on for this app, so Android may defer or skip a " +
+                        "scheduled sync indefinitely. Pull to refresh always works.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(
+                    onClick = {
+                        runCatching {
+                            // The settings list rather than the direct request,
+                            // which needs a permission Play forbids and this
+                            // app has no need of.
+                            context.startActivity(
+                                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                            )
+                        }
+                    },
+                ) {
+                    Text("Battery settings")
+                }
+            }
+        }
+    }
+}
+
+private fun Context.ignoresBatteryOptimisations(): Boolean =
+    getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: false
+
+/**
  * What this build actually is.
  *
  * Useful when more than one APK is in circulation -- a release from the tag, a
@@ -325,6 +416,7 @@ private fun LabelledValue(
 }
 
 private const val SHORT_SHA_LENGTH = 7
+private const val HOURS_IN_DAY = 24
 private const val BYTES_PER_UNIT = 1024.0
 
 private fun formatBytes(bytes: Long): String {

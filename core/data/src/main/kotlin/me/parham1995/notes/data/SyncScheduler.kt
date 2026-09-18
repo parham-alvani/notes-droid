@@ -6,9 +6,11 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import java.time.Duration
@@ -39,6 +41,12 @@ class SyncScheduler
                 ExistingWorkPolicy.REPLACE,
                 OneTimeWorkRequestBuilder<SyncWorker>()
                     .setConstraints(constraints(wifiOnly))
+                    // A tap should start now, not when the scheduler feels
+                    // like it. Below API 31 this runs as a foreground service
+                    // that WorkManager starts itself -- which is allowed,
+                    // because the app is in front when the tap happens.
+                    .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                    .setInputData(workDataOf(SyncWorker.KEY_USER_INITIATED to true))
                     .build(),
             )
         }
@@ -47,15 +55,25 @@ class SyncScheduler
         fun cancel() = workManager.cancelUniqueWork(SyncWorker.UNIQUE_WORK)
 
         /**
-         * Best-effort background refresh. Custom ROMs are aggressive about
-         * killing background work, so pull-to-refresh stays the primary path
-         * and this is a convenience rather than a guarantee.
+         * The background refresh.
+         *
+         * Deliberately not expedited and deliberately without a notification:
+         * this is an ordinary scheduled job, which Android is happy to run in
+         * the background. Asking for a foreground service here is what threw
+         * ForegroundServiceStartNotAllowedException on every run -- an app in
+         * the background is not allowed to start one, and it did not need one.
+         *
+         * Custom ROMs are still aggressive about deferring scheduled work, so
+         * pull-to-refresh remains the path that always works.
          */
-        fun schedulePeriodic(wifiOnly: Boolean = false) {
+        fun schedulePeriodic(
+            wifiOnly: Boolean = false,
+            intervalHours: Long = PERIOD_HOURS,
+        ) {
             workManager.enqueueUniquePeriodicWork(
                 PERIODIC_WORK,
                 ExistingPeriodicWorkPolicy.UPDATE,
-                PeriodicWorkRequestBuilder<SyncWorker>(Duration.ofHours(PERIOD_HOURS))
+                PeriodicWorkRequestBuilder<SyncWorker>(Duration.ofHours(intervalHours))
                     .setConstraints(
                         Constraints
                             .Builder()
