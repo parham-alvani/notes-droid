@@ -42,8 +42,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.toClipEntry
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -51,12 +56,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.icon.VaultIcon
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
 import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
+import me.parham1995.notes.ui.theme.Markup
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,6 +115,34 @@ fun NoteScreen(
                     }
                 },
                 actions = {
+                    // Shares the note as it is written, not as it is rendered:
+                    // what goes out is markdown, which is what the person on
+                    // the other end can do something with.
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                val text = viewModel.markdown()
+                                if (text == null) {
+                                    Toast.makeText(context, "That note is not on the device", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    context.startActivity(
+                                        Intent.createChooser(
+                                            Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/markdown"
+                                                putExtra(Intent.EXTRA_TITLE, state.note?.title)
+                                                putExtra(Intent.EXTRA_SUBJECT, state.note?.title)
+                                                putExtra(Intent.EXTRA_TEXT, text)
+                                            },
+                                            state.note?.title,
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        enabled = state.note != null,
+                    ) {
+                        LucideGlyph("share-2", size = 20.dp, contentDescription = "Share")
+                    }
                     IconButton(onClick = { showOutline = true }, enabled = state.note != null) {
                         Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Outline")
                     }
@@ -263,35 +298,56 @@ fun NoteScreen(
 
     if (showBacklinks) {
         ModalBottomSheet(onDismissRequest = { showBacklinks = false }) {
+            // Looked up when the sheet opens rather than with the note: it is a
+            // full-text search, and most notes are read without anyone asking.
+            LaunchedEffect(noteId) { viewModel.loadMentions() }
+
             LazyColumn {
-                items(state.backlinks, key = { it.noteId.toString() + it.context }) { row ->
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                showBacklinks = false
-                                onOpenNote(row.noteId)
-                            }.padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(row.title, style = MaterialTheme.typography.bodyMedium)
+                if (state.backlinks.isNotEmpty()) {
+                    item { SheetLabel("Linked from ${state.backlinks.size}") }
+                }
+                items(state.backlinks, key = { "link-" + it.noteId + it.context }) { row ->
+                    ReferenceRow(
+                        title = row.title,
                         // The stored context line -- backlinks never re-read
                         // the source note to show it.
+                        context = AnnotatedString(row.context),
+                        path = row.path,
+                        onClick = {
+                            showBacklinks = false
+                            onOpenNote(row.noteId)
+                        },
+                    )
+                }
+
+                // Obsidian calls these unlinked mentions: notes that say this
+                // one's name in prose and never turned it into a link. In a
+                // vault where every link is typed by hand, that is where the
+                // connections somebody meant to make actually are.
+                if (state.mentions.isNotEmpty()) {
+                    item { SheetLabel("Mentioned in ${state.mentions.size}, not linked") }
+                }
+                items(state.mentions, key = { "mention-" + it.noteId }) { hit ->
+                    ReferenceRow(
+                        title = hit.title,
+                        context = hit.snippet.highlighted(),
+                        path = hit.path,
+                        onClick = {
+                            showBacklinks = false
+                            onOpenNote(hit.noteId)
+                        },
+                    )
+                }
+
+                if (state.mentionsLoaded && state.backlinks.isEmpty() && state.mentions.isEmpty()) {
+                    item {
                         Text(
-                            text = row.context,
-                            style = MaterialTheme.typography.bodySmall,
+                            "Nothing links here, and nothing names it either.",
+                            Modifier.fillMaxWidth().padding(24.dp),
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = row.path,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.outline,
                         )
                     }
-                    HorizontalDivider()
                 }
             }
         }
@@ -340,3 +396,70 @@ private fun FolderContents(
         }
     }
 }
+
+@Composable
+private fun SheetLabel(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** One reference to this note: a link that points here, or a mention that does not. */
+@Composable
+private fun ReferenceRow(
+    title: String,
+    context: AnnotatedString,
+    path: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = context,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = path,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.outline,
+        )
+    }
+    HorizontalDivider()
+}
+
+/**
+ * The excerpt FTS5 hands back, with its markers turned into emphasis.
+ *
+ * `snippet()` wraps the matched terms in the delimiters it was given rather
+ * than returning positions, so this is the only way to know where the match
+ * was without searching the excerpt again.
+ */
+private fun String.highlighted(): AnnotatedString =
+    buildAnnotatedString {
+        var rest = this@highlighted
+        while (true) {
+            val open = rest.indexOf('[')
+            val close = rest.indexOf(']', startIndex = open + 1)
+            if (open < 0 || close < 0) break
+            append(rest.substring(0, open))
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Markup.Strong)) {
+                append(rest.substring(open + 1, close))
+            }
+            rest = rest.substring(close + 1)
+        }
+        append(rest)
+    }

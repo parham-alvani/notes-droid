@@ -243,6 +243,23 @@ class VaultRepository
 
         suspend fun backlinkCount(id: Long): Int = links.backlinkCount(id)
 
+        /** A note exactly as it is written, for sharing it somewhere else. */
+        suspend fun markdown(id: Long): String? = notes.byId(id)?.let { files.readText(it.path) }
+
+        /**
+         * Notes that say this one's name without linking to it.
+         *
+         * The note itself and everything that already links here are excluded,
+         * so what is left is exactly the connections somebody wrote in prose
+         * and never turned into a link. In a vault where links are typed by
+         * hand, that is most of them.
+         */
+        suspend fun unlinkedMentions(id: Long): List<SearchHit> {
+            val note = notes.byId(id) ?: return emptyList()
+            val linked = links.backlinks(id).map { it.noteId }.toSet() + id
+            return search.mentions(note.title, linked)
+        }
+
         /** Full-text results, ranked with the title weighted above the body. */
         suspend fun search(query: String): List<SearchHit> = search.search(query)
 

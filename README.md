@@ -20,7 +20,8 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Incremental sync** — a refresh with nothing upstream costs a single HTTP request, and a renamed note transfers no bytes at all
 - **Markdown-only by default** — images are fetched on demand, so a default install is a fraction of the repository's size
 - **Obsidian flavour** — `[[wikilinks]]` with Obsidian's own resolution rules, callouts, `==highlight==`, wiki-embeds, tables, task lists
-- **Backlinks and outline** for every note
+- **Backlinks, unlinked mentions and an outline** for every note
+- **A home screen widget** counting what is overdue and due today
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
 - **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary
@@ -133,6 +134,7 @@ Glyphs come from [Lucide](https://lucide.dev), flattened into a single asset by 
 - [x] **M10** — attachments: PDFs read in place, everything else handed off
 - [x] **M11** — tasks across the whole vault, with a daily summary
 - [x] **M12** — several repositories, mounted side by side
+- [x] **M13** — unlinked mentions, a task widget, an SSH panel that tests a key
 
 Not done: an onboarding flow (setup lives in Settings instead), and editing, which remains out of scope.
 

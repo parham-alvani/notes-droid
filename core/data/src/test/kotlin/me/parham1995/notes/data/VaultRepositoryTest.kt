@@ -280,4 +280,57 @@ class VaultRepositoryTest {
             assertThat(repository.children("Papers").map { it.name })
                 .containsExactly("Notes", "lease.pdf")
         }
+
+    @Test
+    fun `a note that names another without linking is an unlinked mention`() =
+        runTest {
+            index(
+                "Infra/Rate Limiting.md" to "how the limiter works",
+                "Infra/Gateway.md" to "the gateway does Rate Limiting at the edge",
+                "Infra/Linked.md" to "see [[Rate Limiting]] for the details",
+                "Infra/Unrelated.md" to "nothing to do with it",
+            )
+            val id = database.noteDao().idOf("Infra/Rate Limiting.md")!!
+
+            val mentions = repository.unlinkedMentions(id)
+
+            // Gateway says the name and never links it. Linked already does, so
+            // it belongs under backlinks instead of being reported twice.
+            assertThat(mentions.map { it.title }).containsExactly("Gateway")
+        }
+
+    @Test
+    fun `a note is never an unlinked mention of itself`() =
+        runTest {
+            index("Infra/Rate Limiting.md" to "Rate Limiting is what this note is about")
+            val id = database.noteDao().idOf("Infra/Rate Limiting.md")!!
+
+            assertThat(repository.unlinkedMentions(id)).isEmpty()
+        }
+
+    @Test
+    fun `a mention has to be the whole phrase, not one of its words`() =
+        runTest {
+            index(
+                "Infra/Rate Limiting.md" to "the subject",
+                "Infra/Money.md" to "the exchange rate moved",
+            )
+            val id = database.noteDao().idOf("Infra/Rate Limiting.md")!!
+
+            // "rate" alone is not a mention of "Rate Limiting", and treating it
+            // as one would bury the real mentions in a vault this size.
+            assertThat(repository.unlinkedMentions(id)).isEmpty()
+        }
+
+    @Test
+    fun `a note can be shared exactly as it is written`() =
+        runTest {
+            val text = "# Heading\n\nBody with [[a link]] and **emphasis**."
+            index("Infra/Source.md" to text)
+            val id = database.noteDao().idOf("Infra/Source.md")!!
+
+            // Markdown, not the rendered text: what goes out is what the person
+            // receiving it can do something with.
+            assertThat(repository.markdown(id)).isEqualTo(text)
+        }
 }

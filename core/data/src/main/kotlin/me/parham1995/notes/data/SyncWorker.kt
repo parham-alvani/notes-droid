@@ -33,6 +33,13 @@ class SyncWorker
         private val repository: SyncRepository,
         private val log: SyncLog,
     ) : CoroutineWorker(context, params) {
+        /**
+         * Run after a successful sync, for anything outside the app that shows
+         * the vault. Set by the application rather than injected, because this
+         * module deliberately knows nothing about the UI or its widgets.
+         */
+        private val onSynced: (() -> Unit)? get() = afterSync
+
         override suspend fun doWork(): Result {
             // First thing, before anything that can fail: if the worker starts
             // at all, the journal says so.
@@ -74,6 +81,9 @@ class SyncWorker
                         }
                     }
                 log.info(if (foreground) "ran in the foreground" else "ran as a background job")
+                // Anything on the home screen is showing the previous sync's
+                // answer until something tells it otherwise.
+                runCatching { onSynced?.invoke() }
                 Result.success(
                     workDataOf(
                         KEY_ADDED to plan.adds.size,
@@ -154,6 +164,10 @@ class SyncWorker
         }
 
         companion object {
+            /** Set once at startup; see [onSynced]. */
+            @Volatile
+            var afterSync: (() -> Unit)? = null
+
             const val UNIQUE_WORK = "vault-sync"
             const val CHANNEL_ID = "vault-sync"
             const val NOTIFICATION_ID = 1

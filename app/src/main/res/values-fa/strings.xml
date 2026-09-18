@@ -3,4 +3,5 @@
     <!-- The same word, written as it is written. Shown on a device set to
          Persian; the app already renders the vault's own Persian notes. -->
     <string name="app_name">دفتر</string>
+    <string name="widget_description">کارهای عقب‌افتاده و امروز</string>
 </resources>

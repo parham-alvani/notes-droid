@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
+import me.parham1995.notes.data.SyncWorker
+import me.parham1995.notes.widget.TasksWidget
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -45,6 +47,7 @@ class NotesApplication :
         }
         scheduleBackgroundSync()
         scheduleTaskDigest()
+        SyncWorker.afterSync = { TasksWidget.refresh(this) }
     }
 
     /**

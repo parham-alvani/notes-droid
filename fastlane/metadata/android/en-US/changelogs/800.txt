@@ -1,0 +1,7 @@
+Unlinked mentions, a home screen widget, and sharing.
+
+The backlinks sheet now has a second section: notes that say this one's name without linking to it. In a vault where every link is typed by hand, that is where most of the connections somebody meant to make actually are.
+
+A widget shows what is overdue and due today without opening the app, and refreshes after each sync. Tapping it opens the task list.
+
+A note can be shared as markdown rather than as rendered text, so what arrives is something the other end can use.

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.RenderedNote
+import me.parham1995.notes.data.SearchHit
 import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.BacklinkRow
@@ -22,6 +23,9 @@ data class NoteUiState(
     val loading: Boolean = true,
     val note: RenderedNote? = null,
     val backlinks: List<BacklinkRow> = emptyList(),
+    /** Notes that name this one without linking to it. Loaded on demand. */
+    val mentions: List<SearchHit> = emptyList(),
+    val mentionsLoaded: Boolean = false,
     val icon: IconSpec? = null,
     /**
      * What the folder holds, when this note is a folder's landing page. Empty
@@ -76,6 +80,28 @@ class NoteViewModel
                                     .map { VaultRowItem(it, assignments.forPath(it.path, it.isFolder)) }
                             },
                     )
+            }
+        }
+
+        /** The note's own markdown, for handing to another app. */
+        suspend fun markdown(): String? =
+            _state.value.note
+                ?.id
+                ?.let { repository.markdown(it) }
+
+        /**
+         * Looked up only when the sheet is opened.
+         *
+         * It is a full-text search over the whole vault, which is cheap but not
+         * free, and most notes are opened and read without anyone ever asking
+         * what else mentions them.
+         */
+        fun loadMentions() {
+            if (_state.value.mentionsLoaded) return
+            val id = _state.value.note?.id ?: return
+            viewModelScope.launch {
+                val found = repository.unlinkedMentions(id)
+                _state.value = _state.value.copy(mentions = found, mentionsLoaded = true)
             }
         }
 

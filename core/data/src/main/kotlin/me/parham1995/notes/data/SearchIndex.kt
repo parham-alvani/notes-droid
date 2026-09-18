@@ -94,8 +94,52 @@ class SearchIndex
             }
         }
 
+        /**
+         * Notes that say this note's name without linking to it.
+         *
+         * Obsidian calls these unlinked mentions, and in a vault where 110
+         * basenames are duplicated and links are written by hand they are how
+         * you find the connection somebody meant to make. It is the same index
+         * search does, restricted to the title and with everything that
+         * already links here taken out.
+         */
+        suspend fun mentions(
+            title: String,
+            exclude: Set<Long>,
+            limit: Int = MENTION_LIMIT,
+        ): List<SearchHit> {
+            // Phrase-matched, not tokenised: a note called "Rate Limiting"
+            // should find that phrase, not every note containing "rate".
+            val phrase = FtsQuery.phrase(title) ?: return emptyList()
+            return database
+                .useReaderConnection { connection ->
+                    connection.usePrepared(SEARCH_SQL) { statement ->
+                        statement.bindText(1, phrase)
+                        // Asked for generously, because the exclusions are
+                        // applied after ranking rather than in SQL -- the
+                        // linked set is small and already in memory.
+                        statement.bindLong(2, (limit * OVERSCAN).toLong())
+                        buildList {
+                            while (statement.step()) {
+                                add(
+                                    SearchHit(
+                                        noteId = statement.getLong(0),
+                                        title = statement.getText(1),
+                                        path = statement.getText(2),
+                                        snippet = statement.getText(3),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }.filterNot { it.noteId in exclude }
+                .take(limit)
+        }
+
         private companion object {
             const val FTS = NotesDatabase.FTS_TABLE
+            const val MENTION_LIMIT = 30
+            const val OVERSCAN = 3
             const val DEFAULT_LIMIT = 100
 
             val SEARCH_SQL =
@@ -121,6 +165,19 @@ class SearchIndex
  */
 object FtsQuery {
     private val TOKEN = Regex("""[\p{L}\p{N}_]+""")
+
+    /**
+     * The same text as an exact phrase rather than a bag of words.
+     *
+     * FTS5 reads a double-quoted string as a phrase, so the tokens are
+     * re-quoted rather than passed through -- the input is a note title and
+     * can contain anything a filename can.
+     */
+    fun phrase(raw: String): String? {
+        val tokens = TOKEN.findAll(raw).map { it.value }.toList()
+        if (tokens.isEmpty()) return null
+        return tokens.joinToString(" ", prefix = "\"", postfix = "\"")
+    }
 
     /** Null when there is nothing left worth searching for. */
     fun sanitize(raw: String): String? {

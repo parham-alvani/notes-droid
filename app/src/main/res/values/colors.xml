@@ -2,4 +2,5 @@
 <resources>
     <!-- naz.vim: hl("Normal", { fg = white, bg = black }) -->
     <color name="naz_background">#323232</color>
+    <color name="naz_white">#FFF5F5F0</color>
 </resources>

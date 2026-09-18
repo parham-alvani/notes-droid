@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The baseline. `previewLayout` and the cell-size hints only exist from API
+    31, so they live in the `-v31` variant beside this one rather than being
+    declared here and ignored. A widget that will not install on the device it
+    was built for is worse than one without a preview.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_tasks"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

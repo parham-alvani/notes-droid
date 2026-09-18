@@ -2,4 +2,5 @@
 <resources>
     <!-- Persian for notebook. Six characters, so no launcher truncates it. -->
     <string name="app_name">Daftar</string>
+    <string name="widget_description">What is overdue and due today</string>
 </resources>
