@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.feature.browser.BrowserScreen
+import me.parham1995.notes.feature.graph.GraphScreen
 import me.parham1995.notes.feature.note.NoteScreen
 import me.parham1995.notes.feature.search.SearchScreen
 import me.parham1995.notes.feature.ssh.SshScreen
@@ -67,6 +68,11 @@ object SshRoute
 @Serializable
 data class SettingsSectionRoute(
     val section: String,
+)
+
+@Serializable
+data class GraphRoute(
+    val id: Long,
 )
 
 @Serializable
@@ -196,6 +202,13 @@ fun NotesNavHost(
                     onManageSshKeys = { navController.navigate(SshRoute) },
                 )
             }
+            composable<GraphRoute> { entry ->
+                GraphScreen(
+                    noteId = entry.toRoute<GraphRoute>().id,
+                    onBack = { navController.popBackStack() },
+                    onOpenNote = { navController.navigate(NoteRoute(it)) },
+                )
+            }
             composable<SshRoute> {
                 SshScreen(onBack = { navController.popBackStack() })
             }
@@ -203,6 +216,7 @@ fun NotesNavHost(
                 val route = entry.toRoute<NoteRoute>()
                 NoteScreen(
                     noteId = route.id,
+                    onOpenGraph = { navController.navigate(GraphRoute(it)) },
                     onBack = { navController.popBackStack() },
                     onOpenNote = { navController.navigate(NoteRoute(it)) },
                     onOpenFolder = { navController.navigate(BrowseRoute(it)) },

@@ -126,6 +126,23 @@ interface LinkDao {
     )
     suspend fun backlinks(targetId: Long): List<BacklinkRow>
 
+    /**
+     * The notes this one links to, once each.
+     *
+     * DISTINCT because a note that references another four times is one edge
+     * in a graph, not four -- and the graph is what this is for.
+     */
+    @Query(
+        """
+        SELECT DISTINCT notes.id AS noteId, notes.title AS title, notes.path AS path, '' AS context
+        FROM links
+        JOIN notes ON notes.id = links.targetId
+        WHERE links.srcId = :srcId AND links.targetId IS NOT NULL
+        ORDER BY notes.title COLLATE NOCASE
+        """,
+    )
+    suspend fun outgoing(srcId: Long): List<BacklinkRow>
+
     @Query("SELECT COUNT(*) FROM links WHERE targetId = :targetId")
     suspend fun backlinkCount(targetId: Long): Int
 

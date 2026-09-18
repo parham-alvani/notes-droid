@@ -79,6 +79,7 @@ fun NoteScreen(
     onBack: () -> Unit,
     onOpenNote: (Long) -> Unit,
     onOpenFolder: (String) -> Unit,
+    onOpenGraph: (Long) -> Unit = {},
     viewModel: NoteViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -175,6 +176,12 @@ fun NoteScreen(
                             size = 20.dp,
                             contentDescription = if (finding) "Close find" else "Find in note",
                         )
+                    }
+                    IconButton(
+                        onClick = { state.note?.id?.let(onOpenGraph) },
+                        enabled = state.note != null,
+                    ) {
+                        LucideGlyph("waypoints", size = 20.dp, contentDescription = "Connections")
                     }
                     IconButton(onClick = { showOutline = true }, enabled = state.note != null) {
                         Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Outline")
@@ -409,6 +416,7 @@ private fun FolderContents(
     rows: List<VaultRowItem>,
     onOpenNote: (Long) -> Unit,
     onOpenFolder: (String) -> Unit,
+    onOpenGraph: (Long) -> Unit = {},
 ) {
     if (rows.isEmpty()) {
         Text(

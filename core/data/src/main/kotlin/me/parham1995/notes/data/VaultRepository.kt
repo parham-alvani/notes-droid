@@ -73,6 +73,23 @@ data class RenderedNote(
 )
 
 /**
+ * One note and what it is connected to, one hop out.
+ *
+ * One hop, not the whole vault: 2,407 notes and 9,593 links drawn at once is a
+ * screensaver. What answers a question is the handful around whatever is open.
+ */
+data class Neighbours(
+    val centre: NoteEntity,
+    /** Notes this one links to. */
+    val outgoing: List<BacklinkRow>,
+    /** Notes that link to it. */
+    val incoming: List<BacklinkRow>,
+) {
+    /** Links that go both ways, which are the strongest connections here. */
+    val mutual: Set<Long> get() = outgoing.map { it.noteId }.toSet() intersect incoming.map { it.noteId }.toSet()
+}
+
+/**
  * Everything the UI is allowed to ask for. Keeping this the only surface means
  * the screens never touch a DAO, a file, or the parser directly.
  */
@@ -273,6 +290,16 @@ class VaultRepository
             id: Long,
             block: Int,
         ) = notes.rememberScroll(id, block)
+
+        /** What one note is connected to, for the graph. */
+        suspend fun neighbours(id: Long): Neighbours? {
+            val centre = notes.byId(id) ?: return null
+            return Neighbours(
+                centre = centre,
+                outgoing = links.outgoing(id),
+                incoming = links.backlinks(id).distinctBy { it.noteId },
+            )
+        }
 
         /** One note at random, for a vault large enough to have forgotten some. */
         suspend fun randomNote(): NoteEntity? = notes.random()

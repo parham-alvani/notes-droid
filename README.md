@@ -20,7 +20,8 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Incremental sync** — a refresh with nothing upstream costs a single HTTP request, and a renamed note transfers no bytes at all
 - **Markdown-only by default** — images are fetched on demand, so a default install is a fraction of the repository's size
 - **Obsidian flavour** — `[[wikilinks]]` with Obsidian's own resolution rules, callouts, `==highlight==`, wiki-embeds, tables, task lists
-- **Backlinks, unlinked mentions and an outline** for every note
+- **Backlinks, unlinked mentions, an outline and a connections graph** for every note
+- **Find in note**, and notes that resume where you left them
 - **Home screen widgets** — what is overdue and due today, and the notes you were last reading
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
@@ -136,6 +137,7 @@ Glyphs come from [Lucide](https://lucide.dev), flattened into a single asset by 
 - [x] **M12** — several repositories, mounted side by side
 - [x] **M13** — unlinked mentions, widgets, an SSH panel that tests a key
 - [x] **M14** — syntax colouring for the languages the tokeniser has no grammar for
+- [x] **M15** — settings that are about reading, find in note, and a one-hop graph
 
 Not done: an onboarding flow (setup lives in Settings instead), and editing, which remains out of scope.
 

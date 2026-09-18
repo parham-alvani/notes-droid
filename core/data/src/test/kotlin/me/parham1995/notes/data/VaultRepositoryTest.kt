@@ -334,4 +334,55 @@ class VaultRepositoryTest {
             // receiving it can do something with.
             assertThat(repository.markdown(id)).isEqualTo(text)
         }
+
+    @Test
+    fun `the graph knows which way each link points`() =
+        runTest {
+            index(
+                "A.md" to "links to [[B]] and [[C]]",
+                "B.md" to "links back to [[A]]",
+                "C.md" to "says nothing",
+                "D.md" to "links to [[A]]",
+            )
+            val a = database.noteDao().idOf("A.md")!!
+
+            val graph = repository.neighbours(a)!!
+
+            assertThat(graph.outgoing.map { it.title }).containsExactly("B", "C")
+            assertThat(graph.incoming.map { it.title }).containsExactly("B", "D")
+            // B is both, which in a hand-linked vault is the strongest signal
+            // there is, and is drawn differently because of it.
+            assertThat(graph.mutual).containsExactly(database.noteDao().idOf("B.md"))
+        }
+
+    @Test
+    fun `a note referenced four times is one edge, not four`() =
+        runTest {
+            index(
+                "A.md" to "see [[B]], and [[B]] again, and [[B]] once more",
+                "B.md" to "the target",
+            )
+            val a = database.noteDao().idOf("A.md")!!
+
+            assertThat(repository.neighbours(a)!!.outgoing).hasSize(1)
+        }
+
+    @Test
+    fun `an unconnected note has an empty graph rather than no graph`() =
+        runTest {
+            index("Lonely.md" to "nothing here")
+            val id = database.noteDao().idOf("Lonely.md")!!
+
+            val graph = repository.neighbours(id)!!
+
+            assertThat(graph.outgoing).isEmpty()
+            assertThat(graph.incoming).isEmpty()
+            assertThat(graph.centre.title).isEqualTo("Lonely")
+        }
+
+    @Test
+    fun `the graph of a note that is not there is null`() =
+        runTest {
+            assertThat(repository.neighbours(9_999)).isNull()
+        }
 }

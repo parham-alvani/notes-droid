@@ -1,0 +1,7 @@
+Settings about reading, find in note, and a connections graph.
+
+Every setting was about syncing. There are now settings for text size, line spacing, theme, whether Persian is set in Vazirmatn, which screen the app opens on, and how folders are ordered — grouped into sections rather than stacked on one scroll.
+
+Find in note, for the 129 notes here that run past 20KB. Notes resume where you left them. A shuffle button opens one at random.
+
+And a graph of what a note is connected to: one hop, drawn as a ring, with the direction of each link in its colour.
