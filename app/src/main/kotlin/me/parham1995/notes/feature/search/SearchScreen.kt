@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.icon.VaultIcon
 
 @Composable
@@ -100,13 +101,15 @@ fun SearchScreen(
                         spacing = 2.dp,
                     ) {
                         Text(row.hit.title, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            text = row.hit.snippet.highlighted(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        AutoDirection(row.hit.snippet) {
+                            Text(
+                                text = row.hit.snippet.highlighted(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                     HorizontalDivider()
                 }

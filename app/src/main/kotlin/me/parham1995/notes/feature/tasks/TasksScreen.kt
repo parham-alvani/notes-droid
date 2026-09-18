@@ -30,6 +30,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.database.TaskRow
+import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.theme.Naz
 
@@ -144,12 +145,14 @@ private fun TaskRowView(
             contentDescription = if (row.state == IN_PROGRESS) "in progress" else "open",
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = row.text,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
+            AutoDirection(row.text) {
+                Text(
+                    text = row.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Where it came from, because the same task text turns up under
                 // several projects and the file is what disambiguates it.

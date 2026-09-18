@@ -28,7 +28,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Several repositories** — each mounted at a folder, searched and linked as one vault
 - **Attachments** — PDFs read in place; everything else opens in whatever app handles it
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
-- **Right-to-left support**, detected per block rather than declared, for vaults that mix scripts
+- **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
 
 ## Requirements
 

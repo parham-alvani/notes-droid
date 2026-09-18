@@ -1,0 +1,3 @@
+Right-to-left, everywhere a note is quoted.
+
+Notes themselves have always been laid out per block, so Persian prose and the Latin code block under it each read correctly. What was missing was everywhere else: a Persian task in the task list, a Persian excerpt in search results, the line a backlink came from. All of those were laid out left to right regardless of what they said.

@@ -55,13 +55,15 @@ fun ItemRow(
     ) {
         VaultIcon(spec = icon, default = defaultIcon, contentDescription = iconDescription)
         Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                textDecoration = if (underline) TextDecoration.Underline else null,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            AutoDirection(title) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textDecoration = if (underline) TextDecoration.Underline else null,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             subtitle?.takeIf { it.isNotBlank() }?.let {
                 Text(
                     it,
