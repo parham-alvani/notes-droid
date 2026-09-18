@@ -142,7 +142,7 @@ class SyncRepository
                 log.info("sync finished in ${(System.currentTimeMillis() - startedAt) / 1000}s")
                 return plan
             } catch (failure: Exception) {
-                log.error("${failure::class.simpleName}: ${failure.message}")
+                log.error(failure.describeChain())
                 syncState.upsert(
                     SyncStateEntity(
                         headCommit = stored?.headCommit,

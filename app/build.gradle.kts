@@ -19,6 +19,10 @@ android {
         ndk { abiFilters += "arm64-v8a" }
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

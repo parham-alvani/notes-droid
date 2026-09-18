@@ -2,6 +2,7 @@ package me.parham1995.notes.data.git
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.parham1995.notes.data.describeChain
 import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.Rename
 import me.parham1995.notes.sync.SyncBase
@@ -80,6 +81,7 @@ class GitSshVaultSync(
                 try {
                     cloneRepository()
                 } catch (failure: Exception) {
+                    log("clone threw: " + failure.describeChain())
                     // Name the stage it died at. "Remote hung up" says nothing
                     // about whether it failed immediately or three quarters of
                     // the way through a transfer, and those mean very different
@@ -308,6 +310,8 @@ class GitSshVaultSync(
             log("authenticated")
             return
         }
+        // Say exactly what the handshake did before interpreting it.
+        log("authentication failed: " + failure.describeChain())
         throw IOException(
             "the repository rejected this SSH key. Its fingerprint is " + keys.fingerprint() +
                 " - check that exact key is listed as a deploy key on the repository. " +

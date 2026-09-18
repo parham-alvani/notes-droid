@@ -13,6 +13,17 @@ class NotesApplication :
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    override fun onCreate() {
+        super.onCreate()
+        // JGit and sshd log through slf4j; slf4j-simple sends that to stderr,
+        // which Android routes to logcat. Debug level makes the SSH handshake
+        // visible to `just logs` without touching release behaviour.
+        if (BuildConfig.DEBUG) {
+            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug")
+            System.setProperty("org.slf4j.simpleLogger.showThreadName", "false")
+        }
+    }
+
     override val workManagerConfiguration: Configuration
         get() =
             Configuration

@@ -90,7 +90,7 @@ class SyncWorker
                 // forever -- an unbounded retry backs off into the distance
                 // while the UI still calls it "syncing", which is
                 // indistinguishable from a hang.
-                log.error("${failure::class.simpleName}: ${failure.message}")
+                log.error(failure.describeChain())
                 if (runAttemptCount >= MAX_ATTEMPTS) {
                     Result.failure(
                         errorData(
