@@ -11,6 +11,15 @@ release/
 *.keystore
 keystore.properties
 
+# The macOS section of the usual global gitignore carries a bare `Icon`
+# pattern, for the resource fork file Finder writes for a custom folder icon.
+# It is meant to end in two carriage returns; the common copy of it does not,
+# and a pattern with no separator in it is matched against every path
+# component -- so on a case-insensitive filesystem it silently excludes any
+# directory named `icon`. This repository has one, and the symptom is a tree
+# that builds locally, reports itself clean, and does not compile in CI.
+!icon/
+
 # IDE
 .idea/
 .kotlin/
