@@ -61,7 +61,7 @@ class MermaidRenderer
             code: String,
             theme: MermaidTheme,
         ): Result {
-            val key = digest(code + theme.key)
+            val key = digest(code + theme.key + PAGE_VERSION)
             val cached = File(cacheDir, "$key.svg")
             if (cached.isFile && cached.length() > 0) return Result.Svg(cached)
 
@@ -216,6 +216,18 @@ class MermaidRenderer
             }
 
         private companion object {
+            /**
+             * Bumped whenever the page changes what it draws.
+             *
+             * SVGs are cached on disk by their source and theme, so a diagram
+             * rendered by an older page is served forever -- including the
+             * ones drawn with no labels in them at all, which is how this came
+             * to be needed.
+             *
+             * 2: labels as SVG text rather than HTML in a foreignObject.
+             */
+            const val PAGE_VERSION = "2"
+
             const val RENDER_TIMEOUT_MS = 4_000L
             const val LOAD_FRAMES = 120
         }

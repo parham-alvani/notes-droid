@@ -16,7 +16,15 @@
           securityLevel: 'strict',
           theme: 'base',
           themeVariables: JSON.parse(theme),
-          fontFamily: 'sans-serif'
+          fontFamily: 'sans-serif',
+          // Labels as SVG <text>, not HTML in a <foreignObject>.
+          //
+          // mermaid's default puts a <div> inside the SVG, which a browser
+          // draws and an SVG renderer does not -- so the diagram arrived with
+          // its boxes and arrows and not one word in it. <br> still breaks a
+          // line, which is what the vault's diagrams are written with.
+          htmlLabels: false,
+          flowchart: { htmlLabels: false }
         });
       }
 

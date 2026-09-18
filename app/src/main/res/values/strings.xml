@@ -94,4 +94,6 @@
         <item quantity="other">%1$d open</item>
     </plurals>
     <string name="diagram_failed">Diagram could not be drawn: %1$s</string>
+    <string name="settings_stylus">Follow the pen while reading</string>
+    <string name="settings_stylus_note">Marks where the S Pen is hovering, to keep your place. Nothing is drawn without one.</string>
 </resources>

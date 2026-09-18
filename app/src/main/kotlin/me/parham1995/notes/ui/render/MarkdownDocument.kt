@@ -7,10 +7,13 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.markdown.MdBlock
+import me.parham1995.notes.ui.LocalReading
+import me.parham1995.notes.ui.StylusSpotlight
 
 /**
  * A whole note.
@@ -29,16 +32,25 @@ fun MarkdownDocument(
     listState: LazyListState = rememberLazyListState(),
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
-    // Selection spans the document rather than each block, so copying a
-    // paragraph and the heading above it works.
-    SelectionContainer(modifier) {
-        LazyColumn(
-            state = listState,
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            items(items = blocks, key = { it.id }) { block ->
-                MdBlockView(block, actions, brokenLinks)
+    val reading = LocalReading.current
+    // Outside the SelectionContainer, so watching the pen cannot interfere
+    // with the gesture that selects text.
+    StylusSpotlight(
+        enabled = reading.stylusSpotlight,
+        modifier = modifier,
+        tint = MaterialTheme.colorScheme.primary,
+    ) {
+        // Selection spans the document rather than each block, so copying a
+        // paragraph and the heading above it works.
+        SelectionContainer {
+            LazyColumn(
+                state = listState,
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(items = blocks, key = { it.id }) { block ->
+                    MdBlockView(block, actions, brokenLinks)
+                }
             }
         }
     }

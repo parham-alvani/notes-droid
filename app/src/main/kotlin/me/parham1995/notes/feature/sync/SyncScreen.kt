@@ -905,6 +905,18 @@ private fun ReadingCard(
             }
             Switch(checked = reading.persianFont, onCheckedChange = viewModel::setPersianFont)
         }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_stylus), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.settings_stylus_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = reading.stylusSpotlight, onCheckedChange = viewModel::setStylusSpotlight)
+        }
     }
 
     SectionCard("Behaviour") {

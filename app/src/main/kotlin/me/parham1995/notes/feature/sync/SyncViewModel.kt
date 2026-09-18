@@ -250,6 +250,8 @@ class SyncViewModel
 
         fun setPersianFont(enabled: Boolean) = viewModelScope.launch { settingsStore.setPersianFont(enabled) }
 
+        fun setStylusSpotlight(enabled: Boolean) = viewModelScope.launch { settingsStore.setStylusSpotlight(enabled) }
+
         fun setStartScreen(screen: StartScreen) = viewModelScope.launch { settingsStore.setStartScreen(screen) }
 
         fun setBrowserSort(sort: BrowserSort) = viewModelScope.launch { settingsStore.setBrowserSort(sort) }

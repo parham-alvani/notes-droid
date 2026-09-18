@@ -130,6 +130,13 @@ data class ReadingSettings(
      */
     val persianFont: Boolean = true,
     val startScreen: StartScreen = StartScreen.BROWSE,
+    /**
+     * Mark where the pen is hovering while reading.
+     *
+     * On by default on a device that has one, and invisible on a device that
+     * does not: nothing is drawn until a stylus actually hovers.
+     */
+    val stylusSpotlight: Boolean = true,
     val browserSort: BrowserSort = BrowserSort.NAME,
 ) {
     companion object {
@@ -216,6 +223,7 @@ class SettingsStore
                             lineSpacing = preferences[LINE_SPACING] ?: 1f,
                             theme = ThemeChoice.parse(preferences[THEME]),
                             persianFont = preferences[PERSIAN_FONT] ?: true,
+                            stylusSpotlight = preferences[STYLUS_SPOTLIGHT] ?: true,
                             startScreen = StartScreen.parse(preferences[START_SCREEN]),
                             browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
                         ),
@@ -288,6 +296,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[PERSIAN_FONT] = enabled }
         }
 
+        suspend fun setStylusSpotlight(enabled: Boolean) {
+            context.settingsDataStore.edit { it[STYLUS_SPOTLIGHT] = enabled }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -313,6 +325,7 @@ class SettingsStore
             val LINE_SPACING = floatPreferencesKey("reading_line_spacing")
             val THEME = stringPreferencesKey("reading_theme")
             val PERSIAN_FONT = booleanPreferencesKey("reading_persian_font")
+            val STYLUS_SPOTLIGHT = booleanPreferencesKey("reading_stylus_spotlight")
             val START_SCREEN = stringPreferencesKey("start_screen")
             val BROWSER_SORT = stringPreferencesKey("browser_sort")
         }

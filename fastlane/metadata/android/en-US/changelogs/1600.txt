@@ -1,0 +1,3 @@
+Diagrams have labels in them. They rendered as boxes and arrows with not one word: mermaid puts label text in an HTML element inside the SVG, which a browser draws and an SVG renderer does not.
+
+The S Pen is followed while you read. Hovering the pen over a note marks where it is, faintly, to keep your place on a long page — nothing is drawn without a pen, and it can be turned off under Reading.

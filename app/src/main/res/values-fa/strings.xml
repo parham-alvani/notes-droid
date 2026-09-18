@@ -95,4 +95,6 @@
         <item quantity="other">%1$d باز</item>
     </plurals>
     <string name="diagram_failed">نمودار رسم نشد: %1$s</string>
+    <string name="settings_stylus">دنبال کردن قلم هنگام خواندن</string>
+    <string name="settings_stylus_note">جایی که S Pen بالای صفحه است را نشان می‌دهد تا جای خواندن گم نشود. بدون قلم چیزی کشیده نمی‌شود.</string>
 </resources>
