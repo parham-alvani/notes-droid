@@ -151,8 +151,10 @@ Releases are cut from a tag and built by CI. Nothing is published by hand.
 just bump 0.2.0                 # versionName, versionCode, changelog stub
 $EDITOR fastlane/metadata/android/en-US/changelogs/200.txt
 git commit -am "chore: release 0.2.0"
-git tag v0.2.0 && git push --follow-tags
+git tag -a v0.2.0 -m 'v0.2.0' && git push --follow-tags
 ```
+
+The tag must be **annotated**: `git push --follow-tags` ignores a lightweight one, so the commit lands, the workflow never fires, and the release is silently missing.
 
 `versionCode` is derived from the version — `0.2.0` is `200`, `1.12.3` is `11203` — so it can never go backwards. Both are literals in `app/build.gradle.kts` rather than computed, because F-Droid reads them out of that file to decide an update exists. The workflow refuses a tag that disagrees with what the file says.
 

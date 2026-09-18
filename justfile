@@ -110,7 +110,7 @@ bump version:
     echo "next:"
     echo "  1. write $log"
     echo "  2. git commit -am 'chore: release {{ version }}'"
-    echo "  3. git tag v{{ version }} && git push --follow-tags"
+    echo "  3. git tag -a v{{ version }} -m 'v{{ version }}' && git push --follow-tags"
 
 # what the release workflow checks before it publishes anything
 [group('release')]
