@@ -3,7 +3,6 @@ package me.parham1995.notes.feature.browser
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,25 +27,31 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.parham1995.notes.icons.IconSpec
-import me.parham1995.notes.ui.icon.VaultIcon
+import me.parham1995.notes.ui.ItemRow
+import me.parham1995.notes.ui.VaultRowItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowserScreen(
     onOpenNote: (Long) -> Unit,
+    initialPath: String = "",
     viewModel: BrowserViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Only on arrival. Keying on the argument rather than running every
+    // composition means walking up the tree afterwards is not undone on the
+    // next recomposition.
+    LaunchedEffect(initialPath) { if (initialPath.isNotEmpty()) viewModel.open(initialPath) }
 
     // Inside a folder, back walks up the tree before it leaves the screen.
     BackHandler(enabled = state.path.isNotEmpty()) { viewModel.up() }
@@ -124,11 +129,12 @@ fun BrowserScreen(
                             SectionLabel("Recently opened")
                         }
                         items(state.recent, key = { "recent-${it.note.id}" }) { row ->
-                            RowItem(
+                            ItemRow(
                                 title = row.note.title.ifBlank { row.note.name },
                                 subtitle = row.note.path.substringBeforeLast('/', ""),
-                                isFolder = false,
                                 icon = row.icon,
+                                defaultIcon = "file-text",
+                                iconDescription = "Note",
                                 onClick = { onOpenNote(row.note.id) },
                             )
                         }
@@ -137,7 +143,7 @@ fun BrowserScreen(
                     }
 
                     items(state.items, key = { it.item.path }) { row ->
-                        VaultRow(row, viewModel, onOpenNote)
+                        BrowserRow(row, viewModel, onOpenNote)
                     }
 
                     if (!state.loading && state.items.isEmpty()) {
@@ -158,78 +164,40 @@ fun BrowserScreen(
 }
 
 @Composable
-private fun VaultRow(
-    row: BrowserRow,
+private fun BrowserRow(
+    row: VaultRowItem,
     viewModel: BrowserViewModel,
     onOpenNote: (Long) -> Unit,
 ) {
     val item = row.item
-    RowItem(
+    ItemRow(
         title = item.name,
-        subtitle = null,
-        isFolder = item.isFolder,
         icon = row.icon,
+        defaultIcon = if (item.isFolder) "folder" else "file-text",
+        iconDescription = if (item.isFolder) "Folder" else "Note",
         // A folder with its own note opens that note; the chevron descends.
-        hasOwnNote = item.isFolder && item.noteId != null,
+        underline = item.isFolder && item.noteId != null,
         onClick = {
+            val note = item.noteId
             when {
-                !item.isFolder -> item.noteId?.let(onOpenNote)
-                item.noteId != null -> item.noteId?.let(onOpenNote)
+                note != null -> onOpenNote(note)
                 else -> viewModel.open(item.path)
             }
         },
-        onDescend = { viewModel.open(item.path) },
+        trailing =
+            if (!item.isFolder) {
+                null
+            } else {
+                {
+                    IconButton(onClick = { viewModel.open(item.path) }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "Open folder",
+                        )
+                    }
+                }
+            },
     )
-}
-
-@Composable
-private fun RowItem(
-    title: String,
-    subtitle: String?,
-    isFolder: Boolean,
-    icon: IconSpec? = null,
-    hasOwnNote: Boolean = false,
-    onClick: () -> Unit,
-    onDescend: (() -> Unit)? = null,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        VaultIcon(
-            spec = icon,
-            default = if (isFolder) "folder" else "file-text",
-            contentDescription = if (isFolder) "Folder" else "Note",
-        )
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                // Underlined the way Obsidian marks a folder that has a note.
-                textDecoration = if (hasOwnNote) TextDecoration.Underline else null,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            subtitle?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (isFolder && onDescend != null) {
-            IconButton(onClick = onDescend) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Open folder")
-            }
-        }
-    }
 }
 
 @Composable

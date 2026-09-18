@@ -35,6 +35,12 @@ data class RenderedNote(
     val title: String,
     val blocks: List<MdBlock>,
     val isRtl: Boolean,
+    /**
+     * True when this note is a folder's landing page -- `X/X.md`. The reader
+     * offers the folder's contents alongside it, because the note is only half
+     * of what a folder is.
+     */
+    val isFolderNote: Boolean,
     val headings: List<HeadingEntity>,
     /** Raw wikilink target to note id, so a tap can navigate without re-resolving. */
     val linkTargets: Map<String, Long>,
@@ -160,6 +166,7 @@ class VaultRepository
                     title = entity.title,
                     blocks = parsed.blocks,
                     isRtl = entity.isRtl,
+                    isFolderNote = entity.isFolderNote,
                     headings = headings.byNote(entity.id),
                     linkTargets = targets,
                     brokenTargets = allTargets - targets.keys,

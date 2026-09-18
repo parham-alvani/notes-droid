@@ -20,13 +20,8 @@ import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.ui.VaultRowItem
 import javax.inject.Inject
-
-/** A row, with its icon already resolved. */
-data class BrowserRow(
-    val item: VaultItem,
-    val icon: IconSpec? = null,
-)
 
 /** A recently-opened note, likewise. */
 data class RecentRow(
@@ -36,7 +31,7 @@ data class RecentRow(
 
 data class BrowserUiState(
     val path: String = "",
-    val items: List<BrowserRow> = emptyList(),
+    val items: List<VaultRowItem> = emptyList(),
     val recent: List<RecentRow> = emptyList(),
     val noteCount: Int = 0,
     val loading: Boolean = true,
@@ -76,9 +71,9 @@ class BrowserViewModel
         // Resolving here rather than in the row composable keeps the rule
         // regexes off the composition: a rule is tested against every visible
         // item, and the browser recomposes on every scroll.
-        private val rows: Flow<List<BrowserRow>> =
+        private val rows: Flow<List<VaultRowItem>> =
             combine(items, icons.config) { current, config ->
-                current.map { BrowserRow(it, config.forPath(it.path, it.isFolder)) }
+                current.map { VaultRowItem(it, config.forPath(it.path, it.isFolder)) }
             }
 
         private val recent: Flow<List<RecentRow>> =

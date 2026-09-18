@@ -13,6 +13,7 @@ import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.ui.VaultRowItem
 import javax.inject.Inject
 
 data class NoteUiState(
@@ -20,8 +21,15 @@ data class NoteUiState(
     val note: RenderedNote? = null,
     val backlinks: List<BacklinkRow> = emptyList(),
     val icon: IconSpec? = null,
+    /**
+     * What the folder holds, when this note is a folder's landing page. Empty
+     * for an ordinary note, which is what hides the tabs.
+     */
+    val contents: List<VaultRowItem> = emptyList(),
     val missing: Boolean = false,
 ) {
+    val isFolderNote: Boolean get() = note?.isFolderNote == true
+
     /** Targets with no destination, so the renderer can style them as broken. */
     val brokenLinks: Set<String> get() = note?.brokenTargets.orEmpty()
 }
@@ -46,12 +54,24 @@ class NoteViewModel
                     return@launch
                 }
                 repository.markOpened(id)
+                val assignments = icons.config.first()
                 _state.value =
                     NoteUiState(
                         loading = false,
                         note = note,
                         backlinks = repository.backlinks(id),
-                        icon = icons.config.first().forFile(note.path),
+                        icon = assignments.forFile(note.path),
+                        contents =
+                            if (!note.isFolderNote) {
+                                emptyList()
+                            } else {
+                                // `A/B/B.md` is the landing page for `A/B`.
+                                // `children` already leaves the note itself
+                                // out of its own folder's listing.
+                                repository
+                                    .children(note.path.substringBeforeLast('/', ""))
+                                    .map { VaultRowItem(it, assignments.forPath(it.path, it.isFolder)) }
+                            },
                     )
             }
         }

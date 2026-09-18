@@ -36,7 +36,14 @@ import me.parham1995.notes.feature.sync.SyncScreen
  * integer sidesteps.
  */
 @Serializable
-object BrowseRoute
+data class BrowseRoute(
+    /**
+     * Where in the tree to open. Empty is the vault root, which is what the
+     * tab itself navigates to; a path is how a folder with no note of its own
+     * is opened from somewhere else.
+     */
+    val path: String = "",
+)
 
 @Serializable
 object SearchRoute
@@ -60,7 +67,7 @@ fun NotesNavHost() {
     val navController = rememberNavController()
     val tabs =
         listOf(
-            Tab(BrowseRoute, "Browse", Icons.Filled.Home),
+            Tab(BrowseRoute(), "Browse", Icons.Filled.Home),
             Tab(SearchRoute, "Search", Icons.Filled.Search),
             Tab(SettingsRoute, "Settings", Icons.Filled.Settings),
         )
@@ -96,11 +103,14 @@ fun NotesNavHost() {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = BrowseRoute,
+            startDestination = BrowseRoute(),
             modifier = Modifier.fillMaxSize().padding(if (showBar) padding else PaddingValues()),
         ) {
-            composable<BrowseRoute> {
-                BrowserScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
+            composable<BrowseRoute> { entry ->
+                BrowserScreen(
+                    initialPath = entry.toRoute<BrowseRoute>().path,
+                    onOpenNote = { navController.navigate(NoteRoute(it)) },
+                )
             }
             composable<SearchRoute> {
                 SearchScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
@@ -112,6 +122,7 @@ fun NotesNavHost() {
                     noteId = route.id,
                     onBack = { navController.popBackStack() },
                     onOpenNote = { navController.navigate(NoteRoute(it)) },
+                    onOpenFolder = { navController.navigate(BrowseRoute(it)) },
                 )
             }
         }

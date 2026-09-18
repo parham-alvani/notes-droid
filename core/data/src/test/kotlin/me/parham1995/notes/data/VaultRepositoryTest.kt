@@ -108,6 +108,31 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `a folder note says so, and its folder's contents are one call away`() =
+        runTest {
+            // What the reader needs to offer both halves of a folder: the page
+            // someone wrote, and the things actually in it.
+            index(
+                "Alpha/Alpha.md" to "the landing page",
+                "Alpha/One.md" to "a",
+                "Alpha/Deep/Deep.md" to "a nested landing page",
+                "Beta/Ordinary.md" to "b",
+            )
+
+            val landing = repository.note(database.noteDao().idOf("Alpha/Alpha.md")!!)!!
+            assertThat(landing.isFolderNote).isTrue()
+
+            // `A/B/B.md` is the landing page for `A/B`, so that is the folder
+            // whose contents belong beside it -- and it does not list itself.
+            val contents = repository.children(landing.path.substringBeforeLast('/', ""))
+            assertThat(contents.map { it.name }).containsExactly("Deep", "One")
+            assertThat(contents.single { it.name == "Deep" }.noteId).isNotNull()
+
+            val ordinary = repository.note(database.noteDao().idOf("Beta/Ordinary.md")!!)!!
+            assertThat(ordinary.isFolderNote).isFalse()
+        }
+
+    @Test
     fun `the tree fills in as notes arrive`() =
         runTest {
             // This is the bug the browser shipped with: queried once, before

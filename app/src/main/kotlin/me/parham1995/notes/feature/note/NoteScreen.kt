@@ -23,7 +23,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -46,6 +48,8 @@ import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import me.parham1995.notes.ui.ItemRow
+import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.VaultIcon
 import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
@@ -57,6 +61,7 @@ fun NoteScreen(
     noteId: Long,
     onBack: () -> Unit,
     onOpenNote: (Long) -> Unit,
+    onOpenFolder: (String) -> Unit,
     viewModel: NoteViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -67,6 +72,9 @@ fun NoteScreen(
 
     var showOutline by remember { mutableStateOf(false) }
     var showBacklinks by remember { mutableStateOf(false) }
+    // Reset per note, so following a link from a folder note's contents does
+    // not land on the next note with the wrong tab selected.
+    var showContents by remember(noteId) { mutableStateOf(false) }
 
     LaunchedEffect(noteId) { viewModel.load(noteId) }
 
@@ -108,43 +116,74 @@ fun NoteScreen(
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                state.missing ->
-                    Text(
-                        "This note is not on the device.",
-                        Modifier.align(Alignment.Center).padding(24.dp),
-                        style = MaterialTheme.typography.bodyMedium,
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            // A folder note is only half of what a folder is: the page someone
+            // wrote, and the things actually in it. Obsidian shows both at
+            // once, in the editor and the sidebar; on a phone there is only
+            // one pane, so they take turns.
+            if (state.isFolderNote) {
+                PrimaryTabRow(selectedTabIndex = if (showContents) 1 else 0) {
+                    Tab(
+                        selected = !showContents,
+                        onClick = { showContents = false },
+                        text = { Text("Note") },
                     )
+                    Tab(
+                        selected = showContents,
+                        onClick = { showContents = true },
+                        // The count is the useful part: it says whether the
+                        // folder holds anything the note does not mention.
+                        text = { Text("Contents · ${state.contents.size}") },
+                    )
+                }
+            }
 
-                else ->
-                    state.note?.let { note ->
-                        MarkdownDocument(
-                            blocks = note.blocks,
-                            brokenLinks = state.brokenLinks,
-                            listState = listState,
-                            actions =
-                                RenderActions(
-                                    inline =
-                                        InlineActions(
-                                            onWikiLink = { target, _ ->
-                                                viewModel.targetOf(target)?.let(onOpenNote)
-                                            },
-                                            onExternalLink = { url ->
-                                                runCatching {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+            if (showContents) {
+                FolderContents(state.contents, onOpenNote, onOpenFolder)
+            } else {
+                Box(Modifier.fillMaxSize()) {
+                    when {
+                        state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                        state.missing ->
+                            Text(
+                                "This note is not on the device.",
+                                Modifier.align(Alignment.Center).padding(24.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+
+                        else ->
+                            state.note?.let { note ->
+                                MarkdownDocument(
+                                    blocks = note.blocks,
+                                    brokenLinks = state.brokenLinks,
+                                    listState = listState,
+                                    actions =
+                                        RenderActions(
+                                            inline =
+                                                InlineActions(
+                                                    onWikiLink = { target, _ ->
+                                                        viewModel.targetOf(target)?.let(onOpenNote)
+                                                    },
+                                                    onExternalLink = { url ->
+                                                        runCatching {
+                                                            context.startActivity(
+                                                                Intent(Intent.ACTION_VIEW, url.toUri()),
+                                                            )
+                                                        }
+                                                    },
+                                                ),
+                                            onCopyCode = { code ->
+                                                scope.launch {
+                                                    clipboard.setClipEntry(
+                                                        ClipData.newPlainText("code", code).toClipEntry(),
+                                                    )
                                                 }
                                             },
                                         ),
-                                    onCopyCode = { code ->
-                                        scope.launch {
-                                            clipboard.setClipEntry(ClipData.newPlainText("code", code).toClipEntry())
-                                        }
-                                    },
-                                ),
-                        )
+                                )
+                            }
                     }
+                }
             }
         }
     }
@@ -211,6 +250,49 @@ fun NoteScreen(
                     HorizontalDivider()
                 }
             }
+        }
+    }
+}
+
+/**
+ * What the folder actually holds.
+ *
+ * A subfolder opens its own landing page when it has one, which is the same
+ * rule the browser follows. When it has none there is no note to show, so it
+ * hands off to the browser at that path rather than pretending otherwise.
+ */
+@Composable
+private fun FolderContents(
+    rows: List<VaultRowItem>,
+    onOpenNote: (Long) -> Unit,
+    onOpenFolder: (String) -> Unit,
+) {
+    if (rows.isEmpty()) {
+        Text(
+            "This folder holds nothing but its own note.",
+            Modifier.fillMaxWidth().padding(24.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    LazyColumn(Modifier.fillMaxSize()) {
+        items(rows, key = { it.item.path }) { row ->
+            val item = row.item
+            ItemRow(
+                title = item.name,
+                icon = row.icon,
+                defaultIcon = if (item.isFolder) "folder" else "file-text",
+                iconDescription = if (item.isFolder) "Folder" else "Note",
+                underline = item.isFolder && item.noteId != null,
+                onClick = {
+                    val note = item.noteId
+                    when {
+                        note != null -> onOpenNote(note)
+                        else -> onOpenFolder(item.path)
+                    }
+                },
+            )
         }
     }
 }
