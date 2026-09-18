@@ -28,6 +28,15 @@ object TaskMetadata {
             "⏬" to "priority",
         )
 
+    /**
+     * What a symbol means, or null when it is not one of the plugin's.
+     *
+     * Exposed because a chip only needs the symbol, but anything that wants to
+     * *use* a date -- sorting by it, deciding a task is overdue -- has to know
+     * which of the seven dates on a line it is looking at.
+     */
+    fun meaningOf(symbol: String): String? = SYMBOLS[symbol]
+
     data class Result(
         val text: String,
         val meta: List<TaskMeta>,

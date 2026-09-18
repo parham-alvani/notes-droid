@@ -95,6 +95,9 @@ class SyncRepository
             // tree instead, which still diffs against the manifest, so it adds
             // only what is absent rather than re-fetching the vault.
             val staleFilter = stored != null && stored.filterVersion != VaultFilter.VERSION
+            // Same reasoning one layer up: the notes are unchanged, what the
+            // indexer makes of them is not.
+            val staleIndex = stored != null && stored.indexVersion != VaultIndexer.VERSION
             val base =
                 SyncBase(
                     commit = stored?.headCommit?.takeUnless { staleFilter },
@@ -144,6 +147,10 @@ class SyncRepository
                     index(plan, firstSync = stored?.headCommit == null)
                     log.info("indexed in ${(System.currentTimeMillis() - indexStart) / 1000}s")
                 }
+                if (staleIndex) {
+                    log.info("the indexer derives more than it used to - rebuilding from what is on disk")
+                    reindex()
+                }
                 syncState.upsert(
                     SyncStateEntity(
                         headCommit = plan.headCommit.takeIf { it.isNotEmpty() } ?: stored?.headCommit,
@@ -151,6 +158,7 @@ class SyncRepository
                         lastSyncAt = System.currentTimeMillis(),
                         lastError = null,
                         filterVersion = VaultFilter.VERSION,
+                        indexVersion = VaultIndexer.VERSION,
                     ),
                 )
                 log.info("sync finished in ${(System.currentTimeMillis() - startedAt) / 1000}s")
@@ -165,6 +173,7 @@ class SyncRepository
                         lastError = failure.message ?: failure::class.simpleName,
                         // Unchanged on failure, so the catch-up is retried.
                         filterVersion = stored?.filterVersion ?: 0,
+                        indexVersion = stored?.indexVersion ?: 0,
                     ),
                 )
                 throw failure

@@ -94,6 +94,7 @@ fun SyncScreen(viewModel: SyncViewModel = hiltViewModel()) {
             }
             ImagesCard(state, viewModel)
             BackgroundSyncCard(state, viewModel)
+            TaskDigestCard(state, viewModel)
             StatusCard(state, viewModel)
             LogCard(viewModel)
             AboutCard()
@@ -352,6 +353,49 @@ private fun BackgroundSyncCard(
                     Text("Battery settings")
                 }
             }
+        }
+    }
+}
+
+/**
+ * The daily task summary.
+ *
+ * A count, not a list. The vault this was built for has 120 overdue tasks, and
+ * both a notification per task and a notification listing them are unreadable;
+ * the number is the message, and the list is one tap away.
+ */
+@Composable
+private fun TaskDigestCard(
+    state: SyncUiState,
+    viewModel: SyncViewModel,
+) {
+    SectionCard("Daily task summary") {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Notify once a day", style = MaterialTheme.typography.bodyMedium)
+            Switch(checked = state.settings.taskDigest, onCheckedChange = viewModel::setTaskDigest)
+        }
+
+        if (state.settings.taskDigest) {
+            Text("At", style = MaterialTheme.typography.labelMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                VaultSettings.DIGEST_HOUR_CHOICES.forEach { hour ->
+                    FilterChip(
+                        selected = state.settings.taskDigestHour == hour,
+                        onClick = { viewModel.setTaskDigestHour(hour) },
+                        label = { Text("%02d:00".format(hour)) },
+                    )
+                }
+            }
+            Text(
+                "Counts what is overdue and due today, from the last sync. Nothing is sent " +
+                    "when there is nothing to report.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

@@ -3,19 +3,17 @@ package me.parham1995.notes.navigation
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -23,11 +21,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import me.parham1995.notes.feature.browser.BrowserScreen
 import me.parham1995.notes.feature.note.NoteScreen
 import me.parham1995.notes.feature.search.SearchScreen
 import me.parham1995.notes.feature.sync.SyncScreen
+import me.parham1995.notes.feature.tasks.TasksScreen
+import me.parham1995.notes.ui.icon.LucideGlyph
 
 /**
  * Routes are type-safe and a note is addressed by its **id**, never its path.
@@ -46,6 +48,9 @@ data class BrowseRoute(
 )
 
 @Serializable
+object TasksRoute
+
+@Serializable
 object SearchRoute
 
 @Serializable
@@ -59,17 +64,29 @@ data class NoteRoute(
 private data class Tab(
     val route: Any,
     val label: String,
-    val icon: ImageVector,
+    /** A Lucide name, so the bar matches the glyphs used everywhere else. */
+    val icon: String,
 )
 
 @Composable
-fun NotesNavHost() {
+fun NotesNavHost(openTasks: StateFlow<Boolean> = MutableStateFlow(false)) {
     val navController = rememberNavController()
+
+    // A one-shot: consumed so that rotating the phone afterwards does not
+    // yank the person back to the task list.
+    val wantsTasks by openTasks.collectAsStateWithLifecycle()
+    LaunchedEffect(wantsTasks) {
+        if (wantsTasks) {
+            navController.navigate(TasksRoute) { launchSingleTop = true }
+            (openTasks as? MutableStateFlow)?.value = false
+        }
+    }
     val tabs =
         listOf(
-            Tab(BrowseRoute(), "Browse", Icons.Filled.Home),
-            Tab(SearchRoute, "Search", Icons.Filled.Search),
-            Tab(SettingsRoute, "Settings", Icons.Filled.Settings),
+            Tab(BrowseRoute(), "Browse", "folder-tree"),
+            Tab(TasksRoute, "Tasks", "list-todo"),
+            Tab(SearchRoute, "Search", "search"),
+            Tab(SettingsRoute, "Settings", "settings"),
         )
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -93,7 +110,16 @@ fun NotesNavHost() {
                                     restoreState = true
                                 }
                             },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            icon = {
+                                LucideGlyph(
+                                    name = tab.icon,
+                                    size = NAV_ICON,
+                                    // Follows the bar's own selected/unselected
+                                    // colours instead of picking its own.
+                                    tint = LocalContentColor.current,
+                                    contentDescription = tab.label,
+                                )
+                            },
                             label = { Text(tab.label) },
                         )
                     }
@@ -111,6 +137,9 @@ fun NotesNavHost() {
                     initialPath = entry.toRoute<BrowseRoute>().path,
                     onOpenNote = { navController.navigate(NoteRoute(it)) },
                 )
+            }
+            composable<TasksRoute> {
+                TasksScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
             }
             composable<SearchRoute> {
                 SearchScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
@@ -131,3 +160,5 @@ fun NotesNavHost() {
 
 private fun androidx.navigation.NavDestination.hierarchy(): Sequence<androidx.navigation.NavDestination> =
     generateSequence(this) { it.parent }
+
+private val NAV_ICON = 24.dp

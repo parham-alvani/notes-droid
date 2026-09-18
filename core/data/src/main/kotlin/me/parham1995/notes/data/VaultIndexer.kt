@@ -13,16 +13,23 @@ import me.parham1995.notes.data.database.LinkEntity
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.NoteWrite
+import me.parham1995.notes.data.database.TaskDao
+import me.parham1995.notes.data.database.TaskEntity
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
 import me.parham1995.notes.markdown.ParsedNote
 import me.parham1995.notes.markdown.Slugs
+import me.parham1995.notes.markdown.TaskExtractor
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Builds the searchable index over the synced vault.
+ *
+ * "Index" is broader than search: headings become the outline, links become
+ * backlinks, and tasks become the list of what is open across the whole vault.
+ * All of it is derived from the same parse, so it all happens in one pass.
  *
  * Two passes, and the split is necessary rather than tidy: a link can point at
  * a note that has not been parsed yet, so resolving during the first pass would
@@ -40,6 +47,7 @@ class VaultIndexer
         private val notes: NoteDao,
         private val links: LinkDao,
         private val headings: HeadingDao,
+        private val tasks: TaskDao,
         private val index: IndexDao,
         private val search: SearchIndex,
     ) {
@@ -56,6 +64,7 @@ class VaultIndexer
             notes.clear()
             links.clear()
             headings.clear()
+            tasks.clear()
             search.clear()
 
             var done = 0
@@ -79,6 +88,7 @@ class VaultIndexer
                 notes.byPath(path)?.let { note ->
                     links.deleteBySource(note.id)
                     headings.deleteByNote(note.id)
+                    tasks.deleteByNote(note.id)
                     search.delete(note.id)
                 }
                 notes.deleteByPath(path)
@@ -165,6 +175,23 @@ class VaultIndexer
                                         ordinal = ordinal,
                                     )
                                 },
+                        tasks =
+                            TaskExtractor.extract(indexed.note).map { task ->
+                                TaskEntity(
+                                    noteId = 0,
+                                    text = task.text,
+                                    state = task.state.name,
+                                    section = task.section,
+                                    blockIndex = task.blockIndex,
+                                    ordinal = task.ordinal,
+                                    open = task.isOpen,
+                                    actionableOn = task.actionableOn,
+                                    scheduled = task.scheduled,
+                                    due = task.due,
+                                    done = task.done,
+                                    recurring = task.recurring,
+                                )
+                            },
                     )
                 }
 
@@ -201,13 +228,26 @@ class VaultIndexer
                 targets.chunked(BATCH).forEach { index.applyTargets(it) }
             }
 
-        private companion object {
+        companion object {
+            /**
+             * Bumped whenever the indexer starts deriving something it did not
+             * derive before.
+             *
+             * A sync only reparses files that changed, so a new kind of row --
+             * tasks, here -- stays missing on an existing install forever: the
+             * notes did not change, the indexer did. Recording the version
+             * alongside the manifest lets one sync notice and rebuild.
+             *
+             * 1: tasks.
+             */
+            const val VERSION = 1
+
             /**
              * Large enough that commits are rare, small enough that a failure
              * does not lose much work.
              */
-            const val BATCH = 200
-            const val MD = ".md"
+            private const val BATCH = 200
+            private const val MD = ".md"
         }
     }
 

@@ -74,12 +74,25 @@ data class VaultSettings(
      * here is about politeness rather than capability.
      */
     val syncIntervalHours: Int = DEFAULT_INTERVAL_HOURS,
+    /**
+     * A once-a-day notification summarising what is overdue and what is due.
+     *
+     * Off by default. A reader that starts posting notifications on its own is
+     * a reader nobody asked for, and this one only earns its place once the
+     * vault has enough dated tasks in it to be worth summarising.
+     */
+    val taskDigest: Boolean = false,
+    /** Local hour to post it, 0-23. */
+    val taskDigestHour: Int = DEFAULT_DIGEST_HOUR,
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
 
     companion object {
         const val DEFAULT_INTERVAL_HOURS = 6
         val INTERVAL_CHOICES = listOf(1, 3, 6, 12, 24)
+
+        const val DEFAULT_DIGEST_HOUR = 8
+        val DIGEST_HOUR_CHOICES = listOf(7, 9, 12, 18, 21)
     }
 }
 
@@ -102,6 +115,8 @@ class SettingsStore
                     backgroundSync = preferences[BACKGROUND_SYNC] ?: true,
                     syncIntervalHours =
                         preferences[INTERVAL_HOURS] ?: VaultSettings.DEFAULT_INTERVAL_HOURS,
+                    taskDigest = preferences[TASK_DIGEST] ?: false,
+                    taskDigestHour = preferences[DIGEST_HOUR] ?: VaultSettings.DEFAULT_DIGEST_HOUR,
                 )
             }
 
@@ -143,6 +158,14 @@ class SettingsStore
             context.settingsDataStore.edit { it[INTERVAL_HOURS] = hours }
         }
 
+        suspend fun setTaskDigest(enabled: Boolean) {
+            context.settingsDataStore.edit { it[TASK_DIGEST] = enabled }
+        }
+
+        suspend fun setTaskDigestHour(hour: Int) {
+            context.settingsDataStore.edit { it[DIGEST_HOUR] = hour }
+        }
+
         private companion object {
             val OWNER = stringPreferencesKey("repo_owner")
             val REPO = stringPreferencesKey("repo_name")
@@ -153,5 +176,7 @@ class SettingsStore
             val SSH_443 = booleanPreferencesKey("ssh_over_443")
             val BACKGROUND_SYNC = booleanPreferencesKey("background_sync")
             val INTERVAL_HOURS = intPreferencesKey("sync_interval_hours")
+            val TASK_DIGEST = booleanPreferencesKey("task_digest")
+            val DIGEST_HOUR = intPreferencesKey("task_digest_hour")
         }
     }

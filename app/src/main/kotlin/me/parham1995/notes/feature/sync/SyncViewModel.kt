@@ -163,6 +163,10 @@ class SyncViewModel
 
         fun setSyncOnWifiOnly(enabled: Boolean) = viewModelScope.launch { settingsStore.setSyncOnWifiOnly(enabled) }
 
+        fun setTaskDigest(enabled: Boolean) = viewModelScope.launch { settingsStore.setTaskDigest(enabled) }
+
+        fun setTaskDigestHour(hour: Int) = viewModelScope.launch { settingsStore.setTaskDigestHour(hour) }
+
         /**
          * The private half never leaves the device; only this public line does,
          * and it goes to GitHub as a read-only deploy key.

@@ -36,6 +36,7 @@ class VaultIndexerTest {
                 notes = database.noteDao(),
                 links = database.linkDao(),
                 headings = database.headingDao(),
+                tasks = database.taskDao(),
                 index = database.indexDao(),
                 search = search,
             )

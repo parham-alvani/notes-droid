@@ -15,8 +15,9 @@ import androidx.sqlite.execSQL
         LinkEntity::class,
         HeadingEntity::class,
         SyncLogEntity::class,
+        TaskEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -36,6 +37,8 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun syncLogDao(): SyncLogDao
 
     abstract fun indexDao(): IndexDao
+
+    abstract fun taskDao(): TaskDao
 
     companion object {
         const val NAME = "notes.db"
@@ -156,6 +159,38 @@ abstract class NotesDatabase : RoomDatabase() {
                 override fun migrate(connection: SQLiteConnection) {
                     connection.execSQL(
                         "ALTER TABLE `sync_state` ADD COLUMN `filterVersion` INTEGER NOT NULL DEFAULT 0",
+                    )
+                }
+            }
+
+        /**
+         * Adds the tasks table, and a version for the indexer that fills it.
+         *
+         * The table starts empty and cannot be filled here -- the rows come
+         * from parsing markdown, which a migration cannot do. `indexVersion`
+         * is how the app finds out: a sync only reparses files that changed,
+         * so without it the table would stay empty on an existing install
+         * until some unrelated note happened to be edited.
+         */
+        val MIGRATION_5_6 =
+            object : Migration(5, 6) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `tasks` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`noteId` INTEGER NOT NULL, `text` TEXT NOT NULL, `state` TEXT NOT NULL, " +
+                            "`section` TEXT NOT NULL, `blockIndex` INTEGER NOT NULL, " +
+                            "`ordinal` INTEGER NOT NULL, `open` INTEGER NOT NULL, " +
+                            "`actionableOn` TEXT, `scheduled` TEXT, `due` TEXT, `done` TEXT, " +
+                            "`recurring` TEXT)",
+                    )
+                    connection.execSQL("CREATE INDEX IF NOT EXISTS `index_tasks_noteId` ON `tasks` (`noteId`)")
+                    connection.execSQL("CREATE INDEX IF NOT EXISTS `index_tasks_open` ON `tasks` (`open`)")
+                    connection.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_tasks_actionableOn` ON `tasks` (`actionableOn`)",
+                    )
+                    connection.execSQL(
+                        "ALTER TABLE `sync_state` ADD COLUMN `indexVersion` INTEGER NOT NULL DEFAULT 0",
                     )
                 }
             }

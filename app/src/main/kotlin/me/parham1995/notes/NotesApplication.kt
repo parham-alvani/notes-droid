@@ -44,6 +44,7 @@ class NotesApplication :
             System.setProperty("org.slf4j.simpleLogger.showThreadName", "false")
         }
         scheduleBackgroundSync()
+        scheduleTaskDigest()
     }
 
     /**
@@ -71,6 +72,24 @@ class NotesApplication :
                     } else {
                         scheduler.get().cancelPeriodic()
                     }
+                }
+        }
+    }
+
+    /**
+     * Arms the daily digest, and re-anchors it to the chosen hour on every
+     * launch -- periodic work drifts, and opening the app is the cheapest
+     * moment to put it back where it belongs.
+     */
+    private fun scheduleTaskDigest() {
+        scope.launch {
+            settings
+                .get()
+                .settings
+                .map { it.taskDigest to it.taskDigestHour }
+                .distinctUntilChanged()
+                .collect { (enabled, hour) ->
+                    if (enabled) scheduler.get().scheduleDigest(hour) else scheduler.get().cancelDigest()
                 }
         }
     }

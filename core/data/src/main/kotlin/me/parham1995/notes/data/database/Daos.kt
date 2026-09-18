@@ -66,3 +66,38 @@ interface SyncStateDao {
     @Query("DELETE FROM sync_state")
     suspend fun clear()
 }
+
+@Dao
+interface TaskDao {
+    /**
+     * Everything still open, in the order a person would work through it:
+     * dated first and soonest first, undated last.
+     *
+     * `actionableOn IS NULL` sorts before the date itself because SQLite puts
+     * NULL first otherwise, which would bury 120 overdue tasks under every
+     * task that has no date at all.
+     */
+    @Query(
+        """
+        SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.actionableOn,
+               n.path AS notePath, n.title AS noteTitle
+        FROM tasks t
+        JOIN notes n ON n.id = t.noteId
+        WHERE t.open = 1
+        ORDER BY (t.actionableOn IS NULL), t.actionableOn, n.path, t.ordinal
+        """,
+    )
+    fun open(): Flow<List<TaskRow>>
+
+    @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn IS NOT NULL AND actionableOn < :today")
+    suspend fun overdueCount(today: String): Int
+
+    @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn = :today")
+    suspend fun dueTodayCount(today: String): Int
+
+    @Query("DELETE FROM tasks WHERE noteId = :noteId")
+    suspend fun deleteByNote(noteId: Long)
+
+    @Query("DELETE FROM tasks")
+    suspend fun clear()
+}

@@ -36,6 +36,7 @@ class VaultRepositoryTest {
                 notes = database.noteDao(),
                 links = database.linkDao(),
                 headings = database.headingDao(),
+                tasks = database.taskDao(),
                 index = database.indexDao(),
                 search = search,
             )
@@ -46,6 +47,7 @@ class VaultRepositoryTest {
                 headings = database.headingDao(),
                 files = files,
                 search = search,
+                tasks = database.taskDao(),
             )
     }
 
@@ -186,5 +188,51 @@ class VaultRepositoryTest {
             val hits = repository.quickSwitch("kubernetes")
 
             assertThat(hits.map { it.name }).containsExactly("Kubernetes Networking")
+        }
+
+    @Test
+    fun `indexing lifts tasks out of the notes and orders them by when they are due`() =
+        runTest {
+            index(
+                "Work/Apollo.md" to
+                    """
+                    ## Launch
+
+                    - [ ] late thing ⏳ 2026-01-01
+                    - [ ] next week ⏳ 2026-09-25
+                    - [x] finished ✅ 2026-09-01
+                    - [ ] someday
+                    """.trimIndent(),
+            )
+
+            val open = repository.openTasks().first()
+
+            // Closed tasks are not part of a list of what to do.
+            assertThat(open.map { it.text })
+                .containsExactly("late thing", "next week", "someday")
+                .inOrder()
+            // The heading above a task is how this vault names the project.
+            assertThat(open.first().section).isEqualTo("Launch")
+            assertThat(open.first().noteTitle).isEqualTo("Apollo")
+            // Undated last, rather than first as SQLite would sort NULL.
+            assertThat(open.last().actionableOn).isNull()
+        }
+
+    @Test
+    fun `reindexing a note replaces its tasks instead of doubling them`() =
+        runTest {
+            index("Work/Apollo.md" to "- [ ] one ⏳ 2026-09-18")
+            index("Work/Apollo.md" to "- [ ] one ⏳ 2026-09-18\n- [ ] two")
+
+            assertThat(repository.openTasks().first()).hasSize(2)
+        }
+
+    @Test
+    fun `a note that goes away takes its tasks with it`() =
+        runTest {
+            index("Work/Apollo.md" to "- [ ] one ⏳ 2026-09-18")
+            indexer.indexChanged(changed = emptyList(), removed = listOf("Work/Apollo.md"))
+
+            assertThat(repository.openTasks().first()).isEmpty()
         }
 }

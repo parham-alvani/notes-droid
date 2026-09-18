@@ -40,6 +40,12 @@ data class SyncStateEntity(
      * means "before the filter was versioned", which is treated as out of date.
      */
     val filterVersion: Int = 0,
+    /**
+     * Which indexer built the tables derived from the notes. A sync only
+     * reparses files that changed, so anything the indexer learns to extract
+     * stays missing on an existing install until this says otherwise.
+     */
+    val indexVersion: Int = 0,
 ) {
     companion object {
         const val SINGLETON_ID = 0
@@ -129,6 +135,56 @@ data class HeadingEntity(
     val ordinal: Int,
     /** Index into the flattened block list, so an outline tap can scroll. */
     val blockIndex: Int,
+)
+
+/**
+ * One task, lifted out of a note at index time.
+ *
+ * Stored rather than parsed on demand because the question a task list asks --
+ * "what is open across the whole vault, ordered by when it is answerable" -- is
+ * one indexed query over this table and 2,400 markdown files otherwise.
+ */
+@Entity(
+    tableName = "tasks",
+    indices = [Index("noteId"), Index("open"), Index("actionableOn")],
+)
+data class TaskEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val noteId: Long,
+    val text: String,
+    val state: String,
+    /** The heading above it, which in this vault names the project. */
+    val section: String,
+    /** Index into the note's blocks, so opening it can scroll to the task. */
+    val blockIndex: Int,
+    val ordinal: Int,
+    /**
+     * Denormalised from [state] so the list is a single indexed lookup rather
+     * than a scan with a CASE in it.
+     */
+    val open: Boolean,
+    /**
+     * `due` where there is one, `scheduled` otherwise. Denormalised for the
+     * same reason: this is what everything sorts and groups by.
+     */
+    val actionableOn: String?,
+    val scheduled: String?,
+    val due: String?,
+    val done: String?,
+    val recurring: String?,
+)
+
+/** A task with the note it lives in, which is what a list actually shows. */
+data class TaskRow(
+    val id: Long,
+    val noteId: Long,
+    val text: String,
+    val state: String,
+    val section: String,
+    val blockIndex: Int,
+    val actionableOn: String?,
+    val notePath: String,
+    val noteTitle: String,
 )
 
 /**

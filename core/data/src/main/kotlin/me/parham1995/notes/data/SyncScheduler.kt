@@ -14,6 +14,7 @@ import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import java.time.Duration
+import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -86,6 +87,39 @@ class SyncScheduler
 
         fun cancelPeriodic() = workManager.cancelUniqueWork(PERIODIC_WORK)
 
+        /**
+         * Arms the daily task digest for the next occurrence of [hour].
+         *
+         * Periodic work with an initial delay rather than a worker that
+         * re-arms itself: enqueuing unique work with REPLACE from inside the
+         * job that *is* that unique work cancels the job doing the enqueuing.
+         * Periodic work drifts under Doze instead, which is the lesser
+         * problem -- and re-arming with UPDATE on every launch re-anchors it.
+         */
+        fun scheduleDigest(hour: Int) {
+            workManager.enqueueUniquePeriodicWork(
+                TaskDigestWorker.UNIQUE_WORK,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                PeriodicWorkRequestBuilder<TaskDigestWorker>(Duration.ofDays(1))
+                    .setInitialDelay(untilNext(hour))
+                    .build(),
+            )
+        }
+
+        fun cancelDigest() = workManager.cancelUniqueWork(TaskDigestWorker.UNIQUE_WORK)
+
+        private fun untilNext(hour: Int): Duration {
+            val now = LocalDateTime.now()
+            val today =
+                now
+                    .withHour(hour.coerceIn(0, LAST_HOUR))
+                    .withMinute(0)
+                    .withSecond(0)
+                    .withNano(0)
+            val next = if (today.isAfter(now)) today else today.plusDays(1)
+            return Duration.between(now, next)
+        }
+
         fun observe(): Flow<List<WorkInfo>> = workManager.getWorkInfosForUniqueWorkFlow(SyncWorker.UNIQUE_WORK)
 
         private fun constraints(wifiOnly: Boolean) =
@@ -97,5 +131,6 @@ class SyncScheduler
         private companion object {
             const val PERIODIC_WORK = "vault-sync-periodic"
             const val PERIOD_HOURS = 6L
+            const val LAST_HOUR = 23
         }
     }

@@ -13,6 +13,8 @@ data class NoteWrite(
     val headings: List<HeadingEntity>,
     /** `srcId` is assigned during the write. */
     val links: List<LinkEntity>,
+    /** `noteId` is assigned during the write. */
+    val tasks: List<TaskEntity>,
 )
 
 /**
@@ -45,6 +47,12 @@ abstract class IndexDao {
     @Insert
     abstract suspend fun insertLinks(rows: List<LinkEntity>)
 
+    @Query("DELETE FROM tasks WHERE noteId = :noteId")
+    abstract suspend fun deleteTasks(noteId: Long)
+
+    @Insert
+    abstract suspend fun insertTasks(rows: List<TaskEntity>)
+
     @Query("UPDATE links SET targetId = :targetId WHERE id = :id")
     abstract suspend fun setTarget(
         id: Long,
@@ -63,6 +71,9 @@ abstract class IndexDao {
 
             deleteLinks(id)
             if (write.links.isNotEmpty()) insertLinks(write.links.map { it.copy(srcId = id) })
+
+            deleteTasks(id)
+            if (write.tasks.isNotEmpty()) insertTasks(write.tasks.map { it.copy(noteId = id) })
 
             id
         }

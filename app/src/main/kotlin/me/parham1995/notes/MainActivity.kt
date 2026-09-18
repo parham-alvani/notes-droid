@@ -1,6 +1,7 @@
 package me.parham1995.notes
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color.TRANSPARENT
 import android.os.Build
@@ -12,6 +13,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
+import me.parham1995.notes.data.TaskDigestWorker
 import me.parham1995.notes.navigation.NotesNavHost
 import me.parham1995.notes.ui.icon.ProvideLucide
 import me.parham1995.notes.ui.theme.NotesTheme
@@ -21,8 +24,22 @@ class MainActivity : ComponentActivity() {
     private val requestNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    /**
+     * Set when the digest notification launched us, and again on a new intent
+     * because the activity is singleTop -- tapping the notification while the
+     * app is already open delivers here rather than starting it again.
+     */
+    private val openTasks = MutableStateFlow(false)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(TaskDigestWorker.EXTRA_OPEN_TASKS, false)) openTasks.value = true
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openTasks.value = intent?.getBooleanExtra(TaskDigestWorker.EXTRA_OPEN_TASKS, false) == true
         // naz is a dark colorscheme, so the system bars take light icons
         // regardless of what the device is set to.
         enableEdgeToEdge(
@@ -33,7 +50,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NotesTheme {
                 ProvideLucide {
-                    NotesNavHost()
+                    NotesNavHost(openTasks = openTasks)
                 }
             }
         }
