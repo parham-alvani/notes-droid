@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.SettingsStore
@@ -64,7 +65,14 @@ class SshViewModel
         val state: StateFlow<SshUiState> = _state.asStateFlow()
 
         init {
-            refresh()
+            // Follows both the repositories and the key files. A repository
+            // added elsewhere and a key generated here are different events,
+            // and rebuilding only after the second left this list showing a
+            // repository that had gone or missing one that had arrived.
+            viewModelScope.launch {
+                combine(repository.vaults(), keys.revision) { _, _ -> Unit }
+                    .collect { refresh() }
+            }
         }
 
         fun refresh() =
@@ -100,8 +108,9 @@ class SshViewModel
             viewModelScope.launch {
                 _state.value = _state.value.copy(busy = true)
                 runCatching { keys.generate(mount) }
+                // No refresh here: generating bumps the store's revision, and
+                // the collector above rebuilds from that.
                 _state.value = _state.value.copy(busy = false)
-                refresh()
             }
 
         /**
@@ -124,11 +133,7 @@ class SshViewModel
                 )
             }
 
-        fun deleteOrphan(fileName: String) =
-            viewModelScope.launch {
-                keys.deleteByFileName(fileName)
-                refresh()
-            }
+        fun deleteOrphan(fileName: String) = viewModelScope.launch { keys.deleteByFileName(fileName) }
 
         fun setOverPort443(enabled: Boolean) =
             viewModelScope.launch {

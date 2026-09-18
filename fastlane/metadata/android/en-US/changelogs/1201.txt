@@ -1,0 +1,3 @@
+Settings keep up now.
+
+Adding a repository or generating a key left the settings screen showing what was true when it was opened: a new repository with no key listed against it, or a key that had just been created still reported as missing. Both lists now follow the thing they describe.

@@ -3,6 +3,9 @@ package me.parham1995.notes.data.git
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.apache.sshd.common.config.keys.KeyUtils
 import org.apache.sshd.common.config.keys.PublicKeyEntry
@@ -46,6 +49,19 @@ class SshKeyStore
 
         private val sshDir = File(context.filesDir, "ssh").apply { mkdirs() }
 
+        private val _revision = MutableStateFlow(0)
+
+        /**
+         * Bumped whenever a key is created or removed.
+         *
+         * The keys are files and a filesystem has nothing to subscribe to, so
+         * anything showing them has to be told. Without this a screen listing
+         * keys is only ever as current as the last time it was built -- which
+         * is how the settings screen came to show no key for a repository that
+         * had just been given one.
+         */
+        val revision: StateFlow<Int> = _revision.asStateFlow()
+
         val directory: File get() = sshDir
 
         /**
@@ -86,6 +102,7 @@ class SshKeyStore
 
                 val line = PublicKeyEntry.toString(pair.public) + " " + comment
                 publicKey.writeText(line + "\n")
+                _revision.value++
                 line
             }
 
@@ -151,6 +168,7 @@ class SshKeyStore
         fun deleteByFileName(fileName: String) {
             identityFile(fileName).delete()
             File(sshDir, fileName + PUBLIC_SUFFIX).delete()
+            _revision.value++
         }
 
         private fun identityFile(base: String): File = File(sshDir, base)
@@ -158,6 +176,7 @@ class SshKeyStore
         fun delete(mount: String = "") {
             identity(mount).delete()
             publicFile(mount).delete()
+            _revision.value++
         }
 
         private companion object {

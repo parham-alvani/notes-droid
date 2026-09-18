@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -83,11 +84,34 @@ class SyncViewModel
             val hasToken: Boolean = false,
             val diskBytes: Long = 0,
             val connectionMessage: String? = null,
-            val sshKeys: List<VaultKey> = emptyList(),
             val generatingKey: Boolean = false,
             val reindexing: Boolean = false,
             val lastCrash: String? = null,
         )
+
+        /**
+         * One entry per repository set to SSH, kept current.
+         *
+         * Follows the repositories *and* the key files: adding a repository
+         * changes the first, generating a key changes only the second, and a
+         * list built from a snapshot missed whichever happened after it was
+         * taken. GitHub refuses the same deploy key on a second repository, so
+         * there is a key each and each has to be registered.
+         */
+        private val sshKeyRows: Flow<List<VaultKey>> =
+            combine(repository.vaults(), sshKeys.revision) { vaults, _ ->
+                vaults
+                    .filter { SyncTransport.parse(it.transport) == SyncTransport.SSH }
+                    .map { vault ->
+                        val line = sshKeys.publicKeyLine(vault.mount)
+                        VaultKey(
+                            mount = vault.mount,
+                            label = vault.label,
+                            publicKey = line,
+                            fingerprint = line?.let { sshKeys.fingerprint(vault.mount) },
+                        )
+                    }
+            }
 
         val state: StateFlow<SyncUiState> =
             combine(
@@ -115,7 +139,6 @@ class SyncViewModel
                         total = running?.progress?.getInt(SyncWorker.KEY_TOTAL, 0) ?: 0,
                         diskBytes = extra.diskBytes,
                         connectionMessage = extra.connectionMessage,
-                        sshKeys = extra.sshKeys,
                         generatingKey = extra.generatingKey,
                         reindexing = extra.reindexing,
                         lastCrash = extra.lastCrash,
@@ -126,8 +149,9 @@ class SyncViewModel
                 // Nested rather than a sixth argument: `combine` is typed up to
                 // five, and the vararg form loses every type in the lambda.
                 repository.vaults(),
-            ) { base, vaults ->
-                base.copy(vaults = vaults)
+                sshKeyRows,
+            ) { base, vaults, keys ->
+                base.copy(vaults = vaults, sshKeys = keys)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SyncUiState())
 
         init {
@@ -279,25 +303,6 @@ class SyncViewModel
                         hasToken = tokenStore.hasToken(),
                         diskBytes = files.sizeOnDisk(),
                         lastCrash = crashLog.read(),
-                        // One entry per repository set to SSH. GitHub refuses
-                        // the same deploy key on a second repository, so there
-                        // is a key each and each has to be registered.
-                        sshKeys =
-                            repository
-                                .vaults()
-                                .first()
-                                .filter { SyncTransport.parse(it.transport) == SyncTransport.SSH }
-                                .map { vault ->
-                                    VaultKey(
-                                        mount = vault.mount,
-                                        label = vault.label,
-                                        publicKey = sshKeys.publicKeyLine(vault.mount),
-                                        fingerprint =
-                                            sshKeys
-                                                .publicKeyLine(vault.mount)
-                                                ?.let { sshKeys.fingerprint(vault.mount) },
-                                    )
-                                },
                     )
             }
 

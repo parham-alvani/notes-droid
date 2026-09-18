@@ -2,6 +2,7 @@ package me.parham1995.notes.data
 
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.git.SshKeyStore
 import org.junit.Before
 import org.junit.Test
@@ -106,4 +107,20 @@ class SshKeyNamingTest {
     fun clearKeys() {
         sshDir.listFiles()?.forEach { it.delete() }
     }
+
+    @Test
+    fun `creating or removing a key is announced`() =
+        runTest {
+            // Files have nothing to subscribe to, so anything listing keys has
+            // to be told they changed. Without this the settings screen shows
+            // no key for a repository that has just been given one.
+            val before = store.revision.value
+
+            store.generate("announced")
+            val afterGenerate = store.revision.value
+            assertThat(afterGenerate).isGreaterThan(before)
+
+            store.deleteByFileName(store.identity("announced").name)
+            assertThat(store.revision.value).isGreaterThan(afterGenerate)
+        }
 }
