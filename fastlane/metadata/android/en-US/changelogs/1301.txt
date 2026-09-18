@@ -1,0 +1,3 @@
+Fixed PDFs opening as solid black pages. The white page background was being painted before rendering, where the renderer then cleared it away; it now goes on underneath the ink afterwards.
+
+Reindexing names the vault it is working on in the sync journal.
