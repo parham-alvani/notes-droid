@@ -1,0 +1,1 @@
+The task filter tells apart files that share a name. This vault has 110 duplicated file names in it, so the list offered two entries reading "Best Practices" with different counts and no way to know which was which. A repeated name now carries the folder holding it; a name of its own is left alone.

@@ -87,13 +87,7 @@ class TasksViewModel
                 val today = LocalDate.now()
                 // Built from the unfiltered rows: a filter assembled from what
                 // it already filtered would leave one file to choose from.
-                val sources =
-                    rows
-                        .groupingBy { it.notePath }
-                        .eachCount()
-                        .map { (path, count) ->
-                            TaskSource(path, path.substringAfterLast('/').removeSuffix(".md"), count)
-                        }.sortedBy { it.name.lowercase() }
+                val sources = taskSources(rows.groupingBy { it.notePath }.eachCount())
                 // A file whose last task is ticked off stops being a filter
                 // anyone can act on, and leaving it selected is an empty
                 // screen with nothing saying why.
@@ -128,3 +122,25 @@ class TasksViewModel
             const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
         }
     }
+
+/**
+ * Names the files in the filter, telling apart the ones that share a name.
+ *
+ * This vault has 110 duplicated basenames in it, and the filter showed two
+ * entries reading "Best Practices" with different counts and no way to know
+ * which was which. A repeated name is qualified by the folder holding it,
+ * which is what the author would have called it anyway; a unique one is left
+ * alone, because "Tasks / Nobitex" is noise when there is only one Nobitex.
+ */
+internal fun taskSources(countsByPath: Map<String, Int>): List<TaskSource> {
+    fun base(path: String) = path.substringAfterLast('/').removeSuffix(".md")
+
+    val sharing = countsByPath.keys.groupingBy(::base).eachCount()
+    return countsByPath
+        .map { (path, count) ->
+            val name = base(path)
+            val folder = path.substringBeforeLast('/', "").substringAfterLast('/')
+            val label = if ((sharing[name] ?: 0) > 1 && folder.isNotBlank()) "$folder / $name" else name
+            TaskSource(path, label, count)
+        }.sortedBy { it.name.lowercase() }
+}
