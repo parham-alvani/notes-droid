@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,12 +17,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,8 +62,11 @@ fun PdfViewer(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        var failed by remember(file) { mutableStateOf(false) }
         val pages by produceState<PdfPages?>(initialValue = null, file) {
-            value = PdfPages.open(file)
+            val opened = PdfPages.open(file)
+            failed = opened == null
+            value = opened
         }
         // Held open for as long as the viewer is, and closed exactly once:
         // a leaked descriptor survives the dialog and the file stays locked.
@@ -87,14 +93,25 @@ fun PdfViewer(
         ) { padding ->
             val document = pages
             when {
+                // Encrypted, truncated, or not really a PDF. Saying so and
+                // offering the handoff is more use than a spinner that never
+                // resolves -- another app may well open what this cannot.
+                failed || (document != null && document.pageCount == 0) ->
+                    Column(
+                        Modifier.fillMaxSize().padding(padding).padding(32.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            "This PDF could not be read here.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        TextButton(onClick = onOpenExternally) { Text("Open in another app") }
+                    }
+
                 document == null ->
                     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
-                    }
-
-                document.pageCount == 0 ->
-                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                        Text("This PDF has no pages this device can read.")
                     }
 
                 else ->

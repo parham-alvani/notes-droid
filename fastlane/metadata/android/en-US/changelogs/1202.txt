@@ -1,0 +1,5 @@
+Opening a PDF no longer closes the app.
+
+Closing the viewer closed the document out from under the pages still being drawn, and the next one to finish threw from inside a coroutine, which takes the whole app with it. Closing now waits for whatever is mid-render.
+
+A PDF that genuinely cannot be read here says so and offers to hand it to another app, instead of showing a spinner that never resolves.

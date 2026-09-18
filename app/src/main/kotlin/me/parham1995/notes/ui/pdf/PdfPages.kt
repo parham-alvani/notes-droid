@@ -5,7 +5,11 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.core.graphics.createBitmap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -24,6 +28,14 @@ import java.io.File
  * at phone width is a couple of megabytes, and holding all of them is how a
  * viewer runs a 200MB heap into the ground. Compose keeps the visible ones
  * alive and drops the rest.
+ *
+ * Closing is the part that has to be right. A lazy list has several page
+ * renders in flight at any moment, and closing the dialog used to close the
+ * renderer out from under them -- the next one to resume called `openPage` on
+ * a closed renderer and threw, out of a coroutine, taking the app with it.
+ * `closed` stops new work at once and the release itself waits for the mutex,
+ * so nothing is ever torn down mid-render and nothing blocks the frame that
+ * dismissed the dialog.
  */
 class PdfPages private constructor(
     private val descriptor: ParcelFileDescriptor,
@@ -31,15 +43,29 @@ class PdfPages private constructor(
 ) : Closeable {
     private val mutex = Mutex()
 
-    val pageCount: Int get() = renderer.pageCount
+    @Volatile
+    private var closed = false
 
-    /** The aspect ratio of a page, so the list can size it before rendering. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    val pageCount: Int get() = if (closed) 0 else runCatching { renderer.pageCount }.getOrDefault(0)
+
+    /**
+     * The aspect ratio of a page, so the list can size it before rendering.
+     *
+     * Returns zero rather than throwing when the document has gone: the caller
+     * is a composable that has already been left, and a thrown exception there
+     * is a crash rather than a missing page.
+     */
     suspend fun aspectRatio(index: Int): Float =
         withContext(Dispatchers.IO) {
             mutex.withLock {
-                renderer.openPage(index).use { page ->
-                    page.width.toFloat() / page.height.toFloat()
-                }
+                if (closed) return@withLock 0f
+                runCatching {
+                    renderer.openPage(index).use { page ->
+                        page.width.toFloat() / page.height.toFloat()
+                    }
+                }.getOrDefault(0f)
             }
         }
 
@@ -49,6 +75,7 @@ class PdfPages private constructor(
     ): Bitmap? =
         withContext(Dispatchers.IO) {
             mutex.withLock {
+                if (closed) return@withLock null
                 runCatching {
                     renderer.openPage(index).use { page ->
                         val height = (widthPx.toFloat() / page.width * page.height).toInt().coerceAtLeast(1)
@@ -66,8 +93,17 @@ class PdfPages private constructor(
         }
 
     override fun close() {
-        runCatching { renderer.close() }
-        runCatching { descriptor.close() }
+        // Marked first and released after: marking stops anything new from
+        // starting, and taking the mutex lets whatever is already rendering
+        // finish against a renderer that is still open.
+        closed = true
+        scope.launch {
+            mutex.withLock {
+                runCatching { renderer.close() }
+                runCatching { descriptor.close() }
+            }
+            scope.cancel()
+        }
     }
 
     companion object {
