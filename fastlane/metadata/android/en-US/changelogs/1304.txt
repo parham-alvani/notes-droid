@@ -1,0 +1,3 @@
+PDFs open and render. They were never black: the document was being closed the instant it opened, so the viewer had nothing to draw and what showed was the window's own dark background.
+
+Everything else about the viewer — the page rendering, the handoff to another app — was working the whole time and never got the chance to run.

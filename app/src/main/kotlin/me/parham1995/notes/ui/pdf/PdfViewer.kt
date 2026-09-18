@@ -20,7 +20,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -63,15 +62,26 @@ fun PdfViewer(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         var failed by remember(file) { mutableStateOf(false) }
+        // Opened and closed by the same thing, so the document cannot outlive
+        // the viewer and cannot be closed while it is still being read.
+        //
+        // The effect that used to do the closing was keyed on `pages`, which
+        // closed the document the instant it opened: `pages` going from null
+        // to a document changes the key, the old effect is disposed, and its
+        // cleanup reads `pages` -- by then the document that has just
+        // arrived. The viewer drew nothing at all afterwards. The branch that
+        // says "could not be read" had already been passed over, because the
+        // page count was still right when it was tested and zero a moment
+        // later when the list asked for it, leaving an empty list on the
+        // window's own background. That is the "PDFs open black" this has
+        // done from the beginning: nothing was ever rendered to be black.
+        // `awaitDispose` closes the document this producer opened, never
+        // whatever the state happens to hold by then.
         val pages by produceState<PdfPages?>(initialValue = null, file) {
             val opened = PdfPages.open(file)
             failed = opened == null
             value = opened
-        }
-        // Held open for as long as the viewer is, and closed exactly once:
-        // a leaked descriptor survives the dialog and the file stays locked.
-        DisposableEffect(pages) {
-            onDispose { pages?.close() }
+            awaitDispose { opened?.close() }
         }
 
         Scaffold(

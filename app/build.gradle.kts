@@ -60,8 +60,8 @@ android {
         // with a regex to decide an update is available, and a computed value
         // -- from the tag, from the commit count -- is invisible to it.
         // `just bump` keeps them in step; CI refuses a tag that disagrees.
-        versionCode = 1303
-        versionName = "0.13.3"
+        versionCode = 1304
+        versionName = "0.13.4"
 
         // The commit's own date, not the moment of the build. A build stamped
         // with `now` differs every time it runs, which breaks the build cache
