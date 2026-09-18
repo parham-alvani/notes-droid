@@ -2,6 +2,7 @@ package me.parham1995.notes.feature.note
 
 import android.content.ClipData
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,9 +52,12 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.VaultIcon
+import me.parham1995.notes.ui.pdf.PdfViewer
+import me.parham1995.notes.ui.render.Attachments
 import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +79,8 @@ fun NoteScreen(
     // Reset per note, so following a link from a folder note's contents does
     // not land on the next note with the wrong tab selected.
     var showContents by remember(noteId) { mutableStateOf(false) }
+    // A PDF opens in place; everything else is handed to another app.
+    var reading by remember(noteId) { mutableStateOf<File?>(null) }
 
     LaunchedEffect(noteId) { viewModel.load(noteId) }
 
@@ -179,6 +185,30 @@ fun NoteScreen(
                                                     )
                                                 }
                                             },
+                                            // Never wired until now: the card was drawn, said
+                                            // "open with another app", and did nothing at all
+                                            // when tapped.
+                                            onAttachment = { path ->
+                                                scope.launch {
+                                                    val file = viewModel.attachment(path)
+                                                    val message =
+                                                        when {
+                                                            file == null ->
+                                                                "Could not fetch " + path.substringAfterLast('/')
+                                                            // A PDF is read here; everything else
+                                                            // belongs to whatever app owns that type.
+                                                            Attachments.isPdf(path) -> {
+                                                                reading = file
+                                                                null
+                                                            }
+                                                            Attachments.open(context, file) -> null
+                                                            else -> "Nothing on this phone opens that file"
+                                                        }
+                                                    message?.let {
+                                                        Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            },
                                         ),
                                 )
                             }
@@ -186,6 +216,20 @@ fun NoteScreen(
                 }
             }
         }
+    }
+
+    reading?.let { file ->
+        PdfViewer(
+            file = file,
+            title = file.name,
+            onDismiss = { reading = null },
+            onOpenExternally = {
+                reading = null
+                if (!Attachments.open(context, file)) {
+                    Toast.makeText(context, "Nothing on this phone opens that file", Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
     }
 
     if (showOutline) {

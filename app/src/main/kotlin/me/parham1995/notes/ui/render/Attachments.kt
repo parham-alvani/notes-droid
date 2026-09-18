@@ -60,6 +60,16 @@ object Attachments {
             ?: FALLBACK
     }
 
+    /**
+     * Whether the reader shows this one itself.
+     *
+     * PDFs are the exception to handing everything off, because they are the
+     * one attachment type people actually read rather than play or edit, and
+     * bouncing out to another app to read two pages loses the note they came
+     * from.
+     */
+    fun isPdf(name: String): Boolean = name.substringAfterLast('.', "").equals("pdf", ignoreCase = true)
+
     /** What Lucide glyph stands for this kind of file, in a listing. */
     fun iconOf(name: String): String =
         when (name.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
