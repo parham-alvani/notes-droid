@@ -31,15 +31,40 @@ class SyncWorker
         @Assisted private val context: Context,
         @Assisted params: WorkerParameters,
         private val repository: SyncRepository,
+        private val log: SyncLog,
     ) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
-            createChannel()
+            // First thing, before anything that can fail: if the worker starts
+            // at all, the journal says so.
+            log.info("worker started (attempt ${runAttemptCount + 1})")
+
+            runCatching { createChannel() }
+                .onFailure { log.warn("notification channel unavailable: ${it.message}") }
+
+            // Deliberately not fatal. This used to be the first statement in
+            // the try, so a denied notification permission -- or any of the
+            // foreground-service restrictions on recent Android -- threw here,
+            // was caught as a generic failure, and retried forever. The sync
+            // never ran and never logged a thing, which is indistinguishable
+            // from a hang. Running without a notification risks being killed in
+            // the background; not running at all is worse.
+            val foreground =
+                runCatching { setForeground(foregroundInfo(0, 0)) }
+                    .onFailure {
+                        log.warn(
+                            "cannot run in the foreground (${it::class.simpleName}): " +
+                                "syncing anyway, but Android may kill it if you leave the app",
+                        )
+                    }.isSuccess
+
             return try {
-                setForeground(foregroundInfo(0, 0))
                 val plan =
                     repository.sync { done, total ->
-                        setProgressAsync(workDataOf(KEY_DONE to done, KEY_TOTAL to total))
+                        runCatching {
+                            setProgressAsync(workDataOf(KEY_DONE to done, KEY_TOTAL to total))
+                        }
                     }
+                if (foreground) log.info("ran in the foreground")
                 Result.success(
                     workDataOf(
                         KEY_ADDED to plan.adds.size,
@@ -50,11 +75,14 @@ class SyncWorker
                 )
             } catch (failure: NotConfiguredException) {
                 // Nothing to retry: the app has not been set up yet.
+                log.error("not configured: ${failure.message}")
                 Result.failure(errorData(failure.message))
             } catch (failure: GitHubException.Unauthorized) {
                 // Retrying cannot fix a rejected token; the user must replace it.
+                log.error("the access token was rejected")
                 Result.failure(errorData(TOKEN_REJECTED))
             } catch (failure: GitHubException.NotFound) {
+                log.error("not found: ${failure.message}")
                 Result.failure(errorData(failure.message))
             } catch (failure: Exception) {
                 // Rate limits, connectivity, a half-finished download: all worth
@@ -62,6 +90,7 @@ class SyncWorker
                 // forever -- an unbounded retry backs off into the distance
                 // while the UI still calls it "syncing", which is
                 // indistinguishable from a hang.
+                log.error("${failure::class.simpleName}: ${failure.message}")
                 if (runAttemptCount >= MAX_ATTEMPTS) {
                     Result.failure(
                         errorData(

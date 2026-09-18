@@ -2,6 +2,7 @@ package me.parham1995.notes.feature.sync
 
 import android.app.Activity
 import android.content.ClipData
+import android.content.Intent
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -466,6 +467,8 @@ private fun LogCard(viewModel: SyncViewModel) {
     val entries by viewModel.log.collectAsStateWithLifecycle()
     var expanded by remember { mutableStateOf(false) }
     val time = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    val stamp = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US) }
+    val context = LocalContext.current
 
     SectionCard("Sync log") {
         if (entries.isEmpty()) {
@@ -504,6 +507,23 @@ private fun LogCard(viewModel: SyncViewModel) {
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(if (expanded) "Show less" else "Show all ${entries.size}")
                 }
+            }
+            // Reading a log off a phone screen and retyping it is the reason a
+            // journal goes unread. One tap sends the whole thing anywhere.
+            TextButton(onClick = {
+                val text =
+                    entries.reversed().joinToString("\n") { entry ->
+                        stamp.format(Date(entry.at)) + "  " + entry.level + "  " + entry.message
+                    }
+                val send =
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "notes-droid sync log")
+                        putExtra(Intent.EXTRA_TEXT, text)
+                    }
+                context.startActivity(Intent.createChooser(send, "Share sync log"))
+            }) {
+                Text("Share")
             }
             TextButton(onClick = viewModel::clearLog) { Text("Clear") }
         }
