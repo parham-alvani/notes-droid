@@ -121,6 +121,14 @@ Coordinates from a screenshot need scaling to the device's real resolution. `adb
 
 The app also records its last crash itself, readable at **Settings → Advanced** with a Share button, because a sideloaded app has no store console behind it. That is the right thing to ask for when the device is not to hand — but if the app will not start, the card cannot be reached and only logcat will do.
 
+## Synced, but not shown
+
+A `CLAUDE.md` is instructions for the tooling that writes the vault, not something anyone reads on a phone — and there is one in nearly every folder worth browsing, so as notes they sat at every level of the tree and answered to any search for a word about conventions. Nothing in the vault links to them.
+
+They are **still synced and still on disk**: the exclusion is at index time, in `VaultIndexer.GUIDES`. That is the boundary between "synced" and "shown", and skipping a file there keeps it out of the tree, the search, the tasks and the graph at once — rather than a filter each of those has to remember to apply, which is how the `.obsidian` folder and the cross-vault search both happened.
+
+Do not solve this in `VaultFilter` instead. That decides what reaches the device, and narrowing it has never been exercised — both existing `VERSION` bumps widened it, so whether a re-plan removes rows that stopped being eligible is unverified.
+
 ## Public-repo hygiene
 
 - **All test fixtures are synthetic.** Real vault paths leak plenty on their own — folder names alone disclose employers, relationships and where someone lives.

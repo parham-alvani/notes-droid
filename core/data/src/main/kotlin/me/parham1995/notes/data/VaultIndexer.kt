@@ -56,12 +56,14 @@ class VaultIndexer
             val total: Int,
         )
 
-        /** Reindexes every markdown file currently on disk. */
+        /** Reindexes every markdown file currently on disk, bar the guides. */
         suspend fun indexAll(
             vaultId: Long,
             paths: List<PathAndSha>,
             onProgress: (Progress) -> Unit = {},
         ) {
+            @Suppress("NAME_SHADOWING")
+            val paths = paths.filterNot { isGuide(it.path) }
             notes.clearVault(vaultId)
             // Only this vault's rows: the others are still current, and
             // clearing everything would silently empty a vault that was not
@@ -86,6 +88,15 @@ class VaultIndexer
             changed: List<PathAndSha>,
             removed: List<String>,
         ) {
+            // A guide that arrives or changes is treated as one that went
+            // away, so a file that used to be indexed stops being a note
+            // rather than lingering as a row nothing will ever revisit.
+            @Suppress("NAME_SHADOWING")
+            val removed = removed + changed.map { it.path }.filter { isGuide(it) }
+
+            @Suppress("NAME_SHADOWING")
+            val changed = changed.filterNot { isGuide(it.path) }
+
             removed.forEach { path ->
                 notes.byPath(vaultId, path)?.let { note ->
                     links.deleteBySource(note.id)
@@ -252,8 +263,27 @@ class VaultIndexer
              *
              * 1: tasks.
              * 2: vaults are separate, so every note records which it is in.
+             * 3: the guides are synced but no longer indexed as notes.
              */
-            const val VERSION = 2
+            const val VERSION = 3
+
+            /**
+             * Files that are kept on the device but are not notes.
+             *
+             * A `CLAUDE.md` is instructions for the tooling that writes the
+             * vault, not something anyone reads on a phone -- and there is one
+             * in nearly every folder worth browsing, so they sit at every level
+             * of the tree and answer to any search for a word about
+             * conventions. Nothing links to them.
+             *
+             * They are still synced, and still on disk. This is only about
+             * what is a note: skipping them here is what keeps them out of the
+             * tree, the search, the tasks and the graph at once, rather than a
+             * filter that each of those has to remember to apply.
+             */
+            val GUIDES = setOf("CLAUDE.md")
+
+            fun isGuide(path: String): Boolean = path.substringAfterLast('/') in GUIDES
 
             /**
              * Large enough that commits are rare, small enough that a failure

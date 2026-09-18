@@ -1,0 +1,5 @@
+The folder guides no longer appear as notes.
+
+A vault kept with Claude Code has a CLAUDE.md in nearly every folder, holding the conventions for writing that folder. They were showing up at every level of the tree and in search results for any word about conventions. They are still synced and still on the device — they are just not notes.
+
+Existing installs rebuild their index once on the next sync, which takes a few seconds.

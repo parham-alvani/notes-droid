@@ -340,6 +340,60 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `a folder guide is kept on the device but is not a note`() =
+        runTest {
+            // Synced like anything else -- this is only about what is shown.
+            // There is a CLAUDE.md in nearly every folder worth browsing, so
+            // left as notes they sit at every level of the tree and answer to
+            // any search for a word about conventions.
+            index(
+                "Learning/CLAUDE.md" to "# How to write notes here",
+                "Learning/Kafka.md" to "a real note",
+            )
+
+            assertThat(repository.children("Learning").map { it.name }).containsExactly("Kafka")
+            assertThat(repository.quickSwitch("claude")).isEmpty()
+            assertThat(repository.search("conventions")).isEmpty()
+        }
+
+    @Test
+    fun `a guide that was indexed before stops being a note`() =
+        runTest {
+            // The transition an existing install makes. Bumping the indexer's
+            // version rebuilds from scratch, but a guide arriving in an
+            // ordinary sync has to drop the row it already had -- so the row
+            // is put there the way the old indexer would have left it.
+            ensureVault(first)
+            files.write(first, "Learning/CLAUDE.md", "# How to write notes here".toByteArray())
+            database.noteDao().upsert(
+                me.parham1995.notes.data.database.NoteEntity(
+                    vaultId = first,
+                    path = "Learning/CLAUDE.md",
+                    parent = "Learning",
+                    name = "CLAUDE",
+                    slug = "claude",
+                    title = "CLAUDE",
+                    blobSha = "sha-old",
+                    size = 1,
+                    isFolderNote = false,
+                    isRtl = false,
+                    hasMermaid = false,
+                    hasMath = false,
+                    indexedAt = 0,
+                ),
+            )
+            assertThat(repository.children("Learning").map { it.name }).containsExactly("CLAUDE")
+
+            indexer.indexChanged(
+                vaultId = first,
+                changed = listOf(PathAndSha("Learning/CLAUDE.md", "sha-changed")),
+                removed = emptyList(),
+            )
+
+            assertThat(repository.children("Learning")).isEmpty()
+        }
+
+    @Test
     fun `notes and files share a folder without hiding each other`() =
         runTest {
             index("Papers/Notes.md" to "a note")
