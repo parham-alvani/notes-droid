@@ -40,8 +40,11 @@ object DataModule {
             // everywhere and lets the queries be tested on the JVM.
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
-            .addMigrations(NotesDatabase.MIGRATION_1_2, NotesDatabase.MIGRATION_2_3)
-            .addCallback(
+            .addMigrations(
+                NotesDatabase.MIGRATION_1_2,
+                NotesDatabase.MIGRATION_2_3,
+                NotesDatabase.MIGRATION_3_4,
+            ).addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
 

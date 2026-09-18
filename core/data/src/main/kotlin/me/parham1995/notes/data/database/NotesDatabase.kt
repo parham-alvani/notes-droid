@@ -16,7 +16,7 @@ import androidx.sqlite.execSQL
         HeadingEntity::class,
         SyncLogEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -107,6 +107,39 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL("CREATE INDEX IF NOT EXISTS `index_headings_noteId` ON `headings` (`noteId`)")
 
                     createSearchIndex(connection)
+                }
+            }
+
+        /**
+         * Retitles every note after its file name.
+         *
+         * In Obsidian the title *is* the file name; this was storing the first
+         * H1 instead, so any note whose heading differed showed the wrong thing
+         * in the browser, in search results and in its own top bar. Fixing the
+         * indexer only helps notes that get reindexed, and nothing upstream
+         * changes just because the app was updated -- so existing rows are
+         * corrected in place rather than waiting for a re-sync.
+         *
+         * `rtrim(path, <every non-slash character in it>)` leaves the path up
+         * to and including its last slash, which is how the file name is found
+         * without a lastIndexOf.
+         */
+        val MIGRATION_3_4 =
+            object : Migration(3, 4) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL(
+                        "UPDATE notes SET title = CASE WHEN path LIKE '%.md' THEN " +
+                            "substr(substr(path, length(rtrim(path, replace(path, '/', ''))) + 1), 1, " +
+                            "length(substr(path, length(rtrim(path, replace(path, '/', ''))) + 1)) - 3) " +
+                            "ELSE substr(path, length(rtrim(path, replace(path, '/', ''))) + 1) END",
+                    )
+                    // The search index keeps its own copy of the title, and it
+                    // is weighted ten times the body, so a stale one there is
+                    // worse than a stale one on screen.
+                    connection.execSQL(
+                        "UPDATE note_fts SET title = " +
+                            "(SELECT title FROM notes WHERE notes.id = note_fts.rowid)",
+                    )
                 }
             }
 

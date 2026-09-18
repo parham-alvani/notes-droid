@@ -45,6 +45,7 @@ data class SyncUiState(
     val sshPublicKey: String? = null,
     val sshFingerprint: String? = null,
     val generatingKey: Boolean = false,
+    val reindexing: Boolean = false,
 )
 
 @HiltViewModel
@@ -68,6 +69,7 @@ class SyncViewModel
             val sshPublicKey: String? = null,
             val sshFingerprint: String? = null,
             val generatingKey: Boolean = false,
+            val reindexing: Boolean = false,
         )
 
         val state: StateFlow<SyncUiState> =
@@ -98,6 +100,7 @@ class SyncViewModel
                     sshPublicKey = extra.sshPublicKey,
                     sshFingerprint = extra.sshFingerprint,
                     generatingKey = extra.generatingKey,
+                    reindexing = extra.reindexing,
                     tokenRejected =
                         failed?.outputData?.getString(SyncWorker.KEY_ERROR) == SyncWorker.TOKEN_REJECTED,
                 )
@@ -168,6 +171,14 @@ class SyncViewModel
                         sshFingerprint = sshKeys.fingerprint(),
                         generatingKey = false,
                     )
+            }
+
+        fun reindex() =
+            viewModelScope.launch {
+                local.value = local.value.copy(reindexing = true)
+                runCatching { repository.reindex() }
+                local.value = local.value.copy(reindexing = false)
+                refreshLocal()
             }
 
         fun cancelSync() = viewModelScope.launch { scheduler.cancel() }

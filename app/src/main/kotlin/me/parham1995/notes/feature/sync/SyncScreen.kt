@@ -254,6 +254,12 @@ private fun StatusCard(
             } else {
                 OutlinedButton(onClick = viewModel::refreshLocal) { Text("Refresh") }
             }
+            TextButton(
+                onClick = viewModel::reindex,
+                enabled = !state.running && !state.reindexing && state.noteCount > 0,
+            ) {
+                Text(if (state.reindexing) "Reindexing..." else "Reindex")
+            }
             TextButton(onClick = viewModel::reset, enabled = !state.running) { Text("Reset vault") }
         }
     }

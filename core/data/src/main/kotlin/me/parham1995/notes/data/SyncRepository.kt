@@ -187,6 +187,24 @@ class SyncRepository
             )
         }
 
+        /**
+         * Reparses everything already on disk, without touching the network.
+         *
+         * A sync only reindexes what changed, so anything derived during
+         * indexing -- titles, headings, links, the search index -- stays as it
+         * was until the file itself does. This is the way to rebuild it.
+         */
+        suspend fun reindex() {
+            log.info("reindexing everything on disk")
+            val started = System.currentTimeMillis()
+            val markdown =
+                blobs
+                    .byKindAndState(BlobKind.MARKDOWN, LocalState.DOWNLOADED)
+                    .map { PathAndSha(it.path, it.sha) }
+            indexer.indexAll(markdown)
+            log.info("reindexed ${markdown.size} notes in ${(System.currentTimeMillis() - started) / 1000}s")
+        }
+
         /** Forgets everything so the next sync starts from nothing. */
         suspend fun reset() {
             blobs.clear()
