@@ -1,0 +1,1 @@
+Diagrams no longer spend the main thread waiting for themselves. The renderer asked the page for its result sixty times a second, for every diagram in turn, which on a note with a dozen of them is a lot of asking and not much reading.

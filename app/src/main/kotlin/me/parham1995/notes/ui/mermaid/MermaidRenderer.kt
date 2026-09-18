@@ -11,6 +11,7 @@ import androidx.webkit.WebViewClientCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.android.awaitFrame
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -179,14 +180,20 @@ class MermaidRenderer
          *
          * `mermaid.render` is asynchronous and `evaluateJavascript` will not
          * wait for a promise, so the page leaves its answer in a global and
-         * this reads it once it appears. A frame at a time, because that is
-         * the rate the page can make progress at anyway.
+         * this reads it once it appears.
+         *
+         * Every `POLL_MS`, not every frame. Each ask is a hop to the main
+         * thread and a call into the renderer, and asking sixty times a second
+         * per diagram -- serialised across every diagram in a note, twelve of
+         * them in the worst one here -- spends the main thread on nothing but
+         * asking. A diagram takes long enough that the extra wait is not
+         * visible.
          */
         private suspend fun awaitResult(view: WebView): String {
             while (true) {
                 val value = evaluate(view, "result()")
                 if (value.isNotEmpty() && value != "null") return value
-                awaitFrame()
+                delay(POLL_MS)
             }
         }
 
@@ -229,6 +236,7 @@ class MermaidRenderer
             const val PAGE_VERSION = "2"
 
             const val RENDER_TIMEOUT_MS = 4_000L
+            const val POLL_MS = 40L
             const val LOAD_FRAMES = 120
         }
     }
