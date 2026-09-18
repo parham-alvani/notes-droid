@@ -167,17 +167,15 @@ fun BrowserScreen(
                     ) {
                         state.vaults.forEach { vault ->
                             FilterChip(
-                                // The root-mounted repository is selected when
-                                // nothing below it is, which is also where
-                                // "everything" lives.
-                                selected =
-                                    state.path == vault.mount ||
-                                        (vault.mount.isNotEmpty() && state.path.startsWith(vault.mount + "/")),
-                                onClick = { viewModel.open(vault.mount) },
+                                // Switching vault is a switch, not a
+                                // navigation: each has its own root, its own
+                                // search and its own tasks.
+                                selected = vault.id == state.activeVaultId,
+                                onClick = { viewModel.switchVault(vault.id) },
                                 label = { Text(vault.label) },
                                 leadingIcon = {
                                     LucideGlyph(
-                                        name = if (vault.mount.isEmpty()) "house" else "folder-git-2",
+                                        name = "library",
                                         size = 16.dp,
                                         tint = LocalContentColor.current,
                                     )

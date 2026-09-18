@@ -27,7 +27,10 @@ class RoomVaultSink
         /** Filled in by the caller so kind and size survive into the manifest. */
         var plannedEntries: Map<String, VaultEntry> = emptyMap()
 
-        /** Which repository the rows being written belong to. */
+        /**
+         * Which vault the rows being written belong to. Paths are relative to
+         * it, so nothing here has to translate them.
+         */
         var vaultId: Long = 0
 
         /**
@@ -42,7 +45,7 @@ class RoomVaultSink
             bytes: ByteArray,
             sha: String,
         ) {
-            files.write(path, bytes)
+            files.write(vaultId, path, bytes)
             val planned = plannedEntries[path]
             blobs.upsert(
                 BlobEntity(
@@ -76,12 +79,12 @@ class RoomVaultSink
             from: String,
             to: String,
         ) {
-            files.move(from, to)
-            blobs.rename(from, to)
+            files.move(vaultId, from, to)
+            blobs.rename(vaultId, from, to)
         }
 
         override suspend fun delete(path: String) {
-            files.delete(path)
-            blobs.deleteByPath(path)
+            files.delete(vaultId, path)
+            blobs.deleteByPath(vaultId, path)
         }
     }

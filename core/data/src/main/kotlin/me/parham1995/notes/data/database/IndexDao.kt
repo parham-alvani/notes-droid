@@ -32,8 +32,16 @@ abstract class IndexDao {
     @Upsert
     abstract suspend fun upsertNote(note: NoteEntity): Long
 
-    @Query("SELECT id FROM notes WHERE path = :path")
-    abstract suspend fun idOf(path: String): Long?
+    /**
+     * Scoped, and it has to be. Two vaults may each hold a note at the same
+     * path; looking one up by path alone finds whichever vault got there first
+     * and then overwrites it, which is a vault silently eating another's notes.
+     */
+    @Query("SELECT id FROM notes WHERE vaultId = :vaultId AND path = :path")
+    abstract suspend fun idOf(
+        vaultId: Long,
+        path: String,
+    ): Long?
 
     @Query("DELETE FROM headings WHERE noteId = :noteId")
     abstract suspend fun deleteHeadings(noteId: Long)
@@ -63,7 +71,7 @@ abstract class IndexDao {
     @Transaction
     open suspend fun writeBatch(batch: List<NoteWrite>): List<Long> =
         batch.map { write ->
-            val existing = idOf(write.note.path) ?: 0
+            val existing = idOf(write.note.vaultId, write.note.path) ?: 0
             val id = upsertNote(write.note.copy(id = existing))
 
             deleteHeadings(id)

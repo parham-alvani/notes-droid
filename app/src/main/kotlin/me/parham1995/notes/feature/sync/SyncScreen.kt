@@ -82,7 +82,7 @@ enum class SettingsSection(
     val summary: String,
     val icon: String,
 ) {
-    REPOSITORIES("Repositories", "Where the notes come from, and how", "folder-git-2"),
+    REPOSITORIES("Vaults", "The repositories you read, and how", "library"),
     READING("Reading", "Text size, theme, where the app opens", "book-open-text"),
     SYNC("Sync", "When it refreshes, and what it fetches", "refresh-cw"),
     NOTIFICATIONS("Notifications", "The daily task summary", "bell"),
@@ -222,17 +222,17 @@ private fun RepositoryCard(
     var owner by remember { mutableStateOf("") }
     var repo by remember { mutableStateOf("") }
     var branch by remember { mutableStateOf("") }
-    var mount by remember { mutableStateOf("") }
+    var vaultName by remember { mutableStateOf("") }
     val first = state.vaults.isEmpty()
 
-    SectionCard("Repositories") {
+    SectionCard("Vaults") {
         state.vaults.forEach { vault ->
             VaultRow(vault, viewModel)
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
         }
 
         Text(
-            if (first) "Add the repository your vault lives in." else "Add another",
+            if (first) "Add the repository your vault lives in." else "Add another vault",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -258,25 +258,23 @@ private fun RepositoryCard(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        if (!first) {
-            OutlinedTextField(
-                value = mount,
-                onValueChange = { mount = it },
-                label = { Text("Folder") },
-                // Two repositories cannot both own the top level, so every one
-                // after the first is read as a folder inside the vault.
-                placeholder = { Text(repo.ifBlank { "where it appears in the tree" }) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        OutlinedTextField(
+            value = vaultName,
+            onValueChange = { vaultName = it },
+            label = { Text("Name") },
+            // For reading only. It does not decide where anything is stored, so
+            // it can be changed later without moving the files.
+            placeholder = { Text(repo.ifBlank { "what to call it" }) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Button(
             onClick = {
-                viewModel.addVault(owner, repo, branch, mount)
+                viewModel.addVault(owner, repo, branch, vaultName)
                 owner = ""
                 repo = ""
                 branch = ""
-                mount = ""
+                vaultName = ""
             },
             enabled = owner.isNotBlank() && repo.isNotBlank(),
         ) {
@@ -285,8 +283,8 @@ private fun RepositoryCard(
 
         if (state.vaults.size > 1) {
             Text(
-                "One SSH key serves all of them: the same public line is added as a deploy key " +
-                    "on each repository.",
+                "Each vault is separate: its own files, search, tasks and links. The browser " +
+                    "switches between them.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -305,11 +303,11 @@ private fun VaultRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("${vault.owner}/${vault.repo}", style = MaterialTheme.typography.bodyMedium)
+            Text(vault.label, style = MaterialTheme.typography.bodyMedium)
             Text(
                 text =
                     listOfNotNull(
-                        if (vault.mount.isEmpty()) "at the root" else vault.mount,
+                        "${vault.owner}/${vault.repo}".takeIf { it != vault.label },
                         vault.branch,
                         vault.lastError?.let { "failed: " + it.take(ERROR_PREVIEW) },
                     ).joinToString(" · "),

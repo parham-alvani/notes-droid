@@ -80,13 +80,13 @@ class SshViewModel
                 val vaults = repository.vaults().first()
                 val ssh = vaults.filter { SyncTransport.parse(it.transport) == SyncTransport.SSH }
                 val stored = keys.stored()
-                val claimed = vaults.map { keys.identity(it.mount).name }.toSet()
+                val claimed = vaults.map { keys.identity(it.name).name }.toSet()
 
                 _state.value =
                     _state.value.copy(
                         repositories =
                             ssh.map { vault ->
-                                val name = keys.identity(vault.mount).name
+                                val name = keys.identity(vault.name).name
                                 SshKeyRow(
                                     vault = vault,
                                     key = stored.firstOrNull { it.fileName == name },

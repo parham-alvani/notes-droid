@@ -26,7 +26,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
 - **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary
-- **Several repositories** — each mounted at a folder, searched and linked as one vault
+- **Several vaults** — separate, each with its own files, index, search and tasks
 - **Attachments** — PDFs read in place; everything else opens in whatever app handles it
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
@@ -95,15 +95,17 @@ Afterwards each refresh asks only whether `HEAD` moved, using an `ETag`. If it d
 
 Images are recorded but not downloaded, so the default install carries the markdown alone. They are fetched individually when a note that embeds one is opened, and cached after that.
 
-### Several repositories
+### Several vaults
 
-Each repository is mounted at a folder and the app treats the result as one vault: the browser shows them side by side, search covers all of them, links resolve across them, and the task list is the union.
+Each repository is a vault of its own: its own files, its own index, its own search, its own tasks. A `[[wikilink]]` resolves inside the vault that wrote it and nowhere else. The browser switches between them.
 
-The first repository mounts at the root, so a vault that has only ever read one is unchanged — nothing moved on disk and no path was rewritten. Every repository after it needs a folder name, because two of them cannot both own the top level.
+They were mounted as folders inside one tree once, which made every table work untouched and made the app wrong — a document archive appeared inside the notes, and search mixed two things with nothing to do with each other.
 
-**A key per repository, not one for all of them.** GitHub allows a deploy key on exactly one repository — registering the same public line a second time is refused outright — so the app generates one key per repository and Settings lists them separately. The alternative, a key on the account rather than the repository, would be one key and would also grant write access to everything the account can reach, which is a poor trade for something that only reads.
+A vault's name is for reading and can be changed; storage is keyed by its id, so renaming one does not move its files.
 
-An access token has no such limit: a fine-grained token can name several repositories at once, so REST is the lighter option when a vault spans a few of them.
+**A key per vault, not one for all of them.** GitHub allows a deploy key on exactly one repository — registering the same public line a second time is refused outright — so the app generates one key per vault and Settings lists them separately. The alternative, a key on the account rather than the repository, would be one key and would also grant write access to everything the account can reach, which is a poor trade for something that only reads.
+
+An access token has no such limit: a fine-grained token can name several repositories at once, so REST is the lighter option when you read a few of them.
 
 A repository that fails to sync does not stop the others, and its error is shown against it rather than as the vault's.
 
@@ -134,7 +136,7 @@ Glyphs come from [Lucide](https://lucide.dev), flattened into a single asset by 
 - [x] **M9** — background sync that actually runs, and releases signed from a tag
 - [x] **M10** — attachments: PDFs read in place, everything else handed off
 - [x] **M11** — tasks across the whole vault, with a daily summary
-- [x] **M12** — several repositories, mounted side by side
+- [x] **M12** — several vaults, each separate
 - [x] **M13** — unlinked mentions, widgets, an SSH panel that tests a key
 - [x] **M14** — syntax colouring for the languages the tokeniser has no grammar for
 - [x] **M15** — settings that are about reading, find in note, and a one-hop graph

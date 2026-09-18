@@ -18,7 +18,7 @@ import androidx.sqlite.execSQL
         TaskEntity::class,
         VaultEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -233,6 +233,102 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL("ALTER TABLE `notes` ADD COLUMN `scrollIndex` INTEGER NOT NULL DEFAULT 0")
                 }
             }
+
+        /**
+         * Separates the vaults.
+         *
+         * Repositories used to be mounted as folders inside one tree, which
+         * made every table work untouched and made the app wrong: a document
+         * archive appeared inside the notes, links resolved across repositories
+         * that have nothing to do with each other, and search mixed them. They
+         * are now separate -- their own files, index, search and tasks -- and a
+         * note's path is relative to the vault holding it.
+         *
+         * The tables derived from the notes are dropped and recreated rather
+         * than altered. Every one of them is rebuilt by parsing what is on
+         * disk, which takes seconds, and recreating them is the only way to be
+         * certain the schema matches what the entities now declare. The
+         * manifest is kept, because re-fetching 222MB to change a column would
+         * not be.
+         */
+        val MIGRATION_8_9 =
+            object : Migration(8, 9) {
+                override fun migrate(connection: SQLiteConnection) {
+                    // A mount was a folder name; it is now just a name. Renamed
+                    // before the blanks are filled, because which vaults had an
+                    // empty mount is what says whose paths need shortening.
+                    connection.execSQL("ALTER TABLE `vaults` RENAME COLUMN `mount` TO `name`")
+                    connection.execSQL("DROP INDEX IF EXISTS `index_vaults_mount`")
+                    connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_vaults_name` ON `vaults` (`name`)")
+
+                    // Paths become relative to their vault.
+                    connection.execSQL(
+                        "UPDATE blobs SET path = substr(path, length(" +
+                            "(SELECT name FROM vaults WHERE vaults.id = blobs.vaultId)) + 2) " +
+                            "WHERE (SELECT name FROM vaults WHERE vaults.id = blobs.vaultId) != ''",
+                    )
+                    connection.execSQL("UPDATE `vaults` SET `name` = `repo` WHERE `name` = ''")
+
+                    connection.execSQL("DROP TABLE IF EXISTS `tasks`")
+                    connection.execSQL("DROP TABLE IF EXISTS `links`")
+                    connection.execSQL("DROP TABLE IF EXISTS `headings`")
+                    connection.execSQL("DROP TABLE IF EXISTS `notes`")
+                    createNotes(connection)
+                    connection.execSQL("DELETE FROM note_fts")
+                }
+            }
+
+        /** The tables derived from a note, exactly as the entities declare them. */
+        private fun createNotes(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `notes` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`vaultId` INTEGER NOT NULL, `path` TEXT NOT NULL, `parent` TEXT NOT NULL, " +
+                    "`name` TEXT NOT NULL, `slug` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                    "`blobSha` TEXT NOT NULL, `size` INTEGER NOT NULL, " +
+                    "`isFolderNote` INTEGER NOT NULL, `isRtl` INTEGER NOT NULL, " +
+                    "`hasMermaid` INTEGER NOT NULL, `hasMath` INTEGER NOT NULL, " +
+                    "`indexedAt` INTEGER NOT NULL, `openedAt` INTEGER, " +
+                    "`scrollIndex` INTEGER NOT NULL DEFAULT 0)",
+            )
+            connection.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_notes_vaultId_path` ON `notes` (`vaultId`, `path`)",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_notes_vaultId` ON `notes` (`vaultId`)")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_notes_parent` ON `notes` (`parent`)")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_notes_slug` ON `notes` (`slug`)")
+
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `links` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`srcId` INTEGER NOT NULL, `kind` TEXT NOT NULL, `rawTarget` TEXT NOT NULL, " +
+                    "`alias` TEXT, `heading` TEXT, `targetId` INTEGER, `context` TEXT NOT NULL, " +
+                    "`ordinal` INTEGER NOT NULL)",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_links_srcId` ON `links` (`srcId`)")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_links_targetId` ON `links` (`targetId`)")
+
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `headings` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`noteId` INTEGER NOT NULL, `level` INTEGER NOT NULL, `text` TEXT NOT NULL, " +
+                    "`slug` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `blockIndex` INTEGER NOT NULL)",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_headings_noteId` ON `headings` (`noteId`)")
+
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `tasks` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`noteId` INTEGER NOT NULL, `text` TEXT NOT NULL, `state` TEXT NOT NULL, " +
+                    "`section` TEXT NOT NULL, `blockIndex` INTEGER NOT NULL, " +
+                    "`ordinal` INTEGER NOT NULL, `open` INTEGER NOT NULL, " +
+                    "`actionableOn` TEXT, `scheduled` TEXT, `due` TEXT, `done` TEXT, " +
+                    "`recurring` TEXT)",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_tasks_noteId` ON `tasks` (`noteId`)")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_tasks_open` ON `tasks` (`open`)")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_tasks_actionableOn` ON `tasks` (`actionableOn`)")
+        }
 
         /** Adds the on-device sync journal. */
         val MIGRATION_2_3 =

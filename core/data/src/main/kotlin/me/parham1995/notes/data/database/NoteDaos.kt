@@ -16,40 +16,55 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun byId(id: Long): NoteEntity?
 
-    @Query("SELECT * FROM notes WHERE path = :path")
-    suspend fun byPath(path: String): NoteEntity?
+    @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND path = :path")
+    suspend fun byPath(
+        vaultId: Long,
+        path: String,
+    ): NoteEntity?
 
-    @Query("SELECT id FROM notes WHERE path = :path")
-    suspend fun idOf(path: String): Long?
+    @Query("SELECT id FROM notes WHERE vaultId = :vaultId AND path = :path")
+    suspend fun idOf(
+        vaultId: Long,
+        path: String,
+    ): Long?
 
-    @Query("SELECT id, path FROM notes")
-    suspend fun allIds(): List<NoteRef>
+    @Query("SELECT id, path FROM notes WHERE vaultId = :vaultId")
+    suspend fun allIds(vaultId: Long): List<NoteRef>
 
     /** Notes directly inside [parent], folders excluded -- those are derived. */
-    @Query("SELECT * FROM notes WHERE parent = :parent ORDER BY name COLLATE NOCASE")
-    suspend fun childrenOf(parent: String): List<NoteEntity>
+    @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND parent = :parent ORDER BY name COLLATE NOCASE")
+    suspend fun childrenOf(
+        vaultId: Long,
+        parent: String,
+    ): List<NoteEntity>
 
     /**
      * The same, as a Flow. Room re-emits when the table changes, which is what
      * makes the browser fill in as a sync lands instead of showing whatever
      * happened to be there when the screen opened.
      */
-    @Query("SELECT * FROM notes WHERE parent = :parent ORDER BY name COLLATE NOCASE")
-    fun childrenOfFlow(parent: String): Flow<List<NoteEntity>>
+    @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND parent = :parent ORDER BY name COLLATE NOCASE")
+    fun childrenOfFlow(
+        vaultId: Long,
+        parent: String,
+    ): Flow<List<NoteEntity>>
 
     /**
      * Every distinct directory. Only a few hundred rows even for a large vault,
      * so the browser builds its folder tree from this once instead of running a
      * recursive query per level.
      */
-    @Query("SELECT DISTINCT parent FROM notes WHERE parent != ''")
-    suspend fun allParents(): List<String>
+    @Query("SELECT DISTINCT parent FROM notes WHERE vaultId = :vaultId AND parent != ''")
+    suspend fun allParents(vaultId: Long): List<String>
 
-    @Query("SELECT DISTINCT parent FROM notes WHERE parent != ''")
-    fun allParentsFlow(): Flow<List<String>>
+    @Query("SELECT DISTINCT parent FROM notes WHERE vaultId = :vaultId AND parent != ''")
+    fun allParentsFlow(vaultId: Long): Flow<List<String>>
 
-    @Query("SELECT * FROM notes WHERE openedAt IS NOT NULL ORDER BY openedAt DESC LIMIT :limit")
-    fun recentlyOpened(limit: Int): Flow<List<NoteEntity>>
+    @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND openedAt IS NOT NULL ORDER BY openedAt DESC LIMIT :limit")
+    fun recentlyOpened(
+        vaultId: Long,
+        limit: Int,
+    ): Flow<List<NoteEntity>>
 
     @Query("UPDATE notes SET openedAt = :at WHERE id = :id")
     suspend fun markOpened(
@@ -85,17 +100,23 @@ interface NoteDao {
      * again. `ORDER BY RANDOM()` is a full scan, which at this size is
      * microseconds and only happens when asked.
      */
-    @Query("SELECT * FROM notes ORDER BY RANDOM() LIMIT 1")
-    suspend fun random(): NoteEntity?
+    @Query("SELECT * FROM notes WHERE vaultId = :vaultId ORDER BY RANDOM() LIMIT 1")
+    suspend fun random(vaultId: Long): NoteEntity?
 
-    @Query("SELECT COUNT(*) FROM notes")
-    fun count(): Flow<Int>
+    @Query("SELECT COUNT(*) FROM notes WHERE vaultId = :vaultId")
+    fun count(vaultId: Long): Flow<Int>
 
-    @Query("DELETE FROM notes WHERE path = :path")
-    suspend fun deleteByPath(path: String)
+    @Query("DELETE FROM notes WHERE vaultId = :vaultId AND path = :path")
+    suspend fun deleteByPath(
+        vaultId: Long,
+        path: String,
+    )
 
     @Query("DELETE FROM notes")
     suspend fun clear()
+
+    @Query("DELETE FROM notes WHERE vaultId = :vaultId")
+    suspend fun clearVault(vaultId: Long)
 }
 
 data class NoteRef(
@@ -153,8 +174,15 @@ interface LinkDao {
         targetId: Long?,
     )
 
-    @Query("SELECT id, srcId, rawTarget FROM links WHERE targetId IS NULL")
-    suspend fun unresolved(): List<UnresolvedLink>
+    @Query(
+        """
+        SELECT links.id, links.srcId, links.rawTarget
+        FROM links
+        JOIN notes ON notes.id = links.srcId
+        WHERE links.targetId IS NULL AND notes.vaultId = :vaultId
+        """,
+    )
+    suspend fun unresolved(vaultId: Long): List<UnresolvedLink>
 
     @Query("DELETE FROM links")
     suspend fun clear()

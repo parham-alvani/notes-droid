@@ -90,7 +90,7 @@ class SyncRepository
                         owner = current.owner,
                         repo = current.repo,
                         branch = current.branch,
-                        mount = "",
+                        name = current.repo,
                         transport = current.transport.name,
                         ordinal = 0,
                     ),
@@ -118,7 +118,7 @@ class SyncRepository
             owner: String,
             repo: String,
             branch: String?,
-            mount: String,
+            name: String,
             transport: SyncTransport,
         ): Long {
             val existing = vaults.all()
@@ -127,7 +127,7 @@ class SyncRepository
                     owner = owner.trim(),
                     repo = repo.trim(),
                     branch = branch?.trim()?.takeIf { it.isNotBlank() },
-                    mount = mount.trim().trim('/'),
+                    name = name.trim().ifBlank { repo.trim() },
                     transport = transport.name,
                     ordinal = existing.size,
                 ),
@@ -146,10 +146,17 @@ class SyncRepository
          */
         suspend fun removeVault(id: Long) {
             val vault = vaults.byId(id) ?: return
-            val owned = blobs.byVaultKindAndState(id, BlobKind.MARKDOWN, LocalState.DOWNLOADED).map { it.path }
-            indexer.indexChanged(changed = emptyList(), removed = owned)
+            // Through the indexer rather than by deleting rows: a note removed
+            // from `notes` alone leaves a search entry that still matches and a
+            // backlink that still resolves.
+            val owned =
+                blobs
+                    .byVaultKindAndState(id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
+                    .map { it.path }
+            indexer.indexChanged(vaultId = id, changed = emptyList(), removed = owned)
             blobs.clearVault(id)
-            if (vault.mount.isNotEmpty()) files.deleteTree(vault.mount)
+            files.deleteVault(id)
+            sshKeys.delete(vault.name)
             vaults.delete(id)
             log.warn("removed ${vault.owner}/${vault.repo}")
         }
@@ -166,16 +173,16 @@ class SyncRepository
          */
         suspend fun testSshKey(vault: VaultEntity): Result<String> =
             runCatching {
-                if (!sshKeys.exists(vault.mount)) {
+                if (!sshKeys.exists(vault.name)) {
                     error("no key for ${vault.label} yet")
                 }
                 val transport =
                     GitSshVaultSync(
-                        workTree = files.fileFor(vault.mount),
+                        workTree = files.rootOf(vault.id),
                         remoteUrl = sshUrl(vault),
                         branch = vault.branch ?: DEFAULT_BRANCH,
                         keys = sshKeys,
-                        keyMount = vault.mount,
+                        keyMount = vault.name,
                         configDir = File(context.filesDir, "git"),
                         log = log::info,
                     )
@@ -193,6 +200,69 @@ class SyncRepository
         }
 
         /**
+         * Moves each vault's files into the directory named by its id.
+         *
+         * Vaults used to live in a directory named after the folder they were
+         * mounted at, and the first one lived in the shared root with the
+         * others beside it. Naming by id instead means renaming a vault costs
+         * nothing, but the files already on the device are in the old places.
+         *
+         * Renaming beats re-fetching by a wide margin here -- the two
+         * repositories this was written against are a hundred and two hundred
+         * megabytes -- and it keeps the git working trees intact, `.git` and
+         * all, so an SSH vault does not re-clone.
+         *
+         * A vault whose files cannot be moved has its manifest cleared instead,
+         * which costs a re-sync rather than leaving rows pointing at files that
+         * are no longer there.
+         */
+        private suspend fun migrateStorage() {
+            val all = vaults.all()
+            if (all.isEmpty()) return
+
+            // Named vaults first, so that whatever is left in the shared root
+            // afterwards belongs to the one that used to live there.
+            all.filter { !files.rootOf(it.id).exists() }.forEach { vault ->
+                val old = File(files.root, vault.name)
+                if (old.isDirectory) {
+                    moveOrReset(vault, from = { old.renameTo(files.rootOf(vault.id)) })
+                }
+            }
+
+            val stragglers = all.filter { !files.rootOf(it.id).exists() }
+            if (stragglers.size != 1) {
+                // Either nothing is left to move, or more than one vault claims
+                // the root, which cannot be resolved by guessing.
+                stragglers.forEach { blobs.clearVault(it.id) }
+                return
+            }
+
+            val vault = stragglers.single()
+            val target = files.rootOf(vault.id)
+            moveOrReset(vault) {
+                target.mkdirs()
+                files.root
+                    .listFiles()
+                    .orEmpty()
+                    .filterNot { it == target || it.name.toLongOrNull() != null }
+                    .all { it.renameTo(File(target, it.name)) }
+            }
+        }
+
+        private suspend fun moveOrReset(
+            vault: VaultEntity,
+            from: () -> Boolean,
+        ) {
+            val moved = runCatching { from() }.getOrDefault(false)
+            if (moved) {
+                log.info("moved ${vault.label} into its own directory")
+            } else {
+                log.warn("could not move ${vault.label}; it will be fetched again")
+                blobs.clearVault(vault.id)
+            }
+        }
+
+        /**
          * Runs one sync over every repository. [onProgress] reports units of
          * work done, which is the honest measure here -- the compare endpoint
          * does not carry file sizes, so byte-level progress would be a guess.
@@ -206,6 +276,7 @@ class SyncRepository
             coroutineScope {
                 val startedAt = System.currentTimeMillis()
                 ensureSeeded()
+                migrateStorage()
                 val targets = vaults.all().filter { it.enabled }
                 if (targets.isEmpty()) throw NotConfiguredException("no repository configured")
 
@@ -256,8 +327,7 @@ class SyncRepository
             vault: VaultEntity,
             onProgress: (done: Int, total: Int) -> Unit,
         ): SyncPlan {
-            val where = if (vault.mount.isEmpty()) "the root" else vault.mount
-            log.info("syncing ${vault.owner}/${vault.repo} into $where over ${vault.transport}")
+            log.info("syncing ${vault.owner}/${vault.repo} into ${vault.label} over ${vault.transport}")
             val transport = transportFor(vault)
 
             // A manifest built by an older filter is missing whatever the
@@ -274,12 +344,7 @@ class SyncRepository
             val base =
                 SyncBase(
                     commit = vault.headCommit?.takeUnless { staleFilter },
-                    // Handed to the transport unmounted, because a transport
-                    // only ever speaks in repository-relative paths.
-                    manifest =
-                        blobs
-                            .manifestRows(vault.id)
-                            .associate { vault.unmounted(it.path) to it.sha },
+                    manifest = blobs.manifestRows(vault.id).associate { it.path to it.sha },
                     etagRef = vault.etagRef?.takeUnless { staleFilter },
                 )
 
@@ -313,7 +378,8 @@ class SyncRepository
                     )
                 }
                 if (!plan.isEmpty) {
-                    val sink = MountedSink(vault, sinkProvider.get())
+                    val sink = sinkProvider.get()
+                    sink.vaultId = vault.id
                     sink.plannedEntries = plan.downloads.associateBy { it.path }
                     transport.apply(plan, sink, onProgress)
                     log.info("downloaded ${plan.downloads.size} files")
@@ -362,18 +428,19 @@ class SyncRepository
                     .map { PathAndSha(it.path, it.sha) }
 
             if (firstSync) {
-                indexer.indexChanged(changed = markdown, removed = emptyList())
+                indexer.indexChanged(vaultId = vault.id, changed = markdown, removed = emptyList())
                 return
             }
 
+            // Paths are already relative to the vault, on both sides, so
+            // nothing has to be translated between the plan and the index.
             val touched =
-                (plan.adds + plan.modifies).map { vault.mounted(it.path) }.toSet() +
-                    plan.renames.map { vault.mounted(it.to) }.toSet()
+                (plan.adds + plan.modifies).map { it.path }.toSet() +
+                    plan.renames.map { it.to }.toSet()
             indexer.indexChanged(
+                vaultId = vault.id,
                 changed = markdown.filter { it.path in touched },
-                removed =
-                    plan.deletes.map { vault.mounted(it) } +
-                        plan.renames.map { vault.mounted(it.from) },
+                removed = plan.deletes + plan.renames.map { it.from },
             )
         }
 
@@ -393,7 +460,13 @@ class SyncRepository
                 blobs
                     .byKindAndState(BlobKind.MARKDOWN, LocalState.DOWNLOADED)
                     .map { PathAndSha(it.path, it.sha) }
-            indexer.indexAll(markdown)
+            vaults.all().forEach { vault ->
+                val theirs =
+                    blobs
+                        .byVaultKindAndState(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
+                        .map { PathAndSha(it.path, it.sha) }
+                indexer.indexAll(vault.id, theirs)
+            }
             log.info("reindexed ${markdown.size} notes in ${(System.currentTimeMillis() - started) / 1000}s")
         }
 
@@ -426,7 +499,7 @@ class SyncRepository
                 }
 
                 SyncTransport.SSH -> {
-                    if (!sshKeys.exists(vault.mount)) {
+                    if (!sshKeys.exists(vault.name)) {
                         throw NotConfiguredException(
                             "no SSH key for ${vault.label} yet - generate one in Settings and add it " +
                                 "as a deploy key on that repository",
@@ -436,11 +509,11 @@ class SyncRepository
                         // Each repository gets its own working tree, which is
                         // what lets one key serve all of them without their
                         // histories colliding.
-                        workTree = files.fileFor(vault.mount),
+                        workTree = files.rootOf(vault.id),
                         remoteUrl = sshUrl(vault),
                         branch = vault.branch ?: DEFAULT_BRANCH,
                         keys = sshKeys,
-                        keyMount = vault.mount,
+                        keyMount = vault.name,
                         configDir = File(context.filesDir, "git"),
                         log = log::info,
                     )

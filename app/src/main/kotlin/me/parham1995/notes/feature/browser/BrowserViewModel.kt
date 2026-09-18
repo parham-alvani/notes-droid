@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -44,6 +45,7 @@ data class BrowserUiState(
      * what keeps the switcher off screen for a single-repository vault.
      */
     val vaults: List<VaultEntity> = emptyList(),
+    val activeVaultId: Long = 0,
     val loading: Boolean = true,
     val syncing: Boolean = false,
     val syncProgress: Pair<Int, Int>? = null,
@@ -83,10 +85,15 @@ class BrowserViewModel
         // regexes off the composition: a rule is tested against every visible
         // item, and the browser recomposes on every scroll.
         private val rows: Flow<List<VaultRowItem>> =
-            combine(items, icons.config, settings.settings) { current, config, preferences ->
+            combine(
+                items,
+                icons.config,
+                settings.settings,
+                repository.activeVaultId,
+            ) { current, config, preferences, vaultId ->
                 current
                     .sortedWith(preferences.reading.browserSort.comparator())
-                    .map { VaultRowItem(it, config.forPath(it.path, it.isFolder)) }
+                    .map { VaultRowItem(it, config.forPath(vaultId, it.path, it.isFolder)) }
             }
 
         /**
@@ -107,9 +114,16 @@ class BrowserViewModel
         private val vaults: Flow<List<VaultEntity>> =
             repository.vaults().map { found -> if (found.size > 1) found else emptyList() }
 
+        /** Switching vault also returns to that vault's root. */
+        fun switchVault(id: Long) =
+            viewModelScope.launch {
+                repository.setActiveVault(id)
+                path.value = ""
+            }
+
         private val recent: Flow<List<RecentRow>> =
             combine(repository.recentlyOpened(), icons.config) { notes, config ->
-                notes.map { RecentRow(it, config.forFile(it.path)) }
+                notes.map { RecentRow(it, config.forFile(it.vaultId, it.path)) }
             }
 
         private val _state = MutableStateFlow(BrowserUiState())
@@ -122,14 +136,15 @@ class BrowserViewModel
                     rows,
                     recent,
                     repository.noteCount,
-                    vaults,
-                ) { currentPath, currentItems, recentRows, count, repositories ->
+                    combine(vaults, repository.activeVaultId) { all, active -> all to active },
+                ) { currentPath, currentItems, recentRows, count, (repositories, active) ->
                     BrowserUiState(
                         path = currentPath,
                         items = currentItems,
                         recent = recentRows,
                         noteCount = count,
                         vaults = repositories,
+                        activeVaultId = active,
                         loading = false,
                     )
                 }.collect { next ->
@@ -161,7 +176,7 @@ class BrowserViewModel
          * The file on disk, fetching it first if this install has only ever
          * recorded it. Null when it cannot be had at all.
          */
-        suspend fun attachment(path: String): File? = files.localFile(path)
+        suspend fun attachment(path: String): File? = files.localFile(repository.activeVaultId.first(), path)
 
         fun open(next: String) {
             path.value = next

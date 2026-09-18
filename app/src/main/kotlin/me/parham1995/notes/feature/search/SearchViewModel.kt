@@ -56,9 +56,11 @@ class SearchViewModel
          * the flow inside the debounce would put a file read on the typing path.
          */
         private var iconConfig: VaultIcons = VaultIcons.EMPTY
+        private var activeVault: Long = 0
 
         init {
             viewModelScope.launch { icons.config.collect { iconConfig = it } }
+            viewModelScope.launch { repository.activeVaultId.collect { activeVault = it } }
 
             viewModelScope.launch {
                 queries
@@ -72,9 +74,13 @@ class SearchViewModel
                         _state.value = _state.value.copy(searching = true)
                         // The quick switcher is what answers most searches, so
                         // it runs first and the full-text pass fills in under it.
-                        val quick = repository.quickSwitch(query).map { QuickRow(it, iconConfig.forFile(it.path)) }
+                        val quick =
+                            repository
+                                .quickSwitch(
+                                    query,
+                                ).map { QuickRow(it, iconConfig.forFile(it.vaultId, it.path)) }
                         _state.value = _state.value.copy(quick = quick)
-                        val hits = repository.search(query).map { HitRow(it, iconConfig.forFile(it.path)) }
+                        val hits = repository.search(query).map { HitRow(it, iconConfig.forFile(activeVault, it.path)) }
                         _state.value = _state.value.copy(hits = hits, searching = false)
                     }
             }

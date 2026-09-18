@@ -35,6 +35,7 @@ import me.parham1995.notes.di.RendererEntryPoint
  */
 @Composable
 fun VaultImage(
+    vaultId: Long,
     path: String,
     alt: String?,
     modifier: Modifier = Modifier,
@@ -49,11 +50,11 @@ fun VaultImage(
                     RendererEntryPoint::class.java,
                 ).fileSource()
         }
-    var bytes by remember(path) { mutableStateOf<ByteArray?>(null) }
-    var failed by remember(path) { mutableStateOf(false) }
+    var bytes by remember(vaultId, path) { mutableStateOf<ByteArray?>(null) }
+    var failed by remember(vaultId, path) { mutableStateOf(false) }
 
-    LaunchedEffect(path) {
-        val loaded = source.bytes(path)
+    LaunchedEffect(vaultId, path) {
+        val loaded = source.bytes(vaultId, path)
         if (loaded == null) failed = true else bytes = loaded
     }
 

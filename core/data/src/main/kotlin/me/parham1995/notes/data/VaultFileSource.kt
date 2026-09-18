@@ -27,11 +27,15 @@ class VaultFileSource
     constructor(
         private val files: VaultFileStore,
         private val blobs: BlobDao,
+        private val vaults: me.parham1995.notes.data.database.VaultDao,
         private val settings: SettingsStore,
         private val tokens: TokenStore,
         private val http: OkHttpClient,
     ) {
-        suspend fun bytes(path: String): ByteArray? = fetch(path)?.second
+        suspend fun bytes(
+            vaultId: Long,
+            path: String,
+        ): ByteArray? = fetch(vaultId, path)?.second
 
         /**
          * The file on disk, fetching it first if it is not there yet.
@@ -41,29 +45,38 @@ class VaultFileSource
          * something to hold in memory -- a video in this vault is larger than
          * the heap the app is given.
          */
-        suspend fun localFile(path: String): File? {
-            files.fileFor(path).takeIf { it.isFile }?.let { return it }
-            fetch(path) ?: return null
-            return files.fileFor(path).takeIf { it.isFile }
+        suspend fun localFile(
+            vaultId: Long,
+            path: String,
+        ): File? {
+            files.fileFor(vaultId, path).takeIf { it.isFile }?.let { return it }
+            fetch(vaultId, path) ?: return null
+            return files.fileFor(vaultId, path).takeIf { it.isFile }
         }
 
-        private suspend fun fetch(path: String): Pair<File, ByteArray>? {
-            files.read(path)?.let { return files.fileFor(path) to it }
+        private suspend fun fetch(
+            vaultId: Long,
+            path: String,
+        ): Pair<File, ByteArray>? {
+            files.read(vaultId, path)?.let { return files.fileFor(vaultId, path) to it }
 
-            val blob = blobs.byPath(path) ?: return null
+            val blob = blobs.byPath(vaultId, path) ?: return null
             val current = settings.current()
-            if (!current.isConfigured) return null
             // The policy is about images specifically: it exists to keep 300
             // photographs off the device, and says nothing about a PDF that
             // was asked for by name.
             if (blob.kind == BlobKind.IMAGE && current.imagePolicy == ImagePolicy.NEVER) return null
 
+            // The vault's own repository, not the settings' -- those describe
+            // the first vault only, and an image in the second would be fetched
+            // from the wrong place.
+            val vault = vaults.byId(vaultId) ?: return null
             val client =
                 GitHubClient(
                     GitHubConfig(
-                        owner = current.owner,
-                        repo = current.repo,
-                        branch = current.branch,
+                        owner = vault.owner,
+                        repo = vault.repo,
+                        branch = vault.branch,
                         token = tokens.token() ?: return null,
                     ),
                     http = http,
@@ -72,9 +85,9 @@ class VaultFileSource
             return withContext(Dispatchers.IO) {
                 runCatching {
                     val data = client.blob(blob.sha)
-                    files.write(path, data)
+                    files.write(vaultId, path, data)
                     blobs.upsert(blob.copy(localState = LocalState.DOWNLOADED))
-                    files.fileFor(path) to data
+                    files.fileFor(vaultId, path) to data
                 }.getOrNull()
             }
         }

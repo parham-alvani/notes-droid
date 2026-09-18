@@ -1,0 +1,5 @@
+Vaults are separate now.
+
+A second repository used to appear as a folder inside the first, which meant search mixed them and a link in one could resolve into the other. Each is now its own vault: its own files, index, search and tasks, and links that stay where they were written. The browser switches between them.
+
+Files already on the device are moved rather than fetched again, so nothing re-downloads. The index is rebuilt from what is on disk, which takes a few seconds.

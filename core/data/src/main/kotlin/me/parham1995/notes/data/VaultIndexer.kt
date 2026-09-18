@@ -58,48 +58,50 @@ class VaultIndexer
 
         /** Reindexes every markdown file currently on disk. */
         suspend fun indexAll(
+            vaultId: Long,
             paths: List<PathAndSha>,
             onProgress: (Progress) -> Unit = {},
         ) {
-            notes.clear()
-            links.clear()
-            headings.clear()
-            tasks.clear()
-            search.clear()
+            notes.clearVault(vaultId)
+            // Only this vault's rows: the others are still current, and
+            // clearing everything would silently empty a vault that was not
+            // being reindexed.
+            search.clearVault(vaultId)
 
             var done = 0
             paths.chunked(BATCH).forEach { batch ->
-                val parsed = parseBatch(batch)
-                writeBatch(parsed)
+                val parsed = parseBatch(vaultId, batch)
+                writeBatch(vaultId, parsed)
                 done += batch.size
                 onProgress(Progress(done, paths.size))
             }
 
-            resolveLinks()
+            resolveLinks(vaultId)
             search.optimize()
         }
 
         /** Reindexes only what changed, and drops what went away. */
         suspend fun indexChanged(
+            vaultId: Long,
             changed: List<PathAndSha>,
             removed: List<String>,
         ) {
             removed.forEach { path ->
-                notes.byPath(path)?.let { note ->
+                notes.byPath(vaultId, path)?.let { note ->
                     links.deleteBySource(note.id)
                     headings.deleteByNote(note.id)
                     tasks.deleteByNote(note.id)
                     search.delete(note.id)
                 }
-                notes.deleteByPath(path)
+                notes.deleteByPath(vaultId, path)
             }
 
-            changed.chunked(BATCH).forEach { batch -> writeBatch(parseBatch(batch)) }
+            changed.chunked(BATCH).forEach { batch -> writeBatch(vaultId, parseBatch(vaultId, batch)) }
 
             // Cheaper than a full resolve and still correct: only links whose
             // target may have appeared or vanished need revisiting, and the
             // unresolved set is exactly those.
-            resolveLinks()
+            resolveLinks(vaultId)
         }
 
         private data class Indexed(
@@ -109,12 +111,15 @@ class VaultIndexer
             val note: ParsedNote,
         )
 
-        private suspend fun parseBatch(batch: List<PathAndSha>): List<Indexed> =
+        private suspend fun parseBatch(
+            vaultId: Long,
+            batch: List<PathAndSha>,
+        ): List<Indexed> =
             coroutineScope {
                 batch
                     .map { entry ->
                         async(Dispatchers.Default) {
-                            val text = files.readText(entry.path) ?: return@async null
+                            val text = files.readText(vaultId, entry.path) ?: return@async null
                             val parsed = MarkdownParser.parseNote(text)
                             Indexed(entry.path, entry.sha, text.length.toLong(), parsed)
                         }
@@ -122,7 +127,10 @@ class VaultIndexer
                     .filterNotNull()
             }
 
-        private suspend fun writeBatch(batch: List<Indexed>) {
+        private suspend fun writeBatch(
+            vaultId: Long,
+            batch: List<Indexed>,
+        ) {
             if (batch.isEmpty()) return
 
             val writes =
@@ -132,6 +140,7 @@ class VaultIndexer
                     NoteWrite(
                         note =
                             NoteEntity(
+                                vaultId = vaultId,
                                 path = indexed.path,
                                 parent = parent,
                                 name = name,
@@ -210,15 +219,18 @@ class VaultIndexer
          * Second pass. Builds the resolver once over every known path, then
          * attaches each link to the note it names.
          */
-        private suspend fun resolveLinks() =
+        private suspend fun resolveLinks(vaultId: Long) =
             withContext(Dispatchers.Default) {
-                val refs = notes.allIds()
+                // Built from one vault's paths, so a link can only ever resolve
+                // inside the vault that wrote it -- which is the whole point of
+                // them being separate.
+                val refs = notes.allIds(vaultId)
                 val byPath = refs.associate { it.path to it.id }
                 val resolver = LinkResolver(byPath.keys)
                 val sources = refs.associate { it.id to it.path }
 
                 val targets =
-                    links.unresolved().mapNotNull { link ->
+                    links.unresolved(vaultId).mapNotNull { link ->
                         val source = sources[link.srcId] ?: return@mapNotNull null
                         val path = resolver.resolve(link.rawTarget, source)
                         // Deliberately left null when nothing matches: a broken
@@ -239,8 +251,9 @@ class VaultIndexer
              * alongside the manifest lets one sync notice and rebuild.
              *
              * 1: tasks.
+             * 2: vaults are separate, so every note records which it is in.
              */
-            const val VERSION = 1
+            const val VERSION = 2
 
             /**
              * Large enough that commits are rare, small enough that a failure

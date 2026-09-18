@@ -3,7 +3,9 @@ package me.parham1995.notes.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.BacklinkRow
@@ -49,6 +51,7 @@ data class VaultItem(
 /** A note prepared for display. */
 data class RenderedNote(
     val id: Long,
+    val vaultId: Long,
     val path: String,
     val title: String,
     val blocks: List<MdBlock>,
@@ -93,6 +96,7 @@ data class Neighbours(
  * Everything the UI is allowed to ask for. Keeping this the only surface means
  * the screens never touch a DAO, a file, or the parser directly.
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @Singleton
 class VaultRepository
     @Inject
@@ -105,20 +109,39 @@ class VaultRepository
         private val tasks: TaskDao,
         private val blobs: BlobDao,
         private val vaults: VaultDao,
+        private val settings: SettingsStore,
     ) {
-        val noteCount: Flow<Int> = notes.count()
+        /**
+         * The vault being read.
+         *
+         * Held here rather than passed into every call, because every screen
+         * wants the same one and a parameter threaded through forty methods is
+         * forty chances to pass the wrong vault. Falls back to the first, which
+         * is what a single-vault install and a fresh one both want.
+         */
+        val activeVaultId: Flow<Long> =
+            combine(settings.settings, vaults.observe()) { current, all ->
+                all.firstOrNull { it.id == current.activeVaultId }?.id ?: all.firstOrNull()?.id ?: 0L
+            }.distinctUntilChanged()
 
-        /** The repositories making up this vault, for the browser's switcher. */
+        private suspend fun active(): Long = activeVaultId.first()
+
+        val noteCount: Flow<Int> = activeVaultId.flatMapLatest { notes.count(it) }
+
+        /** Every vault, for the switcher. */
         fun vaults(): Flow<List<VaultEntity>> = vaults.observe()
 
+        suspend fun setActiveVault(id: Long) = settings.setActiveVault(id)
+
         /** Every open task in the vault, soonest first, undated last. */
-        fun openTasks(): Flow<List<TaskRow>> = tasks.open()
+        fun openTasks(): Flow<List<TaskRow>> = activeVaultId.flatMapLatest { tasks.open(it) }
 
         suspend fun overdueCount(today: String): Int = tasks.overdueCount(today)
 
         suspend fun dueTodayCount(today: String): Int = tasks.dueTodayCount(today)
 
-        fun recentlyOpened(limit: Int = RECENT_LIMIT): Flow<List<NoteEntity>> = notes.recentlyOpened(limit)
+        fun recentlyOpened(limit: Int = RECENT_LIMIT): Flow<List<NoteEntity>> =
+            activeVaultId.flatMapLatest { notes.recentlyOpened(it, limit) }
 
         /**
          * One level of the tree, re-emitted whenever the notes table changes.
@@ -129,17 +152,27 @@ class VaultRepository
          * worked perfectly.
          */
         fun childrenFlow(parent: String): Flow<List<VaultItem>> =
-            combine(
-                notes.allParentsFlow(),
-                notes.childrenOfFlow(parent),
-                blobs.attachmentPaths(),
-            ) { parents, childNotes, attachments ->
-                buildChildren(parent, parents, childNotes, attachments)
-            }.flowOn(Dispatchers.Default)
+            activeVaultId
+                .flatMapLatest { vaultId ->
+                    combine(
+                        notes.allParentsFlow(vaultId),
+                        notes.childrenOfFlow(vaultId, parent),
+                        blobs.attachmentPaths(vaultId),
+                    ) { parents, childNotes, attachments ->
+                        buildChildren(vaultId, parent, parents, childNotes, attachments)
+                    }
+                }.flowOn(Dispatchers.Default)
 
         suspend fun children(parent: String): List<VaultItem> =
             withContext(Dispatchers.Default) {
-                buildChildren(parent, notes.allParents(), notes.childrenOf(parent), blobs.attachmentPaths().first())
+                val vaultId = active()
+                buildChildren(
+                    vaultId = vaultId,
+                    parent = parent,
+                    parents = notes.allParents(vaultId),
+                    childNotes = notes.childrenOf(vaultId, parent),
+                    attachmentPaths = blobs.attachmentPaths(vaultId).first(),
+                )
             }
 
         /**
@@ -147,6 +180,7 @@ class VaultRepository
          * there is no second structure to keep in step with the manifest.
          */
         private suspend fun buildChildren(
+            vaultId: Long,
             parent: String,
             parents: List<String>,
             childNotes: List<NoteEntity>,
@@ -170,7 +204,7 @@ class VaultRepository
                 folders.map { name ->
                     // A folder's own note is `Folder/Folder.md`; it opens when
                     // the label is tapped and is hidden from the list inside.
-                    val own = notes.byPath("$prefix$name/$name.md")
+                    val own = notes.byPath(vaultId, "$prefix$name/$name.md")
                     VaultItem(
                         path = "$prefix$name",
                         name = name,
@@ -213,7 +247,7 @@ class VaultRepository
         suspend fun note(id: Long): RenderedNote? =
             withContext(Dispatchers.Default) {
                 val entity = notes.byId(id) ?: return@withContext null
-                val text = files.readText(entity.path) ?: return@withContext null
+                val text = files.readText(entity.vaultId, entity.path) ?: return@withContext null
 
                 val parsed =
                     MarkdownParser.parseNote(text) { target ->
@@ -222,7 +256,7 @@ class VaultRepository
                         resolveAttachment(target, entity.path)
                     }
 
-                val refs = notes.allIds()
+                val refs = notes.allIds(entity.vaultId)
                 val resolver = LinkResolver(refs.map { it.path })
                 val byPath = refs.associate { it.path to it.id }
                 val targets =
@@ -242,6 +276,7 @@ class VaultRepository
 
                 RenderedNote(
                     id = entity.id,
+                    vaultId = entity.vaultId,
                     path = entity.path,
                     title = entity.title,
                     blocks = parsed.blocks,
@@ -283,7 +318,7 @@ class VaultRepository
         suspend fun backlinkCount(id: Long): Int = links.backlinkCount(id)
 
         /** A note exactly as it is written, for sharing it somewhere else. */
-        suspend fun markdown(id: Long): String? = notes.byId(id)?.let { files.readText(it.path) }
+        suspend fun markdown(id: Long): String? = notes.byId(id)?.let { files.readText(it.vaultId, it.path) }
 
         /** Records where a note was left, so opening it again resumes there. */
         suspend fun rememberScroll(
@@ -302,7 +337,7 @@ class VaultRepository
         }
 
         /** One note at random, for a vault large enough to have forgotten some. */
-        suspend fun randomNote(): NoteEntity? = notes.random()
+        suspend fun randomNote(): NoteEntity? = notes.random(active())
 
         /**
          * Notes that say this one's name without linking to it.
@@ -315,11 +350,11 @@ class VaultRepository
         suspend fun unlinkedMentions(id: Long): List<SearchHit> {
             val note = notes.byId(id) ?: return emptyList()
             val linked = links.backlinks(id).map { it.noteId }.toSet() + id
-            return search.mentions(note.title, linked)
+            return search.mentions(note.vaultId, note.title, linked)
         }
 
         /** Full-text results, ranked with the title weighted above the body. */
-        suspend fun search(query: String): List<SearchHit> = search.search(query)
+        suspend fun search(query: String): List<SearchHit> = search.search(active(), query)
 
         /** Name-only matches, for jumping straight to a note while typing. */
         suspend fun quickSwitch(query: String): List<NoteEntity> =

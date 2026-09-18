@@ -72,7 +72,7 @@ class NoteViewModel
                         loading = false,
                         note = note,
                         backlinks = repository.backlinks(id),
-                        icon = assignments.forFile(note.path),
+                        icon = assignments.forFile(note.vaultId, note.path),
                         contents =
                             if (!note.isFolderNote) {
                                 emptyList()
@@ -82,7 +82,7 @@ class NoteViewModel
                                 // out of its own folder's listing.
                                 repository
                                     .children(note.path.substringBeforeLast('/', ""))
-                                    .map { VaultRowItem(it, assignments.forPath(it.path, it.isFolder)) }
+                                    .map { VaultRowItem(it, assignments.forPath(note.vaultId, it.path, it.isFolder)) }
                             },
                     )
             }
@@ -151,7 +151,7 @@ class NoteViewModel
          * Null means it could not be had at all -- no network, no token, or a
          * path the manifest has never heard of.
          */
-        suspend fun attachment(path: String): File? = files.localFile(path)
+        suspend fun attachment(path: String): File? = _state.value.note?.let { files.localFile(it.vaultId, path) }
 
         /** The note a wikilink points at, or null when it is broken. */
         fun targetOf(target: String): Long? =

@@ -69,7 +69,20 @@ class SearchIndex
             }
         }
 
+        /** Drops one vault's rows, leaving the others searchable. */
+        suspend fun clearVault(vaultId: Long) {
+            database.useWriterConnection { connection ->
+                connection.usePrepared(
+                    "DELETE FROM $FTS WHERE rowid IN (SELECT id FROM notes WHERE vaultId = ?)",
+                ) { statement ->
+                    statement.bindLong(1, vaultId)
+                    statement.step()
+                }
+            }
+        }
+
         suspend fun search(
+            vaultId: Long,
             raw: String,
             limit: Int = DEFAULT_LIMIT,
         ): List<SearchHit> {
@@ -77,7 +90,8 @@ class SearchIndex
             return database.useReaderConnection { connection ->
                 connection.usePrepared(SEARCH_SQL) { statement ->
                     statement.bindText(1, query)
-                    statement.bindLong(2, limit.toLong())
+                    statement.bindLong(2, vaultId)
+                    statement.bindLong(3, limit.toLong())
                     buildList {
                         while (statement.step()) {
                             add(
@@ -104,6 +118,7 @@ class SearchIndex
          * already links here taken out.
          */
         suspend fun mentions(
+            vaultId: Long,
             title: String,
             exclude: Set<Long>,
             limit: Int = MENTION_LIMIT,
@@ -115,10 +130,11 @@ class SearchIndex
                 .useReaderConnection { connection ->
                     connection.usePrepared(SEARCH_SQL) { statement ->
                         statement.bindText(1, phrase)
+                        statement.bindLong(2, vaultId)
                         // Asked for generously, because the exclusions are
                         // applied after ranking rather than in SQL -- the
                         // linked set is small and already in memory.
-                        statement.bindLong(2, (limit * OVERSCAN).toLong())
+                        statement.bindLong(3, (limit * OVERSCAN).toLong())
                         buildList {
                             while (statement.step()) {
                                 add(
@@ -148,7 +164,7 @@ class SearchIndex
                        snippet(note_fts, 1, '[', ']', '...', 14)
                 FROM note_fts
                 JOIN notes ON notes.id = note_fts.rowid
-                WHERE note_fts MATCH ?
+                WHERE note_fts MATCH ? AND notes.vaultId = ?
                 ORDER BY bm25(note_fts, 10.0, 1.0)
                 LIMIT ?
                 """.trimIndent()

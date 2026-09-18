@@ -103,12 +103,12 @@ class SyncViewModel
                 vaults
                     .filter { SyncTransport.parse(it.transport) == SyncTransport.SSH }
                     .map { vault ->
-                        val line = sshKeys.publicKeyLine(vault.mount)
+                        val line = sshKeys.publicKeyLine(vault.name)
                         VaultKey(
-                            mount = vault.mount,
+                            mount = vault.name,
                             label = vault.label,
                             publicKey = line,
-                            fingerprint = line?.let { sshKeys.fingerprint(vault.mount) },
+                            fingerprint = line?.let { sshKeys.fingerprint(vault.name) },
                         )
                     }
             }
@@ -159,26 +159,24 @@ class SyncViewModel
         }
 
         /**
-         * Adds a repository.
+         * Adds a vault.
          *
-         * The first one mounts at the root, so an install that only ever reads
-         * one looks and behaves exactly as it did before any of this existed.
-         * Everything after it needs a folder of its own, because two
-         * repositories cannot both own the top level.
+         * The name is for reading and nothing else -- it does not decide where
+         * anything is stored, so it can be changed later without moving two
+         * hundred megabytes. Blank falls back to the repository's own name.
          */
         fun addVault(
             owner: String,
             repo: String,
             branch: String,
-            mount: String,
+            name: String,
         ) = viewModelScope.launch {
             val first = state.value.vaults.isEmpty()
-            val folder = if (first) mount.trim() else mount.trim().ifBlank { repo.trim() }
             repository.addVault(
                 owner = owner,
                 repo = repo,
                 branch = branch.ifBlank { null },
-                mount = folder,
+                name = name,
                 transport = state.value.settings.transport,
             )
             // Kept in step so the old single-repository settings still describe

@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.NotesDatabase
+import me.parham1995.notes.data.database.VaultEntity
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -24,6 +25,10 @@ class VaultRepositoryTest {
     private lateinit var files: VaultFileStore
     private lateinit var indexer: VaultIndexer
     private lateinit var repository: VaultRepository
+
+    /** Vault ids the tests index into. The first is the active one. */
+    private val first = 1L
+    private val second = 2L
 
     @Before
     fun setUp() {
@@ -50,6 +55,7 @@ class VaultRepositoryTest {
                 tasks = database.taskDao(),
                 blobs = database.blobDao(),
                 vaults = database.vaultDao(),
+                settings = SettingsStore(ApplicationProvider.getApplicationContext()),
             )
     }
 
@@ -58,20 +64,37 @@ class VaultRepositoryTest {
         database.close()
     }
 
-    private suspend fun index(vararg notes: Pair<String, String>) {
+    private suspend fun index(vararg notes: Pair<String, String>) = indexInto(first, *notes)
+
+    private suspend fun ensureVault(vaultId: Long) {
+        val dao = database.vaultDao()
+        if (dao.byId(vaultId) == null) {
+            dao.insert(VaultEntity(id = vaultId, owner = "someone", repo = "repo-$vaultId", name = "v$vaultId"))
+        }
+    }
+
+    private suspend fun indexInto(
+        vaultId: Long,
+        vararg notes: Pair<String, String>,
+    ) {
+        ensureVault(vaultId)
         val entries =
             notes.map { (path, text) ->
-                files.write(path, text.toByteArray())
+                files.write(vaultId, path, text.toByteArray())
                 PathAndSha(path, "sha-" + path.hashCode())
             }
-        indexer.indexAll(entries)
+        indexer.indexAll(vaultId, entries)
     }
 
     /** Records a file the reader does not parse, as a sync would. */
     private suspend fun attachment(path: String) {
+        // The vault has to exist for anything to be active, and a repository of
+        // nothing but attachments never indexes a note to create one.
+        ensureVault(first)
         database.blobDao().upsert(
             me.parham1995.notes.data.database.BlobEntity(
                 path = path,
+                vaultId = first,
                 sha = "sha-" + path.hashCode(),
                 size = 1,
                 kind = me.parham1995.notes.sync.BlobKind.OTHER,
@@ -136,7 +159,7 @@ class VaultRepositoryTest {
                 "Beta/Ordinary.md" to "b",
             )
 
-            val landing = repository.note(database.noteDao().idOf("Alpha/Alpha.md")!!)!!
+            val landing = repository.note(database.noteDao().idOf(1L, "Alpha/Alpha.md")!!)!!
             assertThat(landing.isFolderNote).isTrue()
 
             // `A/B/B.md` is the landing page for `A/B`, so that is the folder
@@ -145,7 +168,7 @@ class VaultRepositoryTest {
             assertThat(contents.map { it.name }).containsExactly("Deep", "One")
             assertThat(contents.single { it.name == "Deep" }.noteId).isNotNull()
 
-            val ordinary = repository.note(database.noteDao().idOf("Beta/Ordinary.md")!!)!!
+            val ordinary = repository.note(database.noteDao().idOf(1L, "Beta/Ordinary.md")!!)!!
             assertThat(ordinary.isFolderNote).isFalse()
         }
 
@@ -168,7 +191,7 @@ class VaultRepositoryTest {
                 "Alpha/Source.md" to "# Heading\n\nSee [[Target]] and [[Nowhere]].",
                 "Beta/Target.md" to "the target",
             )
-            val id = database.noteDao().idOf("Alpha/Source.md")!!
+            val id = database.noteDao().idOf(1L, "Alpha/Source.md")!!
 
             val note = repository.note(id)!!
 
@@ -186,7 +209,7 @@ class VaultRepositoryTest {
                 "Alpha.md" to "a mention of [[Target]] in passing",
                 "Target.md" to "the target",
             )
-            val targetId = database.noteDao().idOf("Target.md")!!
+            val targetId = database.noteDao().idOf(1L, "Target.md")!!
 
             val backlinks = repository.backlinks(targetId)
 
@@ -246,7 +269,7 @@ class VaultRepositoryTest {
     fun `a note that goes away takes its tasks with it`() =
         runTest {
             index("Work/Apollo.md" to "- [ ] one ⏳ 2026-09-18")
-            indexer.indexChanged(changed = emptyList(), removed = listOf("Work/Apollo.md"))
+            indexer.indexChanged(1L, changed = emptyList(), removed = listOf("Work/Apollo.md"))
 
             assertThat(repository.openTasks().first()).isEmpty()
         }
@@ -291,7 +314,7 @@ class VaultRepositoryTest {
                 "Infra/Linked.md" to "see [[Rate Limiting]] for the details",
                 "Infra/Unrelated.md" to "nothing to do with it",
             )
-            val id = database.noteDao().idOf("Infra/Rate Limiting.md")!!
+            val id = database.noteDao().idOf(1L, "Infra/Rate Limiting.md")!!
 
             val mentions = repository.unlinkedMentions(id)
 
@@ -304,7 +327,7 @@ class VaultRepositoryTest {
     fun `a note is never an unlinked mention of itself`() =
         runTest {
             index("Infra/Rate Limiting.md" to "Rate Limiting is what this note is about")
-            val id = database.noteDao().idOf("Infra/Rate Limiting.md")!!
+            val id = database.noteDao().idOf(1L, "Infra/Rate Limiting.md")!!
 
             assertThat(repository.unlinkedMentions(id)).isEmpty()
         }
@@ -316,7 +339,7 @@ class VaultRepositoryTest {
                 "Infra/Rate Limiting.md" to "the subject",
                 "Infra/Money.md" to "the exchange rate moved",
             )
-            val id = database.noteDao().idOf("Infra/Rate Limiting.md")!!
+            val id = database.noteDao().idOf(1L, "Infra/Rate Limiting.md")!!
 
             // "rate" alone is not a mention of "Rate Limiting", and treating it
             // as one would bury the real mentions in a vault this size.
@@ -328,7 +351,7 @@ class VaultRepositoryTest {
         runTest {
             val text = "# Heading\n\nBody with [[a link]] and **emphasis**."
             index("Infra/Source.md" to text)
-            val id = database.noteDao().idOf("Infra/Source.md")!!
+            val id = database.noteDao().idOf(1L, "Infra/Source.md")!!
 
             // Markdown, not the rendered text: what goes out is what the person
             // receiving it can do something with.
@@ -344,7 +367,7 @@ class VaultRepositoryTest {
                 "C.md" to "says nothing",
                 "D.md" to "links to [[A]]",
             )
-            val a = database.noteDao().idOf("A.md")!!
+            val a = database.noteDao().idOf(1L, "A.md")!!
 
             val graph = repository.neighbours(a)!!
 
@@ -352,7 +375,7 @@ class VaultRepositoryTest {
             assertThat(graph.incoming.map { it.title }).containsExactly("B", "D")
             // B is both, which in a hand-linked vault is the strongest signal
             // there is, and is drawn differently because of it.
-            assertThat(graph.mutual).containsExactly(database.noteDao().idOf("B.md"))
+            assertThat(graph.mutual).containsExactly(database.noteDao().idOf(1L, "B.md"))
         }
 
     @Test
@@ -362,7 +385,7 @@ class VaultRepositoryTest {
                 "A.md" to "see [[B]], and [[B]] again, and [[B]] once more",
                 "B.md" to "the target",
             )
-            val a = database.noteDao().idOf("A.md")!!
+            val a = database.noteDao().idOf(1L, "A.md")!!
 
             assertThat(repository.neighbours(a)!!.outgoing).hasSize(1)
         }
@@ -371,7 +394,7 @@ class VaultRepositoryTest {
     fun `an unconnected note has an empty graph rather than no graph`() =
         runTest {
             index("Lonely.md" to "nothing here")
-            val id = database.noteDao().idOf("Lonely.md")!!
+            val id = database.noteDao().idOf(1L, "Lonely.md")!!
 
             val graph = repository.neighbours(id)!!
 
@@ -384,5 +407,56 @@ class VaultRepositoryTest {
     fun `the graph of a note that is not there is null`() =
         runTest {
             assertThat(repository.neighbours(9_999)).isNull()
+        }
+
+    @Test
+    fun `two vaults holding the same path hold different notes`() =
+        runTest {
+            indexInto(first, "README.md" to "the first vault")
+            indexInto(second, "README.md" to "the second vault")
+
+            // The unique index is on (vault, path), not path: a README in each
+            // is two notes, and treating them as one is how mounting went wrong.
+            assertThat(database.noteDao().byPath(first, "README.md")!!.vaultId).isEqualTo(first)
+            assertThat(database.noteDao().byPath(second, "README.md")!!.vaultId).isEqualTo(second)
+            assertThat(database.noteDao().count(first).first()).isEqualTo(1)
+            assertThat(database.noteDao().count(second).first()).isEqualTo(1)
+        }
+
+    @Test
+    fun `a link cannot resolve into another vault`() =
+        runTest {
+            indexInto(second, "Target.md" to "the other vault's note")
+            indexInto(first, "Source.md" to "see [[Target]]")
+
+            val id = database.noteDao().idOf(first, "Source.md")!!
+            val note = repository.note(id)!!
+
+            // It is a broken link, not a link across vaults. Separate vaults
+            // that quietly linked into each other would be mounting again.
+            assertThat(note.linkTargets).isEmpty()
+            assertThat(note.brokenTargets).contains("Target")
+        }
+
+    @Test
+    fun `the browser only lists the active vault`() =
+        runTest {
+            indexInto(first, "Only/Mine.md" to "a")
+            indexInto(second, "Theirs/Yours.md" to "b")
+
+            assertThat(repository.children("").map { it.name }).containsExactly("Only")
+        }
+
+    @Test
+    fun `indexing one vault leaves the other alone`() =
+        runTest {
+            indexInto(first, "A.md" to "a")
+            indexInto(second, "B.md" to "b")
+
+            // `indexAll` clears before it writes, and clearing everything would
+            // silently empty whichever vault was not being reindexed.
+            indexInto(first, "A.md" to "a changed")
+
+            assertThat(database.noteDao().count(second).first()).isEqualTo(1)
         }
 }

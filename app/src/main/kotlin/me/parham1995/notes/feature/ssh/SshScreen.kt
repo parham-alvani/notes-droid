@@ -116,7 +116,7 @@ fun SshScreen(
                 KeyCard(
                     row = row,
                     busy = state.busy,
-                    onGenerate = { viewModel.generate(row.vault.mount) },
+                    onGenerate = { viewModel.generate(row.vault.name) },
                     onReplace = { replacing = row },
                     onTest = { viewModel.test(row) },
                     onCopy = { line ->
@@ -167,7 +167,7 @@ fun SshScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.generate(row.vault.mount)
+                    viewModel.generate(row.vault.name)
                     replacing = null
                 }) {
                     Text("Replace")

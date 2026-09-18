@@ -57,17 +57,14 @@ class IconStore
         /**
          * One set of assignments per repository.
          *
-         * Each repository carries its own plugin configuration, written in
-         * paths relative to itself -- a rule like `^Companies/[^/]*$` means
-         * nothing once the repository is mounted under a folder. Rather than
-         * rewriting the rules, the mount is stripped off the path before the
-         * repository's own config is asked about it.
+         * Each vault carries its own plugin configuration, written in its own
+         * paths, so the vault has to be named to get an answer -- a rule like
+         * `^Companies/[^/]*$` belongs to one vault and means nothing in another.
          */
         private suspend fun load(): VaultIcons {
-            val mounted =
+            val byVault =
                 vaults.all().mapNotNull { vault ->
-                    val path = vault.mounted(VaultFilter.ICONIC_CONFIG)
-                    val text = files.readText(path) ?: return@mapNotNull null
+                    val text = files.readText(vault.id, VaultFilter.ICONIC_CONFIG) ?: return@mapNotNull null
                     val parsed =
                         runCatching { IconicConfig.parse(text) }
                             .onFailure {
@@ -75,39 +72,34 @@ class IconStore
                                 // should cost the icons, not the app.
                                 log.warn("could not read icon assignments for ${vault.label}: ${it.message}")
                             }.getOrNull() ?: return@mapNotNull null
-                    vault.mount to parsed
+                    vault.id to parsed
                 }
-            return VaultIcons(mounted)
+            return VaultIcons(byVault)
         }
     }
 
 /**
- * The icon assignments of every repository, addressed by the paths the app
- * actually uses.
+ * Each vault's icon assignments, kept apart.
  *
- * The longest matching mount wins, so a repository mounted at `work` answers
- * for `work/...` and the root-mounted one answers for everything else. With a
- * single repository this is exactly the one config it always was.
+ * Every vault carries its own plugin configuration written in its own paths, so
+ * the vault has to be named to get an answer. With one vault this is exactly
+ * the one config it always was.
  */
 class VaultIcons(
-    private val byMount: List<Pair<String, IconicConfig>>,
+    private val byVault: List<Pair<Long, IconicConfig>>,
 ) {
-    val isEmpty: Boolean get() = byMount.all { it.second.isEmpty }
+    val isEmpty: Boolean get() = byVault.all { it.second.isEmpty }
 
     fun forPath(
+        vaultId: Long,
         path: String,
         isFolder: Boolean,
-    ): IconSpec? {
-        val (mount, config) =
-            byMount
-                .filter { (mount, _) -> mount.isEmpty() || path == mount || path.startsWith("$mount/") }
-                .maxByOrNull { (mount, _) -> mount.length }
-                ?: return null
-        val relative = if (mount.isEmpty()) path else path.removePrefix("$mount/")
-        return config.forPath(relative, isFolder)
-    }
+    ): IconSpec? = byVault.firstOrNull { it.first == vaultId }?.second?.forPath(path, isFolder)
 
-    fun forFile(path: String): IconSpec? = forPath(path, isFolder = false)
+    fun forFile(
+        vaultId: Long,
+        path: String,
+    ): IconSpec? = forPath(vaultId, path, isFolder = false)
 
     companion object {
         val EMPTY = VaultIcons(emptyList())

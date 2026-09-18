@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -150,6 +151,11 @@ data class VaultSettings(
     /** Local hour to post it, 0-23. */
     val taskDigestHour: Int = DEFAULT_DIGEST_HOUR,
     val reading: ReadingSettings = ReadingSettings(),
+    /**
+     * The vault being read. Zero means "whichever is first", which is what a
+     * fresh install and a single-vault install both want.
+     */
+    val activeVaultId: Long = 0,
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
 
@@ -183,6 +189,7 @@ class SettingsStore
                         preferences[INTERVAL_HOURS] ?: VaultSettings.DEFAULT_INTERVAL_HOURS,
                     taskDigest = preferences[TASK_DIGEST] ?: false,
                     taskDigestHour = preferences[DIGEST_HOUR] ?: VaultSettings.DEFAULT_DIGEST_HOUR,
+                    activeVaultId = preferences[ACTIVE_VAULT] ?: 0L,
                     reading =
                         ReadingSettings(
                             textScale = preferences[TEXT_SCALE] ?: 1f,
@@ -241,6 +248,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[DIGEST_HOUR] = hour }
         }
 
+        suspend fun setActiveVault(id: Long) {
+            context.settingsDataStore.edit { it[ACTIVE_VAULT] = id }
+        }
+
         suspend fun setTextScale(scale: Float) {
             context.settingsDataStore.edit { it[TEXT_SCALE] = scale }
         }
@@ -277,6 +288,7 @@ class SettingsStore
             val INTERVAL_HOURS = intPreferencesKey("sync_interval_hours")
             val TASK_DIGEST = booleanPreferencesKey("task_digest")
             val DIGEST_HOUR = intPreferencesKey("task_digest_hour")
+            val ACTIVE_VAULT = longPreferencesKey("active_vault")
             val TEXT_SCALE = floatPreferencesKey("reading_text_scale")
             val LINE_SPACING = floatPreferencesKey("reading_line_spacing")
             val THEME = stringPreferencesKey("reading_theme")

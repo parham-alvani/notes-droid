@@ -250,6 +250,7 @@ fun NoteScreen(
                                     listState = listState,
                                     actions =
                                         RenderActions(
+                                            vaultId = note.vaultId,
                                             inline =
                                                 InlineActions(
                                                     onWikiLink = { target, _ ->

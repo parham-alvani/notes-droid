@@ -8,26 +8,24 @@ import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 
 /**
- * One repository the app reads.
+ * One repository the app reads, as its own vault.
  *
- * Mounted at [mount], which is a top-level folder name. Everything downstream
- * -- the file store, the index, search, links, tasks -- addresses files by a
- * path that already carries the mount, so none of it needed to learn about
- * multiple repositories at all. Only syncing does, because each repository has
- * its own head commit and its own manifest.
+ * Vaults are separate rather than folders inside one tree. Each has its own
+ * files, its own index, its own search and its own tasks, and a link in one
+ * cannot resolve into another -- which is what a person means by "a different
+ * vault" and what mounting them under a shared root could never express.
  *
- * An empty [mount] means the root, which is how the vault that existed before
- * any of this keeps working untouched: its paths did not change, so nothing had
- * to be moved on disk or rewritten in the database. Every repository added
- * afterwards needs a name of its own.
+ * [name] is for reading and can be changed. It does not decide where anything
+ * is stored: that is keyed by [id], so renaming a vault does not move two
+ * hundred megabytes.
  */
-@Entity(tableName = "vaults", indices = [Index("mount", unique = true)])
+@Entity(tableName = "vaults", indices = [Index("name", unique = true)])
 data class VaultEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val owner: String,
     val repo: String,
     val branch: String? = null,
-    val mount: String = "",
+    val name: String = "",
     /** `REST` or `SSH`, named rather than typed so the row survives reordering. */
     val transport: String = "REST",
     val ordinal: Int = 0,
@@ -39,15 +37,7 @@ data class VaultEntity(
     val filterVersion: Int = 0,
     val indexVersion: Int = 0,
 ) {
-    val label: String get() = mount.ifEmpty { repo }
-
-    /** A repository path, as this vault addresses it on the device. */
-    fun mounted(path: String): String = if (mount.isEmpty()) path else "$mount/$path"
-
-    /** The reverse, for handing a path back to the transport. */
-    fun unmounted(path: String): String = if (mount.isEmpty()) path else path.removePrefix("$mount/")
-
-    fun owns(path: String): Boolean = mount.isEmpty() || path == mount || path.startsWith("$mount/")
+    val label: String get() = name.ifBlank { repo }
 }
 
 /**
@@ -122,10 +112,19 @@ class Converters {
  */
 @Entity(
     tableName = "notes",
-    indices = [Index("path", unique = true), Index("parent"), Index("slug")],
+    indices = [
+        // Unique per vault, not globally: two vaults may each hold a README,
+        // and they are different notes.
+        Index(value = ["vaultId", "path"], unique = true),
+        Index("vaultId"),
+        Index("parent"),
+        Index("slug"),
+    ],
 )
 data class NoteEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** Which vault this belongs to. Paths are relative to it. */
+    val vaultId: Long,
     val path: String,
     /** Containing directory, for the browser's one-level-at-a-time queries. */
     val parent: String,

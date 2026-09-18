@@ -63,6 +63,12 @@ import me.parham1995.notes.ui.theme.Vazirmatn
 
 /** Everything a rendered block might need to hand back to the screen. */
 data class RenderActions(
+    /**
+     * Which vault the note being rendered belongs to. Its embeds are resolved
+     * against that vault alone -- an image in one is not an image in another,
+     * even at the same path.
+     */
+    val vaultId: Long = 0,
     val inline: InlineActions = InlineActions(),
     val onImage: (path: String) -> Unit = {},
     val onAttachment: (path: String) -> Unit = {},
@@ -113,9 +119,10 @@ fun MdBlockView(
             is MdBlock.Table -> TableView(block, actions, brokenLinks, modifier)
             is MdBlock.Image ->
                 VaultImage(
-                    block.path,
-                    block.alt,
-                    modifier,
+                    vaultId = actions.vaultId,
+                    path = block.path,
+                    alt = block.alt,
+                    modifier = modifier,
                     onClick = { actions.onImage(block.path) },
                 )
             is MdBlock.Attachment -> AttachmentView(block, actions, modifier)

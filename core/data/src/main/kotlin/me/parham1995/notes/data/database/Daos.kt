@@ -20,8 +20,11 @@ interface BlobDao {
     @Query("SELECT path, sha FROM blobs WHERE vaultId = :vaultId")
     suspend fun manifestRows(vaultId: Long): List<ManifestRow>
 
-    @Query("SELECT * FROM blobs WHERE path = :path")
-    suspend fun byPath(path: String): BlobEntity?
+    @Query("SELECT * FROM blobs WHERE vaultId = :vaultId AND path = :path")
+    suspend fun byPath(
+        vaultId: Long,
+        path: String,
+    ): BlobEntity?
 
     @Query("SELECT * FROM blobs WHERE kind = :kind AND localState = :state")
     suspend fun byKindAndState(
@@ -29,11 +32,15 @@ interface BlobDao {
         state: LocalState,
     ): List<BlobEntity>
 
-    @Query("DELETE FROM blobs WHERE path = :path")
-    suspend fun deleteByPath(path: String)
+    @Query("DELETE FROM blobs WHERE vaultId = :vaultId AND path = :path")
+    suspend fun deleteByPath(
+        vaultId: Long,
+        path: String,
+    )
 
-    @Query("UPDATE blobs SET path = :to WHERE path = :from")
+    @Query("UPDATE blobs SET path = :to WHERE vaultId = :vaultId AND path = :from")
     suspend fun rename(
+        vaultId: Long,
         from: String,
         to: String,
     )
@@ -48,8 +55,11 @@ interface BlobDao {
      * Re-emitted rather than sampled, because a repository of nothing but
      * attachments has no notes to make the tree appear when it syncs.
      */
-    @Query("SELECT path FROM blobs WHERE kind != :markdown ORDER BY path")
-    fun attachmentPaths(markdown: BlobKind = BlobKind.MARKDOWN): Flow<List<String>>
+    @Query("SELECT path FROM blobs WHERE vaultId = :vaultId AND kind != :markdown ORDER BY path")
+    fun attachmentPaths(
+        vaultId: Long,
+        markdown: BlobKind = BlobKind.MARKDOWN,
+    ): Flow<List<String>>
 
     @Query("SELECT COALESCE(SUM(size), 0) FROM blobs WHERE localState = :state")
     suspend fun bytesInState(state: LocalState): Long
@@ -117,12 +127,19 @@ interface TaskDao {
                n.path AS notePath, n.title AS noteTitle
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
-        WHERE t.open = 1
+        WHERE t.open = 1 AND n.vaultId = :vaultId
         ORDER BY (t.actionableOn IS NULL), t.actionableOn, n.path, t.ordinal
         """,
     )
-    fun open(): Flow<List<TaskRow>>
+    fun open(vaultId: Long): Flow<List<TaskRow>>
 
+    /**
+     * Counted across every vault, not just the active one.
+     *
+     * The list is per vault because that is where you go to act on it; the
+     * count is what a widget and a notification show, and being late on
+     * something in another vault is still being late.
+     */
     @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn IS NOT NULL AND actionableOn < :today")
     suspend fun overdueCount(today: String): Int
 

@@ -51,7 +51,7 @@ class VaultIndexerTest {
         path: String,
         text: String,
     ): PathAndSha {
-        files.write(path, text.toByteArray())
+        files.write(1L, path, text.toByteArray())
         return PathAndSha(path, "sha-" + path.hashCode())
     }
 
@@ -60,9 +60,9 @@ class VaultIndexerTest {
         runTest {
             val entry = write("Alpha/Some File Name.md", "# A Completely Different Heading\n\nBody.")
 
-            indexer.indexAll(listOf(entry))
+            indexer.indexAll(1L, listOf(entry))
 
-            val note = database.noteDao().byPath("Alpha/Some File Name.md")
+            val note = database.noteDao().byPath(1L, "Alpha/Some File Name.md")
             assertThat(note).isNotNull()
             assertThat(note!!.title).isEqualTo("Some File Name")
         }
@@ -72,9 +72,9 @@ class VaultIndexerTest {
         runTest {
             // It keeps its own copy, weighted ten times the body, so a stale
             // one there is worse than a stale one on screen.
-            indexer.indexAll(listOf(write("Alpha/Findable Note.md", "# Heading\n\nsome body text")))
+            indexer.indexAll(1L, listOf(write("Alpha/Findable Note.md", "# Heading\n\nsome body text")))
 
-            val hits = search.search("Findable")
+            val hits = search.search(1L, "Findable")
 
             assertThat(hits).isNotEmpty()
             assertThat(hits.first().title).isEqualTo("Findable Note")
@@ -85,9 +85,9 @@ class VaultIndexerTest {
         runTest {
             val entry = write("Note.md", "# One\n\ntext\n\n## Two\n\nmore\n\n### Three\n\nend")
 
-            indexer.indexAll(listOf(entry))
+            indexer.indexAll(1L, listOf(entry))
 
-            val id = database.noteDao().idOf("Note.md")!!
+            val id = database.noteDao().idOf(1L, "Note.md")!!
             val headings = database.headingDao().byNote(id)
             assertThat(headings.map { it.text }).containsExactly("One", "Two", "Three").inOrder()
             assertThat(headings.map { it.level }).containsExactly(1, 2, 3).inOrder()
@@ -103,9 +103,9 @@ class VaultIndexerTest {
             val alpha = write("Alpha.md", "See [[Beta]].")
             val beta = write("Beta.md", "The target.")
 
-            indexer.indexAll(listOf(alpha, beta))
+            indexer.indexAll(1L, listOf(alpha, beta))
 
-            val betaId = database.noteDao().idOf("Beta.md")!!
+            val betaId = database.noteDao().idOf(1L, "Beta.md")!!
             val backlinks = database.linkDao().backlinks(betaId)
             assertThat(backlinks).hasSize(1)
             assertThat(backlinks.first().title).isEqualTo("Alpha")
@@ -115,9 +115,9 @@ class VaultIndexerTest {
     @Test
     fun `a link with no target stays unresolved rather than vanishing`() =
         runTest {
-            indexer.indexAll(listOf(write("Alpha.md", "See [[Nothing Here]].")))
+            indexer.indexAll(1L, listOf(write("Alpha.md", "See [[Nothing Here]].")))
 
-            val unresolved = database.linkDao().unresolved()
+            val unresolved = database.linkDao().unresolved(1L)
             assertThat(unresolved.map { it.rawTarget }).contains("Nothing Here")
         }
 
@@ -125,53 +125,55 @@ class VaultIndexerTest {
     fun `a folder note is recognised`() =
         runTest {
             indexer.indexAll(
+                1L,
                 listOf(
                     write("Beta/Beta.md", "The folder's landing page."),
                     write("Beta/Other.md", "Not a folder note."),
                 ),
             )
 
-            assertThat(database.noteDao().byPath("Beta/Beta.md")!!.isFolderNote).isTrue()
-            assertThat(database.noteDao().byPath("Beta/Other.md")!!.isFolderNote).isFalse()
+            assertThat(database.noteDao().byPath(1L, "Beta/Beta.md")!!.isFolderNote).isTrue()
+            assertThat(database.noteDao().byPath(1L, "Beta/Other.md")!!.isFolderNote).isFalse()
         }
 
     @Test
     fun `right-to-left content is flagged`() =
         runTest {
             indexer.indexAll(
+                1L,
                 listOf(
                     write("Fa.md", "این یک یادداشت فارسی است"),
                     write("En.md", "This one is not."),
                 ),
             )
 
-            assertThat(database.noteDao().byPath("Fa.md")!!.isRtl).isTrue()
-            assertThat(database.noteDao().byPath("En.md")!!.isRtl).isFalse()
+            assertThat(database.noteDao().byPath(1L, "Fa.md")!!.isRtl).isTrue()
+            assertThat(database.noteDao().byPath(1L, "En.md")!!.isRtl).isFalse()
         }
 
     @Test
     fun `reindexing replaces rather than duplicates`() =
         runTest {
             val entry = write("Note.md", "# First\n\n[[Somewhere]]")
-            indexer.indexAll(listOf(entry))
-            indexer.indexAll(listOf(entry))
+            indexer.indexAll(1L, listOf(entry))
+            indexer.indexAll(1L, listOf(entry))
 
-            val id = database.noteDao().idOf("Note.md")!!
+            val id = database.noteDao().idOf(1L, "Note.md")!!
             assertThat(database.headingDao().byNote(id)).hasSize(1)
-            assertThat(database.linkDao().unresolved().count { it.srcId == id }).isEqualTo(1)
+            assertThat(database.linkDao().unresolved(1L).count { it.srcId == id }).isEqualTo(1)
         }
 
     @Test
     fun `a removed note leaves nothing behind`() =
         runTest {
             val alpha = write("Alpha.md", "[[Beta]]")
-            indexer.indexAll(listOf(alpha, write("Beta.md", "target")))
-            val alphaId = database.noteDao().idOf("Alpha.md")!!
+            indexer.indexAll(1L, listOf(alpha, write("Beta.md", "target")))
+            val alphaId = database.noteDao().idOf(1L, "Alpha.md")!!
 
-            indexer.indexChanged(changed = emptyList(), removed = listOf("Alpha.md"))
+            indexer.indexChanged(1L, changed = emptyList(), removed = listOf("Alpha.md"))
 
-            assertThat(database.noteDao().byPath("Alpha.md")).isNull()
+            assertThat(database.noteDao().byPath(1L, "Alpha.md")).isNull()
             assertThat(database.headingDao().byNote(alphaId)).isEmpty()
-            assertThat(search.search("Alpha").map { it.path }).doesNotContain("Alpha.md")
+            assertThat(search.search(1L, "Alpha").map { it.path }).doesNotContain("Alpha.md")
         }
 }

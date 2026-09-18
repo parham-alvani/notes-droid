@@ -11,7 +11,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The vault's working tree on disk.
+ * The vaults' working trees on disk.
  *
  * Two things matter here. Writes are atomic -- temp file then rename -- so an
  * interrupted sync can never leave a half-written note that later looks intact.
@@ -28,13 +28,22 @@ class VaultFileStore
     ) {
         val root: File = File(context.filesDir, "vault")
 
-        /** Absolute file for a vault-relative [path]. */
-        fun fileFor(path: String): File {
+        /** Where one vault's working tree lives. */
+        fun rootOf(vaultId: Long): File = File(root, vaultId.toString())
+
+        /** Absolute file for a [path] relative to [vaultId]. */
+        fun fileFor(
+            vaultId: Long,
+            path: String,
+        ): File {
             val normalized = normalize(path)
-            val file = File(root, normalized)
+            val vaultRoot = rootOf(vaultId)
+            val file = File(vaultRoot, normalized)
             // A repository is untrusted input. A path escaping the vault root
-            // would let a crafted entry write anywhere the app can.
-            val canonicalRoot = root.canonicalPath
+            // would let a crafted entry write anywhere the app can -- including
+            // into another vault, which is why this is checked against the
+            // vault's own directory rather than the shared parent.
+            val canonicalRoot = vaultRoot.canonicalPath
             val canonicalFile = file.canonicalPath
             require(canonicalFile == canonicalRoot || canonicalFile.startsWith(canonicalRoot + File.separator)) {
                 "path escapes the vault root: $path"
@@ -43,10 +52,11 @@ class VaultFileStore
         }
 
         suspend fun write(
+            vaultId: Long,
             path: String,
             bytes: ByteArray,
         ) = withContext(Dispatchers.IO) {
-            val target = fileFor(path)
+            val target = fileFor(vaultId, path)
             target.parentFile?.mkdirs()
             val temp = File.createTempFile("write", null, target.parentFile ?: root)
             try {
@@ -61,19 +71,26 @@ class VaultFileStore
             }
         }
 
-        suspend fun read(path: String): ByteArray? =
+        suspend fun read(
+            vaultId: Long,
+            path: String,
+        ): ByteArray? =
             withContext(Dispatchers.IO) {
-                fileFor(path).takeIf { it.isFile }?.readBytes()
+                fileFor(vaultId, path).takeIf { it.isFile }?.readBytes()
             }
 
-        suspend fun readText(path: String): String? = read(path)?.decodeToString()
+        suspend fun readText(
+            vaultId: Long,
+            path: String,
+        ): String? = read(vaultId, path)?.decodeToString()
 
         suspend fun move(
+            vaultId: Long,
             from: String,
             to: String,
         ) = withContext(Dispatchers.IO) {
-            val source = fileFor(from)
-            val target = fileFor(to)
+            val source = fileFor(vaultId, from)
+            val target = fileFor(vaultId, to)
             if (!source.exists()) return@withContext
             target.parentFile?.mkdirs()
             if (!source.renameTo(target)) {
@@ -83,28 +100,29 @@ class VaultFileStore
             pruneEmptyParents(source.parentFile)
         }
 
-        suspend fun delete(path: String) =
-            withContext(Dispatchers.IO) {
-                val file = fileFor(path)
-                file.delete()
-                pruneEmptyParents(file.parentFile)
-            }
+        suspend fun delete(
+            vaultId: Long,
+            path: String,
+        ) = withContext(Dispatchers.IO) {
+            val file = fileFor(vaultId, path)
+            file.delete()
+            pruneEmptyParents(file.parentFile)
+        }
 
         /**
-         * Removes a whole subtree -- the working tree of a repository that has
-         * been detached, including the `.git` directory a clone leaves behind.
+         * Everything one vault holds, for a repository being detached --
+         * including the `.git` directory a clone leaves behind.
          */
-        suspend fun deleteTree(path: String) =
+        suspend fun deleteVault(vaultId: Long) =
             withContext(Dispatchers.IO) {
-                val target = fileFor(path)
-                // Never the vault root itself: `deleteTree("")` from a vault
-                // mounted at the root would take every other repository with it.
-                if (path.isBlank() || target == root) return@withContext
-                target.deleteRecursively()
-                pruneEmptyParents(target.parentFile)
+                rootOf(vaultId).deleteRecursively()
+                Unit
             }
 
-        suspend fun exists(path: String): Boolean = withContext(Dispatchers.IO) { fileFor(path).isFile }
+        suspend fun exists(
+            vaultId: Long,
+            path: String,
+        ): Boolean = withContext(Dispatchers.IO) { fileFor(vaultId, path).isFile }
 
         /** Bytes currently occupied by the working tree. */
         suspend fun sizeOnDisk(): Long =
