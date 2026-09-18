@@ -99,6 +99,7 @@ fun SyncScreen(
             TaskDigestCard(state, viewModel)
             StatusCard(state, viewModel)
             LogCard(viewModel)
+            state.lastCrash?.let { CrashCard(it, viewModel) }
             AboutCard()
         }
     }
@@ -496,6 +497,49 @@ private fun Context.ignoresBatteryOptimisations(): Boolean =
     getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: false
 
 /**
+ * Shown only after a crash, and only until it is dismissed.
+ *
+ * There is no store console behind this app and logcat is gone by the time
+ * anyone thinks to look, so the alternative to putting it here is losing the
+ * reason entirely.
+ */
+@Composable
+private fun CrashCard(
+    crash: String,
+    viewModel: SyncViewModel,
+) {
+    val context = LocalContext.current
+    SectionCard("The app crashed") {
+        Text(
+            crash.lineSequence().take(CRASH_PREVIEW_LINES).joinToString("\n"),
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            maxLines = CRASH_PREVIEW_LINES,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                runCatching {
+                    context.startActivity(
+                        Intent.createChooser(
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Daftar crash")
+                                putExtra(Intent.EXTRA_TEXT, crash)
+                            },
+                            "Share the crash",
+                        ),
+                    )
+                }
+            }) {
+                Text("Share")
+            }
+            OutlinedButton(onClick = viewModel::dismissCrash) { Text("Dismiss") }
+        }
+    }
+}
+
+/**
  * What this build actually is.
  *
  * Useful when more than one APK is in circulation -- a release from the tag, a
@@ -554,6 +598,7 @@ private fun LabelledValue(
 private const val SHORT_SHA_LENGTH = 7
 private const val HOURS_IN_DAY = 24
 private const val ERROR_PREVIEW = 60
+private const val CRASH_PREVIEW_LINES = 8
 private const val BYTES_PER_UNIT = 1024.0
 
 private fun formatBytes(bytes: Long): String {

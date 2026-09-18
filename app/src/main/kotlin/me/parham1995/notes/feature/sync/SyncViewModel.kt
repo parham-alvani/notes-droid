@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncLog
@@ -56,6 +57,8 @@ data class SyncUiState(
     val sshKeys: List<VaultKey> = emptyList(),
     val generatingKey: Boolean = false,
     val reindexing: Boolean = false,
+    /** The last crash, if the app has had one. Null is the normal case. */
+    val lastCrash: String? = null,
 )
 
 @HiltViewModel
@@ -69,6 +72,7 @@ class SyncViewModel
         private val files: VaultFileStore,
         private val sshKeys: SshKeyStore,
         private val syncLog: SyncLog,
+        private val crashLog: CrashLog,
     ) : ViewModel() {
         private val local = MutableStateFlow(LocalState())
 
@@ -79,6 +83,7 @@ class SyncViewModel
             val sshKeys: List<VaultKey> = emptyList(),
             val generatingKey: Boolean = false,
             val reindexing: Boolean = false,
+            val lastCrash: String? = null,
         )
 
         val state: StateFlow<SyncUiState> =
@@ -110,6 +115,7 @@ class SyncViewModel
                         sshKeys = extra.sshKeys,
                         generatingKey = extra.generatingKey,
                         reindexing = extra.reindexing,
+                        lastCrash = extra.lastCrash,
                         tokenRejected =
                             failed?.outputData?.getString(SyncWorker.KEY_ERROR) == SyncWorker.TOKEN_REJECTED,
                     )
@@ -223,6 +229,12 @@ class SyncViewModel
                 refreshLocal()
             }
 
+        fun dismissCrash() =
+            viewModelScope.launch {
+                crashLog.clear()
+                refreshLocal()
+            }
+
         fun reindex() =
             viewModelScope.launch {
                 local.value = local.value.copy(reindexing = true)
@@ -251,6 +263,7 @@ class SyncViewModel
                     local.value.copy(
                         hasToken = tokenStore.hasToken(),
                         diskBytes = files.sizeOnDisk(),
+                        lastCrash = crashLog.read(),
                         // One entry per repository set to SSH. GitHub refuses
                         // the same deploy key on a second repository, so there
                         // is a key each and each has to be registered.

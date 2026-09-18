@@ -73,16 +73,22 @@ private data class Tab(
 )
 
 @Composable
-fun NotesNavHost(openTasks: StateFlow<Boolean> = MutableStateFlow(false)) {
+fun NotesNavHost(openScreen: StateFlow<String?> = MutableStateFlow(null)) {
     val navController = rememberNavController()
 
-    // A one-shot: consumed so that rotating the phone afterwards does not
-    // yank the person back to the task list.
-    val wantsTasks by openTasks.collectAsStateWithLifecycle()
-    LaunchedEffect(wantsTasks) {
-        if (wantsTasks) {
-            navController.navigate(TasksRoute) { launchSingleTop = true }
-            (openTasks as? MutableStateFlow)?.value = false
+    // A one-shot: consumed so that rotating the phone afterwards does not yank
+    // the person back to wherever they were sent half an hour ago.
+    val requested by openScreen.collectAsStateWithLifecycle()
+    LaunchedEffect(requested) {
+        val destination =
+            when (requested) {
+                "tasks" -> TasksRoute
+                "search" -> SearchRoute
+                else -> null
+            }
+        if (destination != null) {
+            navController.navigate(destination) { launchSingleTop = true }
+            (openScreen as? MutableStateFlow)?.value = null
         }
     }
     val tabs =

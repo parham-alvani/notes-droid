@@ -10,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
@@ -23,6 +24,9 @@ class NotesApplication :
     Configuration.Provider {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var crashLog: Provider<CrashLog>
 
     // Providers rather than the objects themselves: both reach WorkManager,
     // and Hilt fills these in during super.onCreate(), which is before this
@@ -38,6 +42,9 @@ class NotesApplication :
 
     override fun onCreate() {
         super.onCreate()
+        // Before anything else that could throw. It records and delegates; it
+        // does not recover.
+        crashLog.get().install()
         // JGit and sshd log through slf4j; slf4j-simple sends that to stderr,
         // which Android routes to logcat. Debug level makes the SSH handshake
         // visible to `just logs` without touching release behaviour.

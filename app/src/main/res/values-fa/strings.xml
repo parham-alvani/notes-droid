@@ -4,4 +4,8 @@
          Persian; the app already renders the vault's own Persian notes. -->
     <string name="app_name">دفتر</string>
     <string name="widget_description">کارهای عقب‌افتاده و امروز</string>
+    <string name="shortcut_tasks_short">کارها</string>
+    <string name="shortcut_tasks_long">کارهای باز</string>
+    <string name="shortcut_search_short">جستجو</string>
+    <string name="shortcut_search_long">جستجو در دفتر</string>
 </resources>

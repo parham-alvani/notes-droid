@@ -1,0 +1,5 @@
+Polish.
+
+A proper splash screen, so the app starts rather than appearing. Long-pressing the launcher icon goes straight to Tasks or Search.
+
+If the app ever crashes, the reason is now kept where it can be read and shared, instead of disappearing into a log nobody was watching. Settings shows it until you dismiss it.

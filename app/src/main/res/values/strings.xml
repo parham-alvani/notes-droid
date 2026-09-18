@@ -3,4 +3,8 @@
     <!-- Persian for notebook. Six characters, so no launcher truncates it. -->
     <string name="app_name">Daftar</string>
     <string name="widget_description">What is overdue and due today</string>
+    <string name="shortcut_tasks_short">Tasks</string>
+    <string name="shortcut_tasks_long">What is open</string>
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search the vault</string>
 </resources>

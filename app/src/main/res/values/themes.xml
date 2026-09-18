@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        The launch theme. From API 31 the system draws this itself; below that
+        core-splashscreen draws the same thing, so a device on Android 10 and
+        one on Android 15 start identically.
+    -->
+    <style name="Theme.Notes.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/naz_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Notes</item>
+    </style>
+
     <!-- The window background matches naz's Normal background, so launching
          does not flash white before Compose draws. -->
     <style name="Theme.Notes" parent="android:Theme.Material.NoActionBar">

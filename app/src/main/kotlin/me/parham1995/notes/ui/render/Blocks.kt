@@ -100,7 +100,13 @@ fun MdBlockView(
             is MdBlock.Quote -> QuoteView(block, actions, brokenLinks, modifier)
             is MdBlock.ListBlock -> ListBlockView(block, actions, brokenLinks, modifier)
             is MdBlock.Table -> TableView(block, actions, brokenLinks, modifier)
-            is MdBlock.Image -> VaultImage(block.path, block.alt, modifier, onClick = { actions.onImage(block.path) })
+            is MdBlock.Image ->
+                VaultImage(
+                    block.path,
+                    block.alt,
+                    modifier,
+                    onClick = { actions.onImage(block.path) },
+                )
             is MdBlock.Attachment -> AttachmentView(block, actions, modifier)
             is MdBlock.ThematicBreak -> HorizontalDivider(modifier.padding(vertical = 8.dp))
             is MdBlock.Unsupported -> UnsupportedView(block.label, modifier)
