@@ -70,7 +70,7 @@ data class RenderActions(
      */
     val vaultId: Long = 0,
     val inline: InlineActions = InlineActions(),
-    val onImage: (path: String) -> Unit = {},
+    val onImage: (path: String, alt: String?) -> Unit = { _, _ -> },
     val onAttachment: (path: String) -> Unit = {},
     val onCopyCode: (String) -> Unit = {},
 )
@@ -123,7 +123,7 @@ fun MdBlockView(
                     path = block.path,
                     alt = block.alt,
                     modifier = modifier,
-                    onClick = { actions.onImage(block.path) },
+                    onClick = { actions.onImage(block.path, block.alt) },
                 )
             is MdBlock.Attachment -> AttachmentView(block, actions, modifier)
             is MdBlock.ThematicBreak -> HorizontalDivider(modifier.padding(vertical = 8.dp))

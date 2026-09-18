@@ -10,11 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,8 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import dagger.hilt.android.EntryPointAccessors
-import me.parham1995.notes.di.RendererEntryPoint
+import me.parham1995.notes.ui.image.rememberVaultImageBytes
 
 /**
  * An embedded image.
@@ -42,21 +37,9 @@ fun VaultImage(
     onClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val source =
-        remember {
-            EntryPointAccessors
-                .fromApplication(
-                    context.applicationContext,
-                    RendererEntryPoint::class.java,
-                ).fileSource()
-        }
-    var bytes by remember(vaultId, path) { mutableStateOf<ByteArray?>(null) }
-    var failed by remember(vaultId, path) { mutableStateOf(false) }
-
-    LaunchedEffect(vaultId, path) {
-        val loaded = source.bytes(vaultId, path)
-        if (loaded == null) failed = true else bytes = loaded
-    }
+    val image by rememberVaultImageBytes(vaultId, path)
+    val bytes = image.bytes
+    val failed = image.failed
 
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         when {

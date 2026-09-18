@@ -63,6 +63,7 @@ import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.icon.VaultIcon
+import me.parham1995.notes.ui.image.ImageViewer
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
@@ -95,6 +96,8 @@ fun NoteScreen(
     var showContents by remember(noteId) { mutableStateOf(false) }
     // A PDF opens in place; everything else is handed to another app.
     var reading by remember(noteId) { mutableStateOf<File?>(null) }
+    // The embedded image being looked at full screen, by its vault path.
+    var zoomed by remember(noteId) { mutableStateOf<Pair<String, String?>?>(null) }
     var finding by remember(noteId) { mutableStateOf(false) }
 
     LaunchedEffect(noteId) { viewModel.load(noteId) }
@@ -274,6 +277,10 @@ fun NoteScreen(
                                             // Never wired until now: the card was drawn, said
                                             // "open with another app", and did nothing at all
                                             // when tapped.
+                                            // Never wired either: images were
+                                            // drawn, took a tap, and did
+                                            // nothing with it.
+                                            onImage = { path, alt -> zoomed = path to alt },
                                             onAttachment = { path ->
                                                 scope.launch {
                                                     val file = viewModel.attachment(path)
@@ -301,6 +308,19 @@ fun NoteScreen(
                     }
                 }
             }
+        }
+    }
+
+    // Both are needed: an image belongs to the vault of the note embedding it,
+    // and there is nothing to show once that note has gone.
+    state.note?.let { note ->
+        zoomed?.let { (path, alt) ->
+            ImageViewer(
+                vaultId = note.vaultId,
+                path = path,
+                alt = alt,
+                onDismiss = { zoomed = null },
+            )
         }
     }
 
