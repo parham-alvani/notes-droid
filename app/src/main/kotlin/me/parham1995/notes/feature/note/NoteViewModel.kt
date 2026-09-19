@@ -85,12 +85,7 @@ class NoteViewModel
          */
         suspend fun peek(noteId: Long): LinkTarget? {
             val note = repository.note(noteId) ?: return null
-            val opening =
-                note.blocks
-                    .filterIsInstance<MdBlock.Paragraph>()
-                    .firstOrNull()
-                    ?.let { plainText(it.inlines).trim() }
-                    .orEmpty()
+            val opening = openingLine(note.blocks)
             return LinkTarget(
                 noteId = noteId,
                 title = note.title,
@@ -233,3 +228,28 @@ data class LinkTarget(
 
 /** Enough of the opening to recognise a note by. */
 private const val PEEK_CHARS = 240
+
+/**
+ * The first line of a note that says what it is about.
+ *
+ * Not simply the first paragraph. Notes in this vault routinely open with a
+ * list of sources and a "Related notes:" line, so the first paragraph is
+ * frequently that label -- which is what the preview showed, and it describes
+ * every note equally.
+ *
+ * A label is short and ends in a colon; prose does neither. Falling back to
+ * the first paragraph is deliberate: a preview of something is better than a
+ * preview of nothing.
+ */
+internal fun openingLine(blocks: List<MdBlock>): String {
+    val paragraphs =
+        blocks
+            .filterIsInstance<MdBlock.Paragraph>()
+            .map { plainText(it.inlines).trim() }
+            .filter { it.isNotEmpty() }
+    val prose = paragraphs.firstOrNull { it.length >= PROSE_CHARS && !it.endsWith(':') }
+    return (prose ?: paragraphs.firstOrNull()).orEmpty().take(PEEK_CHARS)
+}
+
+/** Below this, and ending in a colon, it is a heading for something else. */
+private const val PROSE_CHARS = 40

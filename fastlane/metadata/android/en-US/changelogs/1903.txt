@@ -1,0 +1,1 @@
+A link preview shows what the note is about. It was showing the note's first paragraph, which in this vault is very often "Related notes:" — true of a great many notes and useful about none of them.
