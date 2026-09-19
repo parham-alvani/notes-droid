@@ -98,6 +98,68 @@ class MigrationTest {
     }
 
     @Test
+    fun `the manifest survives every migration, from every version`() {
+        // The shape test above builds an empty database, and an empty table
+        // cannot collide, overflow or lose a row -- which is how a migration
+        // that could not commit, and left the app unable to start, got
+        // through a green suite. This one carries rows the whole way.
+        for (from in 1 until CURRENT) {
+            val file = File.createTempFile("data-$from-", ".db").also { it.delete() }
+            try {
+                BundledSQLiteDriver().open(file.path).use { connection ->
+                    build(connection, schema(from))
+                    NotesDatabase.createSearchIndex(connection)
+                    seedBlobs(connection, from)
+
+                    migrations
+                        .filter { (range, _) -> range.first >= from }
+                        .forEach { (_, migration) -> migration.migrate(connection) }
+
+                    val paths = mutableListOf<String>()
+                    connection.prepare("SELECT path FROM blobs ORDER BY path").use {
+                        while (it.step()) paths += it.getText(0)
+                    }
+                    assertWithMessage("the manifest after migrating from %s", from)
+                        .that(paths)
+                        .containsExactly("README.md", "uploads/logo.png")
+                }
+            } finally {
+                file.delete()
+            }
+        }
+    }
+
+    /** Two manifest rows, written the way the schema at [version] allows. */
+    private fun seedBlobs(
+        connection: SQLiteConnection,
+        version: Int,
+    ) {
+        // `blobs.vaultId` only exists from 8; before that a blob belonged to
+        // the one vault there was.
+        val scoped = version >= VAULT_ID_FROM
+        if (scoped) {
+            // The folder a vault was mounted at became simply its name in 9.
+            val named = if (version >= NAMED_FROM) "name" else "mount"
+            connection.execSQL(
+                "INSERT INTO vaults " +
+                    "(id, owner, repo, $named, transport, ordinal, enabled, filterVersion, indexVersion) " +
+                    "VALUES (1, 'o', 'notes', '', 'REST', 0, 1, 0, 0)",
+            )
+        }
+        val columns =
+            if (scoped) "(path, vaultId, sha, size, kind, localState)" else "(path, sha, size, kind, localState)"
+        val rows =
+            if (scoped) {
+                "('README.md', 1, 'a', 1, 'MARKDOWN', 'DOWNLOADED'), " +
+                    "('uploads/logo.png', 1, 'b', 2, 'IMAGE', 'DOWNLOADED')"
+            } else {
+                "('README.md', 'a', 1, 'MARKDOWN', 'DOWNLOADED'), " +
+                    "('uploads/logo.png', 'b', 2, 'IMAGE', 'DOWNLOADED')"
+            }
+        connection.execSQL("INSERT INTO blobs $columns VALUES $rows")
+    }
+
+    @Test
     fun `two vaults keep a file they both name the same`() {
         // The crash this exists for: one vault mounted at the root and one in
         // a folder, both holding `uploads/logo.png`. Making the paths relative
@@ -229,6 +291,12 @@ class MigrationTest {
 
         val CURRENT = MIGRATIONS.maxOf { (range, _) -> range.last }
         const val TABLE_NAME = "\${TABLE_NAME}"
+
+        /** `blobs.vaultId` exists from this version onward. */
+        const val VAULT_ID_FROM = 7
+
+        /** `vaults.mount` became `vaults.name` at this version. */
+        const val NAMED_FROM = 9
 
         /** Column positions in `PRAGMA table_info`. */
         const val NAME_COLUMN = 1

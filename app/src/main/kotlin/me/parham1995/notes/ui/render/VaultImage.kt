@@ -70,9 +70,7 @@ fun VaultImage(
                     Text(
                         text =
                             if (failed) {
-                                "Image unavailable - ${path.substringAfterLast(
-                                    '/',
-                                )}"
+                                stringResource(R.string.image_unavailable, path.substringAfterLast('/'))
                             } else {
                                 stringResource(R.string.image_loading)
                             },

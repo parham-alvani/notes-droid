@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.parham1995.notes.R
 import me.parham1995.notes.markdown.CalloutKind
 import me.parham1995.notes.markdown.MdAlign
 import me.parham1995.notes.markdown.MdBlock
@@ -550,7 +552,7 @@ private fun AttachmentView(
             Column {
                 Text(block.label, style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    "Open with another app",
+                    stringResource(R.string.attachment_open_with),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

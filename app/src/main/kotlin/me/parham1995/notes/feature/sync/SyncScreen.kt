@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.WindowManager
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -108,7 +109,7 @@ fun SettingsHomeScreen(
             // out why.
             state.blocker()?.let { blocker ->
                 Text(
-                    text = blocker,
+                    text = blocker.text(),
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
@@ -289,8 +290,7 @@ private fun RepositoryCard(
 
         if (state.vaults.size > 1) {
             Text(
-                "Each vault is separate: its own files, search, tasks and links. The browser " +
-                    "switches between them.",
+                stringResource(R.string.help_vaults),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -362,7 +362,7 @@ private fun TokenCard(
 
     SectionCard("Access token") {
         Text(
-            "A fine-grained token with Contents: read-only on this repository, and nothing else.",
+            stringResource(R.string.help_token),
             style = MaterialTheme.typography.bodySmall,
         )
         OutlinedTextField(
@@ -394,8 +394,7 @@ private fun TokenCard(
         }
         if (state.tokenRejected) {
             Text(
-                "The token was rejected. Fine-grained tokens expire after at most a year -- this one " +
-                    "may simply have run out.",
+                stringResource(R.string.help_token_rejected),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -426,9 +425,9 @@ private fun StatusCard(
             Text(
                 text =
                     if (state.attempt > 0) {
-                        "Waiting to retry (attempt ${state.attempt + 1})"
+                        stringResource(R.string.sync_retry_waiting, state.attempt + 1)
                     } else {
-                        "Queued - waiting for the network"
+                        stringResource(R.string.sync_queued)
                     },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.tertiary,
@@ -459,7 +458,7 @@ private fun StatusCard(
         // reason reads as a missing button.
         state.blocker()?.let { reason ->
             Text(
-                text = reason,
+                text = reason.text(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -549,8 +548,7 @@ private fun BackgroundSyncCard(
             val exempt = remember { context.ignoresBatteryOptimisations() }
             if (!exempt) {
                 Text(
-                    "Battery optimisation is on for this app, so Android may defer or skip a " +
-                        "scheduled sync indefinitely. Pull to refresh always works.",
+                    stringResource(R.string.help_battery),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -607,8 +605,7 @@ private fun TaskDigestCard(
                 }
             }
             Text(
-                "Counts what is overdue and due today, from the last sync. Nothing is sent " +
-                    "when there is nothing to report.",
+                stringResource(R.string.help_digest),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -633,6 +630,7 @@ private fun CrashCard(
 ) {
     val context = LocalContext.current
     val crashSubject = stringResource(R.string.settings_crash_subject)
+    val shareTitle = stringResource(R.string.crash_share_title)
     SectionCard("The app crashed") {
         Text(
             crash.lineSequence().take(CRASH_PREVIEW_LINES).joinToString("\n"),
@@ -651,7 +649,7 @@ private fun CrashCard(
                                 putExtra(Intent.EXTRA_SUBJECT, crashSubject)
                                 putExtra(Intent.EXTRA_TEXT, crash)
                             },
-                            "Share the crash",
+                            shareTitle,
                         ),
                     )
                 }
@@ -768,9 +766,9 @@ private fun TransportCard(
                     Text(
                         text =
                             if (option == SyncTransport.REST) {
-                                "Markdown only. A refresh with nothing new costs one request."
+                                stringResource(R.string.help_transport_rest)
                             } else {
-                                "No token to rotate, but git cannot fetch a subset -- full history and all attachments."
+                                stringResource(R.string.help_transport_ssh)
                             },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -884,8 +882,7 @@ private fun ReadingCard(
             }
         }
         Text(
-            "naz is a dark colourscheme and defines no light palette, so light keeps its accents " +
-                "against paper rather than pretending to be it.",
+            stringResource(R.string.help_theme),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -898,7 +895,7 @@ private fun ReadingCard(
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.settings_persian_font), style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    "Off uses the platform's Naskh, which has every glyph and draws them differently.",
+                    stringResource(R.string.help_persian_font),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -985,19 +982,32 @@ private fun ImagesCard(
  * button permanently disabled for anyone using SSH, which is exactly the setup
  * where there is deliberately no token to have.
  */
-private fun SyncUiState.blocker(): String? {
+private fun SyncUiState.blocker(): Blocker? {
     val overRest = vaults.any { SyncTransport.parse(it.transport) == SyncTransport.REST }
     val keyless = sshKeys.firstOrNull { it.publicKey == null }
     return when {
-        vaults.isEmpty() -> "Add a repository first."
-        overRest && !hasToken ->
-            "Syncing over REST needs an access token. Add one above, or switch that repository to SSH."
-        keyless != null ->
-            "${keyless.label} has no SSH key yet. Generate one above and add it to that repository " +
-                "as a read-only deploy key."
+        vaults.isEmpty() -> Blocker(R.string.help_add_repository)
+        overRest && !hasToken -> Blocker(R.string.help_needs_token)
+        keyless != null -> Blocker(R.string.help_needs_key, keyless.label)
         else -> null
     }
 }
+
+/**
+ * Which reason to give, rather than the words of it.
+ *
+ * This is worked out from state, not from a composition, so it cannot read a
+ * resource -- and returning English from here is how the screen kept a
+ * sentence the rest of it no longer has.
+ */
+private data class Blocker(
+    @StringRes val message: Int,
+    val argument: String? = null,
+)
+
+@Composable
+private fun Blocker.text(): String =
+    if (argument == null) stringResource(message) else stringResource(message, argument)
 
 /**
  * The sync journal.
@@ -1018,7 +1028,7 @@ private fun LogCard(viewModel: SyncViewModel) {
     SectionCard("Sync log") {
         if (entries.isEmpty()) {
             Text(
-                "Nothing recorded yet.",
+                stringResource(R.string.journal_empty),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

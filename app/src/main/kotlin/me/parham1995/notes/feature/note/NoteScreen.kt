@@ -88,6 +88,7 @@ import java.io.File
 @Composable
 fun NoteScreen(
     noteId: Long,
+    openInNewTab: Boolean,
     onBack: () -> Unit,
     onOpenNote: (Long) -> Unit,
     onOpenFolder: (String) -> Unit,
@@ -98,6 +99,7 @@ fun NoteScreen(
     val context = LocalContext.current
     val nothingOpens = stringResource(R.string.error_nothing_opens)
     val noteMissing = stringResource(R.string.note_missing)
+    val couldNotFetch = stringResource(R.string.error_could_not_fetch)
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -121,7 +123,7 @@ fun NoteScreen(
     // The route argument only ever seeds the set. After that the screen
     // follows whichever tab is being read, so switching tabs does not have to
     // navigate and lose the back stack.
-    LaunchedEffect(noteId) { viewModel.openTab(noteId) }
+    LaunchedEffect(noteId) { viewModel.openTab(noteId, inNewTab = openInNewTab) }
     val activeId = tabs.current?.noteId ?: noteId
 
     LaunchedEffect(activeId) { viewModel.load(activeId) }
@@ -315,7 +317,7 @@ fun NoteScreen(
                             state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                             state.missing ->
                                 Text(
-                                    "This note is not on the device.",
+                                    stringResource(R.string.note_not_on_device),
                                     Modifier.align(Alignment.Center).padding(24.dp),
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
@@ -383,7 +385,7 @@ fun NoteScreen(
                                                         val message =
                                                             when {
                                                                 file == null ->
-                                                                    "Could not fetch " + path.substringAfterLast('/')
+                                                                    couldNotFetch.format(path.substringAfterLast('/'))
                                                                 // A PDF is read here; everything else
                                                                 // belongs to whatever app owns that type.
                                                                 Attachments.isPdf(path) -> {
@@ -550,7 +552,7 @@ fun NoteScreen(
                 if (state.mentionsLoaded && state.backlinks.isEmpty() && state.mentions.isEmpty()) {
                     item {
                         Text(
-                            "Nothing links here, and nothing names it either.",
+                            stringResource(R.string.note_no_mentions),
                             Modifier.fillMaxWidth().padding(24.dp),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -578,7 +580,7 @@ private fun FolderContents(
 ) {
     if (rows.isEmpty()) {
         Text(
-            "This folder holds nothing but its own note.",
+            stringResource(R.string.note_folder_empty),
             Modifier.fillMaxWidth().padding(24.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

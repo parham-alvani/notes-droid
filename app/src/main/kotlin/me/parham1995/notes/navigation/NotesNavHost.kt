@@ -78,6 +78,15 @@ data class GraphRoute(
 @Serializable
 data class NoteRoute(
     val id: Long,
+    /**
+     * Beside what is already open, rather than in place of it.
+     *
+     * Arriving from the browser or a search is starting a new thread of
+     * reading, so it replaces what was being read -- otherwise a session's
+     * worth of browsing leaves a row of twenty tabs nobody asked for. Holding
+     * a row asks for the other thing.
+     */
+    val newTab: Boolean = false,
 )
 
 private data class Tab(
@@ -178,6 +187,7 @@ fun NotesNavHost(
                 BrowserScreen(
                     initialPath = entry.toRoute<BrowseRoute>().path,
                     onOpenNote = { navController.navigate(NoteRoute(it)) },
+                    onOpenNoteInNewTab = { navController.navigate(NoteRoute(it, newTab = true)) },
                     onOpenAdvancedSettings = {
                         navController.navigate(
                             SettingsSectionRoute(SettingsSection.ADVANCED.name),
@@ -189,7 +199,10 @@ fun NotesNavHost(
                 TasksScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
             }
             composable<SearchRoute> {
-                SearchScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
+                SearchScreen(
+                    onOpenNote = { navController.navigate(NoteRoute(it)) },
+                    onOpenNoteInNewTab = { navController.navigate(NoteRoute(it, newTab = true)) },
+                )
             }
             composable<SettingsRoute> {
                 SettingsHomeScreen(
@@ -221,6 +234,7 @@ fun NotesNavHost(
                 val route = entry.toRoute<NoteRoute>()
                 NoteScreen(
                     noteId = route.id,
+                    openInNewTab = route.newTab,
                     onOpenGraph = { navController.navigate(GraphRoute(it)) },
                     onBack = { navController.popBackStack() },
                     onOpenNote = { navController.navigate(NoteRoute(it)) },

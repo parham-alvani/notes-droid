@@ -1,6 +1,6 @@
 package me.parham1995.notes.ui
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,6 +39,8 @@ fun ItemRow(
     defaultIcon: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Held rather than tapped. Null leaves the gesture alone. */
+    onLongClick: (() -> Unit)? = null,
     subtitle: String? = null,
     iconDescription: String? = null,
     /** Obsidian's own mark for a folder that has a note of its own. */
@@ -48,7 +50,7 @@ fun ItemRow(
     Row(
         modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

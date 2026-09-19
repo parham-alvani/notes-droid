@@ -1,0 +1,3 @@
+Opening a note from the browser or a search replaces what you were reading instead of adding a tab. Every note opened that way used to add one, so a session's browsing left a row of tabs nobody asked for. Hold a row to open it in a new tab instead.
+
+The app is fully translated to Persian — the help text in Settings and the SSH screen was the last of it, and it was still English.

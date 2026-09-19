@@ -96,14 +96,11 @@ fun SshScreen(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Every key is generated on this device and its private half never leaves it. " +
-                            "What you copy out is the public line, which goes to the repository as a " +
-                            "read-only deploy key.",
+                        stringResource(R.string.help_ssh_keys),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Text(
-                        "GitHub allows a deploy key on exactly one repository, so there is one key per " +
-                            "repository rather than one for all of them.",
+                        stringResource(R.string.help_key_per_repo),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -112,8 +109,7 @@ fun SshScreen(
 
             if (state.loaded && state.repositories.isEmpty()) {
                 Text(
-                    "No repository is set to sync over SSH. Switch one to SSH in Settings and its key " +
-                        "will appear here.",
+                    stringResource(R.string.help_no_ssh_repo),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -149,8 +145,7 @@ fun SshScreen(
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.ssh_port_443), style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Many mobile networks block port 22, where a clone simply hangs with no " +
-                                "error at all. GitHub answers SSH on 443 too.",
+                            stringResource(R.string.help_port_443),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -168,11 +163,7 @@ fun SshScreen(
             onDismissRequest = { replacing = null },
             title = { Text(stringResource(R.string.ssh_replace_question, row.label)) },
             text = {
-                Text(
-                    "The key currently registered on ${row.remote} stops working immediately. " +
-                        "Syncing that repository will fail until the new public line is added to it " +
-                        "as a deploy key, and the old one should be removed there.",
-                )
+                Text(stringResource(R.string.help_replace_key, row.remote))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -280,9 +271,7 @@ private fun OrphanCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.ssh_unused), style = MaterialTheme.typography.titleMedium)
             Text(
-                "Left behind by a repository that was removed or switched to REST. Still private keys " +
-                    "sitting in the app's storage, and the deploy keys they match are probably still " +
-                    "registered on GitHub.",
+                stringResource(R.string.help_unused_keys),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

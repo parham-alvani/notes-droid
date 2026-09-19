@@ -1,6 +1,6 @@
 package me.parham1995.notes.feature.search
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -47,6 +47,7 @@ import me.parham1995.notes.ui.inScript
 @Composable
 fun SearchScreen(
     onOpenNote: (Long) -> Unit,
+    onOpenNoteInNewTab: (Long) -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -80,6 +81,7 @@ fun SearchScreen(
                     ResultRow(
                         icon = row.icon,
                         onClick = { onOpenNote(row.note.id) },
+                        onLongClick = { onOpenNoteInNewTab(row.note.id) },
                     ) {
                         Text(row.note.title.ifBlank { row.note.name }, style = MaterialTheme.typography.bodyLarge)
                         Text(
@@ -101,6 +103,7 @@ fun SearchScreen(
                     ResultRow(
                         icon = row.icon,
                         onClick = { onOpenNote(row.hit.noteId) },
+                        onLongClick = { onOpenNoteInNewTab(row.hit.noteId) },
                         spacing = 2.dp,
                     ) {
                         Text(row.hit.title, style = MaterialTheme.typography.bodyMedium)
@@ -121,7 +124,7 @@ fun SearchScreen(
             if (state.query.isNotBlank() && !state.searching && state.quick.isEmpty() && state.hits.isEmpty()) {
                 item {
                     Text(
-                        "Nothing matched.",
+                        stringResource(R.string.search_no_match),
                         Modifier.fillMaxWidth().padding(32.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -173,13 +176,14 @@ private fun String.highlighted(): AnnotatedString {
 private fun ResultRow(
     icon: IconSpec?,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     spacing: Dp = 0.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

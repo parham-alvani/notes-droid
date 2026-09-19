@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -96,7 +97,7 @@ fun GraphScreen(
 
                 state.nodes.isEmpty() ->
                     Text(
-                        "Nothing links to this note, and it links to nothing.",
+                        stringResource(R.string.graph_no_links),
                         Modifier.align(Alignment.Center).padding(32.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = muted,
@@ -149,7 +150,7 @@ fun GraphScreen(
 
                     if (state.hidden > 0) {
                         Text(
-                            "${state.hidden} more not shown",
+                            pluralStringResource(R.plurals.graph_hidden, state.hidden, state.hidden),
                             Modifier.align(Alignment.BottomCenter).padding(16.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = muted,

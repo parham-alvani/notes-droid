@@ -61,6 +61,7 @@ import java.io.File
 @Composable
 fun BrowserScreen(
     onOpenNote: (Long) -> Unit,
+    onOpenNoteInNewTab: (Long) -> Unit,
     onOpenAdvancedSettings: () -> Unit,
     initialPath: String = "",
     viewModel: BrowserViewModel = hiltViewModel(),
@@ -74,6 +75,7 @@ fun BrowserScreen(
 
     val context = LocalContext.current
     val nothingOpens = stringResource(R.string.error_nothing_opens)
+    val couldNotFetch = stringResource(R.string.error_could_not_fetch)
     val scope = rememberCoroutineScope()
     // A PDF is read here; anything else goes to whatever app owns that type.
     var reading by remember { mutableStateOf<File?>(null) }
@@ -83,7 +85,7 @@ fun BrowserScreen(
             val file = viewModel.attachment(path)
             val message =
                 when {
-                    file == null -> "Could not fetch " + path.substringAfterLast('/')
+                    file == null -> couldNotFetch.format(path.substringAfterLast('/'))
                     Attachments.isPdf(path) -> {
                         reading = file
                         null
@@ -173,7 +175,7 @@ fun BrowserScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        "Syncing $done of $total",
+                        stringResource(R.string.browse_syncing, done, total),
                         Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
@@ -243,8 +245,9 @@ fun BrowserScreen(
                                 subtitle = row.note.path.substringBeforeLast('/', ""),
                                 icon = row.icon,
                                 defaultIcon = "file-text",
-                                iconDescription = "Note",
+                                iconDescription = stringResource(R.string.note_kind),
                                 onClick = { onOpenNote(row.note.id) },
+                                onLongClick = { onOpenNoteInNewTab(row.note.id) },
                             )
                         }
                         item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
@@ -252,14 +255,14 @@ fun BrowserScreen(
                     }
 
                     items(state.items, key = { it.item.path }) { row ->
-                        BrowserRow(row, viewModel, onOpenNote, openAttachment)
+                        BrowserRow(row, viewModel, onOpenNote, onOpenNoteInNewTab, openAttachment)
                     }
 
                     if (!state.loading && state.items.isEmpty()) {
                         item {
                             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                                 Text(
-                                    "Nothing here yet. Pull down to sync.",
+                                    stringResource(R.string.browse_empty),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -277,6 +280,7 @@ private fun BrowserRow(
     row: VaultRowItem,
     viewModel: BrowserViewModel,
     onOpenNote: (Long) -> Unit,
+    onOpenNoteInNewTab: (Long) -> Unit,
     onOpenAttachment: (String) -> Unit,
 ) {
     val item = row.item
@@ -291,9 +295,9 @@ private fun BrowserRow(
             },
         iconDescription =
             when {
-                item.isFolder -> "Folder"
-                item.isAttachment -> "File"
-                else -> "Note"
+                item.isFolder -> stringResource(R.string.kind_folder)
+                item.isAttachment -> stringResource(R.string.kind_file)
+                else -> stringResource(R.string.note_kind)
             },
         // A folder with its own note opens that note; the chevron descends.
         underline = item.isFolder && item.noteId != null,
@@ -305,6 +309,10 @@ private fun BrowserRow(
                 else -> viewModel.open(item.path)
             }
         },
+        // Only where there is a note to open beside what is being read. A
+        // folder without one, or a file for another app, has nothing to put
+        // in a tab.
+        onLongClick = item.noteId?.let { note -> { onOpenNoteInNewTab(note) } },
         trailing =
             if (!item.isFolder) {
                 null
