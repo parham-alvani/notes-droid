@@ -66,30 +66,56 @@ class MermaidRenderer
             val cached = File(cacheDir, "$key.svg")
             if (cached.isFile && cached.length() > 0) return Result.Svg(cached)
 
-            return mutex.withLock {
-                // Re-check: another caller may have rendered the same diagram
-                // while this one waited for the lock.
-                if (cached.isFile && cached.length() > 0) return@withLock Result.Svg(cached)
+            // Everything below is bounded, including the wait for the lock.
+            //
+            // There is one WebView and one mutex around it, so a render that
+            // wedges does not fail alone -- every other diagram in the note
+            // waits behind it, on a placeholder, for ever. Both ways that
+            // could happen were unbounded: acquiring the lock, and starting
+            // the page, which sits outside the per-render timeout and is the
+            // part that talks to a WebView that might not answer.
+            return withTimeoutOrNull(TOTAL_TIMEOUT_MS) {
+                mutex.withLock {
+                    // Re-check: another caller may have rendered the same
+                    // diagram while this one waited for the lock.
+                    if (cached.isFile && cached.length() > 0) return@withLock Result.Svg(cached)
 
-                val view = ensureWebView(theme)
-                val json =
-                    withTimeoutOrNull(RENDER_TIMEOUT_MS) {
-                        evaluate(view, "render(${key.take(8).quoted()}, ${code.quoted()})")
-                        awaitResult(view)
-                    } ?: return@withLock Result.Failed("timed out")
+                    val view =
+                        withTimeoutOrNull(LOAD_TIMEOUT_MS) { ensureWebView(theme) }
+                            ?: run {
+                                // Drop it rather than queue behind it again:
+                                // a page that did not answer once will not
+                                // answer the next diagram either.
+                                resetWebView()
+                                return@withLock Result.Failed("the diagram engine did not start")
+                            }
+                    val json =
+                        withTimeoutOrNull(RENDER_TIMEOUT_MS) {
+                            evaluate(view, "render(${key.take(8).quoted()}, ${code.quoted()})")
+                            awaitResult(view)
+                        } ?: return@withLock Result.Failed("timed out")
 
-                val parsed =
-                    runCatching { JSONObject(json) }.getOrNull()
-                        ?: return@withLock Result.Failed("unreadable response")
+                    val parsed =
+                        runCatching { JSONObject(json) }.getOrNull()
+                            ?: return@withLock Result.Failed("unreadable response")
 
-                if (!parsed.optBoolean("ok")) {
-                    return@withLock Result.Failed(parsed.optString("error", "invalid diagram"))
+                    if (!parsed.optBoolean("ok")) {
+                        return@withLock Result.Failed(parsed.optString("error", "invalid diagram"))
+                    }
+
+                    withContext(Dispatchers.IO) { cached.writeText(parsed.getString("svg")) }
+                    Result.Svg(cached)
                 }
-
-                withContext(Dispatchers.IO) { cached.writeText(parsed.getString("svg")) }
-                Result.Svg(cached)
-            }
+            } ?: Result.Failed("gave up waiting to draw")
         }
+
+        /** Forgets the page, so the next diagram builds a fresh one. */
+        private suspend fun resetWebView() =
+            withContext(Dispatchers.Main) {
+                runCatching { webView?.destroy() }
+                webView = null
+                themeKey = null
+            }
 
         @SuppressLint("SetJavaScriptEnabled")
         private suspend fun ensureWebView(theme: MermaidTheme): WebView =
@@ -235,6 +261,18 @@ class MermaidRenderer
              * 3: a line's words joined, so the spaces between them survive.
              */
             const val PAGE_VERSION = "3"
+
+            /**
+             * The whole attempt, queueing included.
+             *
+             * Generous because a note can hold a dozen diagrams and they are
+             * drawn one at a time; short enough that a wedged page becomes a
+             * message rather than a placeholder that never resolves.
+             */
+            const val TOTAL_TIMEOUT_MS = 25_000L
+
+            /** Building the page and parsing five megabytes of mermaid. */
+            const val LOAD_TIMEOUT_MS = 10_000L
 
             const val RENDER_TIMEOUT_MS = 4_000L
             const val POLL_MS = 40L

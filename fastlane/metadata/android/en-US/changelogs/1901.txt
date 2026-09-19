@@ -1,0 +1,1 @@
+Diagrams no longer sit on "Rendering diagram" for ever. Starting the page was the one step with no time limit on it, and it talks to a browser engine that can stop answering — when it did, it held the lock that every other diagram in the note was queued behind. All of it is bounded now, and a page that stops answering is thrown away rather than queued behind again.
