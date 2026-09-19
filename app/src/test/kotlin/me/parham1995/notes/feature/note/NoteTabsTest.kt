@@ -5,18 +5,57 @@ import org.junit.Test
 
 /** How the set of open notes behaves, which is most of what tabs are. */
 class NoteTabsTest {
-    private fun tabs() = NoteTabs()
+    private fun tabs() = Tabs()
 
-    private fun ids(t: NoteTabs) =
-        t.state.value.tabs
-            .map { it.noteId }
+    private fun ids(t: Tabs) = t.state.tabs.map { it.noteId }
+
+    /**
+     * The transitions, without the storage around them.
+     *
+     * What a tab does is arithmetic on a list; what the singleton adds is
+     * writing it down and reading it back. Testing the arithmetic needs
+     * neither a database nor a settings file.
+     */
+    private class Tabs {
+        var state = TabsState()
+
+        fun open(
+            noteId: Long,
+            inNewTab: Boolean,
+        ) {
+            state = state.opening(noteId, inNewTab)
+        }
+
+        fun back(): Boolean {
+            val next = state.goingBack()
+            val moved = next != state
+            state = next
+            return moved
+        }
+
+        fun select(index: Int) {
+            state = state.selecting(index)
+        }
+
+        fun close(index: Int): Boolean {
+            state = state.closing(index)
+            return state.tabs.isNotEmpty()
+        }
+
+        fun retitle(
+            noteId: Long,
+            title: String,
+        ) {
+            state = state.retitling(noteId, title)
+        }
+    }
 
     @Test
     fun `the first note opened becomes the only tab`() {
         val t = tabs()
         t.open(1, inNewTab = true)
         assertThat(ids(t)).containsExactly(1L)
-        assertThat(t.state.value.active).isEqualTo(0)
+        assertThat(t.state.active).isEqualTo(0)
     }
 
     @Test
@@ -37,7 +76,7 @@ class NoteTabsTest {
         t.select(0)
         t.open(3, inNewTab = true)
         assertThat(ids(t)).containsExactly(1L, 3L, 2L).inOrder()
-        assertThat(t.state.value.active).isEqualTo(1)
+        assertThat(t.state.active).isEqualTo(1)
     }
 
     @Test
@@ -47,7 +86,7 @@ class NoteTabsTest {
         t.open(2, inNewTab = true)
         t.open(1, inNewTab = true)
         assertThat(ids(t)).containsExactly(1L, 2L).inOrder()
-        assertThat(t.state.value.active).isEqualTo(0)
+        assertThat(t.state.active).isEqualTo(0)
     }
 
     @Test
@@ -57,7 +96,7 @@ class NoteTabsTest {
         t.open(2, inNewTab = true)
         t.open(3, inNewTab = true)
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.noteId,
         ).isEqualTo(3L)
 
@@ -65,7 +104,7 @@ class NoteTabsTest {
 
         assertThat(ids(t)).containsExactly(2L, 3L).inOrder()
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.noteId,
         ).isEqualTo(3L)
     }
@@ -79,7 +118,7 @@ class NoteTabsTest {
         assertThat(t.close(1)).isTrue()
 
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.noteId,
         ).isEqualTo(1L)
     }
@@ -97,7 +136,7 @@ class NoteTabsTest {
         val t = tabs()
         t.open(1, inNewTab = true)
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.canGoBack,
         ).isFalse()
         assertThat(t.back()).isFalse()
@@ -115,23 +154,23 @@ class NoteTabsTest {
 
         assertThat(t.back()).isTrue()
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.noteId,
         ).isEqualTo(3L)
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.canGoBack,
         ).isFalse()
 
         // The other tab kept its own trail.
         t.select(0)
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.noteId,
         ).isEqualTo(2L)
         assertThat(t.back()).isTrue()
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.noteId,
         ).isEqualTo(1L)
     }
@@ -143,7 +182,7 @@ class NoteTabsTest {
         t.open(2, inNewTab = false)
         assertThat(ids(t)).containsExactly(2L)
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.history,
         ).containsExactly(1L, 2L).inOrder()
     }
@@ -157,11 +196,11 @@ class NoteTabsTest {
         t.open(3, inNewTab = false)
 
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.history,
         ).containsExactly(1L, 3L).inOrder()
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.noteId,
         ).isEqualTo(3L)
     }
@@ -173,14 +212,14 @@ class NoteTabsTest {
         val t = tabs()
         t.open(7, inNewTab = true)
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.title,
         ).isEmpty()
 
         t.retitle(7, "Kafka")
 
         assertThat(
-            t.state.value.current
+            t.state.current
                 ?.title,
         ).isEqualTo("Kafka")
     }

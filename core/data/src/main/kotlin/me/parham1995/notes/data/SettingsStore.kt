@@ -304,6 +304,20 @@ class SettingsStore
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
 
+        /**
+         * The open tabs, as the reader wrote them down.
+         *
+         * Opaque here on purpose: what a tab is belongs to the reader, and
+         * this only has to hand the same text back after a restart.
+         */
+        val openTabs: Flow<String> = context.settingsDataStore.data.map { it[OPEN_TABS].orEmpty() }
+
+        suspend fun setOpenTabs(encoded: String) {
+            context.settingsDataStore.edit {
+                if (encoded.isEmpty()) it.remove(OPEN_TABS) else it[OPEN_TABS] = encoded
+            }
+        }
+
         suspend fun setBrowserSort(sort: BrowserSort) {
             context.settingsDataStore.edit { it[BROWSER_SORT] = sort.name }
         }
@@ -328,5 +342,6 @@ class SettingsStore
             val STYLUS_SPOTLIGHT = booleanPreferencesKey("reading_stylus_spotlight")
             val START_SCREEN = stringPreferencesKey("start_screen")
             val BROWSER_SORT = stringPreferencesKey("browser_sort")
+            val OPEN_TABS = stringPreferencesKey("open_tabs")
         }
     }

@@ -358,6 +358,19 @@ class VaultRepository
             return search.mentions(note.vaultId, note.title, linked)
         }
 
+        /**
+         * Where a note lives, and the note that lives there.
+         *
+         * The pair a reader needs to write a note down and find it again: ids
+         * are row numbers that a reindex reissues, a vault and a path are not.
+         */
+        suspend fun locate(id: Long): Pair<Long, String>? = notes.byId(id)?.let { it.vaultId to it.path }
+
+        suspend fun resolve(
+            vaultId: Long,
+            path: String,
+        ): Long? = notes.byPath(vaultId, path)?.id
+
         /** Full-text results, ranked with the title weighted above the body. */
         suspend fun search(query: String): List<SearchHit> = search.search(active(), query)
 
