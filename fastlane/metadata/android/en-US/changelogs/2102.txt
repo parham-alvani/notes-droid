@@ -1,0 +1,1 @@
+Back walks out through the tabs and leaves the last one open, so returning to a note finds it where you left it — and holding a search result can put a second tab beside it.

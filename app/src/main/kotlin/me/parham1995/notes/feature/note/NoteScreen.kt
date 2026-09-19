@@ -128,11 +128,15 @@ fun NoteScreen(
 
     LaunchedEffect(activeId) { viewModel.load(activeId) }
 
-    // Always, so the last tab is closed rather than left behind. Letting the
-    // nav host handle back on the final tab pops the screen and leaves the
-    // tab open, so the next note opened from a search joins a tab nobody
-    // remembers having.
-    BackHandler { if (!viewModel.closeTab(tabs.active)) onBack() }
+    // Back walks out through the tabs, and the last one is left open.
+    //
+    // Closing it too seemed tidier and made the long press in search and the
+    // browser unreachable: leaving the reader is the only way to get to
+    // either, so if that emptied the tabs there would never be one to open a
+    // second beside. Tabs that outlive a visit are the point of them; what
+    // stops them piling up is that arriving from outside replaces the active
+    // one unless a hold asks otherwise.
+    BackHandler(enabled = tabs.tabs.size > 1) { viewModel.closeTab(tabs.active) }
     LaunchedEffect(state.note?.id, state.note?.title) {
         val note = state.note
         if (note != null) viewModel.retitleTab(note.id, note.title)
@@ -180,10 +184,14 @@ fun NoteScreen(
                     }
                 },
                 navigationIcon = {
-                    // Back closes the tab being read, and only leaves the
-                    // reader when that was the last one -- the same thing the
-                    // gesture does, so the two cannot disagree.
-                    IconButton(onClick = { if (!viewModel.closeTab(tabs.active)) onBack() }) {
+                    // The same rule as the gesture, so the two cannot
+                    // disagree: close a tab while there is more than one, and
+                    // otherwise leave the reader with that tab still open.
+                    IconButton(
+                        onClick = {
+                            if (tabs.tabs.size > 1) viewModel.closeTab(tabs.active) else onBack()
+                        },
+                    ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.action_back),
