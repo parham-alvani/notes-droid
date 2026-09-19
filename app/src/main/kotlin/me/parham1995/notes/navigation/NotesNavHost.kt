@@ -11,8 +11,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -147,6 +151,21 @@ fun NotesNavHost(
             (openNote as? MutableStateFlow)?.value = null
         }
     }
+    // Reopen the note that was being read, once and only at launch.
+    //
+    // The tabs are restored from storage asynchronously, so this waits for
+    // that rather than guessing, and a saved flag keeps a rotation from
+    // yanking someone back to a note they have since left. With nothing open
+    // the start screen setting decides, as before.
+    val resume: ResumeViewModel = hiltViewModel()
+    val restored by resume.restored.collectAsStateWithLifecycle()
+    var resumed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(restored) {
+        if (!restored || resumed) return@LaunchedEffect
+        resumed = true
+        resume.activeNote()?.let { navController.openNote(it) }
+    }
+
     val tabs =
         listOf(
             Tab(BrowseRoute(), "Browse", "folder-tree"),

@@ -131,19 +131,21 @@ class NoteTabs
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
         /**
-         * Until this has run, nothing is written back.
+         * Whether what was written down has been read yet.
          *
-         * Saving an empty set before the stored one has been read would erase
-         * it, which is the obvious way to build something that forgets
-         * everything exactly once per launch.
+         * Nothing is written back before it has: saving an empty set over the
+         * stored one is the obvious way to build something that forgets
+         * everything exactly once per launch. It is also what tells the app
+         * it is time to reopen where the reader left off.
          */
-        private var restored = false
+        private val _restored = MutableStateFlow(false)
+        val restored: StateFlow<Boolean> = _restored.asStateFlow()
 
         init {
             scope.launch {
                 val stored = TabsCodec.decode(settings.openTabs.first())
                 if (stored != null) _state.value = resolve(stored)
-                restored = true
+                _restored.value = true
             }
         }
 
@@ -164,7 +166,7 @@ class NoteTabs
         }
 
         private fun remember() {
-            if (!restored) return
+            if (!_restored.value) return
             val snapshot = _state.value
             scope.launch {
                 val tabs =

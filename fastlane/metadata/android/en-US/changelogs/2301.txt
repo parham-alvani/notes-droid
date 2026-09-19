@@ -1,0 +1,1 @@
+The app reopens the note you were reading. Remembering the tabs was only half of it — they came back, and the app still started on the browser. It now waits for them to load and reopens the one you were on. With nothing open, the start screen setting decides as before.
