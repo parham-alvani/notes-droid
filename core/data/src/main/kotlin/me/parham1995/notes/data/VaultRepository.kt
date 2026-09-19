@@ -366,10 +366,11 @@ class VaultRepository
          */
         suspend fun locate(id: Long): Pair<Long, String>? = notes.byId(id)?.let { it.vaultId to it.path }
 
+        /** The note at a path, as the id to open and the title to label it with. */
         suspend fun resolve(
             vaultId: Long,
             path: String,
-        ): Long? = notes.byPath(vaultId, path)?.id
+        ): Pair<Long, String>? = notes.byPath(vaultId, path)?.let { it.id to it.title.ifBlank { it.name } }
 
         /** Full-text results, ranked with the title weighted above the body. */
         suspend fun search(query: String): List<SearchHit> = search.search(active(), query)

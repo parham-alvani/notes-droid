@@ -159,8 +159,16 @@ class NoteTabs
         private suspend fun resolve(stored: StoredTabs): TabsState {
             val tabs =
                 stored.tabs.mapNotNull { tab ->
-                    val ids = tab.trail.mapNotNull { repository.resolve(it.vaultId, it.path) }
-                    if (ids.isEmpty()) null else NoteTab(ids, tab.index.coerceIn(0, ids.lastIndex))
+                    val found = tab.trail.mapNotNull { repository.resolve(it.vaultId, it.path) }
+                    if (found.isEmpty()) {
+                        null
+                    } else {
+                        // The title comes back with the note, so a restored
+                        // strip reads its own names rather than a row of
+                        // "Note" until each one is opened.
+                        val at = tab.index.coerceIn(0, found.lastIndex)
+                        NoteTab(found.map { it.first }, at, found[at].second)
+                    }
                 }
             return if (tabs.isEmpty()) TabsState() else TabsState(tabs, stored.active.coerceIn(0, tabs.lastIndex))
         }

@@ -1,0 +1,1 @@
+A restored tab shows its own name. Titles were not written down, so every tab you had not yet switched to came back reading "Note" until you opened it.
