@@ -128,15 +128,13 @@ fun NoteScreen(
 
     LaunchedEffect(activeId) { viewModel.load(activeId) }
 
-    // Back walks out through the tabs, and the last one is left open.
+    // Back retraces this tab, not the app.
     //
-    // Closing it too seemed tidier and made the long press in search and the
-    // browser unreachable: leaving the reader is the only way to get to
-    // either, so if that emptied the tabs there would never be one to open a
-    // second beside. Tabs that outlive a visit are the point of them; what
-    // stops them piling up is that arriving from outside replaces the active
-    // one unless a hold asks otherwise.
-    BackHandler(enabled = tabs.tabs.size > 1) { viewModel.closeTab(tabs.active) }
+    // Each tab keeps its own trail, so back goes to the note this one came
+    // from rather than to whatever was opened last anywhere. With nothing
+    // behind it in this tab the gesture falls through and leaves the reader,
+    // which is the only way out; the button says so by being disabled.
+    BackHandler(enabled = tabs.current?.canGoBack == true) { viewModel.back() }
     LaunchedEffect(state.note?.id, state.note?.title) {
         val note = state.note
         if (note != null) viewModel.retitleTab(note.id, note.title)
@@ -184,13 +182,12 @@ fun NoteScreen(
                     }
                 },
                 navigationIcon = {
-                    // The same rule as the gesture, so the two cannot
-                    // disagree: close a tab while there is more than one, and
-                    // otherwise leave the reader with that tab still open.
+                    // Disabled rather than hidden when this tab has nowhere
+                    // to go back to: a button that moves you somewhere
+                    // unrelated is worse than one that plainly cannot.
                     IconButton(
-                        onClick = {
-                            if (tabs.tabs.size > 1) viewModel.closeTab(tabs.active) else onBack()
-                        },
+                        onClick = { viewModel.back() },
+                        enabled = tabs.current?.canGoBack == true,
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,

@@ -69,6 +69,9 @@ class NoteViewModel
 
         fun selectTab(index: Int) = openTabs.select(index)
 
+        /** Steps back inside the tab being read. */
+        fun back() = openTabs.back()
+
         fun retitleTab(
             noteId: Long,
             title: String,

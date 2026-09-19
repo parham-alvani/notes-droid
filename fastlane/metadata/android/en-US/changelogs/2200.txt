@@ -1,0 +1,3 @@
+Back retraces the tab you are in. Each tab keeps its own trail now, so following three links in one tab and two in another no longer leaves a single history that walks out of the tab you were reading. When a tab has nothing behind it the back button is disabled rather than taking you somewhere unrelated.
+
+Opening a note where you already are adds to that tab's trail instead of replacing it, so you can walk back the way you came.

@@ -6,11 +6,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** One open note. The title is carried so the strip can be drawn before it loads. */
+/**
+ * One open note, and how it was arrived at.
+ *
+ * A tab keeps its own trail rather than sharing one with the others, because
+ * following three links in one tab and two in another leaves a single back
+ * stack that walks out of a tab you were not in.
+ */
 data class NoteTab(
-    val noteId: Long,
+    val history: List<Long>,
+    val index: Int = history.lastIndex,
     val title: String = "",
-)
+) {
+    val noteId: Long get() = history[index]
+
+    /** Whether there is somewhere in this tab to go back to. */
+    val canGoBack: Boolean get() = index > 0
+}
 
 data class TabsState(
     val tabs: List<NoteTab> = emptyList(),
@@ -20,19 +32,16 @@ data class TabsState(
 }
 
 /**
- * The notes that are open at once.
+ * The notes that are open at once, and where each one has been.
  *
  * A vault is read by holding two or three notes at a time -- the thing being
- * read, the thing it links to, and the index they both hang off -- and a back
- * stack makes that a straight line you can only walk backwards. Tabs make it a
- * set you can move around in.
+ * read, the thing it links to, and the index they both hang off -- and one
+ * back stack makes that a straight line you can only walk backwards.
  *
  * A singleton rather than something scoped to a screen, because the point of a
- * tab is that it is still there after going to search, opening a task, and
- * coming back. Held in memory only: what survives a process death is each
- * note's own scroll position, which is in the database already, so a restarted
- * app opens the note it was on rather than a set of tabs whose order nobody
- * remembers.
+ * tab is that it is still there after going to search and coming back. Held in
+ * memory only: what survives a process death is each note's own scroll
+ * position, which is in the database already.
  */
 @Singleton
 class NoteTabs
@@ -44,45 +53,64 @@ class NoteTabs
         /**
          * Shows [noteId], in a new tab or in the one being looked at.
          *
-         * A note that is already open is switched to rather than opened twice;
-         * two tabs of the same note is never what was meant, and it is the
-         * easy way to end up with nine of them.
+         * Opening it where you are pushes onto that tab's trail, the way
+         * following a link does. A note already showing in some tab is
+         * switched to instead: two tabs of one note is never what was meant.
          */
         fun open(
             noteId: Long,
             inNewTab: Boolean,
-        ) {
-            _state.update { state ->
-                val existing = state.tabs.indexOfFirst { it.noteId == noteId }
-                when {
-                    existing >= 0 -> state.copy(active = existing)
-                    state.tabs.isEmpty() -> TabsState(listOf(NoteTab(noteId)), 0)
-                    inNewTab -> {
-                        // Beside the one it came from, the way a browser does
-                        // it: a link opened from tab two belongs next to tab
-                        // two, not at the end of a row of nine.
-                        val at = (state.active + 1).coerceAtMost(state.tabs.size)
-                        state.copy(
-                            tabs = state.tabs.toMutableList().apply { add(at, NoteTab(noteId)) },
-                            active = at,
-                        )
-                    }
-                    else ->
-                        state.copy(
-                            tabs = state.tabs.toMutableList().apply { this[state.active] = NoteTab(noteId) },
-                        )
+        ) = update { state ->
+            val showing = state.tabs.indexOfFirst { it.noteId == noteId }
+            when {
+                showing >= 0 -> state.copy(active = showing)
+                state.tabs.isEmpty() -> TabsState(listOf(NoteTab(listOf(noteId))), 0)
+                inNewTab -> {
+                    // Beside the one it came from, the way a browser does it.
+                    val at = (state.active + 1).coerceAtMost(state.tabs.size)
+                    state.copy(
+                        tabs = state.tabs.toMutableList().apply { add(at, NoteTab(listOf(noteId))) },
+                        active = at,
+                    )
                 }
+                else ->
+                    state.copy(
+                        tabs =
+                            state.tabs.mapIndexed { index, tab ->
+                                if (index != state.active) {
+                                    tab
+                                } else {
+                                    // Anything ahead is dropped, as it is
+                                    // after going back and then somewhere new.
+                                    val trail = tab.history.take(tab.index + 1) + noteId
+                                    tab.copy(history = trail, index = trail.lastIndex, title = "")
+                                }
+                            },
+                    )
             }
         }
 
-        fun select(index: Int) {
-            _state.update { if (index in it.tabs.indices) it.copy(active = index) else it }
+        /** Steps back inside the tab being read. False when it has nowhere to go. */
+        fun back(): Boolean {
+            val tab = _state.value.current ?: return false
+            if (!tab.canGoBack) return false
+            update { state ->
+                state.copy(
+                    tabs =
+                        state.tabs.mapIndexed { index, each ->
+                            if (index == state.active) each.copy(index = each.index - 1, title = "") else each
+                        },
+                )
+            }
+            return true
         }
+
+        fun select(index: Int) = update { if (index in it.tabs.indices) it.copy(active = index) else it }
 
         /** Closes a tab, and returns false when that was the last one. */
         fun close(index: Int): Boolean {
             var anyLeft = true
-            _state.update { state ->
+            update { state ->
                 if (index !in state.tabs.indices) return@update state
                 val tabs = state.tabs.toMutableList().apply { removeAt(index) }
                 anyLeft = tabs.isNotEmpty()
@@ -99,18 +127,16 @@ class NoteTabs
         fun retitle(
             noteId: Long,
             title: String,
-        ) {
-            _state.update { state ->
-                state.copy(tabs = state.tabs.map { if (it.noteId == noteId) it.copy(title = title) else it })
-            }
+        ) = update { state ->
+            state.copy(tabs = state.tabs.map { if (it.noteId == noteId) it.copy(title = title) else it })
         }
 
         /** Everything closed, for leaving the reader entirely. */
         fun clear() {
             _state.value = TabsState()
         }
-    }
 
-private fun MutableStateFlow<TabsState>.update(block: (TabsState) -> TabsState) {
-    value = block(value)
-}
+        private fun update(block: (TabsState) -> TabsState) {
+            _state.value = block(_state.value)
+        }
+    }

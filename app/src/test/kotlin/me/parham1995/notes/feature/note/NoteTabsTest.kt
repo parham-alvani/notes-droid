@@ -93,6 +93,80 @@ class NoteTabsTest {
     }
 
     @Test
+    fun `a fresh tab has nowhere to go back to`() {
+        val t = tabs()
+        t.open(1, inNewTab = true)
+        assertThat(
+            t.state.value.current
+                ?.canGoBack,
+        ).isFalse()
+        assertThat(t.back()).isFalse()
+    }
+
+    @Test
+    fun `back retraces the tab you are in, not the app`() {
+        // Two links followed in one tab, one in another. Back in the second
+        // must not walk into the first.
+        val t = tabs()
+        t.open(1, inNewTab = true)
+        t.open(2, inNewTab = false)
+        t.open(3, inNewTab = true)
+        t.open(4, inNewTab = false)
+
+        assertThat(t.back()).isTrue()
+        assertThat(
+            t.state.value.current
+                ?.noteId,
+        ).isEqualTo(3L)
+        assertThat(
+            t.state.value.current
+                ?.canGoBack,
+        ).isFalse()
+
+        // The other tab kept its own trail.
+        t.select(0)
+        assertThat(
+            t.state.value.current
+                ?.noteId,
+        ).isEqualTo(2L)
+        assertThat(t.back()).isTrue()
+        assertThat(
+            t.state.value.current
+                ?.noteId,
+        ).isEqualTo(1L)
+    }
+
+    @Test
+    fun `opening in place adds to the trail rather than erasing it`() {
+        val t = tabs()
+        t.open(1, inNewTab = true)
+        t.open(2, inNewTab = false)
+        assertThat(ids(t)).containsExactly(2L)
+        assertThat(
+            t.state.value.current
+                ?.history,
+        ).containsExactly(1L, 2L).inOrder()
+    }
+
+    @Test
+    fun `going back and then somewhere new drops what was ahead`() {
+        val t = tabs()
+        t.open(1, inNewTab = true)
+        t.open(2, inNewTab = false)
+        t.back()
+        t.open(3, inNewTab = false)
+
+        assertThat(
+            t.state.value.current
+                ?.history,
+        ).containsExactly(1L, 3L).inOrder()
+        assertThat(
+            t.state.value.current
+                ?.noteId,
+        ).isEqualTo(3L)
+    }
+
+    @Test
     fun `a title arrives after the tab does`() {
         // The strip is drawn before the note has loaded, so tabs start
         // untitled and are filled in.
