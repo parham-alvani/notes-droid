@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.widget.RemoteViews
 import androidx.core.graphics.toColorInt
 import dagger.hilt.android.EntryPointAccessors
@@ -39,13 +40,27 @@ class RecentNotesWidget : AppWidgetProvider() {
                     .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
                     .vaultRepository()
 
-            val recent =
-                runCatching { repository.recentlyOpened(ROWS).first() }
-                    .getOrDefault(emptyList())
-
-            val views = build(context, recent)
-            appWidgetIds.forEach { id -> manager.updateAppWidget(id, views) }
+            // Per widget, because two copies of the same widget can be
+            // different sizes and each should fill what it was given.
+            appWidgetIds.forEach { id ->
+                val rows = rowsForHeight(heightOf(manager, id))
+                val recent =
+                    runCatching { repository.recentlyOpened(rows).first() }
+                        .getOrDefault(emptyList())
+                manager.updateAppWidget(id, build(context, recent))
+            }
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        manager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        // Resizing is the moment the row count changes, and without this the
+        // widget keeps whatever it drew at its old size until the next sync.
+        onUpdate(context, manager, intArrayOf(appWidgetId))
     }
 
     private fun build(

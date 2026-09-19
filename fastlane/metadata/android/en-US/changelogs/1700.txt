@@ -1,0 +1,1 @@
+The widgets fill the space they are given. Both drew a fixed four or five rows whatever size they were, so one resized to half a home screen showed the same four lines as a small one and left the rest empty. They now count rows from the height the home screen offers, and redraw when you resize them.

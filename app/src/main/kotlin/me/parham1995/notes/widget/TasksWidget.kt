@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.widget.RemoteViews
 import androidx.core.graphics.toColorInt
 import dagger.hilt.EntryPoint
@@ -69,9 +70,24 @@ class TasksWidget : AppWidgetProvider() {
             val open = runCatching { repository.openTasks().first() }.getOrDefault(emptyList())
             val due = open.filter { TaskBuckets.of(it.actionableOn, today) in PRESSING }
 
-            val views = build(context, open.size, due, today)
-            ids.forEach { id -> manager.updateAppWidget(id, views) }
+            // Per widget: two copies can be different sizes, and each should
+            // fill what it was given rather than always drawing four rows.
+            ids.forEach { id ->
+                val rows = rowsForHeight(heightOf(manager, id))
+                manager.updateAppWidget(id, build(context, open.size, due, today, rows))
+            }
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        manager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        // Resizing is the moment the row count changes; without this the
+        // widget keeps what it drew at its old size until the next sync.
+        render(context, manager, intArrayOf(appWidgetId))
     }
 
     private fun build(
@@ -79,6 +95,7 @@ class TasksWidget : AppWidgetProvider() {
         openCount: Int,
         due: List<TaskRow>,
         today: LocalDate,
+        rows: Int,
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_tasks)
         val overdue = due.count { TaskBuckets.of(it.actionableOn, today) == TaskBucket.OVERDUE }
@@ -100,7 +117,7 @@ class TasksWidget : AppWidgetProvider() {
         )
 
         views.removeAllViews(R.id.widget_tasks)
-        due.take(ROWS).forEach { task ->
+        due.take(rows).forEach { task ->
             val row = RemoteViews(context.packageName, R.layout.widget_task_row)
             val late = TaskBuckets.of(task.actionableOn, today) == TaskBucket.OVERDUE
             row.setTextViewText(R.id.row_marker, if (late) "!" else "-")
