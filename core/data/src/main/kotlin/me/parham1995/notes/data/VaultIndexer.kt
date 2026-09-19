@@ -264,8 +264,9 @@ class VaultIndexer
              * 1: tasks.
              * 2: vaults are separate, so every note records which it is in.
              * 3: the guides are synced but no longer indexed as notes.
+             * 4: a heading records where it is, not what its id is.
              */
-            const val VERSION = 3
+            const val VERSION = 4
 
             /**
              * Files that are kept on the device but are not notes.

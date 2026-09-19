@@ -61,7 +61,7 @@ class BlockFlattener(
             title =
                 headings.firstOrNull { it.level == 1 }?.text
                     ?: headings.firstOrNull()?.text.orEmpty(),
-            headings = headings.toList(),
+            headings = positioned(headings, blocks),
             links = LinkExtraction.from(blocks),
             plainText = plainText,
             frontMatter = frontMatter.toMap(),
@@ -72,6 +72,33 @@ class BlockFlattener(
     }
 
     private fun id() = nextId++
+
+    /**
+     * Turns each heading's block *id* into its position in the rendered list.
+     *
+     * Ids are handed out to nested blocks too -- every list item, every line
+     * inside a callout -- so an id runs ahead of the position as soon as a
+     * note contains a list. Recording the id and scrolling to it as though it
+     * were a position sent the outline, and every `[[Note#Heading]]` link,
+     * somewhere else or off the end. Both were written against this and
+     * neither has ever worked.
+     *
+     * A heading inside a callout or a quote is not a block of the list at all,
+     * so it takes the position of whatever contains it -- which is where it is
+     * on screen.
+     */
+    private fun positioned(
+        found: List<ParsedHeading>,
+        blocks: List<MdBlock>,
+    ): List<ParsedHeading> {
+        val positionOfId = blocks.withIndex().associate { (index, block) -> block.id to index }
+        val topLevelIds = blocks.map { it.id }
+        return found.map { heading ->
+            val exact = positionOfId[heading.blockIndex]
+            val containing = topLevelIds.indexOfLast { it <= heading.blockIndex }
+            heading.copy(blockIndex = exact ?: containing.coerceAtLeast(0))
+        }
+    }
 
     private fun blocksFor(node: Node): List<MdBlock> =
         when (node) {

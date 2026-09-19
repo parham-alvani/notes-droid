@@ -1,0 +1,3 @@
+The outline scrolls to the heading you tap, and so does a link to one. Neither ever has: a heading recorded its block's id rather than its position in the page, and ids are handed out to nested blocks too — every list item, every line in a callout. The moment a note contained a list the number ran ahead, and the scroll landed elsewhere or off the end.
+
+Existing installs rebuild their index once on the next sync.
