@@ -17,8 +17,10 @@ import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteMatch
 import me.parham1995.notes.markdown.NoteSearch
+import me.parham1995.notes.markdown.plainText
 import me.parham1995.notes.ui.VaultRowItem
 import java.io.File
 import javax.inject.Inject
@@ -55,7 +57,48 @@ class NoteViewModel
         private val icons: IconStore,
         private val files: VaultFileSource,
         private val settings: SettingsStore,
+        private val openTabs: NoteTabs,
     ) : ViewModel() {
+        val tabs: StateFlow<TabsState> = openTabs.state
+
+        fun openTab(
+            noteId: Long,
+            inNewTab: Boolean = true,
+        ) = openTabs.open(noteId, inNewTab)
+
+        fun selectTab(index: Int) = openTabs.select(index)
+
+        fun retitleTab(
+            noteId: Long,
+            title: String,
+        ) = openTabs.retitle(noteId, title)
+
+        /** Closes the tab being read; false when it was the last one. */
+        fun closeTab(index: Int): Boolean = openTabs.close(index)
+
+        /**
+         * What a link points at, before following it.
+         *
+         * Enough to decide with: the title, where it lives, and the note's
+         * opening words. Following a link to find out it was not the one you
+         * meant costs a load and the scroll position you were at.
+         */
+        suspend fun peek(noteId: Long): LinkTarget? {
+            val note = repository.note(noteId) ?: return null
+            val opening =
+                note.blocks
+                    .filterIsInstance<MdBlock.Paragraph>()
+                    .firstOrNull()
+                    ?.let { plainText(it.inlines).trim() }
+                    .orEmpty()
+            return LinkTarget(
+                noteId = noteId,
+                title = note.title,
+                path = note.path,
+                excerpt = opening.take(PEEK_CHARS),
+            )
+        }
+
         /**
          * Resizes the text by pinching the note.
          *
@@ -179,3 +222,14 @@ class NoteViewModel
                 ?.linkTargets
                 ?.get(target)
     }
+
+/** A link's destination, shown before it is followed. */
+data class LinkTarget(
+    val noteId: Long,
+    val title: String,
+    val path: String,
+    val excerpt: String,
+)
+
+/** Enough of the opening to recognise a note by. */
+private const val PEEK_CHARS = 240

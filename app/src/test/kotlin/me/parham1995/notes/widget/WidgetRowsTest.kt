@@ -14,10 +14,11 @@ import org.junit.Test
 class WidgetRowsTest {
     @Test
     fun `a tall widget is filled`() {
-        // 344dp is what the home screen on the test device hands out, and
-        // fifteen rows is what fitted inside it without the last being drawn
-        // off the bottom edge.
-        assertThat(rowsForHeight(344)).isEqualTo(15)
+        // 344dp is what the home screen on the test device hands out. Its
+        // panel measured about 280dp of that, which holds fourteen rows; this
+        // asks for thirteen, because a gap is invisible and a clipped row
+        // is not.
+        assertThat(rowsForHeight(344)).isEqualTo(13)
     }
 
     @Test

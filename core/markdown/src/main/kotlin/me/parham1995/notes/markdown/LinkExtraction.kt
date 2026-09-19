@@ -79,23 +79,5 @@ object LinkExtraction {
         }
     }
 
-    private fun context(nodes: List<MdInline>): String = plain(nodes).trim().take(MAX_CONTEXT)
-
-    private fun plain(nodes: List<MdInline>): String =
-        buildString {
-            nodes.forEach { node ->
-                when (node) {
-                    is MdInline.Text -> append(node.text)
-                    is MdInline.Code -> append(node.code)
-                    is MdInline.Emphasis -> append(plain(node.children))
-                    is MdInline.Strong -> append(plain(node.children))
-                    is MdInline.Strikethrough -> append(plain(node.children))
-                    is MdInline.Highlight -> append(plain(node.children))
-                    is MdInline.Link -> append(plain(node.children))
-                    is MdInline.WikiLink -> append(node.display)
-                    is MdInline.InlineMath -> append(node.latex)
-                    MdInline.LineBreak, MdInline.SoftBreak -> append(' ')
-                }
-            }
-        }
+    private fun context(nodes: List<MdInline>): String = plainText(nodes).trim().take(MAX_CONTEXT)
 }

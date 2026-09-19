@@ -3,7 +3,9 @@ package me.parham1995.notes.feature.note
 import android.content.ClipData
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,19 +13,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
@@ -104,8 +112,25 @@ fun NoteScreen(
     // The embedded image being looked at full screen, by its vault path.
     var zoomed by remember(noteId) { mutableStateOf<Pair<String, String?>?>(null) }
     var finding by remember(noteId) { mutableStateOf(false) }
+    var peeking by remember { mutableStateOf<LinkTarget?>(null) }
+    var peekBroken by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(noteId) { viewModel.load(noteId) }
+    val tabs by viewModel.tabs.collectAsStateWithLifecycle()
+    // The route argument only ever seeds the set. After that the screen
+    // follows whichever tab is being read, so switching tabs does not have to
+    // navigate and lose the back stack.
+    LaunchedEffect(noteId) { viewModel.openTab(noteId) }
+    val activeId = tabs.current?.noteId ?: noteId
+
+    LaunchedEffect(activeId) { viewModel.load(activeId) }
+
+    // The system gesture, while there is more than one tab. Below that the nav
+    // host's own handling leaves the screen, which is what should happen.
+    BackHandler(enabled = tabs.tabs.size > 1) { viewModel.closeTab(tabs.active) }
+    LaunchedEffect(state.note?.id, state.note?.title) {
+        val note = state.note
+        if (note != null) viewModel.retitleTab(note.id, note.title)
+    }
 
     // Resume where this note was left. Keyed on the note's own id rather than
     // the argument, so it runs once the note has actually loaded.
@@ -139,7 +164,10 @@ fun NoteScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    // Back closes the tab being read, and only leaves the
+                    // reader when that was the last one -- the same thing the
+                    // gesture does, so the two cannot disagree.
+                    IconButton(onClick = { if (!viewModel.closeTab(tabs.active)) onBack() }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.action_back),
@@ -217,6 +245,16 @@ fun NoteScreen(
             )
         },
     ) { padding ->
+        // Only with something to switch between: one tab is a strip that says
+        // the same thing as the title above it.
+        if (tabs.tabs.size > 1) {
+            TabStrip(
+                tabs = tabs,
+                modifier = Modifier.padding(top = padding.calculateTopPadding()),
+                onSelect = viewModel::selectTab,
+                onClose = { index -> if (!viewModel.closeTab(index)) onBack() },
+            )
+        }
         Column(Modifier.fillMaxSize().padding(padding)) {
             // A folder note is only half of what a folder is: the page someone
             // wrote, and the things actually in it. Obsidian shows both at
@@ -274,8 +312,19 @@ fun NoteScreen(
                                             vaultId = note.vaultId,
                                             inline =
                                                 InlineActions(
+                                                    // A look before a leap.
+                                                    // Following a link to
+                                                    // find it was not the one
+                                                    // you meant costs a load
+                                                    // and the place you were
+                                                    // reading.
                                                     onWikiLink = { target, _ ->
-                                                        viewModel.targetOf(target)?.let(onOpenNote)
+                                                        val id = viewModel.targetOf(target)
+                                                        if (id == null) {
+                                                            peekBroken = target
+                                                        } else {
+                                                            scope.launch { peeking = viewModel.peek(id) }
+                                                        }
                                                     },
                                                     onExternalLink = { url ->
                                                         runCatching {
@@ -369,6 +418,25 @@ fun NoteScreen(
                 }
             },
         )
+    }
+
+    peeking?.let { target ->
+        LinkPeek(
+            target = target,
+            onDismiss = { peeking = null },
+            onOpenHere = {
+                peeking = null
+                viewModel.openTab(target.noteId, inNewTab = false)
+            },
+            onOpenInNewTab = {
+                peeking = null
+                viewModel.openTab(target.noteId, inNewTab = true)
+            },
+        )
+    }
+
+    peekBroken?.let { target ->
+        BrokenLinkPeek(target = target, onDismiss = { peekBroken = null })
     }
 
     if (showOutline) {
@@ -642,6 +710,144 @@ private fun FindBar(
             ) {
                 LucideGlyph("chevron-down", size = 20.dp, contentDescription = stringResource(R.string.note_find_next))
             }
+        }
+    }
+}
+
+/**
+ * The open notes, as a row you can move along.
+ *
+ * Titles rather than numbers, truncated rather than wrapped: the strip has to
+ * stay one line high or it is competing with the note for the screen. The one
+ * being read is filled in; the rest are outlines.
+ */
+@Composable
+private fun TabStrip(
+    tabs: TabsState,
+    onSelect: (Int) -> Unit,
+    onClose: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tabs.tabs.forEachIndexed { index, tab ->
+            val selected = index == tabs.active
+            FilterChip(
+                selected = selected,
+                onClick = { onSelect(index) },
+                label = {
+                    Text(
+                        text = tab.title.ifBlank { stringResource(R.string.note_kind) },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = TAB_LABEL_WIDTH),
+                    )
+                },
+                trailingIcon = {
+                    // Only on the one being read. A close button on every tab
+                    // in a row of six is a row of six things to hit by
+                    // accident.
+                    if (selected) {
+                        IconButton(
+                            onClick = { onClose(index) },
+                            modifier = Modifier.size(TAB_CLOSE_SIZE),
+                        ) {
+                            LucideGlyph(
+                                "x",
+                                size = 14.dp,
+                                contentDescription = stringResource(R.string.action_close),
+                            )
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+private val TAB_LABEL_WIDTH = 140.dp
+private val TAB_CLOSE_SIZE = 22.dp
+
+/**
+ * What a link points at, and what to do with it.
+ *
+ * The title and where it lives answer "is this the one I meant"; the opening
+ * words answer it when two notes share a name, which in this vault is 110
+ * times over.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LinkPeek(
+    target: LinkTarget,
+    onDismiss: () -> Unit,
+    onOpenHere: () -> Unit,
+    onOpenInNewTab: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutoDirection(target.title) {
+                Text(target.title, style = MaterialTheme.typography.titleMedium.inScript())
+            }
+            Text(
+                target.path,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (target.excerpt.isNotBlank()) {
+                AutoDirection(target.excerpt) {
+                    Text(
+                        target.excerpt,
+                        style = MaterialTheme.typography.bodySmall.inScript(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOpenHere) { Text(stringResource(R.string.link_open_here)) }
+                OutlinedButton(onClick = onOpenInNewTab) { Text(stringResource(R.string.link_open_new_tab)) }
+            }
+        }
+    }
+}
+
+/** A link that resolves to nothing, said plainly rather than ignored. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BrokenLinkPeek(
+    target: String,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(stringResource(R.string.link_broken), style = MaterialTheme.typography.titleMedium)
+            Text(
+                target,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.link_broken_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

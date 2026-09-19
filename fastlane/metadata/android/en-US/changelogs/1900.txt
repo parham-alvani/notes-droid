@@ -1,0 +1,7 @@
+Notes open in tabs. A vault is read by holding two or three notes at once — the one being read, the one it links to, and the index they both hang off — and a back stack makes that a line you can only walk backwards.
+
+Tapping a link now shows where it goes before it goes there: the title, where it lives, and its opening words, with the choice of opening it here or in a new tab. A link that resolves to nothing says so instead of doing nothing.
+
+Back closes the tab you are reading, and leaves the reader when it was the last one.
+
+Widgets fit their rows more carefully; the last one was being drawn off the bottom edge.

@@ -96,4 +96,8 @@
     <string name="diagram_failed">Diagram could not be drawn: %1$s</string>
     <string name="settings_stylus">Follow the pen while reading</string>
     <string name="settings_stylus_note">Marks where the S Pen is hovering, to keep your place. Nothing is drawn without one.</string>
+    <string name="link_open_here">Open</string>
+    <string name="link_open_new_tab">Open in a new tab</string>
+    <string name="link_broken">This link goes nowhere yet</string>
+    <string name="link_broken_note">Nothing in the vault answers to that name. Many of these are deliberate placeholders.</string>
 </resources>
