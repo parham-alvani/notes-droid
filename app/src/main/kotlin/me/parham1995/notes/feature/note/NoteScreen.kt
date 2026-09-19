@@ -268,6 +268,7 @@ fun NoteScreen(
                                     blocks = note.blocks,
                                     brokenLinks = state.brokenLinks,
                                     listState = listState,
+                                    onPinch = viewModel::pinchTextScale,
                                     actions =
                                         RenderActions(
                                             vaultId = note.vaultId,

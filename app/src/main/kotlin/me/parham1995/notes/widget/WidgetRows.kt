@@ -24,8 +24,13 @@ internal fun rowsForHeight(
     return ((heightDp - HEADER_DP - PADDING_DP) / ROW_DP).coerceIn(minimum, maximum)
 }
 
-/** A row of the widget layout: one line of text plus its spacing. */
-private const val ROW_DP = 26
+/**
+ * A row of the widget layout: one line of text plus its spacing.
+ *
+ * Measured off a screenshot of the real widget at 17dp, and rounded up so a
+ * misjudged row costs a gap rather than a clipped last line.
+ */
+private const val ROW_DP = 18
 
 /** The headline above the rows. */
 private const val HEADER_DP = 24
@@ -34,7 +39,7 @@ private const val HEADER_DP = 24
 private const val PADDING_DP = 24
 
 private const val MIN_ROWS = 3
-private const val MAX_ROWS = 14
+private const val MAX_ROWS = 18
 
 /**
  * The height a host is offering a widget, in dp.

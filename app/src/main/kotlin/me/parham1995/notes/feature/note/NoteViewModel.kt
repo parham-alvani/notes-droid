@@ -9,8 +9,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
+import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.SearchHit
+import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.BacklinkRow
@@ -52,7 +54,25 @@ class NoteViewModel
         private val repository: VaultRepository,
         private val icons: IconStore,
         private val files: VaultFileSource,
+        private val settings: SettingsStore,
     ) : ViewModel() {
+        /**
+         * Resizes the text by pinching the note.
+         *
+         * Reading size lived four taps away in Settings, which is three too
+         * many for the thing the app exists to do. Snapped to the same steps
+         * the setting offers rather than being continuous, so pinching and
+         * then opening Settings does not show a size that is not on the list.
+         */
+        fun pinchTextScale(factor: Float) {
+            viewModelScope.launch {
+                val current = settings.current().reading.textScale
+                val wanted = current * factor
+                val nearest = ReadingSettings.TEXT_SCALES.minBy { kotlin.math.abs(it - wanted) }
+                if (nearest != current) settings.setTextScale(nearest)
+            }
+        }
+
         private val _state = MutableStateFlow(NoteUiState())
         val state: StateFlow<NoteUiState> = _state.asStateFlow()
 

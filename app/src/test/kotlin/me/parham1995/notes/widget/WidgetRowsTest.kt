@@ -15,7 +15,7 @@ class WidgetRowsTest {
     @Test
     fun `a tall widget is filled`() {
         // 344dp is what the home screen on the test device hands out.
-        assertThat(rowsForHeight(344)).isEqualTo(11)
+        assertThat(rowsForHeight(344)).isEqualTo(16)
     }
 
     @Test
@@ -26,7 +26,7 @@ class WidgetRowsTest {
     @Test
     fun `an enormous widget stops somewhere sensible`() {
         // Not unbounded: every row is a database row and a PendingIntent.
-        assertThat(rowsForHeight(2000)).isEqualTo(14)
+        assertThat(rowsForHeight(2000)).isEqualTo(18)
     }
 
     @Test

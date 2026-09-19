@@ -1,0 +1,3 @@
+Pinch a note to change the text size. It lived four taps away in Settings, which is three too many for the thing the app is for. The size snaps to the same steps the setting offers, so the two never disagree.
+
+The widgets fit more in. The row height was guessed at and measured too tall, so a widget still had about a third of itself empty.
