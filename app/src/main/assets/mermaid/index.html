@@ -35,12 +35,33 @@
       // function here therefore returned a Promise, which encodes as `{}` --
       // an object with no `ok` in it, so every diagram ever rendered was
       // reported as invalid and shown as its own source.
+      // One text node per line, instead of one tspan per word.
+      //
+      // mermaid splits a label into a tspan per word and puts the separating
+      // space at the *start* of the next one -- `<tspan>Write</tspan><tspan>
+      // Model</tspan>`. SVG's default whitespace handling strips leading
+      // whitespace from each chunk, so a strict renderer draws
+      // "WriteModel". Browsers are lenient and mermaid relies on it; the
+      // image loader that actually draws these is not a browser.
+      //
+      // Joining each line back into one string keeps the spaces, and the
+      // line breaks survive because mermaid already gives each line its own
+      // outer tspan.
+      function flatten(svgText) {
+        var doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+        doc.querySelectorAll('tspan.text-outer-tspan').forEach(function (row) {
+          row.textContent = row.textContent;
+          row.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+        });
+        return new XMLSerializer().serializeToString(doc);
+      }
+
       function render(id, code) {
         window.__result = null;
         mermaid
           .render('d' + id, code)
           .then(function (out) {
-            window.__result = JSON.stringify({ ok: true, svg: out.svg });
+            window.__result = JSON.stringify({ ok: true, svg: flatten(out.svg) });
           })
           .catch(function (e) {
             window.__result = JSON.stringify({ ok: false, error: String((e && e.message) || e) });

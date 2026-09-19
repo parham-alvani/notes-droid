@@ -1,0 +1,1 @@
+Diagram labels keep their spaces. "Write Model" was being drawn as "WriteModel": mermaid splits a label into one piece per word and puts the space at the start of the next piece, and the rule for SVG is that leading space is dropped. Browsers ignore that rule; the thing drawing these is not a browser.

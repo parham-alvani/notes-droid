@@ -232,8 +232,9 @@ class MermaidRenderer
              * to be needed.
              *
              * 2: labels as SVG text rather than HTML in a foreignObject.
+             * 3: a line's words joined, so the spaces between them survive.
              */
-            const val PAGE_VERSION = "2"
+            const val PAGE_VERSION = "3"
 
             const val RENDER_TIMEOUT_MS = 4_000L
             const val POLL_MS = 40L
