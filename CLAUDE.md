@@ -117,7 +117,9 @@ adb exec-out screencap -p > shot.png   # then read the image
 adb shell input tap X Y                # drive the UI
 ```
 
-Coordinates from a screenshot need scaling to the device's real resolution. `adb shell input text` drops characters on long strings — type short runs. A release build is not debuggable, so `run-as` cannot reach app storage; logcat and screenshots are what there is.
+Coordinates from a screenshot need scaling to the device's real resolution, and they go stale the moment anything scrolls — take the screenshot and tap from it in the same breath. `adb shell input text` drops characters on long strings, so type short runs. A release build is not debuggable, so `run-as` cannot reach app storage; logcat and screenshots are what there is.
+
+**What cannot be driven from here at all:** multi-touch and stylus hover. `adb shell input` is single-pointer, and `sendevent` to the touchscreen is refused by SELinux (`Permission denied`) on a stock Samsung. Pinch-to-zoom and anything the S Pen does have to be tried by hand — do not claim either works because it compiled.
 
 The app also records its last crash itself, readable at **Settings → Advanced** with a Share button, because a sideloaded app has no store console behind it. That is the right thing to ask for when the device is not to hand — but if the app will not start, the card cannot be reached and only logcat will do.
 
@@ -140,6 +142,8 @@ Do not solve this in `VaultFilter` instead. That decides what reaches the device
 - **A deploy key belongs to exactly one repository.** GitHub returns 422 "key is already in use" on the second. Hence one key per vault, generated on the device.
 - **A global gitignore can hide a whole directory.** A bare `Icon` pattern matched `ui/icon/` on a case-insensitive filesystem, so an entire package was never committed and CI had never run its tests. `!icon/` in `.gitignore` is the fix, and the symptom is a tree that builds locally and not in CI.
 - **Compose `Text(style = …)` replaces `LocalTextStyle`, it does not merge with it.** Hence the `inScript()` helper.
+- **A `Scaffold` lays its content slot out as a box, not a column.** Two things emitted side by side there are drawn on top of each other: a tab strip and a full-height column came out with the strip behind the text and the column swallowing every tap meant for it. Put them in a `Column` and apply the bar's inset once.
+- **An id is not an index.** `ParsedHeading` recorded its block's id and the outline scrolled to it as though it were a position. Ids are handed out to nested blocks too — every list item, every line in a callout — so the number runs ahead the moment a note holds a list, and the scroll clamps to the end and appears to do nothing. The outline was inert from the day it was written.
 - **A `DisposableEffect` keyed on the thing it cleans up disposes the new value, not the old one.** Its cleanup runs after the key changed and reads current state. This closed a PDF document at the moment it opened, and the viewer drew nothing for weeks. Where a producer owns a resource, close it with `produceState`'s `awaitDispose`.
 - **`PdfRenderer` allows one page open at a time and is not thread safe**, which a lazy list will absolutely violate.
 - **XML:** `--` is illegal inside a comment, `tools:ignore` needs its namespace, and `previewLayout`/`targetCell*` are API 31+ so they live in `res/xml-v31/`.
