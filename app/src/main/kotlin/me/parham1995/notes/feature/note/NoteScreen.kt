@@ -128,9 +128,11 @@ fun NoteScreen(
 
     LaunchedEffect(activeId) { viewModel.load(activeId) }
 
-    // The system gesture, while there is more than one tab. Below that the nav
-    // host's own handling leaves the screen, which is what should happen.
-    BackHandler(enabled = tabs.tabs.size > 1) { viewModel.closeTab(tabs.active) }
+    // Always, so the last tab is closed rather than left behind. Letting the
+    // nav host handle back on the final tab pops the screen and leaves the
+    // tab open, so the next note opened from a search joins a tab nobody
+    // remembers having.
+    BackHandler { if (!viewModel.closeTab(tabs.active)) onBack() }
     LaunchedEffect(state.note?.id, state.note?.title) {
         val note = state.note
         if (note != null) viewModel.retitleTab(note.id, note.title)

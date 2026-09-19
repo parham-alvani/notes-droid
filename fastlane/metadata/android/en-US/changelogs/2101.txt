@@ -1,0 +1,3 @@
+Opening a note in a new tab shows that note. The strip said the new tab was selected while the page below it still showed the previous one, because notes were kept in the back stack as well as in the tabs and the two disagreed. There is one note screen now, and the tabs are the only record of what is open.
+
+Back closes the tab you are reading even when it is the last one. It used to leave that tab behind, so the next note opened from a search joined a tab nobody remembered having.

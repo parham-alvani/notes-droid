@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -75,6 +76,25 @@ data class GraphRoute(
     val id: Long,
 )
 
+/**
+ * Shows a note, in the single note destination there is.
+ *
+ * Notes are tabs now, so the back stack must not also keep a list of them --
+ * two records of what is open disagree, and the one that wins is whichever
+ * screen happens to still be composed. The symptom is a strip that says one
+ * note is selected while the page below it shows another.
+ *
+ * Any note already on the stack is replaced, so there is exactly one note
+ * screen and back leaves the reader rather than walking a second history.
+ */
+private fun NavController.openNote(
+    id: Long,
+    newTab: Boolean = false,
+) = navigate(NoteRoute(id, newTab)) {
+    popUpTo<NoteRoute> { inclusive = true }
+    launchSingleTop = true
+}
+
 @Serializable
 data class NoteRoute(
     val id: Long,
@@ -123,7 +143,7 @@ fun NotesNavHost(
     val requestedNote by openNote.collectAsStateWithLifecycle()
     LaunchedEffect(requestedNote) {
         requestedNote?.let { id ->
-            navController.navigate(NoteRoute(id)) { launchSingleTop = true }
+            navController.openNote(id)
             (openNote as? MutableStateFlow)?.value = null
         }
     }
@@ -186,8 +206,8 @@ fun NotesNavHost(
             composable<BrowseRoute> { entry ->
                 BrowserScreen(
                     initialPath = entry.toRoute<BrowseRoute>().path,
-                    onOpenNote = { navController.navigate(NoteRoute(it)) },
-                    onOpenNoteInNewTab = { navController.navigate(NoteRoute(it, newTab = true)) },
+                    onOpenNote = { navController.openNote(it) },
+                    onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
                     onOpenAdvancedSettings = {
                         navController.navigate(
                             SettingsSectionRoute(SettingsSection.ADVANCED.name),
@@ -196,12 +216,12 @@ fun NotesNavHost(
                 )
             }
             composable<TasksRoute> {
-                TasksScreen(onOpenNote = { navController.navigate(NoteRoute(it)) })
+                TasksScreen(onOpenNote = { navController.openNote(it) })
             }
             composable<SearchRoute> {
                 SearchScreen(
-                    onOpenNote = { navController.navigate(NoteRoute(it)) },
-                    onOpenNoteInNewTab = { navController.navigate(NoteRoute(it, newTab = true)) },
+                    onOpenNote = { navController.openNote(it) },
+                    onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
                 )
             }
             composable<SettingsRoute> {
@@ -224,7 +244,7 @@ fun NotesNavHost(
                 GraphScreen(
                     noteId = entry.toRoute<GraphRoute>().id,
                     onBack = { navController.popBackStack() },
-                    onOpenNote = { navController.navigate(NoteRoute(it)) },
+                    onOpenNote = { navController.openNote(it) },
                 )
             }
             composable<SshRoute> {
@@ -237,7 +257,7 @@ fun NotesNavHost(
                     openInNewTab = route.newTab,
                     onOpenGraph = { navController.navigate(GraphRoute(it)) },
                     onBack = { navController.popBackStack() },
-                    onOpenNote = { navController.navigate(NoteRoute(it)) },
+                    onOpenNote = { navController.openNote(it) },
                     onOpenFolder = { navController.navigate(BrowseRoute(it)) },
                 )
             }
