@@ -101,4 +101,5 @@
     <string name="link_open_new_tab">باز کردن در تب تازه</string>
     <string name="link_broken">این پیوند هنوز به جایی نمی‌رسد</string>
     <string name="link_broken_note">چیزی در دفتر با این نام نیست. خیلی از اینها عمدا جای خالی گذاشته شده‌اند.</string>
+    <string name="link_at_heading">در «%1$s»</string>
 </resources>

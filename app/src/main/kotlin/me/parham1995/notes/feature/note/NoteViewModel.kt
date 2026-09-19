@@ -16,6 +16,7 @@ import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.BacklinkRow
+import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteMatch
@@ -224,6 +225,8 @@ data class LinkTarget(
     val title: String,
     val path: String,
     val excerpt: String,
+    /** The heading the link points at, when it points at one. */
+    val heading: String? = null,
 )
 
 /** Enough of the opening to recognise a note by. */
@@ -253,3 +256,23 @@ internal fun openingLine(blocks: List<MdBlock>): String {
 
 /** Below this, and ending in a colon, it is a heading for something else. */
 private const val PROSE_CHARS = 40
+
+/**
+ * Which block a `[[Note#Heading]]` link means.
+ *
+ * Matched on the heading's own text, trimmed and ignoring case, because
+ * Obsidian does not slugify an anchor -- the real ones in this vault contain
+ * em dashes, parentheses and Persian, and slugifying either of those two ways
+ * agrees with nothing.
+ *
+ * Null when nothing matches, which is a link to a heading that was renamed.
+ * The note still opens; it just opens where it was left.
+ */
+internal fun blockForHeading(
+    headings: List<HeadingEntity>,
+    heading: String?,
+): Int? {
+    val wanted = heading?.trim().orEmpty()
+    if (wanted.isEmpty()) return null
+    return headings.firstOrNull { it.text.trim().equals(wanted, ignoreCase = true) }?.blockIndex
+}

@@ -100,4 +100,5 @@
     <string name="link_open_new_tab">Open in a new tab</string>
     <string name="link_broken">This link goes nowhere yet</string>
     <string name="link_broken_note">Nothing in the vault answers to that name. Many of these are deliberate placeholders.</string>
+    <string name="link_at_heading">at “%1$s”</string>
 </resources>

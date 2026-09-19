@@ -114,6 +114,8 @@ fun NoteScreen(
     var finding by remember(noteId) { mutableStateOf(false) }
     var peeking by remember { mutableStateOf<LinkTarget?>(null) }
     var peekBroken by remember { mutableStateOf<String?>(null) }
+    // A heading to land on once the note it belongs to has loaded.
+    var pendingHeading by remember { mutableStateOf<String?>(null) }
 
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     // The route argument only ever seeds the set. After that the screen
@@ -135,9 +137,19 @@ fun NoteScreen(
     // Resume where this note was left. Keyed on the note's own id rather than
     // the argument, so it runs once the note has actually loaded.
     val loadedId = state.note?.id
-    LaunchedEffect(loadedId) {
-        val block = state.note?.scrollIndex ?: 0
-        if (block > 0) listState.scrollToItem(block)
+    LaunchedEffect(loadedId, pendingHeading) {
+        val note = state.note ?: return@LaunchedEffect
+        // A heading asked for wins over where the note was left: it is the
+        // reason the note was opened at all.
+        val target = blockForHeading(note.headings, pendingHeading)
+        when {
+            target != null -> {
+                listState.scrollToItem(target)
+                pendingHeading = null
+            }
+            pendingHeading != null -> pendingHeading = null // renamed since; stop asking
+            note.scrollIndex > 0 -> listState.scrollToItem(note.scrollIndex)
+        }
     }
     DisposableEffect(loadedId) {
         onDispose {
@@ -326,12 +338,21 @@ fun NoteScreen(
                                                         // you meant costs a load
                                                         // and the place you were
                                                         // reading.
-                                                        onWikiLink = { target, _ ->
+                                                        onWikiLink = { target, heading ->
                                                             val id = viewModel.targetOf(target)
-                                                            if (id == null) {
-                                                                peekBroken = target
-                                                            } else {
-                                                                scope.launch { peeking = viewModel.peek(id) }
+                                                            when {
+                                                                // `[[#Heading]]` means this
+                                                                // note, so there is nothing
+                                                                // to decide about.
+                                                                target.isBlank() -> pendingHeading = heading
+                                                                id == null -> peekBroken = target
+                                                                else ->
+                                                                    scope.launch {
+                                                                        peeking =
+                                                                            viewModel
+                                                                                .peek(id)
+                                                                                ?.copy(heading = heading)
+                                                                    }
                                                             }
                                                         },
                                                         onExternalLink = { url ->
@@ -435,10 +456,12 @@ fun NoteScreen(
             onDismiss = { peeking = null },
             onOpenHere = {
                 peeking = null
+                pendingHeading = target.heading
                 viewModel.openTab(target.noteId, inNewTab = false)
             },
             onOpenInNewTab = {
                 peeking = null
+                pendingHeading = target.heading
                 viewModel.openTab(target.noteId, inNewTab = true)
             },
         )
@@ -813,6 +836,15 @@ private fun LinkPeek(
         ) {
             AutoDirection(target.title) {
                 Text(target.title, style = MaterialTheme.typography.titleMedium.inScript())
+            }
+            target.heading?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    stringResource(R.string.link_at_heading, it),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Text(
                 target.path,
