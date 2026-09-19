@@ -1,0 +1,1 @@
+The tab strip works. It was being drawn in the same place as the note rather than above it, so it sat behind the first lines of text and every tap meant for it went to the note underneath — which also made "Open in a new tab" look identical to "Open", since the tab it opened was invisible.

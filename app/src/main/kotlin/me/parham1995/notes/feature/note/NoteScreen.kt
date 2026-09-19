@@ -245,133 +245,142 @@ fun NoteScreen(
             )
         },
     ) { padding ->
-        // Only with something to switch between: one tab is a strip that says
-        // the same thing as the title above it.
-        if (tabs.tabs.size > 1) {
-            TabStrip(
-                tabs = tabs,
-                modifier = Modifier.padding(top = padding.calculateTopPadding()),
-                onSelect = viewModel::selectTab,
-                onClose = { index -> if (!viewModel.closeTab(index)) onBack() },
-            )
-        }
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            // A folder note is only half of what a folder is: the page someone
-            // wrote, and the things actually in it. Obsidian shows both at
-            // once, in the editor and the sidebar; on a phone there is only
-            // one pane, so they take turns.
-            if (state.isFolderNote) {
-                PrimaryTabRow(selectedTabIndex = if (showContents) 1 else 0) {
-                    Tab(
-                        selected = !showContents,
-                        onClick = { showContents = false },
-                        text = { Text(stringResource(R.string.note_kind)) },
-                    )
-                    Tab(
-                        selected = showContents,
-                        onClick = { showContents = true },
-                        // The count is the useful part: it says whether the
-                        // folder holds anything the note does not mention.
-                        text = { Text(stringResource(R.string.note_contents, state.contents.size)) },
+        // One column, not two siblings.
+        //
+        // A Scaffold lays its content slot out as a box, so a strip and a
+        // full-height column emitted beside each other are drawn on top of one
+        // another: the strip sat behind the note's first lines and the column
+        // swallowed every tap meant for it, which reads as a tab bar that
+        // collides with the text and does not work.
+        Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
+            // Only with something to switch between: one tab is a strip that
+            // says the same thing as the title above it.
+            if (tabs.tabs.size > 1) {
+                TabStrip(
+                    tabs = tabs,
+                    onSelect = viewModel::selectTab,
+                    onClose = { index -> if (!viewModel.closeTab(index)) onBack() },
+                )
+                HorizontalDivider()
+            }
+            Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
+                // A folder note is only half of what a folder is: the page someone
+                // wrote, and the things actually in it. Obsidian shows both at
+                // once, in the editor and the sidebar; on a phone there is only
+                // one pane, so they take turns.
+                if (state.isFolderNote) {
+                    PrimaryTabRow(selectedTabIndex = if (showContents) 1 else 0) {
+                        Tab(
+                            selected = !showContents,
+                            onClick = { showContents = false },
+                            text = { Text(stringResource(R.string.note_kind)) },
+                        )
+                        Tab(
+                            selected = showContents,
+                            onClick = { showContents = true },
+                            // The count is the useful part: it says whether the
+                            // folder holds anything the note does not mention.
+                            text = { Text(stringResource(R.string.note_contents, state.contents.size)) },
+                        )
+                    }
+                }
+
+                if (finding) {
+                    FindBar(
+                        query = state.findQuery,
+                        matches = state.matches.size,
+                        onQueryChange = viewModel::find,
+                        onJump = { index -> scope.launch { listState.animateScrollToItem(index) } },
+                        matchBlocks = state.matches.map { it.blockIndex },
                     )
                 }
-            }
 
-            if (finding) {
-                FindBar(
-                    query = state.findQuery,
-                    matches = state.matches.size,
-                    onQueryChange = viewModel::find,
-                    onJump = { index -> scope.launch { listState.animateScrollToItem(index) } },
-                    matchBlocks = state.matches.map { it.blockIndex },
-                )
-            }
-
-            if (showContents) {
-                FolderContents(state.contents, onOpenNote, onOpenFolder)
-            } else {
-                Box(Modifier.fillMaxSize()) {
-                    when {
-                        state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                        state.missing ->
-                            Text(
-                                "This note is not on the device.",
-                                Modifier.align(Alignment.Center).padding(24.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-
-                        else ->
-                            state.note?.let { note ->
-                                MarkdownDocument(
-                                    blocks = note.blocks,
-                                    brokenLinks = state.brokenLinks,
-                                    listState = listState,
-                                    onPinch = viewModel::pinchTextScale,
-                                    actions =
-                                        RenderActions(
-                                            vaultId = note.vaultId,
-                                            inline =
-                                                InlineActions(
-                                                    // A look before a leap.
-                                                    // Following a link to
-                                                    // find it was not the one
-                                                    // you meant costs a load
-                                                    // and the place you were
-                                                    // reading.
-                                                    onWikiLink = { target, _ ->
-                                                        val id = viewModel.targetOf(target)
-                                                        if (id == null) {
-                                                            peekBroken = target
-                                                        } else {
-                                                            scope.launch { peeking = viewModel.peek(id) }
-                                                        }
-                                                    },
-                                                    onExternalLink = { url ->
-                                                        runCatching {
-                                                            context.startActivity(
-                                                                Intent(Intent.ACTION_VIEW, url.toUri()),
-                                                            )
-                                                        }
-                                                    },
-                                                ),
-                                            onCopyCode = { code ->
-                                                scope.launch {
-                                                    clipboard.setClipEntry(
-                                                        ClipData.newPlainText("code", code).toClipEntry(),
-                                                    )
-                                                }
-                                            },
-                                            // Never wired until now: the card was drawn, said
-                                            // "open with another app", and did nothing at all
-                                            // when tapped.
-                                            // Never wired either: images were
-                                            // drawn, took a tap, and did
-                                            // nothing with it.
-                                            onImage = { path, alt -> zoomed = path to alt },
-                                            onAttachment = { path ->
-                                                scope.launch {
-                                                    val file = viewModel.attachment(path)
-                                                    val message =
-                                                        when {
-                                                            file == null ->
-                                                                "Could not fetch " + path.substringAfterLast('/')
-                                                            // A PDF is read here; everything else
-                                                            // belongs to whatever app owns that type.
-                                                            Attachments.isPdf(path) -> {
-                                                                reading = file
-                                                                null
-                                                            }
-                                                            Attachments.open(context, file) -> null
-                                                            else -> nothingOpens
-                                                        }
-                                                    message?.let {
-                                                        Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            },
-                                        ),
+                if (showContents) {
+                    FolderContents(state.contents, onOpenNote, onOpenFolder)
+                } else {
+                    Box(Modifier.fillMaxSize()) {
+                        when {
+                            state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                            state.missing ->
+                                Text(
+                                    "This note is not on the device.",
+                                    Modifier.align(Alignment.Center).padding(24.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
                                 )
-                            }
+
+                            else ->
+                                state.note?.let { note ->
+                                    MarkdownDocument(
+                                        blocks = note.blocks,
+                                        brokenLinks = state.brokenLinks,
+                                        listState = listState,
+                                        onPinch = viewModel::pinchTextScale,
+                                        actions =
+                                            RenderActions(
+                                                vaultId = note.vaultId,
+                                                inline =
+                                                    InlineActions(
+                                                        // A look before a leap.
+                                                        // Following a link to
+                                                        // find it was not the one
+                                                        // you meant costs a load
+                                                        // and the place you were
+                                                        // reading.
+                                                        onWikiLink = { target, _ ->
+                                                            val id = viewModel.targetOf(target)
+                                                            if (id == null) {
+                                                                peekBroken = target
+                                                            } else {
+                                                                scope.launch { peeking = viewModel.peek(id) }
+                                                            }
+                                                        },
+                                                        onExternalLink = { url ->
+                                                            runCatching {
+                                                                context.startActivity(
+                                                                    Intent(Intent.ACTION_VIEW, url.toUri()),
+                                                                )
+                                                            }
+                                                        },
+                                                    ),
+                                                onCopyCode = { code ->
+                                                    scope.launch {
+                                                        clipboard.setClipEntry(
+                                                            ClipData.newPlainText("code", code).toClipEntry(),
+                                                        )
+                                                    }
+                                                },
+                                                // Never wired until now: the card was drawn, said
+                                                // "open with another app", and did nothing at all
+                                                // when tapped.
+                                                // Never wired either: images were
+                                                // drawn, took a tap, and did
+                                                // nothing with it.
+                                                onImage = { path, alt -> zoomed = path to alt },
+                                                onAttachment = { path ->
+                                                    scope.launch {
+                                                        val file = viewModel.attachment(path)
+                                                        val message =
+                                                            when {
+                                                                file == null ->
+                                                                    "Could not fetch " + path.substringAfterLast('/')
+                                                                // A PDF is read here; everything else
+                                                                // belongs to whatever app owns that type.
+                                                                Attachments.isPdf(path) -> {
+                                                                    reading = file
+                                                                    null
+                                                                }
+                                                                Attachments.open(context, file) -> null
+                                                                else -> nothingOpens
+                                                            }
+                                                        message?.let {
+                                                            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                },
+                                            ),
+                                    )
+                                }
+                        }
                     }
                 }
             }
@@ -753,10 +762,18 @@ private fun TabStrip(
                     // Only on the one being read. A close button on every tab
                     // in a row of six is a row of six things to hit by
                     // accident.
+                    //
+                    // A clickable box rather than an IconButton: the button
+                    // insists on a 48dp minimum, which inside a chip is fought
+                    // down to something that clips, and its click has to
+                    // consume the event or the chip underneath also handles it
+                    // and reopens what was just closed.
                     if (selected) {
-                        IconButton(
-                            onClick = { onClose(index) },
-                            modifier = Modifier.size(TAB_CLOSE_SIZE),
+                        Box(
+                            Modifier
+                                .size(TAB_CLOSE_SIZE)
+                                .clickable { onClose(index) },
+                            contentAlignment = Alignment.Center,
                         ) {
                             LucideGlyph(
                                 "x",
@@ -772,7 +789,7 @@ private fun TabStrip(
 }
 
 private val TAB_LABEL_WIDTH = 140.dp
-private val TAB_CLOSE_SIZE = 22.dp
+private val TAB_CLOSE_SIZE = 26.dp
 
 /**
  * What a link points at, and what to do with it.
