@@ -21,7 +21,7 @@ internal fun rowsForHeight(
     // Zero is what the host offers before it has decided, which is not a
     // reason to draw nothing.
     if (heightDp <= 0) return minimum
-    return ((heightDp - HEADER_DP - PADDING_DP) / ROW_DP).coerceIn(minimum, maximum)
+    return ((heightDp - HEADER_DP - PADDING_DP - HOST_INSET_DP) / ROW_DP).coerceIn(minimum, maximum)
 }
 
 /**
@@ -37,6 +37,16 @@ private const val HEADER_DP = 24
 
 /** The container's own padding, top and bottom. */
 private const val PADDING_DP = 24
+
+/**
+ * Height the host keeps for itself.
+ *
+ * The number in the options bundle is the cell the widget was given, not the
+ * space inside it -- the launcher's own margins come out of that. Measured the
+ * only way available: sixteen rows fitted the arithmetic and the sixteenth was
+ * drawn off the bottom edge on the device.
+ */
+private const val HOST_INSET_DP = 20
 
 private const val MIN_ROWS = 3
 private const val MAX_ROWS = 18

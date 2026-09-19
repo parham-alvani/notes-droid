@@ -1,0 +1,1 @@
+The last row of a widget is no longer drawn off its bottom edge. The height the home screen reports is the cell the widget sits in, not the space inside it, and the launcher's own margins come out of that.

@@ -14,8 +14,10 @@ import org.junit.Test
 class WidgetRowsTest {
     @Test
     fun `a tall widget is filled`() {
-        // 344dp is what the home screen on the test device hands out.
-        assertThat(rowsForHeight(344)).isEqualTo(16)
+        // 344dp is what the home screen on the test device hands out, and
+        // fifteen rows is what fitted inside it without the last being drawn
+        // off the bottom edge.
+        assertThat(rowsForHeight(344)).isEqualTo(15)
     }
 
     @Test
