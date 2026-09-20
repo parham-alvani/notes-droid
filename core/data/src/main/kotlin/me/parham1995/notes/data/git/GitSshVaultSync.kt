@@ -215,7 +215,17 @@ class GitSshVaultSync(
                 }
                 true
             }.getOrElse { failure ->
-                log("this key cannot push: " + failure.describeChain())
+                // A refused key is the ordinary answer here, not an incident.
+                // Logging the whole chain for it buried the journal in six
+                // stack frames on every sync.
+                val why = failure.message.orEmpty()
+                if (PUSH_REFUSED in
+                    why
+                ) {
+                    log("this key is read-only")
+                } else {
+                    log("cannot push: " + failure.describeChain())
+                }
                 false
             }
         }
@@ -247,8 +257,18 @@ class GitSshVaultSync(
                         .setRef("$REMOTE_PREFIX$branch")
                         .call()
 
+                    // From the commit, never from the working tree.
+                    //
+                    // The working tree *is* the app's file store for an SSH
+                    // vault, and an edit is written there optimistically before
+                    // it is sent. `reset --hard` leaves an untracked file
+                    // alone, so reading the file back read the app's own
+                    // scribble -- the edit looked already applied, reported
+                    // "nothing to send", and left the queue without ever
+                    // reaching the repository.
+                    val head = git.repository.resolve("$REMOTE_PREFIX$branch")
+                    val current = head?.let { contentAt(git.repository, it, path) }
                     val file = File(workTree, path)
-                    val current = if (file.isFile) file.readText() else null
                     val updated = edit.applyTo(current) ?: return@withContext WriteOutcome.NotApplicable
                     if (updated == current) return@withContext WriteOutcome.NotApplicable
 
@@ -285,6 +305,19 @@ class GitSshVaultSync(
                 }
             }
             throw IOException("could not push $path after $PUSH_ATTEMPTS attempts")
+        }
+
+    /** One file's text as of [commit], or null when it is not in that tree. */
+    private fun contentAt(
+        repository: Repository,
+        commit: ObjectId,
+        path: String,
+    ): String? =
+        RevWalk(repository).use { walk ->
+            val tree = walk.parseCommit(commit).tree
+            TreeWalk.forPath(repository, path, tree)?.use { found ->
+                String(repository.open(found.getObjectId(0)).bytes)
+            }
         }
 
     /** The first remote ref this push failed on, or null if it all landed. */
@@ -346,7 +379,7 @@ class GitSshVaultSync(
             .setBranch(branch)
             .setBranchesToClone(listOf("$REFS_HEADS$branch"))
             // No sparse-checkout in JGit, so depth is the only lever there is.
-            .setDepth(shallowDepth)
+            .apply { if (shallowDepth > 0) setDepth(shallowDepth) }
             .setTransportConfigCallback(sshConfig)
             .setProgressMonitor(progress)
             // Without a timeout a blocked port never fails, it just hangs --
@@ -360,7 +393,10 @@ class GitSshVaultSync(
         git
             .fetch()
             .setRemote(Constants.DEFAULT_REMOTE_NAME)
-            .setDepth(shallowDepth)
+            // Zero means no limit. Depth is about the size of a transfer over
+            // the network; a transport that cannot serve a shallow fetch at all
+            // -- a repository on the same disk, say -- has nothing to trim.
+            .apply { if (shallowDepth > 0) setDepth(shallowDepth) }
             .setTransportConfigCallback(sshConfig)
             .setProgressMonitor(progress)
             .setTimeout(TIMEOUT_SECONDS)
@@ -621,6 +657,9 @@ class GitSshVaultSync(
 
         /** What a server says when it will not take a push from a shallow clone. */
         const val SHALLOW_REFUSED = "shallow update not allowed"
+
+        /** What GitHub says when the deploy key was registered read-only. */
+        const val PUSH_REFUSED = "push not permitted"
     }
 }
 
