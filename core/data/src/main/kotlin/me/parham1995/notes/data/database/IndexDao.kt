@@ -67,12 +67,24 @@ abstract class IndexDao {
         targetId: Long?,
     )
 
-    /** Writes a batch and returns each note's id, in the order given. */
+    /**
+     * Writes a batch and returns each note's id, in the order given.
+     *
+     * **`@Upsert` returns -1 when it resolved to an update, not the row's id.**
+     * Everything below keys on that id, so taking it at face value wrote every
+     * heading, link and task of an *existing* note against `noteId = -1` --
+     * rows no query will ever find, while the note itself updated perfectly.
+     * A note therefore kept the tasks and backlinks it had when it was first
+     * indexed, however often it changed afterwards, and only a full reindex
+     * put it right. That was invisible because a full reindex runs whenever
+     * [me.parham1995.notes.data.VaultIndexer.VERSION] moves, which is most
+     * releases.
+     */
     @Transaction
     open suspend fun writeBatch(batch: List<NoteWrite>): List<Long> =
         batch.map { write ->
             val existing = idOf(write.note.vaultId, write.note.path) ?: 0
-            val id = upsertNote(write.note.copy(id = existing))
+            val id = upsertNote(write.note.copy(id = existing)).takeIf { it > 0 } ?: existing
 
             deleteHeadings(id)
             if (write.headings.isNotEmpty()) insertHeadings(write.headings.map { it.copy(noteId = id) })

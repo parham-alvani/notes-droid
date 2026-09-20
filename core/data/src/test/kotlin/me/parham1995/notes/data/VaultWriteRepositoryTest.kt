@@ -2,6 +2,7 @@ package me.parham1995.notes.data
 
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
@@ -33,6 +34,7 @@ class VaultWriteRepositoryTest {
     private lateinit var settings: SettingsStore
     private lateinit var writes: VaultWriteRepository
     private lateinit var transport: FakeWriter
+    private lateinit var indexer: VaultIndexer
 
     private val vaultId = 1L
 
@@ -68,7 +70,7 @@ class VaultWriteRepositoryTest {
             settings = SettingsStore(context)
             transport = FakeWriter()
 
-            val indexer =
+            indexer =
                 VaultIndexer(
                     files = files,
                     notes = database.noteDao(),
@@ -116,6 +118,34 @@ class VaultWriteRepositoryTest {
         runTest {
             database.close()
             files.clear()
+        }
+
+    @Test
+    fun `a task added shows up in the task list without a reindex`() =
+        runTest {
+            val path = "Tasks/Work.md"
+            files.write(vaultId, path, "## Alpha\n\n- [ ] first\n".toByteArray())
+            indexer.indexAll(vaultId, listOf(PathAndSha(path, "sha-seed")))
+            transport.content = files.readText(vaultId, path)
+            assertThat(database.taskDao().open(vaultId).first()).hasSize(1)
+
+            val result = writes.addTask(vaultId, path, "Alpha", "second")
+
+            assertThat(result).isEqualTo(WriteResult.Pushed)
+            assertThat(files.readText(vaultId, path)).contains("- [ ] second")
+            // The point of the test: a write indexes what it wrote, so the
+            // task list answers immediately rather than after a reindex.
+            assertThat(
+                database
+                    .taskDao()
+                    .open(vaultId)
+                    .first()
+                    .map { it.text },
+            ).containsExactly("first", "second")
+            // The line each task sits on, because that is what a completion
+            // looks it up by and it moves whenever the note above it does.
+            val noteId = database.noteDao().byPath(vaultId, path)!!.id
+            assertThat(database.taskDao().byNote(noteId).map { it.line }).containsExactly(2, 3)
         }
 
     @Test

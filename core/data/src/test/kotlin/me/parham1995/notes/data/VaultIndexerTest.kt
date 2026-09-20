@@ -164,6 +164,36 @@ class VaultIndexerTest {
         }
 
     @Test
+    fun `a note that changed keeps nothing of what it used to say`() =
+        runTest {
+            // The incremental path a sync takes for every modified file, and
+            // the one that was quietly broken: `@Upsert` answers -1 when it
+            // resolves to an update, so a note that already existed had its
+            // headings, links and tasks written against noteId -1. It updated
+            // perfectly and kept the index it was first built with, and only a
+            // full reindex -- which runs on an indexer version bump, so most
+            // releases -- put it right.
+            indexer.indexAll(1L, listOf(write("Note.md", "# Before\n\n- [ ] old task\n\n[[Alpha]]")))
+            val id = database.noteDao().idOf(1L, "Note.md")!!
+
+            indexer.indexChanged(
+                vaultId = 1L,
+                changed = listOf(write("Note.md", "# After\n\n- [ ] new task\n\n[[Beta]]")),
+                removed = emptyList(),
+            )
+
+            assertThat(database.taskDao().byNote(id).map { it.text }).containsExactly("new task")
+            assertThat(database.headingDao().byNote(id).map { it.text }).containsExactly("After")
+            assertThat(
+                database
+                    .linkDao()
+                    .unresolved(1L)
+                    .filter { it.srcId == id }
+                    .map { it.rawTarget },
+            ).containsExactly("Beta")
+        }
+
+    @Test
     fun `a removed note leaves nothing behind`() =
         runTest {
             val alpha = write("Alpha.md", "[[Beta]]")
