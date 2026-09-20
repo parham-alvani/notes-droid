@@ -288,22 +288,42 @@ class VaultWriteRepository
                     createdAt = System.currentTimeMillis(),
                 )
             // Every write funnels through here, so this is the one place that
-            // has to wait for a sync to finish with the files.
-            return gate.withVault {
+            // has to wait for a refresh to finish with the files -- except it
+            // does not wait. A sync of this vault is minutes; the edit goes in
+            // the queue rather than freezing whoever typed it.
+            return gate.tryWithVault {
                 val transform = transformFor(edit)
                 val before = files.readText(vault.id, path)
-                val after = transform(before) ?: return@withVault WriteResult.Unchanged
+                val after = transform(before) ?: return@tryWithVault WriteResult.Unchanged
 
                 val id = pending.insert(edit)
                 store(vault.id, path, after)
 
                 val stored = edit.copy(id = id)
-                if (send(stored, vault)) {
-                    WriteResult.Pushed
-                } else {
-                    WriteResult.Queued(stored.lastErrorOr("it will go up with the next sync"))
-                }
-            }
+                val outcome =
+                    if (send(stored, vault)) {
+                        WriteResult.Pushed
+                    } else {
+                        WriteResult.Queued(stored.lastErrorOr("it will go up with the next sync"))
+                    }
+                // Anything that queued while this held the gate goes now, which
+                // is what makes two quick taps behave like two writes rather
+                // than one write and one thing waiting for a refresh.
+                if (outcome == WriteResult.Pushed) runCatching { drain() }
+                outcome
+            } ?: queueWhileBusy(edit)
+        }
+
+        /**
+         * A refresh has the files. The edit is recorded and nothing is written
+         * to disk: the sync is checking a tree out underneath, and writing into
+         * that is the very race the gate exists to prevent. The next flush --
+         * which that same sync runs before it pulls -- applies it.
+         */
+        private suspend fun queueWhileBusy(edit: PendingEditEntity): WriteResult {
+            pending.insert(edit)
+            log.info("a refresh has the vault - \"${edit.summary}\" is queued")
+            return WriteResult.Queued("a refresh is running; it goes up when that finishes")
         }
 
         /** True when [edit] reached the repository and left the queue. */

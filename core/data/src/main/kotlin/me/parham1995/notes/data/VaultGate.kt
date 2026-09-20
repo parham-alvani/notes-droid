@@ -37,6 +37,28 @@ class VaultGate
          */
         suspend fun <T> withVault(block: suspend () -> T): T = mutex.withLock { block() }
 
+        /**
+         * The same, but only if nothing else holds it. Null when something does.
+         *
+         * A sync of this vault is minutes, not moments -- git cannot fetch a
+         * subset, so it is the whole repository -- and a write that blocked on
+         * one would sit there with a dead button and nothing said. An edit has
+         * somewhere else to go: the queue.
+         *
+         * Not a timed wait, deliberately. A timeout is a `delay`, and under a
+         * test scheduler virtual time runs it out the moment the body touches a
+         * real dispatcher, so every write test would take the queued branch and
+         * the tests would pass while testing the wrong path.
+         */
+        suspend fun <T> tryWithVault(block: suspend () -> T): T? {
+            if (!mutex.tryLock()) return null
+            return try {
+                block()
+            } finally {
+                mutex.unlock()
+            }
+        }
+
         /** Whether something holds it, for a status line rather than a decision. */
         val busy: Boolean get() = mutex.isLocked
     }

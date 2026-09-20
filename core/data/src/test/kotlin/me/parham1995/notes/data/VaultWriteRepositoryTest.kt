@@ -35,6 +35,7 @@ class VaultWriteRepositoryTest {
     private lateinit var writes: VaultWriteRepository
     private lateinit var transport: FakeWriter
     private lateinit var indexer: VaultIndexer
+    private lateinit var build: (VaultGate) -> VaultWriteRepository
 
     private val vaultId = 1L
 
@@ -100,7 +101,7 @@ class VaultWriteRepositoryTest {
             )
             settings.setAuthor("A Person", "person@example.com")
 
-            writes =
+            build = { gate ->
                 VaultWriteRepository(
                     settings = settings,
                     vaults = database.vaultDao(),
@@ -110,9 +111,14 @@ class VaultWriteRepositoryTest {
                     indexer = indexer,
                     transports = transports,
                     log = SyncLog(database.syncLogDao()),
-                    gate = VaultGate(),
+                    gate = gate,
                 )
+            }
+            writes = build(VaultGate())
         }
+
+    /** The same repository, on a gate the test can hold itself. */
+    private fun repositoryOn(gate: VaultGate) = build(gate)
 
     @After
     fun tearDown() =
@@ -147,6 +153,25 @@ class VaultWriteRepositoryTest {
             // looks it up by and it moves whenever the note above it does.
             val noteId = database.noteDao().byPath(vaultId, path)!!.id
             assertThat(database.taskDao().byNote(noteId).map { it.line }).containsExactly(2, 3)
+        }
+
+    @Test
+    fun `a write during a refresh is queued rather than blocked`() =
+        runTest {
+            val gate = VaultGate()
+            val writes = repositoryOn(gate)
+
+            // A sync holds the vault. The write must not wait for it.
+            val result = gate.withVault { writes.capture("caught mid-refresh") }
+
+            assertThat(result).isInstanceOf(WriteResult.Queued::class.java)
+            assertThat(database.pendingEditDao().all()).hasSize(1)
+            // Nothing was written to disk: a checkout is in progress under it.
+            assertThat(files.readText(vaultId, SCRATCHPAD)).isNull()
+
+            // And it goes as soon as the vault is free again.
+            assertThat(writes.flush()).isEqualTo(1)
+            assertThat(transport.content).contains("caught mid-refresh")
         }
 
     @Test

@@ -343,6 +343,12 @@ class SyncRepository
                     ),
                 )
 
+                // Again at the end: an edit made *during* this sync could not
+                // take the gate and queued instead, and the flush at the start
+                // is long past. Without this it would wait for the next one.
+                runCatching { writes.drain() }
+                    .onFailure { log.warn("could not send queued edits: " + it.describeChain()) }
+
                 failure?.let { throw it }
                 log.info("sync finished in ${(System.currentTimeMillis() - startedAt) / 1000}s")
                 plans.merged()
