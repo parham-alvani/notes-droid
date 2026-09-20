@@ -242,27 +242,35 @@ fun NoteScreen(
                         }
                     },
                     navigationIcon = {
-                        // The files drawer, then back. Ordered that way because
-                        // the leading slot is where a drawer is looked for, and
-                        // back has a second home in the gesture.
-                        IconButton(onClick = { scope.launch { drawer.open() } }) {
-                            LucideGlyph(
-                                "panel-left",
-                                size = 20.dp,
-                                contentDescription = stringResource(R.string.drawer_title),
-                            )
-                        }
-                        // Disabled rather than hidden when this tab has nowhere
-                        // to go back to: a button that moves you somewhere
-                        // unrelated is worse than one that plainly cannot.
-                        IconButton(
-                            onClick = { viewModel.back() },
-                            enabled = tabs.current?.canGoBack == true,
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.action_back),
-                            )
+                        // A Row, because the navigation slot lays its content
+                        // out as a box: two buttons put in it directly are
+                        // drawn one on top of the other, which is how the back
+                        // arrow spent a build hidden underneath the drawer's.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // The files drawer, then back. Ordered that way
+                            // because the leading slot is where a drawer is
+                            // looked for, and back has a second home in the
+                            // gesture.
+                            IconButton(onClick = { scope.launch { drawer.open() } }) {
+                                LucideGlyph(
+                                    "panel-left",
+                                    size = 20.dp,
+                                    contentDescription = stringResource(R.string.drawer_title),
+                                )
+                            }
+                            // Disabled rather than hidden when this tab has
+                            // nowhere to go back to: a button that moves you
+                            // somewhere unrelated is worse than one that
+                            // plainly cannot.
+                            IconButton(
+                                onClick = { viewModel.back() },
+                                enabled = tabs.current?.canGoBack == true,
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.action_back),
+                                )
+                            }
                         }
                     },
                     actions = {
