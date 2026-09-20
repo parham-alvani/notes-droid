@@ -137,6 +137,9 @@ class VaultRepository
         /** Every open task in the vault, soonest first, undated last. */
         fun openTasks(): Flow<List<TaskRow>> = activeVaultId.flatMapLatest { tasks.open(it) }
 
+        /** The tasks written in one note, so one can be ticked where it sits. */
+        suspend fun tasksIn(noteId: Long): List<TaskRow> = tasks.byNote(noteId)
+
         suspend fun overdueCount(today: String): Int = tasks.overdueCount(today)
 
         suspend fun dueTodayCount(today: String): Int = tasks.dueTodayCount(today)

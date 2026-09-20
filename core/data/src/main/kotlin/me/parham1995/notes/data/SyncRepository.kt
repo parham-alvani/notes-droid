@@ -1,7 +1,5 @@
 package me.parham1995.notes.data
 
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -15,8 +13,6 @@ import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.GitSshVaultSync
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.BlobKind
-import me.parham1995.notes.sync.GitHubClient
-import me.parham1995.notes.sync.GitHubConfig
 import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.RepositoryInfo
 import me.parham1995.notes.sync.RestVaultSync
@@ -24,7 +20,6 @@ import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.SyncPlan
 import me.parham1995.notes.sync.VaultFilter
 import me.parham1995.notes.sync.VaultSync
-import okhttp3.OkHttpClient
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Provider
@@ -58,8 +53,8 @@ class SyncRepository
         private val log: SyncLog,
         private val files: VaultFileStore,
         private val sshKeys: SshKeyStore,
-        @param:ApplicationContext private val context: Context,
-        private val http: OkHttpClient,
+        private val transports: VaultTransports,
+        private val writes: VaultWriteRepository,
     ) {
         val status: Flow<SyncStatus> =
             syncState.observe().map {
@@ -176,19 +171,32 @@ class SyncRepository
                 if (!sshKeys.exists(vault.name)) {
                     error("no key for ${vault.label} yet")
                 }
-                val transport =
-                    GitSshVaultSync(
-                        workTree = files.rootOf(vault.id),
-                        remoteUrl = sshUrl(vault),
-                        branch = vault.branch ?: DEFAULT_BRANCH,
-                        keys = sshKeys,
-                        keyMount = vault.name,
-                        configDir = File(context.filesDir, "git"),
-                        log = log::info,
-                    )
+                val transport = transports.ssh(vault)
                 transport.authenticate()
-                "authenticated against ${vault.owner}/${vault.repo}"
+                val write = if (transport.canPush()) "read and write" else "read only"
+                vaults.update(vaults.byId(vault.id)!!.copy(canWrite = write.startsWith("read and")))
+                "authenticated against ${vault.owner}/${vault.repo} ($write)"
             }
+
+        /**
+         * Re-asks every repository whether its credential may write, and says
+         * what the answers were.
+         *
+         * Offered as a button because the answer changes outside the app -- a
+         * deploy key gets write ticked, a token is replaced -- and waiting for
+         * the next background sync to notice is a long time to stare at a
+         * checkbox that is not there.
+         */
+        suspend fun refreshWriteAccess(): String {
+            val targets = vaults.all().filter { it.enabled }
+            if (targets.isEmpty()) throw NotConfiguredException("no repository configured")
+            return targets
+                .map { vault ->
+                    refreshWritability(vault)
+                    val can = vaults.byId(vault.id)?.canWrite == true
+                    "${vault.label}: " + if (can) "can write" else "read-only"
+                }.joinToString("\n")
+        }
 
         /** Confirms the token and repository before anything is synced. */
         suspend fun testConnection(): RepositoryInfo {
@@ -196,7 +204,9 @@ class SyncRepository
             val vault =
                 vaults.all().firstOrNull { it.enabled }
                     ?: throw NotConfiguredException("no repository configured")
-            return client(vault).repository()
+            val info = transports.client(vault).repository()
+            vaults.update(vault.copy(canWrite = info.canPush))
+            return info
         }
 
         /**
@@ -277,6 +287,11 @@ class SyncRepository
                 val startedAt = System.currentTimeMillis()
                 ensureSeeded()
                 migrateStorage()
+                // Before anything is pulled: an SSH vault's working tree is
+                // reset during a sync, which would take an edit's local copy
+                // with it and make a queued change look like a lost one.
+                runCatching { writes.flush() }
+                    .onFailure { log.warn("could not send queued edits: " + it.describeChain()) }
                 val targets = vaults.all().filter { it.enabled }
                 if (targets.isEmpty()) throw NotConfiguredException("no repository configured")
 
@@ -402,6 +417,7 @@ class SyncRepository
                         indexVersion = VaultIndexer.VERSION,
                     ),
                 )
+                refreshWritability(vault)
                 return plan
             } finally {
                 narrator?.cancel()
@@ -490,7 +506,7 @@ class SyncRepository
         private suspend fun transportFor(vault: VaultEntity): VaultSync =
             when (SyncTransport.parse(vault.transport)) {
                 SyncTransport.REST -> {
-                    val client = client(vault)
+                    val client = transports.client(vault)
                     RestVaultSync(
                         client = client,
                         branch = vault.branch ?: client.repository().defaultBranch,
@@ -506,43 +522,28 @@ class SyncRepository
                                 "as a deploy key on that repository",
                         )
                     }
-                    GitSshVaultSync(
-                        // Each repository gets its own working tree, which is
-                        // what lets one key serve all of them without their
-                        // histories colliding.
-                        workTree = files.rootOf(vault.id),
-                        remoteUrl = sshUrl(vault),
-                        branch = vault.branch ?: DEFAULT_BRANCH,
-                        keys = sshKeys,
-                        keyMount = vault.name,
-                        configDir = File(context.filesDir, "git"),
-                        log = log::info,
-                    )
+                    transports.ssh(vault)
                 }
             }
 
         /**
-         * GitHub answers SSH on 443 as well as 22, which is the way round a
-         * network that blocks 22 -- otherwise the clone just hangs.
+         * Asks the host what this vault's credential may do, and records it.
+         *
+         * Done on every sync rather than once, because the answer changes
+         * outside the app: a deploy key gets write ticked, a token is replaced
+         * with a narrower one. Never inferred from a failure -- a write
+         * offered on a read-only credential fails after the person has already
+         * typed the thing they wanted to save.
          */
-        private suspend fun sshUrl(vault: VaultEntity): String =
-            if (settings.current().sshOverPort443) {
-                "ssh://git@ssh.github.com:443/" + vault.owner + "/" + vault.repo + ".git"
-            } else {
-                "git@github.com:" + vault.owner + "/" + vault.repo + ".git"
+        private suspend fun refreshWritability(vault: VaultEntity) {
+            val can =
+                runCatching { transports.writer(vault).canPush() }
+                    .onFailure { log.warn("could not check write access for ${vault.label}: ${it.describeChain()}") }
+                    .getOrDefault(false)
+            if (can != vault.canWrite) {
+                log.info("${vault.label} is now " + if (can) "writable" else "read-only")
             }
-
-        private suspend fun client(vault: VaultEntity): GitHubClient {
-            val token = tokens.token() ?: throw NotConfiguredException("no access token stored")
-            return GitHubClient(
-                GitHubConfig(
-                    owner = vault.owner,
-                    repo = vault.repo,
-                    branch = vault.branch,
-                    token = token,
-                ),
-                http = http,
-            )
+            vaults.byId(vault.id)?.let { vaults.update(it.copy(canWrite = can)) }
         }
 
         /** One plan describing everything that happened, for the worker's report. */

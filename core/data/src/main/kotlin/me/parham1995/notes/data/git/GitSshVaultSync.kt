@@ -3,24 +3,33 @@ package me.parham1995.notes.data.git
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.describeChain
+import me.parham1995.notes.sync.Author
 import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.Rename
 import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.SyncPlan
+import me.parham1995.notes.sync.TextEdit
 import me.parham1995.notes.sync.VaultEntry
 import me.parham1995.notes.sync.VaultFilter
 import me.parham1995.notes.sync.VaultSink
 import me.parham1995.notes.sync.VaultSync
+import me.parham1995.notes.sync.VaultWriter
+import me.parham1995.notes.sync.WriteOutcome
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.api.TransportConfigCallback
 import org.eclipse.jgit.diff.DiffEntry
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
+import org.eclipse.jgit.lib.PersonIdent
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevWalk
+import org.eclipse.jgit.transport.PushResult
+import org.eclipse.jgit.transport.RefSpec
+import org.eclipse.jgit.transport.RemoteRefUpdate
 import org.eclipse.jgit.transport.SshSessionFactory
 import org.eclipse.jgit.transport.SshTransport
+import org.eclipse.jgit.transport.Transport
 import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.transport.sshd.ServerKeyDatabase
 import org.eclipse.jgit.transport.sshd.SshdSessionFactoryBuilder
@@ -63,7 +72,8 @@ class GitSshVaultSync(
     /** Narrates each stage, so a long clone is visibly working. */
     private val log: suspend (String) -> Unit = {},
     val progress: GitProgress = GitProgress(),
-) : VaultSync {
+) : VaultSync,
+    VaultWriter {
     init {
         // Must happen before any other JGit call touches configuration.
         AndroidGitEnvironment.install(configDir)
@@ -177,8 +187,111 @@ class GitSshVaultSync(
         )
     }
 
-    /** The public line to register with the host as a read-only deploy key. */
+    /** The public line to register with the host as a deploy key. */
     suspend fun publicKey(): String = keys.publicKeyLine(keyMount) ?: keys.generate(keyMount)
+
+    /**
+     * Whether this key may push, asked by starting a push and stopping at the
+     * advertisement.
+     *
+     * A deploy key is read-only unless it was registered with write access
+     * ticked, and nothing about the key itself says which it is -- the fetch
+     * side behaves identically either way. GitHub refuses to run `receive-pack`
+     * for a read-only key, so opening a push and going no further is the one
+     * cheap question that gets a straight answer.
+     */
+    override suspend fun canPush(): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!File(workTree, Constants.DOT_GIT).isDirectory) return@withContext false
+            runCatching {
+                openGit().use { git ->
+                    Transport.open(git.repository, URIish(remoteUrl)).use { transport ->
+                        if (transport is SshTransport) {
+                            transport.sshSessionFactory = SshSessionFactory.getInstance()
+                        }
+                        transport.timeout = AUTH_TIMEOUT_MS / MILLIS_PER_SECOND
+                        transport.openPush().close()
+                    }
+                }
+                true
+            }.getOrElse { failure ->
+                log("this key cannot push: " + failure.describeChain())
+                false
+            }
+        }
+
+    /**
+     * Applies [edit] to [path] and pushes the commit.
+     *
+     * Fetch and hard reset first, every time: the edit has to be computed
+     * against what the branch actually says now, not against whatever this
+     * working tree was left holding. That also means a rejected push is
+     * answered by going round again -- the reset discards the commit that lost,
+     * the edit is re-applied to the new content, and the result is a change
+     * that reads as though it were made after the other one rather than instead
+     * of it.
+     */
+    override suspend fun write(
+        path: String,
+        message: String,
+        author: Author,
+        edit: TextEdit,
+    ): WriteOutcome =
+        withContext(Dispatchers.IO) {
+            openGit().use { git ->
+                repeat(PUSH_ATTEMPTS) {
+                    fetch(git)
+                    git
+                        .reset()
+                        .setMode(ResetCommand.ResetType.HARD)
+                        .setRef("$REMOTE_PREFIX$branch")
+                        .call()
+
+                    val file = File(workTree, path)
+                    val current = if (file.isFile) file.readText() else null
+                    val updated = edit.applyTo(current) ?: return@withContext WriteOutcome.NotApplicable
+                    if (updated == current) return@withContext WriteOutcome.NotApplicable
+
+                    file.parentFile?.mkdirs()
+                    file.writeText(updated)
+                    git.add().addFilepattern(path).call()
+                    val identity = PersonIdent(author.name, author.email)
+                    val commit =
+                        git
+                            .commit()
+                            .setMessage(message)
+                            .setAuthor(identity)
+                            .setCommitter(identity)
+                            .call()
+
+                    val results =
+                        git
+                            .push()
+                            .setRemote(Constants.DEFAULT_REMOTE_NAME)
+                            .setRefSpecs(RefSpec("HEAD:$REFS_HEADS$branch"))
+                            .setTransportConfigCallback(sshConfig)
+                            .setTimeout(TIMEOUT_SECONDS)
+                            .call()
+                    val rejection = results.firstNotNullOfOrNull { it.rejection() }
+                    if (rejection == null) return@withContext WriteOutcome.Written(commit.name, updated)
+                    log("push rejected ($rejection) - re-reading and applying the edit again")
+                    if (SHALLOW_REFUSED in rejection) {
+                        throw IOException(
+                            "the repository refused a push from a shallow clone. This vault was " +
+                                "cloned one commit deep, which is what keeps it to a size a phone " +
+                                "can hold; the REST transport writes without that limit.",
+                        )
+                    }
+                }
+            }
+            throw IOException("could not push $path after $PUSH_ATTEMPTS attempts")
+        }
+
+    /** The first remote ref this push failed on, or null if it all landed. */
+    private fun PushResult.rejection(): String? =
+        remoteUpdates
+            .firstOrNull { it.status != RemoteRefUpdate.Status.OK && it.status != RemoteRefUpdate.Status.UP_TO_DATE }
+            ?.let { "${it.status}${it.message?.let { why -> ": $why" }.orEmpty()}" }
 
     private enum class ChangeKind { ADDED, MODIFIED, DELETED }
 
@@ -503,6 +616,11 @@ class GitSshVaultSync(
         const val DEFAULT_SSH_PORT = 22
         const val REMOTE_PREFIX = "refs/remotes/origin/"
         const val REFS_HEADS = "refs/heads/"
+        const val MILLIS_PER_SECOND = 1000
+        const val PUSH_ATTEMPTS = 3
+
+        /** What a server says when it will not take a push from a shallow clone. */
+        const val SHALLOW_REFUSED = "shallow update not allowed"
     }
 }
 

@@ -156,8 +156,9 @@ interface TaskDao {
      */
     @Query(
         """
-        SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.actionableOn,
-               n.path AS notePath, n.title AS noteTitle
+        SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
+               t.actionableOn, t.recurring, n.path AS notePath, n.title AS noteTitle,
+               n.vaultId AS vaultId
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
         WHERE t.open = 1 AND n.vaultId = :vaultId
@@ -165,6 +166,23 @@ interface TaskDao {
         """,
     )
     fun open(vaultId: Long): Flow<List<TaskRow>>
+
+    /**
+     * The tasks in one note, for ticking one off where it is written rather
+     * than only from the list.
+     */
+    @Query(
+        """
+        SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
+               t.actionableOn, t.recurring, n.path AS notePath, n.title AS noteTitle,
+               n.vaultId AS vaultId
+        FROM tasks t
+        JOIN notes n ON n.id = t.noteId
+        WHERE t.noteId = :noteId
+        ORDER BY t.ordinal
+        """,
+    )
+    suspend fun byNote(noteId: Long): List<TaskRow>
 
     /**
      * Counted across every vault, not just the active one.
@@ -223,4 +241,35 @@ interface VaultDao {
 
     @Query("DELETE FROM vaults WHERE id = :id")
     suspend fun delete(id: Long)
+}
+
+/**
+ * The queue of edits that have not reached the repository yet.
+ *
+ * Ordered by when they were made, and flushed in that order: two edits to the
+ * same file applied out of order would each be re-applied against the other's
+ * result, which is correct but reads as a scrambled history.
+ */
+@Dao
+interface PendingEditDao {
+    @Insert
+    suspend fun insert(edit: PendingEditEntity): Long
+
+    @Query("SELECT * FROM pending_edits ORDER BY createdAt, id")
+    suspend fun all(): List<PendingEditEntity>
+
+    @Query("SELECT * FROM pending_edits ORDER BY createdAt, id")
+    fun observe(): Flow<List<PendingEditEntity>>
+
+    @Query("SELECT COUNT(*) FROM pending_edits")
+    fun count(): Flow<Int>
+
+    @Update
+    suspend fun update(edit: PendingEditEntity)
+
+    @Query("DELETE FROM pending_edits WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("DELETE FROM pending_edits WHERE vaultId = :vaultId")
+    suspend fun clearVault(vaultId: Long)
 }

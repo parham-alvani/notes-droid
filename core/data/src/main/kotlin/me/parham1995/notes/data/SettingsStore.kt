@@ -16,6 +16,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import me.parham1995.notes.sync.Author
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -145,6 +146,33 @@ data class ReadingSettings(
     }
 }
 
+/**
+ * What the app needs in order to write, as opposed to read.
+ *
+ * Kept apart from the rest because writing is opt-in twice over: the credential
+ * has to allow it, and an author has to be named. Neither has a sensible
+ * default -- a commit attributed to the app rather than to the person who made
+ * it is worse than no commit -- so until both are set, every write affordance
+ * stays hidden.
+ */
+data class WriteSettings(
+    val authorName: String = "",
+    val authorEmail: String = "",
+    /** Where a captured thought lands, relative to the vault's root. */
+    val scratchpadPath: String = DEFAULT_SCRATCHPAD,
+    /** Which vault holds it. Zero means the one being read. */
+    val scratchpadVaultId: Long = 0,
+) {
+    val author: Author get() = Author(authorName.trim(), authorEmail.trim())
+
+    /** Whether an author has been named well enough to commit as. */
+    val hasAuthor: Boolean get() = author.isUsable
+
+    companion object {
+        const val DEFAULT_SCRATCHPAD = "Scratchpad.md"
+    }
+}
+
 /** Which repository to read and how. Nothing about the vault is compiled in. */
 data class VaultSettings(
     val owner: String = "",
@@ -183,6 +211,7 @@ data class VaultSettings(
      * fresh install and a single-vault install both want.
      */
     val activeVaultId: Long = 0,
+    val write: WriteSettings = WriteSettings(),
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
 
@@ -217,6 +246,15 @@ class SettingsStore
                     taskDigest = preferences[TASK_DIGEST] ?: false,
                     taskDigestHour = preferences[DIGEST_HOUR] ?: VaultSettings.DEFAULT_DIGEST_HOUR,
                     activeVaultId = preferences[ACTIVE_VAULT] ?: 0L,
+                    write =
+                        WriteSettings(
+                            authorName = preferences[AUTHOR_NAME].orEmpty(),
+                            authorEmail = preferences[AUTHOR_EMAIL].orEmpty(),
+                            scratchpadPath =
+                                preferences[SCRATCHPAD_PATH]?.takeIf { it.isNotBlank() }
+                                    ?: WriteSettings.DEFAULT_SCRATCHPAD,
+                            scratchpadVaultId = preferences[SCRATCHPAD_VAULT] ?: 0L,
+                        ),
                     reading =
                         ReadingSettings(
                             textScale = preferences[TEXT_SCALE] ?: 1f,
@@ -241,6 +279,26 @@ class SettingsStore
                 it[OWNER] = owner.trim()
                 it[REPO] = repo.trim()
                 if (branch.isNullOrBlank()) it.remove(BRANCH) else it[BRANCH] = branch.trim()
+            }
+        }
+
+        suspend fun setAuthor(
+            name: String,
+            email: String,
+        ) {
+            context.settingsDataStore.edit {
+                it[AUTHOR_NAME] = name.trim()
+                it[AUTHOR_EMAIL] = email.trim()
+            }
+        }
+
+        suspend fun setScratchpad(
+            path: String,
+            vaultId: Long,
+        ) {
+            context.settingsDataStore.edit {
+                it[SCRATCHPAD_PATH] = path.trim().trim('/')
+                it[SCRATCHPAD_VAULT] = vaultId
             }
         }
 
@@ -343,5 +401,9 @@ class SettingsStore
             val START_SCREEN = stringPreferencesKey("start_screen")
             val BROWSER_SORT = stringPreferencesKey("browser_sort")
             val OPEN_TABS = stringPreferencesKey("open_tabs")
+            val AUTHOR_NAME = stringPreferencesKey("git_author_name")
+            val AUTHOR_EMAIL = stringPreferencesKey("git_author_email")
+            val SCRATCHPAD_PATH = stringPreferencesKey("scratchpad_path")
+            val SCRATCHPAD_VAULT = longPreferencesKey("scratchpad_vault")
         }
     }

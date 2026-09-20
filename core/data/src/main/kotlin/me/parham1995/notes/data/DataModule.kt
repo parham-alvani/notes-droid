@@ -17,6 +17,7 @@ import me.parham1995.notes.data.database.IndexDao
 import me.parham1995.notes.data.database.LinkDao
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NotesDatabase
+import me.parham1995.notes.data.database.PendingEditDao
 import me.parham1995.notes.data.database.SearchDao
 import me.parham1995.notes.data.database.SyncLogDao
 import me.parham1995.notes.data.database.SyncStateDao
@@ -52,6 +53,7 @@ object DataModule {
                 NotesDatabase.MIGRATION_7_8,
                 NotesDatabase.MIGRATION_8_9,
                 NotesDatabase.MIGRATION_9_10,
+                NotesDatabase.MIGRATION_10_11,
             ).addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
@@ -91,6 +93,9 @@ object DataModule {
 
     @Provides
     fun vaultDao(database: NotesDatabase): VaultDao = database.vaultDao()
+
+    @Provides
+    fun pendingEditDao(database: NotesDatabase): PendingEditDao = database.pendingEditDao()
 
     @Provides
     @Singleton

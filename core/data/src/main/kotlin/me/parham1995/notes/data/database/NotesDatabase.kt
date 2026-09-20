@@ -17,8 +17,9 @@ import androidx.sqlite.execSQL
         SyncLogEntity::class,
         TaskEntity::class,
         VaultEntity::class,
+        PendingEditEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -42,6 +43,8 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
 
     abstract fun vaultDao(): VaultDao
+
+    abstract fun pendingEditDao(): PendingEditDao
 
     companion object {
         const val NAME = "notes.db"
@@ -317,6 +320,35 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL("DROP TABLE `blobs`")
                     connection.execSQL("ALTER TABLE `blobs_new` RENAME TO `blobs`")
                     connection.execSQL("DROP INDEX IF EXISTS `index_blobs_vaultId`")
+                }
+            }
+
+        /**
+         * Adds everything writing needs: where a task sits in its file, whether
+         * a vault's credential may push, and the queue of edits that have not
+         * reached the repository yet.
+         *
+         * `line` defaults to -1 rather than 0, because 0 is a real line and a
+         * task wrongly claiming to be the first line of its file would be ticked
+         * by editing whatever is actually there. The indexer's version is bumped
+         * alongside this so the existing rows are filled in on the next sync
+         * instead of staying at -1 forever.
+         */
+        val MIGRATION_10_11 =
+            object : Migration(10, 11) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `tasks` ADD COLUMN `line` INTEGER NOT NULL DEFAULT -1")
+                    connection.execSQL("ALTER TABLE `vaults` ADD COLUMN `canWrite` INTEGER NOT NULL DEFAULT 0")
+                    connection.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `pending_edits` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`vaultId` INTEGER NOT NULL, `path` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+                            "`anchor` TEXT NOT NULL, `text` TEXT NOT NULL, `summary` TEXT NOT NULL, " +
+                            "`createdAt` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `lastError` TEXT)",
+                    )
+                    connection.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_pending_edits_vaultId` ON `pending_edits` (`vaultId`)",
+                    )
                 }
             }
 

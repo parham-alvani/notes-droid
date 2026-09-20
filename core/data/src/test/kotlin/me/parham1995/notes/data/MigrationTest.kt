@@ -287,6 +287,7 @@ class MigrationTest {
                 7..8 to NotesDatabase.MIGRATION_7_8,
                 8..9 to NotesDatabase.MIGRATION_8_9,
                 9..10 to NotesDatabase.MIGRATION_9_10,
+                10..11 to NotesDatabase.MIGRATION_10_11,
             )
 
         val CURRENT = MIGRATIONS.maxOf { (range, _) -> range.last }

@@ -36,6 +36,17 @@ data class VaultEntity(
     val lastError: String? = null,
     val filterVersion: Int = 0,
     val indexVersion: Int = 0,
+    /**
+     * Whether the credential this vault syncs with may also push, as the host
+     * itself last answered it.
+     *
+     * Stored rather than asked each time because it gates whether the app shows
+     * a write affordance at all, and a checkbox that appears a second after the
+     * screen does is worse than one that is simply not there. Refreshed on
+     * every sync, so a token upgraded at the desk is picked up on the next
+     * refresh rather than needing the app reinstalled.
+     */
+    val canWrite: Boolean = false,
 ) {
     val label: String get() = name.ifBlank { repo }
 }
@@ -219,6 +230,15 @@ data class TaskEntity(
     val section: String,
     /** Index into the note's blocks, so opening it can scroll to the task. */
     val blockIndex: Int,
+    /**
+     * The zero-based line it was written on, which is how the app finds the
+     * line again in order to tick it.
+     *
+     * A block index cannot do that job: several tasks share one block, and the
+     * text stored here has already had its markup and its emoji metadata taken
+     * off, so it no longer matches anything in the file.
+     */
+    val line: Int = -1,
     val ordinal: Int,
     /**
      * Denormalised from [state] so the list is a single indexed lookup rather
@@ -244,9 +264,12 @@ data class TaskRow(
     val state: String,
     val section: String,
     val blockIndex: Int,
+    val line: Int,
     val actionableOn: String?,
+    val recurring: String?,
     val notePath: String,
     val noteTitle: String,
+    val vaultId: Long,
 )
 
 /**
@@ -263,4 +286,35 @@ data class SyncLogEntity(
     val at: Long,
     val level: String,
     val message: String,
+)
+
+/**
+ * One edit waiting to reach the repository.
+ *
+ * Every write is recorded here before it is attempted and removed once it
+ * lands, which is what lets an edit survive a phone with no signal: the queue
+ * is flushed at the start of the next sync, ahead of anything being pulled
+ * down. What is stored is the *intent* -- the line to find, the line to write
+ * -- never a patch, so flushing it re-applies the change to whatever the file
+ * says by then rather than reverting a day of work at the desk.
+ */
+@Entity(tableName = "pending_edits", indices = [Index("vaultId")])
+data class PendingEditEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val vaultId: Long,
+    val path: String,
+    /** One of [me.parham1995.notes.data.EditKind], by name. */
+    val kind: String,
+    /**
+     * What the edit attaches to: the exact line to replace for a completion,
+     * the section heading for a new task, empty for an append.
+     */
+    val anchor: String,
+    /** The line or block to write. */
+    val text: String,
+    /** Shown in the journal and in the commit message. */
+    val summary: String,
+    val createdAt: Long,
+    val attempts: Int = 0,
+    val lastError: String? = null,
 )

@@ -203,6 +203,7 @@ class VaultIndexer
                                     state = task.state.name,
                                     section = task.section,
                                     blockIndex = task.blockIndex,
+                                    line = task.line,
                                     ordinal = task.ordinal,
                                     open = task.isOpen,
                                     actionableOn = task.actionableOn,
@@ -266,7 +267,7 @@ class VaultIndexer
              * 3: the guides are synced but no longer indexed as notes.
              * 4: a heading records where it is, not what its id is.
              */
-            const val VERSION = 4
+            const val VERSION = 5
 
             /**
              * Files that are kept on the device but are not notes.
