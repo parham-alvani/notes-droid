@@ -136,10 +136,24 @@ class VaultWriteRepository
                     ?: return WriteResult.Refused(
                         "that task is not in ${task.notePath} any more - refresh and try again",
                     )
+            // A repeat becomes two lines: the next occurrence and the one just
+            // finished. Where the rule is not one the app will act on it says
+            // so rather than dropping the repeat, which would quietly turn a
+            // standing job into a one-off.
             if (TaskLine.isRecurring(raw)) {
-                return WriteResult.Refused(
-                    "this task repeats, and ticking it here would drop the repeat rather than " +
-                        "schedule the next one. Obsidian does that part",
+                val both =
+                    TaskLine.completeRecurring(raw, today())
+                        ?: return WriteResult.Refused(
+                            "this task repeats on a rule the app will not work out for itself - " +
+                                "ticking it here could drop the repeat. Obsidian does that part",
+                        )
+                return apply(
+                    vault = vault,
+                    path = task.notePath,
+                    kind = EditKind.REPLACE_LINE,
+                    anchor = raw,
+                    replacement = both.joinToString(LINES),
+                    summary = "docs(tasks): complete \"${task.text.take(SUBJECT)}\" and schedule the next",
                 )
             }
             val completed = TaskLine.complete(raw, today()) ?: return WriteResult.Unchanged
@@ -375,7 +389,9 @@ class VaultWriteRepository
         /** The pure transform this edit stands for. */
         private fun transformFor(edit: PendingEditEntity): (String?) -> String? =
             when (EditKind.parse(edit.kind)) {
-                EditKind.REPLACE_LINE -> VaultEdits.replaceLine(edit.anchor, edit.text)
+                // Split back out, because a repeat's replacement is two lines
+                // and the queue stores an edit as one string.
+                EditKind.REPLACE_LINE -> VaultEdits.replaceLineWith(edit.anchor, edit.text.split(LINES))
                 EditKind.ADD_UNDER -> VaultEdits.addUnder(edit.anchor, edit.text)
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
@@ -467,6 +483,9 @@ class VaultWriteRepository
              * sync for ever, and the only sign of it was a line in Settings.
              */
             const val MAX_ATTEMPTS = 5
+
+            /** How a multi-line replacement is held in one stored field. */
+            const val LINES = "\n"
             const val SCHEDULE_DAYS = 3L
             const val SUBJECT = 60
             const val SHORT_SHA = 7

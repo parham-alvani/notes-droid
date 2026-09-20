@@ -21,6 +21,23 @@ class VaultEditsTest {
     }
 
     @Test
+    fun `one line can become two, each keeping the indentation`() {
+        val note = "## Daftar\n\n- [ ] parent\n    - [ ] bins 🔁 every day ⏳ 2026-09-19\n"
+
+        val out =
+            VaultEdits.replaceLineWith(
+                "- [ ] bins 🔁 every day ⏳ 2026-09-19",
+                listOf("- [ ] bins 🔁 every day ⏳ 2026-09-21", "- [x] bins 🔁 every day ⏳ 2026-09-19 ✅ 2026-09-20"),
+            )(note)
+
+        assertThat(out).isEqualTo(
+            "## Daftar\n\n- [ ] parent\n" +
+                "    - [ ] bins 🔁 every day ⏳ 2026-09-21\n" +
+                "    - [x] bins 🔁 every day ⏳ 2026-09-19 ✅ 2026-09-20\n",
+        )
+    }
+
+    @Test
     fun `a line that is already what the edit wanted is not applicable`() {
         val note = "- [x] done ✅ 2026-09-19"
 

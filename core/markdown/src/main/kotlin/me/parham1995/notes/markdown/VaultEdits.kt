@@ -26,13 +26,28 @@ object VaultEdits {
     fun replaceLine(
         anchor: String,
         replacement: String,
+    ): (String?) -> String? = replaceLineWith(anchor, listOf(replacement))
+
+    /**
+     * The same, but the line becomes several.
+     *
+     * Completing a repeating task is the reason: one line goes in, the next
+     * occurrence and the finished one come out. Each keeps the indentation the
+     * original had, so a nested sub-task stays nested.
+     */
+    fun replaceLineWith(
+        anchor: String,
+        replacement: List<String>,
     ): (String?) -> String? {
         val wanted = anchor.trim()
-        val becomes = replacement.trim()
+        val becomes = replacement.map { it.trim() }.filter { it.isNotEmpty() }
+        if (becomes.isEmpty()) return { null }
         return { current ->
             when {
                 current == null -> null
-                current.lines().any { it.trim() == becomes } -> null
+                // Already said: the last line is the one a second run would
+                // produce, so finding it means the edit has happened.
+                current.lines().any { it.trim() == becomes.last() } -> null
                 else -> {
                     val lines = current.lines()
                     val at = lines.indexOfFirst { it.trim() == wanted }
@@ -40,7 +55,12 @@ object VaultEdits {
                         null
                     } else {
                         val indent = lines[at].takeWhile { it == ' ' || it == '\t' }
-                        lines.toMutableList().apply { this[at] = indent + becomes }.joinToString("\n")
+                        lines
+                            .toMutableList()
+                            .apply {
+                                removeAt(at)
+                                addAll(at, becomes.map { indent + it })
+                            }.joinToString("\n")
                     }
                 }
             }

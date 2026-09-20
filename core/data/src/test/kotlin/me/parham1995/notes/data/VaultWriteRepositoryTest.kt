@@ -175,6 +175,38 @@ class VaultWriteRepositoryTest {
         }
 
     @Test
+    fun `completing a repeat leaves the next occurrence behind it`() =
+        runTest {
+            val path = "Tasks/Work.md"
+            val today = java.time.LocalDate.now()
+            val due = today.plusDays(1)
+            val line = "- [ ] bins 🔁 every day ⏳ $due"
+            files.write(vaultId, path, "## Alpha\n\n$line\n".toByteArray())
+            indexer.indexAll(vaultId, listOf(PathAndSha(path, "sha-seed")))
+            transport.content = files.readText(vaultId, path)
+            val task =
+                database
+                    .taskDao()
+                    .open(vaultId)
+                    .first()
+                    .single()
+
+            assertThat(writes.completeTask(task)).isEqualTo(WriteResult.Pushed)
+
+            val after = files.readText(vaultId, path).orEmpty()
+            assertThat(after).contains("- [ ] bins 🔁 every day ⏳ ${due.plusDays(1)}")
+            assertThat(after).contains("- [x] bins 🔁 every day ⏳ $due ✅ $today")
+            // And the list still has exactly one thing to do.
+            assertThat(
+                database
+                    .taskDao()
+                    .open(vaultId)
+                    .first()
+                    .map { it.text },
+            ).containsExactly("bins")
+        }
+
+    @Test
     fun `a read-only vault is refused, and nothing is queued`() =
         runTest {
             database.vaultDao().update(database.vaultDao().byId(vaultId)!!.copy(canWrite = false))

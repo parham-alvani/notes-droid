@@ -1,5 +1,8 @@
 package me.parham1995.notes.markdown
 
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
 /**
  * One task as it is actually written in the file.
  *
@@ -50,6 +53,64 @@ object TaskLine {
     }
 
     /**
+     * Completes a repeating task: the next occurrence, then the one just done.
+     *
+     * Two lines, because that is what completing a repeat means -- the work
+     * comes back. The new one goes first, which is where the Tasks plugin puts
+     * it, so the open task stays above the record of the finished one.
+     *
+     * Null when this is not a repeating task, when its rule is not one the app
+     * will act on, or when it carries no date to move: a repeat with no dates
+     * has no next occurrence to describe, and copying the line unchanged would
+     * only duplicate it.
+     *
+     * Every date on the line moves by the same number of days. The rule decides
+     * how far the *leading* date travels -- due, else scheduled, else start --
+     * and the others follow by exactly that, so a task scheduled three days
+     * before it is due stays scheduled three days before it is due.
+     */
+    fun completeRecurring(
+        raw: String,
+        today: String,
+    ): List<String>? {
+        val match = LINE.find(raw) ?: return null
+        val (prefix, state, body) = match.destructured
+        if (state != " " && state != "/") return null
+
+        val split = TaskMetadata.split(body)
+        val rule = split.meta.firstOrNull { it.emoji == RECUR }?.value ?: return null
+        val recurrence = TaskRecurrence.parse(rule) ?: return null
+
+        val dates = split.meta.mapNotNull { meta -> meta.date()?.let { meta.emoji to it } }.toMap()
+        val leading = MOVED.firstNotNullOfOrNull { dates[it] } ?: return null
+        val now = today.toDateOrNull() ?: return null
+
+        val from = if (recurrence.whenDone) now else leading
+        val shift = ChronoUnit.DAYS.between(leading, TaskRecurrence.next(from, recurrence, now))
+
+        val moved =
+            split.meta.map { meta ->
+                val date = dates[meta.emoji]
+                if (meta.emoji in MOVED && date != null) meta.copy(value = date.plusDays(shift).toString()) else meta
+            }
+        val next = prefix + "[ ] " + rebuild(split.text, moved)
+        val done = prefix + "[x] " + body.trimEnd() + " " + DONE + " " + today
+        return listOf(next, done)
+    }
+
+    private fun rebuild(
+        text: String,
+        meta: List<TaskMeta>,
+    ): String =
+        (listOf(text.trimEnd()) + meta.map { "${it.emoji} ${it.value}".trimEnd() })
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+
+    private fun TaskMeta.date(): LocalDate? = value.toDateOrNull()
+
+    private fun String.toDateOrNull(): LocalDate? = runCatching { LocalDate.parse(trim()) }.getOrNull()
+
+    /**
      * What the index would call this line, so a stored task can be matched back
      * to the line it came from.
      *
@@ -66,4 +127,7 @@ object TaskLine {
 
     private const val DONE = "✅"
     private const val RECUR = "🔁"
+
+    /** The dates that describe when a task happens, and so travel with it. */
+    private val MOVED = listOf("📅", "⏳", "🛫")
 }
