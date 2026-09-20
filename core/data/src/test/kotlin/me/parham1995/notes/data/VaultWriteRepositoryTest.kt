@@ -110,6 +110,7 @@ class VaultWriteRepositoryTest {
                     indexer = indexer,
                     transports = transports,
                     log = SyncLog(database.syncLogDao()),
+                    gate = VaultGate(),
                 )
         }
 
@@ -201,6 +202,24 @@ class VaultWriteRepositoryTest {
             // than replayed over it.
             assertThat(transport.content).contains("written at the desk")
             assertThat(transport.content).contains("caught on a train")
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun `a scheduled flush gives up on an edit that keeps failing`() =
+        runTest {
+            transport.offline = true
+            writes.capture("never lands")
+
+            // Five scheduled attempts, as a sync would make them.
+            repeat(6) { writes.drain() }
+            val edit = database.pendingEditDao().all().single()
+            assertThat(edit.attempts).isEqualTo(5)
+
+            // Still there, and still sendable by hand -- a person asking for it
+            // always gets one more try.
+            transport.offline = false
+            assertThat(writes.flush()).isEqualTo(1)
             assertThat(database.pendingEditDao().all()).isEmpty()
         }
 

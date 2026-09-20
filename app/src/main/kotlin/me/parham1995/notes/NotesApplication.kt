@@ -16,6 +16,7 @@ import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
+import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.widget.RecentNotesWidget
 import me.parham1995.notes.widget.TasksWidget
 import javax.inject.Inject
@@ -74,6 +75,12 @@ class NotesApplication :
         scheduleBackgroundSync()
         scheduleTaskDigest()
         SyncWorker.afterSync = {
+            TasksWidget.refresh(this)
+            RecentNotesWidget.refresh(this)
+        }
+        // A task ticked in the app leaves the home screen a tick behind
+        // otherwise, until whenever the next background refresh happens to run.
+        VaultWriteRepository.afterWrite = {
             TasksWidget.refresh(this)
             RecentNotesWidget.refresh(this)
         }

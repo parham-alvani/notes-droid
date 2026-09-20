@@ -55,6 +55,7 @@ class SyncRepository
         private val sshKeys: SshKeyStore,
         private val transports: VaultTransports,
         private val writes: VaultWriteRepository,
+        private val gate: VaultGate,
     ) {
         val status: Flow<SyncStatus> =
             syncState.observe().map {
@@ -283,14 +284,24 @@ class SyncRepository
          * repository a liability.
          */
         suspend fun sync(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): SyncPlan =
+            // Held for the whole sync. A write that arrives while this is
+            // running drives the same working tree, and the two interleaved
+            // produce a commit of a half-checked-out tree or an edit lost in
+            // the checkout.
+            gate.withVault {
+                syncLocked(onProgress)
+            }
+
+        private suspend fun syncLocked(onProgress: (done: Int, total: Int) -> Unit): SyncPlan =
             coroutineScope {
                 val startedAt = System.currentTimeMillis()
                 ensureSeeded()
                 migrateStorage()
                 // Before anything is pulled: an SSH vault's working tree is
                 // reset during a sync, which would take an edit's local copy
-                // with it and make a queued change look like a lost one.
-                runCatching { writes.flush() }
+                // with it and make a queued change look like a lost one. The
+                // unlocked form, because the gate is already held here.
+                runCatching { writes.drain() }
                     .onFailure { log.warn("could not send queued edits: " + it.describeChain()) }
                 val targets = vaults.all().filter { it.enabled }
                 if (targets.isEmpty()) throw NotConfiguredException("no repository configured")

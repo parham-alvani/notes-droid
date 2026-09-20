@@ -93,6 +93,7 @@ class VaultWriteRepository
         private val indexer: VaultIndexer,
         private val transports: VaultTransports,
         private val log: SyncLog,
+        private val gate: VaultGate,
     ) {
         /** How many edits have not reached the repository yet. */
         val queued: Flow<Int> = pending.count()
@@ -217,7 +218,22 @@ class VaultWriteRepository
          *
          * Returns how many were sent.
          */
-        suspend fun flush(): Int {
+        suspend fun flush(): Int = gate.withVault { drain(automatic = false) }
+
+        /**
+         * The unlocked form, for a caller that already holds the gate.
+         *
+         * A sync flushes the queue before it pulls, and it does that inside its
+         * own lock -- taking the gate again here would deadlock on a mutex that
+         * is not reentrant.
+         *
+         * [automatic] is what tells a scheduled attempt from a person pressing
+         * the button: a scheduled one gives up on an edit that has failed
+         * [MAX_ATTEMPTS] times, so a change that can never land stops being
+         * retried every six hours for ever. A person asking for it always gets
+         * one more try.
+         */
+        internal suspend fun drain(automatic: Boolean = true): Int {
             val queue = pending.all()
             if (queue.isEmpty()) return 0
             log.info("${queue.size} edit(s) waiting to go up")
@@ -227,6 +243,12 @@ class VaultWriteRepository
                 if (vault == null) {
                     // Its repository was removed; there is nowhere to send it.
                     pending.delete(edit.id)
+                    return@forEach
+                }
+                if (automatic && edit.attempts >= MAX_ATTEMPTS) {
+                    // Said once, not on every refresh: the journal is read to
+                    // find out what went wrong, and a line repeated hourly
+                    // buries whatever else is in it.
                     return@forEach
                 }
                 if (send(edit, vault)) sent++
@@ -265,18 +287,22 @@ class VaultWriteRepository
                     summary = summary,
                     createdAt = System.currentTimeMillis(),
                 )
-            val transform = transformFor(edit)
-            val before = files.readText(vault.id, path)
-            val after = transform(before) ?: return WriteResult.Unchanged
+            // Every write funnels through here, so this is the one place that
+            // has to wait for a sync to finish with the files.
+            return gate.withVault {
+                val transform = transformFor(edit)
+                val before = files.readText(vault.id, path)
+                val after = transform(before) ?: return@withVault WriteResult.Unchanged
 
-            val id = pending.insert(edit)
-            store(vault.id, path, after)
+                val id = pending.insert(edit)
+                store(vault.id, path, after)
 
-            val stored = edit.copy(id = id)
-            return if (send(stored, vault)) {
-                WriteResult.Pushed
-            } else {
-                WriteResult.Queued(stored.lastErrorOr("it will go up with the next sync"))
+                val stored = edit.copy(id = id)
+                if (send(stored, vault)) {
+                    WriteResult.Pushed
+                } else {
+                    WriteResult.Queued(stored.lastErrorOr("it will go up with the next sync"))
+                }
             }
         }
 
@@ -303,6 +329,8 @@ class VaultWriteRepository
                     is WriteOutcome.Written -> {
                         store(vault.id, edit.path, outcome.text)
                         log.info("${edit.summary} -> ${outcome.commit.take(SHORT_SHA)}")
+                        // What is on the home screen is now a tick behind.
+                        afterWrite?.invoke()
                     }
 
                     WriteOutcome.NotApplicable ->
@@ -401,7 +429,24 @@ class VaultWriteRepository
 
         private fun today(plusDays: Long = 0): String = LocalDate.now().plusDays(plusDays).toString()
 
-        private companion object {
+        companion object {
+            /**
+             * Run after an edit reaches the repository, for anything outside
+             * the app that shows the vault. Set by the application rather than
+             * injected, the same as the sync worker's, because this module
+             * deliberately knows nothing about widgets.
+             */
+            @Volatile
+            var afterWrite: (() -> Unit)? = null
+
+            /**
+             * How many scheduled attempts an edit gets before it is left alone.
+             *
+             * An edit that can never land -- its file deleted upstream, the
+             * branch protected -- was otherwise retried at the start of every
+             * sync for ever, and the only sign of it was a line in Settings.
+             */
+            const val MAX_ATTEMPTS = 5
             const val SCHEDULE_DAYS = 3L
             const val SUBJECT = 60
             const val SHORT_SHA = 7
