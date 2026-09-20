@@ -3,10 +3,14 @@ package me.parham1995.notes.sync
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.net.URLEncoder
+import java.util.Base64
 
 /** Which repository to read, and with what credential. */
 data class GitHubConfig(
@@ -63,6 +67,25 @@ sealed class GitHubException(
         body: String,
     ) : GitHubException("unexpected response $code: $body")
 
+    /**
+     * The credential is valid and can see the repository, but not do this.
+     *
+     * Distinct from [RateLimited] and [SlowDown], which are also `403`: a
+     * read-only token answers a write with this, and backing off and retrying
+     * a permission failure forever is the wrong response to it.
+     */
+    class Forbidden(
+        detail: String,
+    ) : GitHubException("refused: $detail")
+
+    /**
+     * The file moved on between reading it and writing it back. The edit is
+     * re-applied to the new content rather than retried as-is.
+     */
+    class Conflict(
+        path: String,
+    ) : GitHubException("$path changed upstream while it was being edited")
+
     /** The tree was truncated, so it cannot be treated as a full listing. */
     class TreeTruncated : GitHubException("the repository tree was truncated and cannot be used as a manifest")
 }
@@ -109,6 +132,11 @@ class GitHubClient(
                     response.isSuccessful || response.code == 304 -> onSuccess(response)
                     response.code == 401 -> throw GitHubException.Unauthorized()
                     response.code == 404 -> throw GitHubException.NotFound(resource)
+                    response.code == 409 -> throw GitHubException.Conflict(resource)
+                    // GitHub answers a stale blob sha with 422 as often as
+                    // with 409, and the two mean the same thing to a write.
+                    response.code == 422 && STALE_SHA in response.peekBody(BODY_PEEK).string() ->
+                        throw GitHubException.Conflict(resource)
                     response.code == 403 || response.code == 429 -> throw response.toLimitException()
                     else -> throw GitHubException.Unexpected(response.code, response.peekBody(BODY_PEEK).string())
                 }
@@ -121,6 +149,11 @@ class GitHubClient(
             val reset = header("x-ratelimit-reset")?.toLongOrNull() ?: 0L
             return GitHubException.RateLimited(reset)
         }
+        // A 403 carrying none of the rate-limit headers is a permission
+        // answer, not a pacing one -- which is what a read-only token returns
+        // to a write. Treating it as a secondary limit would have the app back
+        // off and try again forever over something no amount of waiting fixes.
+        if (code == 403) return GitHubException.Forbidden(peekBody(BODY_PEEK).string())
         return GitHubException.SlowDown(DEFAULT_BACKOFF_SECONDS)
     }
 
@@ -128,7 +161,13 @@ class GitHubClient(
     suspend fun repository(): RepositoryInfo =
         call(request(url("")), "${config.owner}/${config.repo}") { response ->
             val dto = json.decodeFromString<RepoDto>(response.body.string())
-            RepositoryInfo(dto.fullName, dto.defaultBranch, dto.private, dto.pushedAt)
+            RepositoryInfo(
+                dto.fullName,
+                dto.defaultBranch,
+                dto.private,
+                dto.pushedAt,
+                canPush = dto.permissions?.push == true,
+            )
         }
 
     /**
@@ -193,15 +232,113 @@ class GitHubClient(
             "blob/$sha",
         ) { it.body.bytes() }
 
+    /**
+     * One file as the branch currently has it, or null when it is not there.
+     *
+     * Read through the contents endpoint rather than as a blob because a write
+     * has to quote the file's current sha back, and only this call hands both
+     * the text and that sha over together.
+     */
+    suspend fun file(
+        path: String,
+        ref: String,
+    ): RemoteFile? =
+        try {
+            call(request(url("/contents/${encodePath(path)}?ref=$ref")), path) { response ->
+                val dto = json.decodeFromString<ContentsDto>(response.body.string())
+                RemoteFile(dto.path, dto.sha, decodeContent(dto))
+            }
+        } catch (_: GitHubException.NotFound) {
+            null
+        }
+
+    /**
+     * Replaces [path] with [text] in one commit.
+     *
+     * [sha] is the blob the edit was computed against; GitHub refuses the write
+     * if the file has moved on since, which is exactly the check that makes a
+     * phone editing a repository safe. The caller answers that refusal by
+     * re-reading and re-applying the edit, never by forcing this one through.
+     */
+    suspend fun putFile(
+        path: String,
+        text: String,
+        sha: String?,
+        branch: String,
+        message: String,
+        author: Author,
+    ): String {
+        val person = PersonDto(author.name, author.email)
+        val payload =
+            json.encodeToString(
+                PutContentsDto(
+                    message = message,
+                    content = Base64.getEncoder().encodeToString(text.toByteArray()),
+                    branch = branch,
+                    sha = sha,
+                    committer = person,
+                    author = person,
+                ),
+            )
+        val request =
+            Request
+                .Builder()
+                .url(url("/contents/${encodePath(path)}"))
+                .header("Authorization", "Bearer ${config.token}")
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .put(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+        return call(request, path) { response ->
+            json.decodeFromString<CommitResultDto>(response.body.string()).commit.sha
+        }
+    }
+
+    private fun decodeContent(dto: ContentsDto): String {
+        // GitHub wraps the base64 at 60 columns, which the strict decoder
+        // rejects outright.
+        val cleaned = dto.content.filterNot { it == '\n' || it == '\r' }
+        return String(Base64.getDecoder().decode(cleaned))
+    }
+
     private companion object {
         const val BODY_PEEK = 512L
         const val DEFAULT_BACKOFF_SECONDS = 60L
+        const val STALE_SHA = "does not match"
+        val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
+
+/** One file's text together with the blob sha a write has to quote back. */
+data class RemoteFile(
+    val path: String,
+    val sha: String,
+    val text: String,
+)
+
+/**
+ * Percent-encodes a vault path for a URL, leaving the separators alone.
+ *
+ * Over a thousand paths in the vault this was written for contain a space, and
+ * sixteen are Persian; handing those to a URL unencoded is not a corner case
+ * here, it is the common one.
+ */
+internal fun encodePath(path: String): String =
+    path.split('/').joinToString("/") { segment ->
+        URLEncoder.encode(segment, Charsets.UTF_8).replace("+", "%20")
+    }
 
 data class RepositoryInfo(
     val fullName: String,
     val defaultBranch: String,
     val private: Boolean,
     val pushedAt: String?,
+    /**
+     * Whether this token may write here.
+     *
+     * Asked of GitHub rather than inferred: a fine-grained token's scopes are
+     * not visible from a response body, and guessing wrong in the permissive
+     * direction means offering an edit that fails after it is written.
+     */
+    val canPush: Boolean = false,
 )

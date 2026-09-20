@@ -9,6 +9,20 @@ internal data class RepoDto(
     @SerialName("default_branch") val defaultBranch: String,
     val private: Boolean,
     @SerialName("pushed_at") val pushedAt: String? = null,
+    /**
+     * What this credential may do here, as GitHub itself reports it.
+     *
+     * Absent when the request was unauthenticated, which is the same as no
+     * write for our purposes.
+     */
+    val permissions: PermissionsDto? = null,
+)
+
+@Serializable
+internal data class PermissionsDto(
+    val pull: Boolean = false,
+    val push: Boolean = false,
+    val admin: Boolean = false,
 )
 
 @Serializable
@@ -56,4 +70,45 @@ internal data class CompareFileDto(
     val status: String,
     val sha: String? = null,
     @SerialName("previous_filename") val previousFilename: String? = null,
+)
+
+@Serializable
+internal data class ContentsDto(
+    val path: String,
+    val sha: String,
+    val content: String = "",
+    val encoding: String = "base64",
+)
+
+@Serializable
+internal data class PutContentsDto(
+    val message: String,
+    val content: String,
+    val branch: String,
+    /** Omitted when creating the file; required, and checked, when replacing one. */
+    val sha: String? = null,
+    val committer: PersonDto,
+    val author: PersonDto,
+)
+
+@Serializable
+internal data class PersonDto(
+    val name: String,
+    val email: String,
+)
+
+@Serializable
+internal data class CommitResultDto(
+    val commit: CommitShaDto,
+    val content: ContentShaDto? = null,
+)
+
+@Serializable
+internal data class CommitShaDto(
+    val sha: String,
+)
+
+@Serializable
+internal data class ContentShaDto(
+    val sha: String,
 )
