@@ -1,0 +1,7 @@
+Hide completed tasks.
+
+A new reading setting leaves ticked and cancelled tasks out of a note — the ones the task list already leaves out. A task file is mostly a record of work already done, so reading one on a phone was largely scrolling past things that no longer need doing.
+
+A finished task with something still open nested under it stays, because a parent is routinely ticked before its children and hiding live work would make the setting untrustworthy.
+
+Off by default: a note is what it says.
