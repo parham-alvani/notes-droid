@@ -1,0 +1,7 @@
+Repeating tasks, and writing that never gets stuck.
+
+Ticking a repeating task now writes two lines: the next occurrence and the one just finished. Every date moves by the same number of days, so a task scheduled three days before it is due stays that way, and a repeat left for weeks comes back in the future rather than immediately overdue. Plain intervals only — every day, every 2 weeks, every month, every year, with or without "when done"; a rule needing a weekday or an ordinal is refused by name rather than guessed at.
+
+A sync and a write can no longer run over each other. They drive the same files, and nothing had kept them apart. A write made during a refresh is now queued rather than left waiting on a dead button, and the task list says how many edits have not gone up yet. An edit that can never land stops being retried for ever.
+
+Ticking a task now redraws the home screen widgets, instead of leaving them a tick behind until the next refresh.
