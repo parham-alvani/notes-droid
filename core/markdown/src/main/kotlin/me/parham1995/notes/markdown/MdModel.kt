@@ -155,6 +155,14 @@ data class MdListItem(
     val blocks: List<MdBlock>,
     val task: TaskState = TaskState.NONE,
     val taskMeta: List<TaskMeta> = emptyList(),
+    /**
+     * The zero-based line this item started on in the source, or -1 when the
+     * parser was not asked for spans.
+     *
+     * Only tasks use it, and only to find the line again in the file so it can
+     * be ticked. Everything else about a list item is content.
+     */
+    val line: Int = -1,
 )
 
 /** Text direction, detected per block from its first strong character. */

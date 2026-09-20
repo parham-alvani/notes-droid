@@ -238,6 +238,7 @@ class BlockFlattener(
                     blocks = item.children().flatMap { blocksFor(it) },
                     task = state,
                     taskMeta = meta,
+                    line = item.sourceSpans.firstOrNull()?.lineIndex ?: -1,
                 )
             }
         return MdBlock.ListBlock(self, ordered, start, items)

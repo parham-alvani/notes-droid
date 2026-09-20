@@ -15,6 +15,11 @@ data class ParsedTask(
     val section: String,
     /** Index into the note's blocks, so opening the note can scroll to it. */
     val blockIndex: Int,
+    /**
+     * The zero-based line it was written on, so the line can be found again in
+     * the file and ticked. -1 when the source is unknown.
+     */
+    val line: Int = -1,
     val ordinal: Int,
     val scheduled: String? = null,
     val due: String? = null,
@@ -98,6 +103,7 @@ object TaskExtractor {
             state = task,
             section = section,
             blockIndex = blockIndex,
+            line = line,
             ordinal = 0,
             scheduled = dates["scheduled"],
             due = dates["due"],

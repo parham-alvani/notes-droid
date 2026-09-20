@@ -12,6 +12,7 @@ import org.commonmark.node.HtmlBlock
 import org.commonmark.node.ListBlock
 import org.commonmark.node.Node
 import org.commonmark.node.ThematicBreak
+import org.commonmark.parser.IncludeSourceSpans
 import org.commonmark.parser.Parser
 
 /**
@@ -51,7 +52,13 @@ object MarkdownParser {
                     BlockQuote::class.java,
                     ListBlock::class.java,
                 ),
-            ).postProcessor(CalloutPostProcessor())
+            )
+            // Block spans carry the line each block started on, which is how a
+            // task found in the index is located again in the file it came
+            // from. Without it the only way back to the line is to re-derive it
+            // from the rendered text, which is the renderer written twice.
+            .includeSourceSpans(IncludeSourceSpans.BLOCKS)
+            .postProcessor(CalloutPostProcessor())
             .build()
 
     fun parse(markdown: String): Node = instance.parse(markdown)
