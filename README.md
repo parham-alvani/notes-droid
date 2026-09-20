@@ -8,7 +8,7 @@
 
 An Android reader for an [Obsidian](https://obsidian.md) vault kept in a Git repository. It syncs the vault's markdown directly from GitHub — no server in between, no Obsidian account — and renders it the way Obsidian does, including the parts plain CommonMark gets wrong.
 
-It is **read-only by design**. Editing on a phone means merge conflicts, and the thing worth having on a phone is the reading.
+It is **a reader first**. Editing on a phone means merge conflicts, and the thing worth having on a phone is the reading — so the only writing it does is the small amount that is worse to postpone: ticking a task off, adding one, and writing a thought down before it goes. Everything else is read.
 
 ## Status
 
@@ -30,6 +30,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Attachments** — PDFs read in place; everything else opens in whatever app handles it
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
+- **A little writing** — tick a task off, add one, capture a thought — each a commit, and offered only where the credential can actually push
 
 ## Requirements
 
@@ -74,6 +75,8 @@ The app is told which repository to read at runtime — nothing about the vault 
 | Images | `on demand` (default), `prefetch on Wi-Fi`, or `never` |
 | Background sync | Off, or every 1/3/6/12/24 hours, optionally Wi-Fi only |
 | Daily task summary | Off by default; a single notification counting what is overdue and due |
+| Commit as | The name and email phone-made commits are attributed to. Blank disables writing |
+| Scratchpad | Where a captured thought lands, and in which vault |
 
 ### Access token
 
@@ -82,6 +85,8 @@ A private vault needs a token. Create a [fine-grained personal access token](htt
 - **Resource owner** — the user or organisation that owns the vault
 - **Repository access** — *Only select repositories*, and pick just the vault
 - **Permissions** — **Contents: Read-only**. `Metadata: Read-only` is added automatically. Nothing else is needed, and nothing else should be granted.
+
+Grant **Contents: Read and write** instead only if you want the writing described below; with read-only the app asks GitHub, is told it cannot push, and leaves every checkbox inert rather than failing at the commit.
 
 The token is held in a `DataStore` encrypted with an AES-256-GCM key that lives in the AndroidKeyStore and never leaves the device. It is never written to the build, to logs, or to this repository.
 
@@ -111,9 +116,21 @@ A repository that fails to sync does not stop the others, and its error is shown
 
 ### git over SSH
 
-The alternative transport, chosen in Settings. The key is generated on the device and its private half never leaves; the public line is added to the repository as a **read-only deploy key**, so nothing expires and nothing secret is ever copied between machines.
+The alternative transport, chosen in Settings. The key is generated on the device and its private half never leaves; the public line is added to the repository as a deploy key — **read-only unless you want the writing above**, in which case tick write access when you register it — so nothing expires and nothing secret is ever copied between machines.
 
 The trade is size. Git cannot fetch a subset of paths — there is no sparse-checkout or partial clone in JGit — so this is the full history and every attachment, where the REST transport takes the markdown alone. The clone is shallow, which helps but does not close the gap. REST remains the default.
+
+## Writing
+
+Three edits, and no more: tick an open task, add a task under a project heading, and append a captured line to a scratchpad. There is no editor, and there never will be one — a phone is a poor place to write a note and an excellent place to lose one to a merge.
+
+**Nothing is offered unless the host says it can be done.** A read-only deploy key and a `Contents: read-only` token both behave exactly like working credentials until the moment of the push. So the app asks outright — `permissions.push` on the REST transport, an SSH push opened and abandoned at the advertisement on the other — records the answer per vault, and hides every write affordance where the answer is no. It also asks for a name and an email to commit as: a commit attributed to the app rather than to the person who made it is worse than no commit.
+
+**An edit is never a patch.** It is stored as an intent — the line to find, the line to write — and re-applied to whatever the file says at the moment it reaches the repository. An edit queued on a train lands in the current file rather than reverting a morning's work at the desk, and a task already ticked at the desk is a quiet no-op rather than a conflict. GitHub's own blob-sha check refuses a stale write, and the answer to that refusal is to read again and re-apply, never to force it through.
+
+**An edit made with no signal is kept.** It is applied on the device straight away, so the app tells the truth about what it was asked to do, and queued. The queue is flushed at the *start* of the next sync, before anything is pulled down — a pull that overwrote a queued edit's file would be indistinguishable from losing it.
+
+Capture is reachable from the share sheet, the text-selection menu, a launcher shortcut and a button on the tasks widget, because the point of it is the thought that arrives away from the desk.
 
 ### Icons
 
@@ -140,8 +157,10 @@ Glyphs come from [Lucide](https://lucide.dev), flattened into a single asset by 
 - [x] **M13** — unlinked mentions, widgets, an SSH panel that tests a key
 - [x] **M14** — syntax colouring for the languages the tokeniser has no grammar for
 - [x] **M15** — settings that are about reading, find in note, and a one-hop graph
+- [x] **M16** — tabs, with per-tab history, restored where you left them
+- [x] **M17** — the small amount of writing, gated on what the credential may actually do
 
-Not done: an onboarding flow (setup lives in Settings instead), and editing, which remains out of scope.
+Not done: an onboarding flow (setup lives in Settings instead), and a general editor, which remains out of scope — see [Writing](#writing) for what is in it.
 
 ## Releasing
 

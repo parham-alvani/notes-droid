@@ -61,6 +61,16 @@ The app reads several repositories, and they are **separate vaults** — their o
 
 When adding a query, the question is not "does this work" but "which vault is this about". When reviewing one, check the `WHERE` clause first.
 
+## Writing: three rules, and none of them is optional
+
+The app writes, but only three edits: tick a task, add a task, append to a scratchpad. `VaultWriteRepository` is the only place any of it happens. If something new wants to write, it goes through there.
+
+- **Ask the host what the credential may do; never infer it.** `permissions.push` on REST, an abandoned `Transport.openPush()` on SSH. A read-only deploy key and a `Contents: read-only` token are indistinguishable from working ones until the push, so guessing permissively means the person finds out *after* typing the thing they wanted to keep. The answer lives on `vaults.canWrite`, refreshed every sync, and every affordance is gated on it plus an author being set.
+- **An edit is a function of the file's current text, never a patch.** `VaultEdits` holds all three as pure `(String?) -> String?`, and every conflict — GitHub's stale-sha refusal, a rejected push — is answered by reading again and calling the function again. Returning null means "the file already says this", which is a quiet success, not a failure.
+- **Queue first, flush at the start of a sync.** An edit is applied locally and written to `pending_edits` before it is attempted, so it survives no signal and a crash. Flushing *after* a pull would let an SSH vault's `reset --hard` wipe the local copy of something still queued, which looks exactly like losing it.
+
+A task is found again by the source line the indexer recorded (`tasks.line`, from commonmark's block source spans), then checked against what the index made of that line. Text alone cannot do it — the stored text has had markup and emoji metadata stripped — and a line number alone cannot either, because notes grow paragraphs above tasks.
+
 ## Room
 
 - **`BundledSQLiteDriver`**, so FTS5 ships with the app rather than depending on the device's SQLite. It also means the database tests are plain JVM tests.
@@ -147,5 +157,7 @@ Do not solve this in `VaultFilter` instead. That decides what reaches the device
 - **A `DisposableEffect` keyed on the thing it cleans up disposes the new value, not the old one.** Its cleanup runs after the key changed and reads current state. This closed a PDF document at the moment it opened, and the viewer drew nothing for weeks. Where a producer owns a resource, close it with `produceState`'s `awaitDispose`.
 - **`PdfRenderer` allows one page open at a time and is not thread safe**, which a lazy list will absolutely violate.
 - **XML:** `--` is illegal inside a comment, `tools:ignore` needs its namespace, and `previewLayout`/`targetCell*` are API 31+ so they live in `res/xml-v31/`.
-- **New user-facing strings need a `values-fa` translation**, or lint fails the build.
+- **New user-facing strings need a `values-fa` translation**, or lint fails the build. An unused one fails it too, so do not add strings ahead of the code that uses them.
+- **A lambda that returns `Job` is not a `() -> Unit` when the expected type is spelled out.** `viewModelScope.launch {}` coerces fine as an `onClick` argument and stops coercing the moment it goes through `takeIf` or a typed local. Declare the local as `(() -> Unit)?` and put the call in a block.
+- **Parsing one line on its own is not parsing it in context.** An indented `    - [ ] child` is a list item inside a note and a paragraph on its own, because indented code blocks are disabled and four spaces are no longer a marker position. `TaskLine.indexedText` trims before parsing for exactly this reason.
 - **ktlint's `no-consecutive-comments`:** inserting a function immediately before another orphans that one's KDoc. Anchor insertions on the `/**`, not on the `@Composable`.
