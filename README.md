@@ -226,7 +226,7 @@ just lint    # ktlint + Android lint (warnings are errors)
 just ci      # everything CI runs
 ```
 
-There are no instrumentation tests and CI runs no emulator. The markdown and sync modules are pure JVM by construction, which is the point of keeping them free of Android — their tests run in seconds.
+There are no instrumentation tests and CI runs no emulator. The markdown and sync modules are pure JVM by construction, which is the point of keeping them free of Android — their tests run in seconds. Compose is covered too, under Robolectric: not how it looks, but whether a tap reaches a handler and whether two things drawn in the same slot land on top of each other, which is where this app's shipped bugs have actually been.
 
 ## Related
 

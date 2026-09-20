@@ -91,6 +91,7 @@ android {
 
     testOptions {
         unitTests {
+            isIncludeAndroidResources = true
             // Without this the android.jar stubs throw rather than returning a
             // default, and a pure function that merely *mentions* a platform
             // class becomes untestable off a device.
@@ -167,4 +168,12 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+    // Compose, tested on the JVM. There is no emulator in CI and no wish for
+    // one; Robolectric runs the composition, and the layer these tests cover is
+    // where every bug this app has shipped was found by hand.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

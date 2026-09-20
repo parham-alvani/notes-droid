@@ -105,6 +105,28 @@ git tag -a v0.13.7 -m "v0.13.7" && git push --follow-tags
 
 `versionCode` is derived from the version (`0.13.7` → `1307`) so it cannot go backwards, and the workflow refuses a tag that disagrees with `app/build.gradle.kts`. CI signs; nothing is published by hand. Every release carries its certificate fingerprint — an APK signed with a different key cannot update an installed one, and uninstalling takes the synced vault, the token and the on-device SSH key.
 
+## Compose is testable here, on the JVM
+
+`app` runs Compose tests under Robolectric -- no emulator, and none wanted. Two
+things make it work, and both are easy to miss:
+
+- **`robolectric.properties` must pin `sdk=34` per module.** Robolectric needs
+  Java 21 to sandbox SDK 37 and AGP 9 pins the build to Java 17. The emulated
+  runtime does not have to match `compileSdk`.
+- **`isIncludeAndroidResources = true`** in `testOptions.unitTests`, or the
+  composition cannot resolve a theme.
+
+Use `androidx.compose.ui.test.junit4.v2.createComposeRule`; the v1 one is
+deprecated and `-Werror` fails the build on it.
+
+What to spend the tests on is the layer where this app's bugs actually shipped:
+**things that compiled, rendered, and did nothing.** A tap that reaches no
+handler, a setting wired to nothing, two buttons drawn on top of each other.
+`TaskRenderingTest` asserts a checkbox tap hands back the line it was written
+on; `TopBarLayoutTest` asserts two navigation buttons have disjoint bounds, and
+carries a second test proving the framework overlaps them without the `Row`, so
+the first test cannot quietly stop meaning anything.
+
 ## Verifying work, because compilation does not
 
 Several features in this project were written, compiled, reviewed and shipped **without ever being called**. `schedulePeriodic()` had no callers. `onAttachment` defaulted to an empty lambda. `notes.isRtl` was carried all the way to the UI and never read. The SSH key list was a one-shot snapshot that nothing re-took. A compiler cannot report an absent call site.
