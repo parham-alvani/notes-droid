@@ -138,6 +138,15 @@ data class ReadingSettings(
      * does not: nothing is drawn until a stylus actually hovers.
      */
     val stylusSpotlight: Boolean = true,
+    /**
+     * Leave finished tasks out of a note.
+     *
+     * Off by default, because a note is what it says. On, a task file stops
+     * being mostly a record of work already done -- this vault's own hold 2,900
+     * ticked tasks against 460 open ones, so reading one on a phone is largely
+     * scrolling past things that no longer need doing.
+     */
+    val hideCompletedTasks: Boolean = false,
     val browserSort: BrowserSort = BrowserSort.NAME,
 ) {
     companion object {
@@ -262,6 +271,7 @@ class SettingsStore
                             theme = ThemeChoice.parse(preferences[THEME]),
                             persianFont = preferences[PERSIAN_FONT] ?: true,
                             stylusSpotlight = preferences[STYLUS_SPOTLIGHT] ?: true,
+                            hideCompletedTasks = preferences[HIDE_DONE_TASKS] ?: false,
                             startScreen = StartScreen.parse(preferences[START_SCREEN]),
                             browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
                         ),
@@ -358,6 +368,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[STYLUS_SPOTLIGHT] = enabled }
         }
 
+        suspend fun setHideCompletedTasks(enabled: Boolean) {
+            context.settingsDataStore.edit { it[HIDE_DONE_TASKS] = enabled }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -405,5 +419,6 @@ class SettingsStore
             val AUTHOR_EMAIL = stringPreferencesKey("git_author_email")
             val SCRATCHPAD_PATH = stringPreferencesKey("scratchpad_path")
             val SCRATCHPAD_VAULT = longPreferencesKey("scratchpad_vault")
+            val HIDE_DONE_TASKS = booleanPreferencesKey("hide_completed_tasks")
         }
     }

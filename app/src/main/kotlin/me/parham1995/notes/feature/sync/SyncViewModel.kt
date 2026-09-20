@@ -300,6 +300,9 @@ class SyncViewModel
 
         fun setStylusSpotlight(enabled: Boolean) = viewModelScope.launch { settingsStore.setStylusSpotlight(enabled) }
 
+        fun setHideCompletedTasks(enabled: Boolean) =
+            viewModelScope.launch { settingsStore.setHideCompletedTasks(enabled) }
+
         fun setStartScreen(screen: StartScreen) = viewModelScope.launch { settingsStore.setStartScreen(screen) }
 
         fun setBrowserSort(sort: BrowserSort) = viewModelScope.launch { settingsStore.setBrowserSort(sort) }

@@ -162,6 +162,8 @@
     <string name="drawer_root">ریشه والت</string>
     <string name="drawer_browse_all">مرور کل والت</string>
     <string name="drawer_folder_empty">این پوشه خالی است.</string>
+    <string name="settings_hide_done">پنهان کردن تسکهای انجامشده</string>
+    <string name="help_hide_done">تسکهای تیکخورده و لغوشده را از نوشته کنار میگذارد، همانهایی که فهرست تسکها هم نشان نمیدهد. تسکی که زیرش چیزی باز مانده باشد سر جایش میماند.</string>
     <plurals name="graph_hidden">
         <item quantity="one">%1$d تای دیگر نشان داده نشده</item>
         <item quantity="other">%1$d تای دیگر نشان داده نشده</item>

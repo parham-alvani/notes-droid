@@ -56,6 +56,7 @@ import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.markdown.MdListItem
 import me.parham1995.notes.markdown.TaskMeta
 import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.markdown.isFinishedAndEmpty
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
@@ -324,8 +325,22 @@ private fun ListBlockView(
     brokenLinks: Set<String>,
     modifier: Modifier,
 ) {
+    // Numbered by the item's own position, not by where it lands after
+    // filtering: an ordered list that renumbered itself when a done item was
+    // hidden would disagree with the file it came from.
+    val visible =
+        if (!LocalReading.current.hideCompletedTasks) {
+            block.items.withIndex().toList()
+        } else {
+            block.items.withIndex().filterNot { (_, item) -> item.isFinishedAndEmpty() }
+        }
+    // Nothing left to draw. The block stays in the document -- the outline and
+    // find-in-note scroll to block positions, and dropping one would move every
+    // target after it -- it simply takes no room.
+    if (visible.isEmpty()) return
+
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        block.items.forEachIndexed { index, item ->
+        visible.forEach { (index, item) ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ItemMarker(item, block.ordered, block.start + index, actions.onCompleteTask)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -921,6 +921,21 @@ private fun ReadingCard(
             }
             Switch(checked = reading.stylusSpotlight, onCheckedChange = viewModel::setStylusSpotlight)
         }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_hide_done), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.help_hide_done),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = reading.hideCompletedTasks,
+                onCheckedChange = viewModel::setHideCompletedTasks,
+            )
+        }
     }
 
     SectionCard("Behaviour") {
