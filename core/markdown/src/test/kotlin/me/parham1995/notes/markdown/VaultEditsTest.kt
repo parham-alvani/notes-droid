@@ -91,6 +91,20 @@ class VaultEditsTest {
     }
 
     @Test
+    fun `a task joins the list it is added to rather than starting a new one`() {
+        val out = VaultEdits.addUnder("", "- [ ] third")("## Alpha\n\n- [ ] first\n- [ ] second\n")
+
+        assertThat(out).isEqualTo("## Alpha\n\n- [ ] first\n- [ ] second\n- [ ] third\n")
+    }
+
+    @Test
+    fun `a capture after prose still gets its blank line`() {
+        val out = VaultEdits.append("- a thought")("# Scratch\n\nsome prose\n")
+
+        assertThat(out).isEqualTo("# Scratch\n\nsome prose\n\n- a thought\n")
+    }
+
+    @Test
     fun `a duplicate task is not added twice`() {
         assertThat(VaultEdits.addUnder("Alpha", "- [ ] first")("## Alpha\n\n- [ ] first\n")).isNull()
     }

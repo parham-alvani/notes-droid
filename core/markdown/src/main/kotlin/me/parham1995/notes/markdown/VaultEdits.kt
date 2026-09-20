@@ -122,10 +122,19 @@ object VaultEdits {
         additions: List<String>,
     ): String {
         while (lines.isNotEmpty() && lines.last().isBlank()) lines.removeAt(lines.size - 1)
-        if (lines.isNotEmpty()) lines.add("")
+        // No blank between two list items: it would split one list into two and
+        // make it loose, which changes how the whole list renders. A task added
+        // to the end of a list of tasks belongs in that list.
+        val joins = lines.lastOrNull()?.isListItem() == true && additions.first().isListItem()
+        if (lines.isNotEmpty() && !joins) lines.add("")
         lines.addAll(additions)
         lines.add("")
         return lines.joinToString("\n")
+    }
+
+    private fun String.isListItem(): Boolean {
+        val body = trimStart()
+        return body.startsWith("- ") || body.startsWith("* ") || body.startsWith("+ ")
     }
 
     /**
