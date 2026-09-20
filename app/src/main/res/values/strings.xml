@@ -155,6 +155,13 @@
     <string name="shortcut_capture_short">Capture</string>
     <string name="shortcut_capture_long">Write something down</string>
     <string name="capture_hint">A thought, a link, anything</string>
+    <string name="drawer_title">Files</string>
+    <string name="drawer_filter">Jump to a note</string>
+    <string name="drawer_open">Open</string>
+    <string name="drawer_recent">Recent</string>
+    <string name="drawer_root">Vault root</string>
+    <string name="drawer_browse_all">Browse the whole vault</string>
+    <string name="drawer_folder_empty">Nothing in this folder.</string>
     <plurals name="graph_hidden">
         <item quantity="one">%1$d more not shown</item>
         <item quantity="other">%1$d more not shown</item>

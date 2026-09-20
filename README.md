@@ -22,6 +22,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Obsidian flavour** — `[[wikilinks]]` with Obsidian's own resolution rules, callouts, `==highlight==`, wiki-embeds, tables, task lists
 - **Backlinks, unlinked mentions, an outline and a connections graph** for every note
 - **Find in note**, and notes that resume where you left them
+- **A files drawer** in the note screen — filter by name, the tabs already open, the last few notes, and the folder this one sits in
 - **Home screen widgets** — what is overdue and due today, and the notes you were last reading
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
@@ -159,6 +160,7 @@ Glyphs come from [Lucide](https://lucide.dev), flattened into a single asset by 
 - [x] **M15** — settings that are about reading, find in note, and a one-hop graph
 - [x] **M16** — tabs, with per-tab history, restored where you left them
 - [x] **M17** — the small amount of writing, gated on what the credential may actually do
+- [x] **M18** — a files drawer, so another note is reachable without leaving this one
 
 Not done: an onboarding flow (setup lives in Settings instead), and a general editor, which remains out of scope — see [Writing](#writing) for what is in it.
 

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -31,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
@@ -42,6 +44,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +74,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.feature.drawer.FileDrawerSheet
+import me.parham1995.notes.feature.drawer.FileDrawerViewModel
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
@@ -122,6 +127,20 @@ fun NoteScreen(
     var pendingHeading by remember { mutableStateOf<String?>(null) }
 
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
+
+    // Somewhere else to go without leaving this note. The reader had one way to
+    // reach another file -- back out to the browser -- which loses the note on
+    // screen and the place in it, and following a thought across four notes and
+    // back is what this vault is actually read for.
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val files: FileDrawerViewModel = hiltViewModel()
+    val drawerState by files.state.collectAsStateWithLifecycle()
+
+    fun closeThen(action: () -> Unit) {
+        scope.launch { drawer.close() }
+        action()
+    }
+
     // The route argument only ever seeds the set. After that the screen
     // follows whichever tab is being read, so switching tabs does not have to
     // navigate and lose the back stack.
@@ -136,7 +155,11 @@ fun NoteScreen(
     // from rather than to whatever was opened last anywhere. With nothing
     // behind it in this tab the gesture falls through and leaves the reader,
     // which is the only way out; the button says so by being disabled.
-    BackHandler(enabled = tabs.current?.canGoBack == true) { viewModel.back() }
+    // Not while the drawer is over the page. The drawer registers a handler of
+    // its own, but this one is composed inside the drawer's content slot and
+    // would win -- navigating the note underneath instead of shutting the
+    // drawer covering it.
+    BackHandler(enabled = !drawer.isOpen && tabs.current?.canGoBack == true) { viewModel.back() }
     LaunchedEffect(state.note?.id, state.note?.title) {
         val note = state.note
         if (note != null) viewModel.retitleTab(note.id, note.title)
@@ -145,6 +168,12 @@ fun NoteScreen(
     // Resume where this note was left. Keyed on the note's own id rather than
     // the argument, so it runs once the note has actually loaded.
     val loadedId = state.note?.id
+    // Re-located on every opening, not once: the note underneath changes, and a
+    // drawer still showing where you were three notes ago is one you stop
+    // opening.
+    LaunchedEffect(drawer.isOpen, loadedId) {
+        if (drawer.isOpen) loadedId?.let { files.locate(it) }
+    }
     LaunchedEffect(loadedId, pendingHeading) {
         val note = state.note ?: return@LaunchedEffect
         // A heading asked for wins over where the note was left: it is the
@@ -173,417 +202,463 @@ fun NoteScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        // The vault turns Iconic's title icons on, so a note
-                        // that has one carries it into its own header too.
-                        state.icon?.let { VaultIcon(spec = it, default = "file-text") }
-                        Text(
-                            text = state.note?.title ?: "",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                },
-                navigationIcon = {
-                    // Disabled rather than hidden when this tab has nowhere
-                    // to go back to: a button that moves you somewhere
-                    // unrelated is worse than one that plainly cannot.
-                    IconButton(
-                        onClick = { viewModel.back() },
-                        enabled = tabs.current?.canGoBack == true,
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
-                        )
-                    }
-                },
-                actions = {
-                    // Shares the note as it is written, not as it is rendered:
-                    // what goes out is markdown, which is what the person on
-                    // the other end can do something with.
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                val text = viewModel.markdown()
-                                if (text == null) {
-                                    Toast
-                                        .makeText(
-                                            context,
-                                            noteMissing,
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
-                                } else {
-                                    context.startActivity(
-                                        Intent.createChooser(
-                                            Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/markdown"
-                                                putExtra(Intent.EXTRA_TITLE, state.note?.title)
-                                                putExtra(Intent.EXTRA_SUBJECT, state.note?.title)
-                                                putExtra(Intent.EXTRA_TEXT, text)
-                                            },
-                                            state.note?.title,
-                                        ),
-                                    )
-                                }
-                            }
-                        },
-                        enabled = state.note != null,
-                    ) {
-                        LucideGlyph("share-2", size = 20.dp, contentDescription = stringResource(R.string.action_share))
-                    }
-                    IconButton(
-                        onClick = {
-                            finding = !finding
-                            if (!finding) viewModel.clearFind()
-                        },
-                        enabled = state.note != null,
-                    ) {
-                        LucideGlyph(
-                            if (finding) "x" else "text-search",
-                            size = 20.dp,
-                            contentDescription = if (finding) "Close find" else stringResource(R.string.note_find),
-                        )
-                    }
-                    IconButton(
-                        onClick = { state.note?.id?.let(onOpenGraph) },
-                        enabled = state.note != null,
-                    ) {
-                        LucideGlyph(
-                            "waypoints",
-                            size = 20.dp,
-                            contentDescription = stringResource(R.string.note_connections),
-                        )
-                    }
-                    IconButton(onClick = { showOutline = true }, enabled = state.note != null) {
-                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.note_outline))
-                    }
-                    // The count is more use than an icon here: it says
-                    // whether opening the sheet is worth it.
-                    if (state.backlinks.isNotEmpty()) {
-                        TextButton(onClick = { showBacklinks = true }) {
-                            Text(pluralStringResource(R.plurals.note_links, state.backlinks.size, state.backlinks.size))
-                        }
-                    }
-                },
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        // Swipe opens nothing: an edge swipe is the system back gesture, and a
+        // drawer that fights it costs more than the button it saves. Once open,
+        // a swipe shuts it, which is the half worth having.
+        gesturesEnabled = drawer.isOpen,
+        drawerContent = {
+            FileDrawerSheet(
+                state = drawerState,
+                viewModel = files,
+                // Straight into the tab set rather than through the
+                // navigator: the screen already follows whichever tab is
+                // being read, so navigating would rebuild this destination
+                // to show the same thing.
+                onOpenNote = { id -> closeThen { viewModel.openTab(id, inNewTab = false) } },
+                onOpenNoteInNewTab = { id -> closeThen { viewModel.openTab(id, inNewTab = true) } },
+                onBrowseFolder = { path -> closeThen { onOpenFolder(path) } },
             )
         },
-    ) { padding ->
-        // One column, not two siblings.
-        //
-        // A Scaffold lays its content slot out as a box, so a strip and a
-        // full-height column emitted beside each other are drawn on top of one
-        // another: the strip sat behind the note's first lines and the column
-        // swallowed every tap meant for it, which reads as a tab bar that
-        // collides with the text and does not work.
-        Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
-            // Only with something to switch between: one tab is a strip that
-            // says the same thing as the title above it.
-            if (tabs.tabs.size > 1) {
-                TabStrip(
-                    tabs = tabs,
-                    onSelect = viewModel::selectTab,
-                    onClose = { index -> if (!viewModel.closeTab(index)) onBack() },
+    ) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbar) },
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            // The vault turns Iconic's title icons on, so a note
+                            // that has one carries it into its own header too.
+                            state.icon?.let { VaultIcon(spec = it, default = "file-text") }
+                            Text(
+                                text = state.note?.title ?: "",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        // The files drawer, then back. Ordered that way because
+                        // the leading slot is where a drawer is looked for, and
+                        // back has a second home in the gesture.
+                        IconButton(onClick = { scope.launch { drawer.open() } }) {
+                            LucideGlyph(
+                                "panel-left",
+                                size = 20.dp,
+                                contentDescription = stringResource(R.string.drawer_title),
+                            )
+                        }
+                        // Disabled rather than hidden when this tab has nowhere
+                        // to go back to: a button that moves you somewhere
+                        // unrelated is worse than one that plainly cannot.
+                        IconButton(
+                            onClick = { viewModel.back() },
+                            enabled = tabs.current?.canGoBack == true,
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.action_back),
+                            )
+                        }
+                    },
+                    actions = {
+                        // Shares the note as it is written, not as it is rendered:
+                        // what goes out is markdown, which is what the person on
+                        // the other end can do something with.
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    val text = viewModel.markdown()
+                                    if (text == null) {
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                noteMissing,
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                    } else {
+                                        context.startActivity(
+                                            Intent.createChooser(
+                                                Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/markdown"
+                                                    putExtra(Intent.EXTRA_TITLE, state.note?.title)
+                                                    putExtra(Intent.EXTRA_SUBJECT, state.note?.title)
+                                                    putExtra(Intent.EXTRA_TEXT, text)
+                                                },
+                                                state.note?.title,
+                                            ),
+                                        )
+                                    }
+                                }
+                            },
+                            enabled = state.note != null,
+                        ) {
+                            LucideGlyph(
+                                "share-2",
+                                size = 20.dp,
+                                contentDescription = stringResource(R.string.action_share),
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                finding = !finding
+                                if (!finding) viewModel.clearFind()
+                            },
+                            enabled = state.note != null,
+                        ) {
+                            LucideGlyph(
+                                if (finding) "x" else "text-search",
+                                size = 20.dp,
+                                contentDescription = if (finding) "Close find" else stringResource(R.string.note_find),
+                            )
+                        }
+                        IconButton(
+                            onClick = { state.note?.id?.let(onOpenGraph) },
+                            enabled = state.note != null,
+                        ) {
+                            LucideGlyph(
+                                "waypoints",
+                                size = 20.dp,
+                                contentDescription = stringResource(R.string.note_connections),
+                            )
+                        }
+                        IconButton(onClick = { showOutline = true }, enabled = state.note != null) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.List,
+                                contentDescription = stringResource(R.string.note_outline),
+                            )
+                        }
+                        // The count is more use than an icon here: it says
+                        // whether opening the sheet is worth it.
+                        if (state.backlinks.isNotEmpty()) {
+                            TextButton(onClick = { showBacklinks = true }) {
+                                Text(
+                                    pluralStringResource(
+                                        R.plurals.note_links,
+                                        state.backlinks.size,
+                                        state.backlinks.size,
+                                    ),
+                                )
+                            }
+                        }
+                    },
                 )
-                HorizontalDivider()
-            }
-            Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-                // A folder note is only half of what a folder is: the page someone
-                // wrote, and the things actually in it. Obsidian shows both at
-                // once, in the editor and the sidebar; on a phone there is only
-                // one pane, so they take turns.
-                if (state.isFolderNote) {
-                    PrimaryTabRow(selectedTabIndex = if (showContents) 1 else 0) {
-                        Tab(
-                            selected = !showContents,
-                            onClick = { showContents = false },
-                            text = { Text(stringResource(R.string.note_kind)) },
-                        )
-                        Tab(
-                            selected = showContents,
-                            onClick = { showContents = true },
-                            // The count is the useful part: it says whether the
-                            // folder holds anything the note does not mention.
-                            text = { Text(stringResource(R.string.note_contents, state.contents.size)) },
+            },
+        ) { padding ->
+            // One column, not two siblings.
+            //
+            // A Scaffold lays its content slot out as a box, so a strip and a
+            // full-height column emitted beside each other are drawn on top of one
+            // another: the strip sat behind the note's first lines and the column
+            // swallowed every tap meant for it, which reads as a tab bar that
+            // collides with the text and does not work.
+            Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
+                // Only with something to switch between: one tab is a strip that
+                // says the same thing as the title above it.
+                if (tabs.tabs.size > 1) {
+                    TabStrip(
+                        tabs = tabs,
+                        onSelect = viewModel::selectTab,
+                        onClose = { index -> if (!viewModel.closeTab(index)) onBack() },
+                    )
+                    HorizontalDivider()
+                }
+                Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
+                    // A folder note is only half of what a folder is: the page someone
+                    // wrote, and the things actually in it. Obsidian shows both at
+                    // once, in the editor and the sidebar; on a phone there is only
+                    // one pane, so they take turns.
+                    if (state.isFolderNote) {
+                        PrimaryTabRow(selectedTabIndex = if (showContents) 1 else 0) {
+                            Tab(
+                                selected = !showContents,
+                                onClick = { showContents = false },
+                                text = { Text(stringResource(R.string.note_kind)) },
+                            )
+                            Tab(
+                                selected = showContents,
+                                onClick = { showContents = true },
+                                // The count is the useful part: it says whether the
+                                // folder holds anything the note does not mention.
+                                text = { Text(stringResource(R.string.note_contents, state.contents.size)) },
+                            )
+                        }
+                    }
+
+                    if (finding) {
+                        FindBar(
+                            query = state.findQuery,
+                            matches = state.matches.size,
+                            onQueryChange = viewModel::find,
+                            onJump = { index -> scope.launch { listState.animateScrollToItem(index) } },
+                            matchBlocks = state.matches.map { it.blockIndex },
                         )
                     }
-                }
 
-                if (finding) {
-                    FindBar(
-                        query = state.findQuery,
-                        matches = state.matches.size,
-                        onQueryChange = viewModel::find,
-                        onJump = { index -> scope.launch { listState.animateScrollToItem(index) } },
-                        matchBlocks = state.matches.map { it.blockIndex },
-                    )
-                }
-
-                if (showContents) {
-                    FolderContents(state.contents, onOpenNote, onOpenFolder)
-                } else {
-                    Box(Modifier.fillMaxSize()) {
-                        when {
-                            state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                            state.missing ->
-                                Text(
-                                    stringResource(R.string.note_not_on_device),
-                                    Modifier.align(Alignment.Center).padding(24.dp),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-
-                            else ->
-                                state.note?.let { note ->
-                                    MarkdownDocument(
-                                        blocks = note.blocks,
-                                        brokenLinks = state.brokenLinks,
-                                        listState = listState,
-                                        onPinch = viewModel::pinchTextScale,
-                                        actions =
-                                            RenderActions(
-                                                vaultId = note.vaultId,
-                                                // Ticking a box where it is
-                                                // written, rather than only
-                                                // from the task list.
-                                                onCompleteTask =
-                                                    if (state.writable) {
-                                                        { line -> viewModel.completeTask(line) }
-                                                    } else {
-                                                        null
-                                                    },
-                                                inline =
-                                                    InlineActions(
-                                                        // A look before a leap.
-                                                        // Following a link to
-                                                        // find it was not the one
-                                                        // you meant costs a load
-                                                        // and the place you were
-                                                        // reading.
-                                                        onWikiLink = { target, heading ->
-                                                            val id = viewModel.targetOf(target)
-                                                            when {
-                                                                // `[[#Heading]]` means this
-                                                                // note, so there is nothing
-                                                                // to decide about.
-                                                                target.isBlank() -> pendingHeading = heading
-                                                                id == null -> peekBroken = target
-                                                                else ->
-                                                                    scope.launch {
-                                                                        peeking =
-                                                                            viewModel
-                                                                                .peek(id)
-                                                                                ?.copy(heading = heading)
-                                                                    }
-                                                            }
-                                                        },
-                                                        onExternalLink = { url ->
-                                                            runCatching {
-                                                                context.startActivity(
-                                                                    Intent(Intent.ACTION_VIEW, url.toUri()),
-                                                                )
-                                                            }
-                                                        },
-                                                    ),
-                                                onCopyCode = { code ->
-                                                    scope.launch {
-                                                        clipboard.setClipEntry(
-                                                            ClipData.newPlainText("code", code).toClipEntry(),
-                                                        )
-                                                    }
-                                                },
-                                                // Never wired until now: the card was drawn, said
-                                                // "open with another app", and did nothing at all
-                                                // when tapped.
-                                                // Never wired either: images were
-                                                // drawn, took a tap, and did
-                                                // nothing with it.
-                                                onImage = { path, alt -> zoomed = path to alt },
-                                                onAttachment = { path ->
-                                                    scope.launch {
-                                                        val file = viewModel.attachment(path)
-                                                        val message =
-                                                            when {
-                                                                file == null ->
-                                                                    couldNotFetch.format(path.substringAfterLast('/'))
-                                                                // A PDF is read here; everything else
-                                                                // belongs to whatever app owns that type.
-                                                                Attachments.isPdf(path) -> {
-                                                                    reading = file
-                                                                    null
-                                                                }
-                                                                Attachments.open(context, file) -> null
-                                                                else -> nothingOpens
-                                                            }
-                                                        message?.let {
-                                                            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    }
-                                                },
-                                            ),
+                    if (showContents) {
+                        FolderContents(state.contents, onOpenNote, onOpenFolder)
+                    } else {
+                        Box(Modifier.fillMaxSize()) {
+                            when {
+                                state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                                state.missing ->
+                                    Text(
+                                        stringResource(R.string.note_not_on_device),
+                                        Modifier.align(Alignment.Center).padding(24.dp),
+                                        style = MaterialTheme.typography.bodyMedium,
                                     )
-                                }
+
+                                else ->
+                                    state.note?.let { note ->
+                                        MarkdownDocument(
+                                            blocks = note.blocks,
+                                            brokenLinks = state.brokenLinks,
+                                            listState = listState,
+                                            onPinch = viewModel::pinchTextScale,
+                                            actions =
+                                                RenderActions(
+                                                    vaultId = note.vaultId,
+                                                    // Ticking a box where it is
+                                                    // written, rather than only
+                                                    // from the task list.
+                                                    onCompleteTask =
+                                                        if (state.writable) {
+                                                            { line -> viewModel.completeTask(line) }
+                                                        } else {
+                                                            null
+                                                        },
+                                                    inline =
+                                                        InlineActions(
+                                                            // A look before a leap.
+                                                            // Following a link to
+                                                            // find it was not the one
+                                                            // you meant costs a load
+                                                            // and the place you were
+                                                            // reading.
+                                                            onWikiLink = { target, heading ->
+                                                                val id = viewModel.targetOf(target)
+                                                                when {
+                                                                    // `[[#Heading]]` means this
+                                                                    // note, so there is nothing
+                                                                    // to decide about.
+                                                                    target.isBlank() -> pendingHeading = heading
+                                                                    id == null -> peekBroken = target
+                                                                    else ->
+                                                                        scope.launch {
+                                                                            peeking =
+                                                                                viewModel
+                                                                                    .peek(id)
+                                                                                    ?.copy(heading = heading)
+                                                                        }
+                                                                }
+                                                            },
+                                                            onExternalLink = { url ->
+                                                                runCatching {
+                                                                    context.startActivity(
+                                                                        Intent(Intent.ACTION_VIEW, url.toUri()),
+                                                                    )
+                                                                }
+                                                            },
+                                                        ),
+                                                    onCopyCode = { code ->
+                                                        scope.launch {
+                                                            clipboard.setClipEntry(
+                                                                ClipData.newPlainText("code", code).toClipEntry(),
+                                                            )
+                                                        }
+                                                    },
+                                                    // Never wired until now: the card was drawn, said
+                                                    // "open with another app", and did nothing at all
+                                                    // when tapped.
+                                                    // Never wired either: images were
+                                                    // drawn, took a tap, and did
+                                                    // nothing with it.
+                                                    onImage = { path, alt -> zoomed = path to alt },
+                                                    onAttachment = { path ->
+                                                        scope.launch {
+                                                            val file = viewModel.attachment(path)
+                                                            val message =
+                                                                when {
+                                                                    file == null ->
+                                                                        couldNotFetch.format(
+                                                                            path.substringAfterLast('/'),
+                                                                        )
+                                                                    // A PDF is read here; everything else
+                                                                    // belongs to whatever app owns that type.
+                                                                    Attachments.isPdf(path) -> {
+                                                                        reading = file
+                                                                        null
+                                                                    }
+                                                                    Attachments.open(context, file) -> null
+                                                                    else -> nothingOpens
+                                                                }
+                                                            message?.let {
+                                                                Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        }
+                                                    },
+                                                ),
+                                        )
+                                    }
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    // Both are needed: an image belongs to the vault of the note embedding it,
-    // and there is nothing to show once that note has gone.
-    state.note?.let { note ->
-        zoomed?.let { (path, alt) ->
-            ImageViewer(
-                vaultId = note.vaultId,
-                path = path,
-                alt = alt,
-                onDismiss = { zoomed = null },
-                onOpenExternally = {
-                    scope.launch {
-                        val file = viewModel.attachment(path)
-                        val opened = file != null && Attachments.open(context, file)
-                        if (!opened) {
-                            Toast
-                                .makeText(
-                                    context,
-                                    nothingOpens,
-                                    Toast.LENGTH_SHORT,
-                                ).show()
+        // Both are needed: an image belongs to the vault of the note embedding it,
+        // and there is nothing to show once that note has gone.
+        state.note?.let { note ->
+            zoomed?.let { (path, alt) ->
+                ImageViewer(
+                    vaultId = note.vaultId,
+                    path = path,
+                    alt = alt,
+                    onDismiss = { zoomed = null },
+                    onOpenExternally = {
+                        scope.launch {
+                            val file = viewModel.attachment(path)
+                            val opened = file != null && Attachments.open(context, file)
+                            if (!opened) {
+                                Toast
+                                    .makeText(
+                                        context,
+                                        nothingOpens,
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                            }
+                            zoomed = null
                         }
-                        zoomed = null
+                    },
+                )
+            }
+        }
+
+        reading?.let { file ->
+            PdfViewer(
+                file = file,
+                title = file.name,
+                onDismiss = { reading = null },
+                onOpenExternally = {
+                    reading = null
+                    if (!Attachments.open(context, file)) {
+                        Toast.makeText(context, nothingOpens, Toast.LENGTH_SHORT).show()
                     }
                 },
             )
         }
-    }
 
-    reading?.let { file ->
-        PdfViewer(
-            file = file,
-            title = file.name,
-            onDismiss = { reading = null },
-            onOpenExternally = {
-                reading = null
-                if (!Attachments.open(context, file)) {
-                    Toast.makeText(context, nothingOpens, Toast.LENGTH_SHORT).show()
-                }
-            },
-        )
-    }
+        peeking?.let { target ->
+            LinkPeek(
+                target = target,
+                onDismiss = { peeking = null },
+                onOpenHere = {
+                    peeking = null
+                    pendingHeading = target.heading
+                    viewModel.openTab(target.noteId, inNewTab = false)
+                },
+                onOpenInNewTab = {
+                    peeking = null
+                    pendingHeading = target.heading
+                    viewModel.openTab(target.noteId, inNewTab = true)
+                },
+            )
+        }
 
-    peeking?.let { target ->
-        LinkPeek(
-            target = target,
-            onDismiss = { peeking = null },
-            onOpenHere = {
-                peeking = null
-                pendingHeading = target.heading
-                viewModel.openTab(target.noteId, inNewTab = false)
-            },
-            onOpenInNewTab = {
-                peeking = null
-                pendingHeading = target.heading
-                viewModel.openTab(target.noteId, inNewTab = true)
-            },
-        )
-    }
+        peekBroken?.let { target ->
+            BrokenLinkPeek(target = target, onDismiss = { peekBroken = null })
+        }
 
-    peekBroken?.let { target ->
-        BrokenLinkPeek(target = target, onDismiss = { peekBroken = null })
-    }
-
-    if (showOutline) {
-        ModalBottomSheet(onDismissRequest = { showOutline = false }) {
-            val headings = state.note?.headings.orEmpty()
-            if (headings.isEmpty()) {
-                Text(
-                    stringResource(R.string.note_no_headings),
-                    Modifier.padding(24.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            } else {
-                LazyColumn {
-                    items(headings, key = { it.id }) { heading ->
-                        Text(
-                            text = heading.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        showOutline = false
-                                        scope.launch { listState.animateScrollToItem(heading.blockIndex) }
-                                    }
-                                    // Indent by level so the outline reads as a
-                                    // structure rather than a flat list.
-                                    .padding(start = (12 + (heading.level - 1) * 12).dp, end = 16.dp)
-                                    .padding(vertical = 10.dp),
-                        )
+        if (showOutline) {
+            ModalBottomSheet(onDismissRequest = { showOutline = false }) {
+                val headings = state.note?.headings.orEmpty()
+                if (headings.isEmpty()) {
+                    Text(
+                        stringResource(R.string.note_no_headings),
+                        Modifier.padding(24.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    LazyColumn {
+                        items(headings, key = { it.id }) { heading ->
+                            Text(
+                                text = heading.text,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            showOutline = false
+                                            scope.launch { listState.animateScrollToItem(heading.blockIndex) }
+                                        }
+                                        // Indent by level so the outline reads as a
+                                        // structure rather than a flat list.
+                                        .padding(start = (12 + (heading.level - 1) * 12).dp, end = 16.dp)
+                                        .padding(vertical = 10.dp),
+                            )
+                        }
                     }
                 }
             }
         }
-    }
 
-    if (showBacklinks) {
-        ModalBottomSheet(onDismissRequest = { showBacklinks = false }) {
-            // Looked up when the sheet opens rather than with the note: it is a
-            // full-text search, and most notes are read without anyone asking.
-            LaunchedEffect(noteId) { viewModel.loadMentions() }
+        if (showBacklinks) {
+            ModalBottomSheet(onDismissRequest = { showBacklinks = false }) {
+                // Looked up when the sheet opens rather than with the note: it is a
+                // full-text search, and most notes are read without anyone asking.
+                LaunchedEffect(noteId) { viewModel.loadMentions() }
 
-            LazyColumn {
-                if (state.backlinks.isNotEmpty()) {
-                    item { SheetLabel("Linked from ${state.backlinks.size}") }
-                }
-                items(state.backlinks, key = { "link-" + it.noteId + it.context }) { row ->
-                    ReferenceRow(
-                        title = row.title,
-                        // The stored context line -- backlinks never re-read
-                        // the source note to show it.
-                        context = AnnotatedString(row.context),
-                        path = row.path,
-                        onClick = {
-                            showBacklinks = false
-                            onOpenNote(row.noteId)
-                        },
-                    )
-                }
-
-                // Obsidian calls these unlinked mentions: notes that say this
-                // one's name in prose and never turned it into a link. In a
-                // vault where every link is typed by hand, that is where the
-                // connections somebody meant to make actually are.
-                if (state.mentions.isNotEmpty()) {
-                    item { SheetLabel("Mentioned in ${state.mentions.size}, not linked") }
-                }
-                items(state.mentions, key = { "mention-" + it.noteId }) { hit ->
-                    ReferenceRow(
-                        title = hit.title,
-                        context = hit.snippet.highlighted(),
-                        path = hit.path,
-                        onClick = {
-                            showBacklinks = false
-                            onOpenNote(hit.noteId)
-                        },
-                    )
-                }
-
-                if (state.mentionsLoaded && state.backlinks.isEmpty() && state.mentions.isEmpty()) {
-                    item {
-                        Text(
-                            stringResource(R.string.note_no_mentions),
-                            Modifier.fillMaxWidth().padding(24.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                LazyColumn {
+                    if (state.backlinks.isNotEmpty()) {
+                        item { SheetLabel("Linked from ${state.backlinks.size}") }
+                    }
+                    items(state.backlinks, key = { "link-" + it.noteId + it.context }) { row ->
+                        ReferenceRow(
+                            title = row.title,
+                            // The stored context line -- backlinks never re-read
+                            // the source note to show it.
+                            context = AnnotatedString(row.context),
+                            path = row.path,
+                            onClick = {
+                                showBacklinks = false
+                                onOpenNote(row.noteId)
+                            },
                         )
+                    }
+
+                    // Obsidian calls these unlinked mentions: notes that say this
+                    // one's name in prose and never turned it into a link. In a
+                    // vault where every link is typed by hand, that is where the
+                    // connections somebody meant to make actually are.
+                    if (state.mentions.isNotEmpty()) {
+                        item { SheetLabel("Mentioned in ${state.mentions.size}, not linked") }
+                    }
+                    items(state.mentions, key = { "mention-" + it.noteId }) { hit ->
+                        ReferenceRow(
+                            title = hit.title,
+                            context = hit.snippet.highlighted(),
+                            path = hit.path,
+                            onClick = {
+                                showBacklinks = false
+                                onOpenNote(hit.noteId)
+                            },
+                        )
+                    }
+
+                    if (state.mentionsLoaded && state.backlinks.isEmpty() && state.mentions.isEmpty()) {
+                        item {
+                            Text(
+                                stringResource(R.string.note_no_mentions),
+                                Modifier.fillMaxWidth().padding(24.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }

@@ -155,6 +155,13 @@
     <string name="capture_hint">یک فکر، یک لینک، هر چیزی</string>
     <string name="shortcut_capture_short">یادداشت</string>
     <string name="shortcut_capture_long">یک چیزی بنویسید</string>
+    <string name="drawer_title">فایلها</string>
+    <string name="drawer_filter">رفتن به یک نوشته</string>
+    <string name="drawer_open">باز</string>
+    <string name="drawer_recent">اخیر</string>
+    <string name="drawer_root">ریشه والت</string>
+    <string name="drawer_browse_all">مرور کل والت</string>
+    <string name="drawer_folder_empty">این پوشه خالی است.</string>
     <plurals name="graph_hidden">
         <item quantity="one">%1$d تای دیگر نشان داده نشده</item>
         <item quantity="other">%1$d تای دیگر نشان داده نشده</item>
