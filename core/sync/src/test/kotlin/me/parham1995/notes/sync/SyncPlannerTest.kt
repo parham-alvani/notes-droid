@@ -112,6 +112,20 @@ class SyncPlannerTest {
     }
 
     @Test
+    fun `a modify the device already holds is not fetched again`() {
+        // What a commit made by the app itself looks like on the next refresh:
+        // compare reports the file as changed, and the device wrote those exact
+        // bytes a moment ago.
+        val base = SyncBase("old", mapOf("Tasks/Work.md" to "sha-mine"))
+        val changes = listOf(CompareChange("Tasks/Work.md", ChangeStatus.MODIFIED, "sha-mine"))
+
+        val plan = SyncPlanner.fromCompare(base, "head2", changes, filter)
+
+        assertThat(plan.downloads).isEmpty()
+        assertThat(plan.isEmpty).isTrue()
+    }
+
+    @Test
     fun `compare rename with unchanged content moves on disk`() {
         val base = SyncBase("old", mapOf("alpha/note.md" to "sha-x"))
         val changes =

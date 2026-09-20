@@ -133,7 +133,13 @@ object SyncPlanner {
                     if (inVault) entryFor(change.path, change.sha)?.let(adds::add)
 
                 ChangeStatus.MODIFIED, ChangeStatus.CHANGED ->
-                    if (inVault) entryFor(change.path, change.sha)?.let(modifies::add)
+                    // Not if the device already holds exactly those bytes. The
+                    // app's own commits come back through compare as changes to
+                    // files it wrote itself, and fetching them again would
+                    // overwrite the copy that is already correct.
+                    if (inVault && change.sha != base.manifest[change.path]) {
+                        entryFor(change.path, change.sha)?.let(modifies::add)
+                    }
 
                 ChangeStatus.REMOVED ->
                     if (change.path in base.manifest) deletes += change.path
