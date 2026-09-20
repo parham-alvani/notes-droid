@@ -26,6 +26,8 @@ import me.parham1995.notes.data.ThemeChoice
 import me.parham1995.notes.data.TokenStore
 import me.parham1995.notes.data.VaultFileStore
 import me.parham1995.notes.data.VaultSettings
+import me.parham1995.notes.data.VaultWriteRepository
+import me.parham1995.notes.data.database.PendingEditEntity
 import me.parham1995.notes.data.database.SyncLogEntity
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
@@ -63,6 +65,10 @@ data class SyncUiState(
     val reindexing: Boolean = false,
     /** The last crash, if the app has had one. Null is the normal case. */
     val lastCrash: String? = null,
+    /** Edits made on the device that have not reached the repository yet. */
+    val queuedEdits: List<PendingEditEntity> = emptyList(),
+    /** Result of the last write-access check, for immediate feedback. */
+    val writeMessage: String? = null,
 )
 
 @HiltViewModel
@@ -77,6 +83,7 @@ class SyncViewModel
         private val sshKeys: SshKeyStore,
         private val syncLog: SyncLog,
         private val crashLog: CrashLog,
+        private val writes: VaultWriteRepository,
     ) : ViewModel() {
         private val local = MutableStateFlow(LocalState())
 
@@ -87,6 +94,7 @@ class SyncViewModel
             val generatingKey: Boolean = false,
             val reindexing: Boolean = false,
             val lastCrash: String? = null,
+            val writeMessage: String? = null,
         )
 
         /**
@@ -142,6 +150,7 @@ class SyncViewModel
                         generatingKey = extra.generatingKey,
                         reindexing = extra.reindexing,
                         lastCrash = extra.lastCrash,
+                        writeMessage = extra.writeMessage,
                         tokenRejected =
                             failed?.outputData?.getString(SyncWorker.KEY_ERROR) == SyncWorker.TOKEN_REJECTED,
                     )
@@ -150,8 +159,9 @@ class SyncViewModel
                 // five, and the vararg form loses every type in the lambda.
                 repository.vaults(),
                 sshKeyRows,
-            ) { base, vaults, keys ->
-                base.copy(vaults = vaults, sshKeys = keys)
+                writes.queue(),
+            ) { base, vaults, keys, queued ->
+                base.copy(vaults = vaults, sshKeys = keys, queuedEdits = queued)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SyncUiState())
 
         init {
@@ -225,6 +235,44 @@ class SyncViewModel
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
         fun clearLog() = viewModelScope.launch { syncLog.clear() }
+
+        fun setAuthor(
+            name: String,
+            email: String,
+        ) = viewModelScope.launch { settingsStore.setAuthor(name, email) }
+
+        fun setScratchpad(
+            path: String,
+            vaultId: Long,
+        ) = viewModelScope.launch { settingsStore.setScratchpad(path, vaultId) }
+
+        /**
+         * Asks each repository again whether this device may push to it.
+         *
+         * The answer is what every write affordance in the app is gated on, so
+         * it is worth being able to ask outright rather than waiting for the
+         * next background sync to find out.
+         */
+        fun checkWriteAccess() =
+            viewModelScope.launch {
+                local.value = local.value.copy(writeMessage = "checking...")
+                val message =
+                    runCatching { repository.refreshWriteAccess() }
+                        .getOrElse { it.message ?: "could not check" }
+                local.value = local.value.copy(writeMessage = message)
+            }
+
+        /** Tries the queue again now, rather than waiting for the next sync. */
+        fun sendQueuedEdits() =
+            viewModelScope.launch {
+                val sent = runCatching { writes.flush() }.getOrDefault(0)
+                local.value =
+                    local.value.copy(
+                        writeMessage = if (sent > 0) "sent $sent edit(s)" else "nothing could be sent yet",
+                    )
+            }
+
+        fun discardEdit(id: Long) = viewModelScope.launch { writes.discard(id) }
 
         fun setTransport(transport: SyncTransport) = viewModelScope.launch { settingsStore.setTransport(transport) }
 

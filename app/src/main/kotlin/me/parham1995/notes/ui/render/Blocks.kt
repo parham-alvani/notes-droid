@@ -75,6 +75,13 @@ data class RenderActions(
     val onImage: (path: String, alt: String?) -> Unit = { _, _ -> },
     val onAttachment: (path: String) -> Unit = {},
     val onCopyCode: (String) -> Unit = {},
+    /**
+     * Tick the open task written on this source line.
+     *
+     * Null when this vault cannot be written to, which is what keeps the
+     * checkbox inert rather than offering something that fails at the push.
+     */
+    val onCompleteTask: ((line: Int) -> Unit)? = null,
 )
 
 @Composable
@@ -320,7 +327,7 @@ private fun ListBlockView(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         block.items.forEachIndexed { index, item ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ItemMarker(item, block.ordered, block.start + index)
+                ItemMarker(item, block.ordered, block.start + index, actions.onCompleteTask)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     item.blocks.forEach { child ->
                         // A nested list indents; anything else sits flush with
@@ -348,6 +355,7 @@ private fun ItemMarker(
     item: MdListItem,
     ordered: Boolean,
     number: Int,
+    onComplete: ((line: Int) -> Unit)? = null,
 ) {
     val icon =
         when (item.task) {
@@ -366,11 +374,20 @@ private fun ItemMarker(
         )
         return
     }
+    // Only an open task, only where the line is known, and only where the vault
+    // can be written to. A box that ticks in some notes and not others is worse
+    // than one that never does, so the three conditions are checked together.
+    val open = item.task == TaskState.UNCHECKED || item.task == TaskState.IN_PROGRESS
+    val complete = onComplete?.takeIf { open && item.line >= 0 }
     LucideGlyph(
         name = icon,
         // Nudged down to sit on the first line of the item's text rather than
         // above it; an icon has no baseline of its own.
-        modifier = Modifier.widthIn(min = MARKER_WIDTH).padding(top = MARKER_NUDGE),
+        modifier =
+            Modifier
+                .widthIn(min = MARKER_WIDTH)
+                .padding(top = MARKER_NUDGE)
+                .then(complete?.let { Modifier.clickable { it(item.line) } } ?: Modifier),
         size = MARKER_ICON,
         tint = item.markerColor(),
         contentDescription =

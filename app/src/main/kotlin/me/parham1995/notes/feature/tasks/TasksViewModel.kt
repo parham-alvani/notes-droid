@@ -7,11 +7,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskBuckets
 import me.parham1995.notes.data.VaultRepository
+import me.parham1995.notes.data.VaultWriteRepository
+import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.TaskRow
 import java.time.LocalDate
 import javax.inject.Inject
@@ -47,6 +50,12 @@ data class TasksUiState(
     val sources: List<TaskSource> = emptyList(),
     /** The file being filtered to, or null for all of them. */
     val selectedPath: String? = null,
+    /** Whether this vault's credential can push, and an author is set. */
+    val canWrite: Boolean = false,
+    /** The headings each file already uses, so a new task can join one. */
+    val sectionsByPath: Map<String, List<String>> = emptyMap(),
+    /** The last thing a write had to say, shown once and dismissed. */
+    val message: String? = null,
 ) {
     val overdue: Int get() = groups.firstOrNull { it.bucket == TaskBucket.OVERDUE }?.rows?.size ?: 0
 }
@@ -56,7 +65,35 @@ class TasksViewModel
     @Inject
     constructor(
         private val repository: VaultRepository,
+        private val writes: VaultWriteRepository,
     ) : ViewModel() {
+        private val message = MutableStateFlow<String?>(null)
+
+        fun dismissMessage() {
+            message.value = null
+        }
+
+        /**
+         * Ticks a task and sends it, reporting what happened either way.
+         *
+         * Reported rather than assumed: the same tap can land in the repository,
+         * sit in a queue with no signal, or be refused outright because the task
+         * repeats -- and a checkbox that just changes colour says none of that.
+         */
+        fun complete(row: TaskRow) =
+            viewModelScope.launch {
+                message.value = writes.completeTask(row).describe()
+            }
+
+        fun addTask(
+            path: String,
+            section: String,
+            text: String,
+        ) = viewModelScope.launch {
+            val vaultId = repository.activeVaultId.first()
+            message.value = writes.addTask(vaultId, path, section, text).describe()
+        }
+
         fun switchTo(vaultId: Long) {
             viewModelScope.launch { repository.setActiveVault(vaultId) }
         }
@@ -103,6 +140,12 @@ class TasksViewModel
                     total = visible.size,
                     loading = false,
                     sources = sources,
+                    sectionsByPath =
+                        rows
+                            .groupBy { it.notePath }
+                            .mapValues { (_, theirs) ->
+                                theirs.map { it.section }.filter { it.isNotBlank() }.distinct()
+                            },
                     selectedPath = chosenPath,
                     vaultLabel = vaults.firstOrNull { it.id == activeId }?.label.orEmpty(),
                     elsewhere =
@@ -112,6 +155,12 @@ class TasksViewModel
                                 counts[vault.id]?.takeIf { it > 0 }?.let { VaultTasks(vault.id, vault.label, it) }
                             },
                 )
+            }.let { base ->
+                // Nested rather than more arguments: `combine` is typed up to
+                // five and the vararg form loses every type in the lambda.
+                combine(base, writes.writable, repository.activeVaultId, message) { ui, writable, activeId, said ->
+                    ui.copy(canWrite = activeId in writable, message = said)
+                }
             }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
@@ -144,3 +193,12 @@ internal fun taskSources(countsByPath: Map<String, Int>): List<TaskSource> {
             TaskSource(path, label, count)
         }.sortedBy { it.name.lowercase() }
 }
+
+/** What to say about a write, in one line. */
+private fun WriteResult.describe(): String =
+    when (this) {
+        WriteResult.Pushed -> "Saved"
+        is WriteResult.Queued -> "Saved here - $why"
+        WriteResult.Unchanged -> "Already done"
+        is WriteResult.Refused -> why
+    }

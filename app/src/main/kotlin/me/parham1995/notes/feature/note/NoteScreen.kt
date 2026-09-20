@@ -35,6 +35,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -163,7 +165,16 @@ fun NoteScreen(
         }
     }
 
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            snackbar.showSnackbar(it)
+            viewModel.dismissMessage()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {
@@ -339,6 +350,15 @@ fun NoteScreen(
                                         actions =
                                             RenderActions(
                                                 vaultId = note.vaultId,
+                                                // Ticking a box where it is
+                                                // written, rather than only
+                                                // from the task list.
+                                                onCompleteTask =
+                                                    if (state.writable) {
+                                                        { line -> viewModel.completeTask(line) }
+                                                    } else {
+                                                        null
+                                                    },
                                                 inline =
                                                     InlineActions(
                                                         // A look before a leap.

@@ -134,6 +134,27 @@
     <string name="crash_share_title">Share the crash</string>
     <string name="error_could_not_fetch">Could not fetch %1$s</string>
     <string name="help_add_repository">Add a repository first.</string>
+    <string name="action_discard">Discard</string>
+    <string name="settings_author_name">Name</string>
+    <string name="settings_author_email">Email</string>
+    <string name="settings_check_write">Check access</string>
+    <string name="settings_can_write">can write</string>
+    <string name="settings_read_only">read only</string>
+    <string name="settings_scratchpad_path">Path in the vault</string>
+    <string name="settings_send_queued">Send now</string>
+    <string name="help_author">Commits made from this phone are attributed to this name and address, the same as the ones made at a desk.</string>
+    <string name="help_author_missing">Until a name and an email are set, nothing here can be edited.</string>
+    <string name="help_scratchpad">Where a captured thought lands, under today\'s date. The file is created the first time you write to it.</string>
+    <string name="tasks_add">Add a task</string>
+    <string name="tasks_add_text">What needs doing</string>
+    <string name="tasks_add_section">Project</string>
+    <string name="tasks_add_section_end">End of the file</string>
+    <string name="tasks_add_file">File</string>
+    <string name="capture_title">Capture</string>
+    <string name="widget_capture_glyph" translatable="false">+</string>
+    <string name="shortcut_capture_short">Capture</string>
+    <string name="shortcut_capture_long">Write something down</string>
+    <string name="capture_hint">A thought, a link, anything</string>
     <plurals name="graph_hidden">
         <item quantity="one">%1$d more not shown</item>
         <item quantity="other">%1$d more not shown</item>

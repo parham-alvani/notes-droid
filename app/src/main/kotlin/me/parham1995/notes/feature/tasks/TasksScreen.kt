@@ -12,17 +12,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,8 +66,41 @@ fun TasksScreen(
     viewModel: TasksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    var adding by remember { mutableStateOf(false) }
+
+    // Said once and cleared: the same message arriving again on a
+    // recomposition would stack a second snackbar on top of the first.
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            snackbar.showSnackbar(it)
+            viewModel.dismissMessage()
+        }
+    }
+
+    if (adding) {
+        AddTaskDialog(
+            state = state,
+            onDismiss = { adding = false },
+            onAdd = { path, section, text ->
+                viewModel.addTask(path, section, text)
+                adding = false
+            },
+        )
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+        floatingActionButton = {
+            // Only where there is somewhere to put it. A task needs a file, and
+            // offering to add one into a vault the app cannot push to is an
+            // offer that fails after the thing has been typed.
+            if (state.canWrite && state.sources.isNotEmpty()) {
+                FloatingActionButton(onClick = { adding = true }) {
+                    LucideGlyph("plus", contentDescription = stringResource(R.string.tasks_add))
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -133,7 +172,18 @@ fun TasksScreen(
                     BucketHeader(group.bucket, group.rows.size)
                 }
                 items(group.rows, key = { it.id }) { row ->
-                    TaskRowView(row, group.bucket) { onOpenNote(row.noteId) }
+                    val complete: (() -> Unit)? =
+                        if (state.canWrite) {
+                            { viewModel.complete(row) }
+                        } else {
+                            null
+                        }
+                    TaskRowView(
+                        row = row,
+                        bucket = group.bucket,
+                        onComplete = complete,
+                        onClick = { onOpenNote(row.noteId) },
+                    )
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
                 }
             }
@@ -173,6 +223,7 @@ private fun BucketHeader(
 private fun TaskRowView(
     row: TaskRow,
     bucket: TaskBucket,
+    onComplete: (() -> Unit)?,
     onClick: () -> Unit,
 ) {
     Row(
@@ -184,7 +235,18 @@ private fun TaskRowView(
     ) {
         LucideGlyph(
             name = if (row.state == IN_PROGRESS) "square-dot" else "square",
-            modifier = Modifier.padding(top = 2.dp),
+            modifier =
+                Modifier
+                    .padding(top = 2.dp)
+                    // The box is the affordance, not the row: tapping the text
+                    // opens the note, which is what it has always done, and a
+                    // list where a stray tap ticks something off is a list
+                    // nobody trusts.
+                    .then(
+                        onComplete?.let { complete ->
+                            Modifier.clickable(onClick = complete).padding(CHECKBOX_TAP)
+                        } ?: Modifier,
+                    ),
             tint = if (row.state == IN_PROGRESS) Naz.Blue else MaterialTheme.colorScheme.onSurfaceVariant,
             contentDescription = if (row.state == IN_PROGRESS) "in progress" else "open",
         )
@@ -303,3 +365,95 @@ private fun SourceFilter(
 
 private val FILTER_LABEL_WIDTH = 120.dp
 private val FILTER_MENU_WIDTH = 220.dp
+
+/** Widens the checkbox to something a thumb can hit without opening the note. */
+private val CHECKBOX_TAP = 6.dp
+
+/**
+ * Adds a task to a file that already has some.
+ *
+ * File and project are offered from what the vault already contains rather than
+ * typed: this vault keeps one file per context and one heading per project, and
+ * a task filed under a heading that does not quite match an existing one is a
+ * task nobody finds again.
+ */
+@Composable
+private fun AddTaskDialog(
+    state: TasksUiState,
+    onDismiss: () -> Unit,
+    onAdd: (path: String, section: String, text: String) -> Unit,
+) {
+    var path by remember { mutableStateOf(state.selectedPath ?: state.sources.first().path) }
+    var section by remember { mutableStateOf("") }
+    var text by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.tasks_add)) },
+        confirmButton = {
+            TextButton(onClick = { onAdd(path, section, text) }, enabled = text.isNotBlank()) {
+                Text(stringResource(R.string.action_add))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(R.string.tasks_add_text)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ChoiceField(
+                    label = stringResource(R.string.tasks_add_file),
+                    value = state.sources.firstOrNull { it.path == path }?.name ?: path,
+                    options = state.sources.map { it.name to it.path },
+                    onChoose = { chosen ->
+                        path = chosen
+                        // A project heading belongs to a file, so it cannot
+                        // survive the file changing underneath it.
+                        section = ""
+                    },
+                )
+                ChoiceField(
+                    label = stringResource(R.string.tasks_add_section),
+                    value = section.ifBlank { stringResource(R.string.tasks_add_section_end) },
+                    options = state.sectionsByPath[path].orEmpty().map { it to it },
+                    onChoose = { section = it },
+                )
+            }
+        },
+    )
+}
+
+/** A read-only field that opens a menu, for choosing from what exists. */
+@Composable
+private fun ChoiceField(
+    label: String,
+    value: String,
+    options: List<Pair<String, String>>,
+    onChoose: (String) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+
+    Column {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        Box {
+            TextButton(onClick = { open = true }, enabled = options.isNotEmpty()) {
+                Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, false))
+                LucideGlyph("chevron-down", size = 16.dp, contentDescription = null)
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                options.forEach { (name, chosen) ->
+                    DropdownMenuItem(
+                        text = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        onClick = {
+                            onChoose(chosen)
+                            open = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}

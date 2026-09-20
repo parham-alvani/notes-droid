@@ -23,6 +23,7 @@ import me.parham1995.notes.data.TaskBuckets
 import me.parham1995.notes.data.TaskDigestWorker
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.TaskRow
+import me.parham1995.notes.feature.capture.CaptureActivity
 import java.time.LocalDate
 
 /**
@@ -128,6 +129,7 @@ class TasksWidget : AppWidgetProvider() {
 
         views.setOnClickPendingIntent(R.id.widget_headline, openApp(context))
         views.setOnClickPendingIntent(R.id.widget_tasks, openApp(context))
+        views.setOnClickPendingIntent(R.id.widget_capture, capture(context))
         return views
     }
 
@@ -145,6 +147,15 @@ class TasksWidget : AppWidgetProvider() {
         )
     }
 
+    /** Straight into the capture field, with nothing else in the way. */
+    private fun capture(context: Context): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            CAPTURE_REQUEST,
+            Intent(context, CaptureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
     companion object {
         /** Redraws every placed widget. Called when a sync changes the tasks. */
         fun refresh(context: Context) {
@@ -161,6 +172,7 @@ class TasksWidget : AppWidgetProvider() {
         }
 
         private val PRESSING = setOf(TaskBucket.OVERDUE, TaskBucket.TODAY)
+        private const val CAPTURE_REQUEST = 1
         private const val ROWS = 4
 
         // naz, by value: RemoteViews cannot read the Compose theme.

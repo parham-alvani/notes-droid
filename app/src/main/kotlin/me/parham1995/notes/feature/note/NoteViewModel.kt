@@ -15,6 +15,8 @@ import me.parham1995.notes.data.SearchHit
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
+import me.parham1995.notes.data.VaultWriteRepository
+import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.icons.IconSpec
@@ -43,6 +45,10 @@ data class NoteUiState(
      */
     val contents: List<VaultRowItem> = emptyList(),
     val missing: Boolean = false,
+    /** Whether this note's vault can be written to, and an author is set. */
+    val writable: Boolean = false,
+    /** The last thing a write had to say, shown once and dismissed. */
+    val message: String? = null,
 ) {
     val isFolderNote: Boolean get() = note?.isFolderNote == true
 
@@ -59,6 +65,7 @@ class NoteViewModel
         private val files: VaultFileSource,
         private val settings: SettingsStore,
         private val openTabs: NoteTabs,
+        private val writes: VaultWriteRepository,
     ) : ViewModel() {
         val tabs: StateFlow<TabsState> = openTabs.state
 
@@ -118,6 +125,47 @@ class NoteViewModel
         private val _state = MutableStateFlow(NoteUiState())
         val state: StateFlow<NoteUiState> = _state.asStateFlow()
 
+        fun dismissMessage() {
+            _state.value = _state.value.copy(message = null)
+        }
+
+        /**
+         * Ticks the task written on [line] of the note that is open.
+         *
+         * Matched by source line rather than by text, because a note can hold
+         * the same one-line task under two headings -- "- [ ] follow up" is in
+         * this vault several times over -- and ticking the wrong one is a
+         * silent, believable mistake.
+         */
+        fun completeTask(line: Int) =
+            viewModelScope.launch {
+                val noteId = _state.value.note?.id ?: return@launch
+                val row = repository.tasksIn(noteId).firstOrNull { it.line == line }
+                if (row == null) {
+                    _state.value = _state.value.copy(message = "that task is not in the index yet")
+                    return@launch
+                }
+                val said =
+                    when (val result = writes.completeTask(row)) {
+                        WriteResult.Pushed -> "Saved"
+                        is WriteResult.Queued -> "Saved here - it goes up with the next sync"
+                        WriteResult.Unchanged -> "Already done"
+                        is WriteResult.Refused -> result.why
+                    }
+                _state.value = _state.value.copy(message = said)
+                // The file on disk has changed, so what is on screen is one
+                // edit out of date. `load` refuses to reload the note it is
+                // already showing, which is what makes this necessary rather
+                // than tidy.
+                if (said == "Saved" || said.startsWith("Saved here")) reload()
+            }
+
+        private suspend fun reload() {
+            val id = _state.value.note?.id ?: return
+            val note = repository.note(id) ?: return
+            _state.value = _state.value.copy(note = note)
+        }
+
         fun load(id: Long) {
             if (_state.value.note?.id == id) return
             _state.value = NoteUiState(loading = true)
@@ -129,12 +177,14 @@ class NoteViewModel
                 }
                 repository.markOpened(id)
                 val assignments = icons.config.first()
+                val writable = writes.canWrite(note.vaultId).first()
                 _state.value =
                     NoteUiState(
                         loading = false,
                         note = note,
                         backlinks = repository.backlinks(id),
                         icon = assignments.forFile(note.vaultId, note.path),
+                        writable = writable,
                         contents =
                             if (!note.isFolderNote) {
                                 emptyList()

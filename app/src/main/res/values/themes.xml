@@ -17,4 +17,17 @@
         <item name="android:windowBackground">@color/naz_background</item>
         <item name="android:colorBackground">@color/naz_background</item>
     </style>
+
+    <!--
+        Quick capture floats over whatever was already on screen. Translucent
+        rather than a full screen of its own: it is opened from a share sheet
+        and from the home screen, and in both cases replacing what is behind it
+        would make a one-line note feel like leaving the app.
+    -->
+    <style name="Theme.Notes.Capture" parent="android:Theme.Material.Dialog.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
 </resources>
