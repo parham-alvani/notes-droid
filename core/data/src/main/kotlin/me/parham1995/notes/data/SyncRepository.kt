@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.database.BlobDao
+import me.parham1995.notes.data.database.PendingEditDao
 import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.data.database.SyncStateEntity
 import me.parham1995.notes.data.database.VaultDao
@@ -53,6 +54,7 @@ class SyncRepository
         private val log: SyncLog,
         private val files: VaultFileStore,
         private val sshKeys: SshKeyStore,
+        private val pending: PendingEditDao,
         private val transports: VaultTransports,
         private val writes: VaultWriteRepository,
         private val gate: VaultGate,
@@ -151,6 +153,10 @@ class SyncRepository
                     .map { it.path }
             indexer.indexChanged(vaultId = id, changed = emptyList(), removed = owned)
             blobs.clearVault(id)
+            // Its queued edits go too. A flush would eventually notice the
+            // vault was gone and drop them, but until then they sit in the
+            // queue looking like work still to do.
+            pending.clearVault(id)
             files.deleteVault(id)
             sshKeys.delete(vault.name)
             vaults.delete(id)

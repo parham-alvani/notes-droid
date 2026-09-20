@@ -56,6 +56,15 @@ data class TasksUiState(
     val sectionsByPath: Map<String, List<String>> = emptyMap(),
     /** The last thing a write had to say, shown once and dismissed. */
     val message: String? = null,
+    /**
+     * Edits made here that have not reached the repository.
+     *
+     * Shown because otherwise a queued edit is invisible: it is said once in a
+     * snackbar and then only exists in a settings screen nobody opens. You
+     * would think you had ticked something off and never learn that you had
+     * not.
+     */
+    val waiting: Int = 0,
 ) {
     val overdue: Int get() = groups.firstOrNull { it.bucket == TaskBucket.OVERDUE }?.rows?.size ?: 0
 }
@@ -158,8 +167,14 @@ class TasksViewModel
             }.let { base ->
                 // Nested rather than more arguments: `combine` is typed up to
                 // five and the vararg form loses every type in the lambda.
-                combine(base, writes.writable, repository.activeVaultId, message) { ui, writable, activeId, said ->
-                    ui.copy(canWrite = activeId in writable, message = said)
+                combine(
+                    base,
+                    writes.writable,
+                    repository.activeVaultId,
+                    message,
+                    writes.queued,
+                ) { ui, writable, activeId, said, queued ->
+                    ui.copy(canWrite = activeId in writable, message = said, waiting = queued)
                 }
             }.stateIn(
                 scope = viewModelScope,

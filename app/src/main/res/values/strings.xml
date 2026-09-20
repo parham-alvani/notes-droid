@@ -164,6 +164,10 @@
     <string name="drawer_folder_empty">Nothing in this folder.</string>
     <string name="settings_hide_done">Hide completed tasks</string>
     <string name="help_hide_done">Leaves ticked and cancelled tasks out of a note — the ones the task list already leaves out. A finished task with something still open under it stays.</string>
+    <plurals name="tasks_waiting">
+        <item quantity="one">%1$d waiting to go up</item>
+        <item quantity="other">%1$d waiting to go up</item>
+    </plurals>
     <plurals name="graph_hidden">
         <item quantity="one">%1$d more not shown</item>
         <item quantity="other">%1$d more not shown</item>

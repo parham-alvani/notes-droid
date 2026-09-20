@@ -116,6 +116,21 @@ fun TasksScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        // Only when there is something to say. A counter that
+                        // reads zero most of the time is a counter nobody
+                        // reads the rest of the time.
+                        if (state.waiting > 0) {
+                            Text(
+                                text =
+                                    pluralStringResource(
+                                        R.plurals.tasks_waiting,
+                                        state.waiting,
+                                        state.waiting,
+                                    ),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Naz.Orange,
+                            )
+                        }
                     }
                 },
                 actions = {
