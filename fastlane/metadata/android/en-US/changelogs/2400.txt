@@ -1,5 +1,9 @@
-Writing, where the credential allows it.
+Writing, where the credential allows it — and a drawer to get around.
 
-Tick a task off — in the list or in the note it is written in — add a task under a project heading, and capture a thought into a scratchpad from the share sheet, a launcher shortcut or the widget. Each one is a commit, attributed to the name and email set in Settings.
+Tick a task off, in the list or in the note it is written in. Add a task under a project heading. Capture a thought into a scratchpad from the share sheet, the text-selection menu, a launcher shortcut or the widget. Each one is a commit, attributed to the name and email set in Settings.
 
-Every write is gated on what the host says the credential may do: a read-only deploy key or a Contents: read-only token leaves the checkboxes inert rather than failing at the push. An edit made with no signal is kept and sent with the next sync, and it is re-applied to whatever the file says by then rather than overwriting it.
+Every write is gated on what the host says the credential may actually do: a read-only deploy key or a Contents: read-only token leaves the checkboxes inert rather than failing at the push. An edit made with no signal is kept and sent with the next sync, and it is re-applied to whatever the file says by then rather than overwriting it.
+
+The note screen gains a files drawer: filter by name, the tabs already open, the last few notes, and the folder this one sits in.
+
+Fixed: a note that changed upstream kept the tasks and backlinks it had when it was first indexed, until the next full reindex.
