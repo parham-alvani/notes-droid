@@ -1,0 +1,1 @@
+The back arrow in a note now appears only when there is somewhere to go, instead of sitting there greyed out. A note opened from a list has no trail behind it yet, so that was most notes most of the time.
