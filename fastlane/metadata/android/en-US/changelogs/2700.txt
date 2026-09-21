@@ -1,0 +1,5 @@
+Zoom a PDF, and a back button that goes back.
+
+Pinch a PDF to zoom it, double tap to fill the width again, and drag to move around the page. A page is re-rendered from the document at the size it is shown at, so the text stays sharp instead of being magnified out of a picture made for the phone's width — which is what a scanned contract needs to be readable at all.
+
+Back returns to where a note was opened from. Picking a note in the browser, in search or from a task used to add it to the trail of whatever was read last, so back walked into a note nobody had navigated from and the list was no longer behind it. Those now start a fresh thread of reading. Following a link, a backlink or an entry in a folder note still retraces one step at a time, as before.
