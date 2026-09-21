@@ -259,18 +259,21 @@ fun NoteScreen(
                                     contentDescription = stringResource(R.string.drawer_title),
                                 )
                             }
-                            // Disabled rather than hidden when this tab has
-                            // nowhere to go back to: a button that moves you
-                            // somewhere unrelated is worse than one that
-                            // plainly cannot.
-                            IconButton(
-                                onClick = { viewModel.back() },
-                                enabled = tabs.current?.canGoBack == true,
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = stringResource(R.string.action_back),
-                                )
+                            // Gone, rather than greyed out, when this tab has
+                            // nowhere to go back to. A note is usually opened
+                            // from a list and has no trail behind it yet, so a
+                            // disabled arrow is what most of them wear most of
+                            // the time -- permanent furniture that says only
+                            // that a thing does not work, and takes the space
+                            // the title needs on a phone. It appears once
+                            // following a link has given it somewhere to go.
+                            if (tabs.current?.canGoBack == true) {
+                                IconButton(onClick = { viewModel.back() }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = stringResource(R.string.action_back),
+                                    )
+                                }
                             }
                         }
                     },
