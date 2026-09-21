@@ -94,7 +94,8 @@ data class GraphRoute(
 private fun NavController.openNote(
     id: Long,
     newTab: Boolean = false,
-) = navigate(NoteRoute(id, newTab)) {
+    fresh: Boolean = false,
+) = navigate(NoteRoute(id, newTab, fresh)) {
     popUpTo<NoteRoute> { inclusive = true }
     launchSingleTop = true
 }
@@ -111,6 +112,16 @@ data class NoteRoute(
      * a row asks for the other thing.
      */
     val newTab: Boolean = false,
+    /**
+     * Whether the reader is being entered from outside it.
+     *
+     * The browser, a search result, a task and a launcher shortcut all start a
+     * new thread of reading, so the tab they land in begins again at this note
+     * and back returns to the list the note was picked from. A link followed
+     * inside the reader -- a wikilink, a backlink, an entry in a folder note --
+     * is the next step of the thread already being read, and pushes.
+     */
+    val fresh: Boolean = false,
 )
 
 private data class Tab(
@@ -147,7 +158,9 @@ fun NotesNavHost(
     val requestedNote by openNote.collectAsStateWithLifecycle()
     LaunchedEffect(requestedNote) {
         requestedNote?.let { id ->
-            navController.openNote(id)
+            // A launcher shortcut or a widget: outside the reader, so it starts
+            // its own thread rather than landing on the end of the last one.
+            navController.openNote(id, fresh = true)
             (openNote as? MutableStateFlow)?.value = null
         }
     }
@@ -177,8 +190,13 @@ fun NotesNavHost(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val destination = backStackEntry?.destination
     // The note screen is pushed on top of a tab rather than being one, so the
-    // bar hides there and back returns to where the link was followed.
-    val showBar = destination?.hasRoute(NoteRoute::class) != true
+    // bar hides there and back returns to where the link was followed. The
+    // graph is reached only from a note and goes back to it, so it belongs on
+    // the same side of that line -- with the bar it flashes in for one screen
+    // and offers a way out of the reader that back already is.
+    val showBar =
+        destination?.hasRoute(NoteRoute::class) != true &&
+            destination?.hasRoute(GraphRoute::class) != true
 
     Scaffold(
         bottomBar = {
@@ -225,7 +243,7 @@ fun NotesNavHost(
             composable<BrowseRoute> { entry ->
                 BrowserScreen(
                     initialPath = entry.toRoute<BrowseRoute>().path,
-                    onOpenNote = { navController.openNote(it) },
+                    onOpenNote = { navController.openNote(it, fresh = true) },
                     onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
                     onOpenAdvancedSettings = {
                         navController.navigate(
@@ -235,11 +253,11 @@ fun NotesNavHost(
                 )
             }
             composable<TasksRoute> {
-                TasksScreen(onOpenNote = { navController.openNote(it) })
+                TasksScreen(onOpenNote = { navController.openNote(it, fresh = true) })
             }
             composable<SearchRoute> {
                 SearchScreen(
-                    onOpenNote = { navController.openNote(it) },
+                    onOpenNote = { navController.openNote(it, fresh = true) },
                     onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
                 )
             }
@@ -274,6 +292,7 @@ fun NotesNavHost(
                 NoteScreen(
                     noteId = route.id,
                     openInNewTab = route.newTab,
+                    fresh = route.fresh,
                     onOpenGraph = { navController.navigate(GraphRoute(it)) },
                     onBack = { navController.popBackStack() },
                     onOpenNote = { navController.openNote(it) },

@@ -22,8 +22,9 @@ class NoteTabsTest {
         fun open(
             noteId: Long,
             inNewTab: Boolean,
+            fresh: Boolean = false,
         ) {
-            state = state.opening(noteId, inNewTab)
+            state = state.opening(noteId, inNewTab, fresh)
         }
 
         fun back(): Boolean {
@@ -222,5 +223,62 @@ class NoteTabsTest {
             t.state.current
                 ?.title,
         ).isEqualTo("Kafka")
+    }
+
+    /**
+     * The bug this exists to stop coming back: opening a note from the browser
+     * pushed it onto whatever trail the tab already held, so back went to a
+     * note the reader had not navigated from and the browser was no longer
+     * behind it at all.
+     */
+    @Test
+    fun `arriving from outside the reader begins the trail again`() {
+        val t = tabs()
+        t.open(1, inNewTab = false)
+        t.open(2, inNewTab = false)
+        assertThat(t.state.current!!.history).containsExactly(1L, 2L).inOrder()
+
+        t.open(3, inNewTab = false, fresh = true)
+
+        assertThat(t.state.current!!.history).containsExactly(3L)
+        assertThat(t.state.current!!.canGoBack).isFalse()
+    }
+
+    @Test
+    fun `a fresh arrival leaves the other tabs alone`() {
+        val t = tabs()
+        t.open(1, inNewTab = true)
+        t.open(2, inNewTab = true)
+        t.open(3, inNewTab = false)
+        assertThat(t.state.tabs).hasSize(2)
+
+        t.open(4, inNewTab = false, fresh = true)
+
+        assertThat(t.state.tabs).hasSize(2)
+        assertThat(t.state.tabs[0].history).containsExactly(1L)
+        assertThat(t.state.current!!.history).containsExactly(4L)
+    }
+
+    @Test
+    fun `a fresh arrival at a note already open switches to it`() {
+        val t = tabs()
+        t.open(1, inNewTab = true)
+        t.open(2, inNewTab = true)
+        t.select(0)
+
+        t.open(2, inNewTab = false, fresh = true)
+
+        assertThat(t.state.active).isEqualTo(1)
+        assertThat(ids(t)).containsExactly(1L, 2L).inOrder()
+    }
+
+    @Test
+    fun `following a link still pushes onto the trail`() {
+        val t = tabs()
+        t.open(1, inNewTab = false, fresh = true)
+        t.open(2, inNewTab = false)
+
+        assertThat(t.state.current!!.history).containsExactly(1L, 2L).inOrder()
+        assertThat(t.state.current!!.canGoBack).isTrue()
     }
 }

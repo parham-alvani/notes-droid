@@ -72,7 +72,8 @@ class NoteViewModel
         fun openTab(
             noteId: Long,
             inNewTab: Boolean = true,
-        ) = openTabs.open(noteId, inNewTab)
+            fresh: Boolean = false,
+        ) = openTabs.open(noteId, inNewTab, fresh)
 
         fun selectTab(index: Int) = openTabs.select(index)
 

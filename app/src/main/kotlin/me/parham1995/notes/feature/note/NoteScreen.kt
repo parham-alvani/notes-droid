@@ -96,6 +96,7 @@ import java.io.File
 fun NoteScreen(
     noteId: Long,
     openInNewTab: Boolean,
+    fresh: Boolean = false,
     onBack: () -> Unit,
     onOpenNote: (Long) -> Unit,
     onOpenFolder: (String) -> Unit,
@@ -144,7 +145,7 @@ fun NoteScreen(
     // The route argument only ever seeds the set. After that the screen
     // follows whichever tab is being read, so switching tabs does not have to
     // navigate and lose the back stack.
-    LaunchedEffect(noteId) { viewModel.openTab(noteId, inNewTab = openInNewTab) }
+    LaunchedEffect(noteId) { viewModel.openTab(noteId, inNewTab = openInNewTab, fresh = fresh) }
     val activeId = tabs.current?.noteId ?: noteId
 
     LaunchedEffect(activeId) { viewModel.load(activeId) }

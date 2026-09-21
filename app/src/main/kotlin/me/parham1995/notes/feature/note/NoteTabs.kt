@@ -43,10 +43,20 @@ data class TabsState(
      * Opening it where you are pushes onto that tab's trail, the way
      * following a link does. A note already showing in some tab is switched
      * to instead: two tabs of one note is never what was meant.
+     *
+     * [fresh] is how the reader is entered from outside it -- the browser, a
+     * search result, a task, a launcher shortcut. That is the start of a new
+     * thread of reading rather than the next step of the last one, so the tab
+     * begins again at this note and back leaves the reader for the list the
+     * note was picked from. Pushing instead is what made back walk into a note
+     * nobody had navigated from: open something from the browser and the
+     * gesture went to whatever had been read an hour earlier, with the browser
+     * no longer anywhere behind it.
      */
     fun opening(
         noteId: Long,
         inNewTab: Boolean,
+        fresh: Boolean = false,
     ): TabsState {
         val showing = tabs.indexOfFirst { it.noteId == noteId }
         return when {
@@ -57,6 +67,14 @@ data class TabsState(
                 val at = (active + 1).coerceAtMost(tabs.size)
                 copy(tabs = tabs.toMutableList().apply { add(at, NoteTab(listOf(noteId))) }, active = at)
             }
+            fresh ->
+                copy(
+                    tabs =
+                        tabs.mapIndexed { index, tab ->
+                            if (index == active) NoteTab(listOf(noteId)) else tab
+                        },
+                )
+
             else ->
                 copy(
                     tabs =
@@ -200,7 +218,8 @@ class NoteTabs
         fun open(
             noteId: Long,
             inNewTab: Boolean,
-        ) = update { it.opening(noteId, inNewTab) }
+            fresh: Boolean = false,
+        ) = update { it.opening(noteId, inNewTab, fresh) }
 
         /** Steps back inside the tab being read. False when it has nowhere to go. */
         fun back(): Boolean {
