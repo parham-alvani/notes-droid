@@ -43,8 +43,16 @@ fun RichText(
     brokenLinks: Set<String> = emptySet(),
     textAlign: TextAlign? = null,
 ) {
-    val (annotated, formulas) = inlines.toAnnotated(actions, brokenLinks)
-    val color = MaterialTheme.colorScheme.onSurface
+    // Kept until what it is built from changes. The inlines and the set of
+    // broken links are the note's own and keep their identity, and the actions
+    // are remembered by the screen, so an unrelated recomposition -- a
+    // keystroke in the find bar, a snackbar -- reuses the string.
+    val colors = MaterialTheme.colorScheme
+    val (annotated, formulas) =
+        remember(inlines, actions, brokenLinks, colors) {
+            annotate(inlines, colors, actions, brokenLinks)
+        }
+    val color = colors.onSurface
     val density = LocalDensity.current
     val sizePx = with(density) { style.fontSize.takeIf { it.isSpecified() }?.toPx() ?: DEFAULT_SIZE_PX }
 

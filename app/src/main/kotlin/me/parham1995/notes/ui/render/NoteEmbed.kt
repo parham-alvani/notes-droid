@@ -16,6 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,34 +132,38 @@ internal fun NoteEmbedView(
         }
 
         loaded?.let { note ->
+            // Remembered like the note's own actions, so the embedded blocks
+            // are not rebuilt whenever the note around them recomposes.
             val inner =
-                actions.copy(
-                    // A box ticked here would be ticked in the note on screen,
-                    // at the embedded note's line number -- a different task.
-                    onCompleteTask = null,
-                    inline =
-                        actions.inline.copy(
-                            onWikiLink = { target, heading ->
-                                val id = if (target.isBlank()) note.noteId else note.linkTargets[target]
-                                if (id != null) {
-                                    actions.inline.onNoteLink(id, heading)
-                                } else {
-                                    actions.inline.onBrokenLink(target)
-                                }
-                            },
-                            // A note it links to is looked up in its own table;
-                            // anything else -- a file -- goes on as it was.
-                            onInternalLink = { destination ->
-                                val link = MarkdownLinks.internal(destination)
-                                val id = if (link.target.isEmpty()) note.noteId else note.linkTargets[link.target]
-                                if (id != null) {
-                                    actions.inline.onNoteLink(id, link.heading)
-                                } else {
-                                    actions.inline.onInternalLink(destination)
-                                }
-                            },
-                        ),
-                )
+                remember(actions, note) {
+                    actions.copy(
+                        // A box ticked here would be ticked in the note on screen,
+                        // at the embedded note's line number -- a different task.
+                        onCompleteTask = null,
+                        inline =
+                            actions.inline.copy(
+                                onWikiLink = { target, heading ->
+                                    val id = if (target.isBlank()) note.noteId else note.linkTargets[target]
+                                    if (id != null) {
+                                        actions.inline.onNoteLink(id, heading)
+                                    } else {
+                                        actions.inline.onBrokenLink(target)
+                                    }
+                                },
+                                // A note it links to is looked up in its own table;
+                                // anything else -- a file -- goes on as it was.
+                                onInternalLink = { destination ->
+                                    val link = MarkdownLinks.internal(destination)
+                                    val id = if (link.target.isEmpty()) note.noteId else note.linkTargets[link.target]
+                                    if (id != null) {
+                                        actions.inline.onNoteLink(id, link.heading)
+                                    } else {
+                                        actions.inline.onInternalLink(destination)
+                                    }
+                                },
+                            ),
+                    )
+                }
             CompositionLocalProvider(LocalEmbedDepth provides depth + 1) {
                 Column(
                     Modifier.padding(12.dp),

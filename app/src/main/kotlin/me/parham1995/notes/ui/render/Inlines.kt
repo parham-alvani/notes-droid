@@ -56,13 +56,26 @@ data class InlineActions(
 fun List<MdInline>.toAnnotated(
     actions: InlineActions = InlineActions(),
     brokenLinks: Set<String> = emptySet(),
+): Pair<AnnotatedString, List<String>> = annotate(this, MaterialTheme.colorScheme, actions, brokenLinks)
+
+/**
+ * The same, outside composition, so a caller can remember the result.
+ *
+ * Building the string walks every inline and allocates every span; doing it on
+ * each recomposition -- which a keystroke in the find bar used to cause for
+ * every block on screen -- is work thrown away the moment it is done.
+ */
+internal fun annotate(
+    inlines: List<MdInline>,
+    colors: ColorScheme,
+    actions: InlineActions,
+    brokenLinks: Set<String>,
 ): Pair<AnnotatedString, List<String>> {
-    val colors = MaterialTheme.colorScheme
     val formulas = mutableListOf<String>()
 
     val text =
         buildAnnotatedString {
-            appendInlines(this, this@toAnnotated, colors, actions, brokenLinks, formulas)
+            appendInlines(this, inlines, colors, actions, brokenLinks, formulas)
         }
     return text to formulas
 }

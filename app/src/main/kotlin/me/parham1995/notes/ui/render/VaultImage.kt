@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import me.parham1995.notes.R
-import me.parham1995.notes.ui.image.rememberVaultImageBytes
+import me.parham1995.notes.ui.image.rememberVaultImage
 import me.parham1995.notes.ui.inScript
 
 /**
@@ -44,31 +44,34 @@ fun VaultImage(
     height: Int? = null,
     onClick: () -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val image by rememberVaultImage(vaultId, path)
+    val file = image.file
+    val failed = image.failed
+
     // Never wider than the page, whatever was asked for: the size was chosen
     // on a desktop window, and the order matters -- capping first and filling
-    // after gives the smaller of the two.
+    // after gives the smaller of the two. The shape is the one asked for, or
+    // failing that the file's own, read from its header: either way the space
+    // is reserved before the picture is decoded, so the note does not jump
+    // under the reader when it lands.
+    val shape =
+        if (width != null && height != null && height > 0) width.toFloat() / height else image.aspectRatio
     val sized =
-        if (width != null) {
-            Modifier.widthIn(max = width.dp).fillMaxWidth().let { base ->
-                if (height != null && height > 0) base.aspectRatio(width.toFloat() / height) else base
-            }
-        } else {
-            Modifier.fillMaxWidth()
-        }
-
-    val context = LocalContext.current
-    val image by rememberVaultImageBytes(vaultId, path)
-    val bytes = image.bytes
-    val failed = image.failed
+        (if (width != null) Modifier.widthIn(max = width.dp).fillMaxWidth() else Modifier.fillMaxWidth())
+            .let { base -> if (shape != null) base.aspectRatio(shape) else base }
 
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         when {
-            bytes != null ->
+            file != null ->
                 AsyncImage(
+                    // The file, not its bytes: Coil caches it by path and
+                    // decodes it at the size it is drawn, instead of the whole
+                    // image being read into memory each time it scrolls in.
                     model =
                         ImageRequest
                             .Builder(context)
-                            .data(bytes)
+                            .data(file)
                             .build(),
                     contentDescription = alt,
                     contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,

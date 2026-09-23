@@ -454,110 +454,123 @@ fun NoteScreen(
                                             brokenLinks = state.brokenLinks,
                                             listState = listState,
                                             onPinch = viewModel::pinchTextScale,
+                                            // Remembered, keyed on what it is built from. A new
+                                            // set of actions on every recomposition was unequal
+                                            // to the last, so a keystroke in the find bar or a
+                                            // snackbar recomposed every block on screen.
                                             actions =
-                                                RenderActions(
-                                                    vaultId = note.vaultId,
-                                                    // Ticking a box where it is
-                                                    // written, rather than only
-                                                    // from the task list.
-                                                    onCompleteTask =
-                                                        if (state.writable) {
-                                                            { line -> viewModel.completeTask(line) }
-                                                        } else {
-                                                            null
-                                                        },
-                                                    inline =
-                                                        InlineActions(
-                                                            // A look before a leap.
-                                                            // Following a link to
-                                                            // find it was not the one
-                                                            // you meant costs a load
-                                                            // and the place you were
-                                                            // reading.
-                                                            onWikiLink = { target, heading ->
-                                                                val id = viewModel.targetOf(target)
-                                                                when {
-                                                                    // `[[#Heading]]` means this
-                                                                    // note, so there is nothing
-                                                                    // to decide about.
-                                                                    target.isBlank() -> pendingHeading = heading
-                                                                    id == null -> peekBroken = target
-                                                                    else ->
-                                                                        scope.launch {
-                                                                            peeking =
-                                                                                viewModel
-                                                                                    .peek(id)
-                                                                                    ?.copy(heading = heading)
-                                                                        }
-                                                                }
+                                                remember(note.id, note.vaultId, note.path, state.writable) {
+                                                    RenderActions(
+                                                        vaultId = note.vaultId,
+                                                        // Ticking a box where it is
+                                                        // written, rather than only
+                                                        // from the task list.
+                                                        onCompleteTask =
+                                                            if (state.writable) {
+                                                                { line -> viewModel.completeTask(line) }
+                                                            } else {
+                                                                null
                                                             },
-                                                            onNoteLink = { id, heading ->
-                                                                if (id == state.note?.id) {
-                                                                    pendingHeading = heading
-                                                                } else {
-                                                                    scope.launch {
-                                                                        peeking =
-                                                                            viewModel.peek(id)?.copy(heading = heading)
-                                                                    }
-                                                                }
-                                                            },
-                                                            onBrokenLink = { target -> peekBroken = target },
-                                                            onInternalLink = { destination ->
-                                                                val route =
-                                                                    routeOf(destination, note.path) {
-                                                                        viewModel.targetOf(it)
-                                                                    }
-                                                                when (route) {
-                                                                    is LinkRoute.Here -> pendingHeading = route.heading
-                                                                    is LinkRoute.Note ->
-                                                                        if (route.noteId == note.id) {
-                                                                            pendingHeading = route.heading
-                                                                        } else {
+                                                        inline =
+                                                            InlineActions(
+                                                                // A look before a leap.
+                                                                // Following a link to
+                                                                // find it was not the one
+                                                                // you meant costs a load
+                                                                // and the place you were
+                                                                // reading.
+                                                                onWikiLink = { target, heading ->
+                                                                    val id = viewModel.targetOf(target)
+                                                                    when {
+                                                                        // `[[#Heading]]` means this
+                                                                        // note, so there is nothing
+                                                                        // to decide about.
+                                                                        target.isBlank() -> pendingHeading = heading
+                                                                        id == null -> peekBroken = target
+                                                                        else ->
                                                                             scope.launch {
                                                                                 peeking =
                                                                                     viewModel
-                                                                                        .peek(route.noteId)
-                                                                                        ?.copy(heading = route.heading)
+                                                                                        .peek(id)
+                                                                                        ?.copy(heading = heading)
                                                                             }
+                                                                    }
+                                                                },
+                                                                onNoteLink = { id, heading ->
+                                                                    if (id == state.note?.id) {
+                                                                        pendingHeading = heading
+                                                                    } else {
+                                                                        scope.launch {
+                                                                            peeking =
+                                                                                viewModel
+                                                                                    .peek(
+                                                                                        id,
+                                                                                    )?.copy(heading = heading)
                                                                         }
-                                                                    is LinkRoute.File -> openAttachment(route.path)
-                                                                    is LinkRoute.Nowhere ->
-                                                                        Toast
-                                                                            .makeText(
-                                                                                context,
-                                                                                linkNotFound.format(route.target),
-                                                                                Toast.LENGTH_SHORT,
-                                                                            ).show()
-                                                                }
-                                                            },
-                                                            onExternalLink = { url ->
-                                                                runCatching {
-                                                                    context.startActivity(
-                                                                        Intent(Intent.ACTION_VIEW, url.toUri()),
-                                                                    )
-                                                                }
-                                                            },
-                                                        ),
-                                                    onCopyCode = { code ->
-                                                        scope.launch {
-                                                            clipboard.setClipEntry(
-                                                                ClipData.newPlainText("code", code).toClipEntry(),
-                                                            )
-                                                        }
-                                                    },
-                                                    // Never wired until now: the card was drawn, said
-                                                    // "open with another app", and did nothing at all
-                                                    // when tapped.
-                                                    // Never wired either: images were
-                                                    // drawn, took a tap, and did
-                                                    // nothing with it.
-                                                    onImage = { path, alt -> zoomed = path to alt },
-                                                    // Another note drawn in place, rather
-                                                    // than offered to an app that had
-                                                    // nothing to open.
-                                                    transclude = viewModel::transclusion,
-                                                    onAttachment = { path -> openAttachment(path) },
-                                                ),
+                                                                    }
+                                                                },
+                                                                onBrokenLink = { target -> peekBroken = target },
+                                                                onInternalLink = { destination ->
+                                                                    val route =
+                                                                        routeOf(destination, note.path) {
+                                                                            viewModel.targetOf(it)
+                                                                        }
+                                                                    when (route) {
+                                                                        is LinkRoute.Here ->
+                                                                            pendingHeading =
+                                                                                route.heading
+                                                                        is LinkRoute.Note ->
+                                                                            if (route.noteId == note.id) {
+                                                                                pendingHeading = route.heading
+                                                                            } else {
+                                                                                scope.launch {
+                                                                                    peeking =
+                                                                                        viewModel
+                                                                                            .peek(route.noteId)
+                                                                                            ?.copy(
+                                                                                                heading = route.heading,
+                                                                                            )
+                                                                                }
+                                                                            }
+                                                                        is LinkRoute.File -> openAttachment(route.path)
+                                                                        is LinkRoute.Nowhere ->
+                                                                            Toast
+                                                                                .makeText(
+                                                                                    context,
+                                                                                    linkNotFound.format(route.target),
+                                                                                    Toast.LENGTH_SHORT,
+                                                                                ).show()
+                                                                    }
+                                                                },
+                                                                onExternalLink = { url ->
+                                                                    runCatching {
+                                                                        context.startActivity(
+                                                                            Intent(Intent.ACTION_VIEW, url.toUri()),
+                                                                        )
+                                                                    }
+                                                                },
+                                                            ),
+                                                        onCopyCode = { code ->
+                                                            scope.launch {
+                                                                clipboard.setClipEntry(
+                                                                    ClipData.newPlainText("code", code).toClipEntry(),
+                                                                )
+                                                            }
+                                                        },
+                                                        // Never wired until now: the card was drawn, said
+                                                        // "open with another app", and did nothing at all
+                                                        // when tapped.
+                                                        // Never wired either: images were
+                                                        // drawn, took a tap, and did
+                                                        // nothing with it.
+                                                        onImage = { path, alt -> zoomed = path to alt },
+                                                        // Another note drawn in place, rather
+                                                        // than offered to an app that had
+                                                        // nothing to open.
+                                                        transclude = viewModel::transclusion,
+                                                        onAttachment = { path -> openAttachment(path) },
+                                                    )
+                                                },
                                         )
                                     }
                             }
