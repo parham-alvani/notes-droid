@@ -144,14 +144,6 @@ class BlockFlattener(
      * formula with a sentence above it without trace.
      */
     private fun paragraph(node: Paragraph): List<MdBlock> {
-        val meaningful = node.children().filterNot { it is SoftLineBreak }
-        (meaningful.singleOrNull() as? WikiLinkNode)?.takeIf { it.embed }?.let { return listOf(embed(it)) }
-        (meaningful.singleOrNull() as? Image)?.let { image ->
-            val alt = plainTextOf(image).takeIf { it.isNotBlank() }
-            links += ParsedLink(LinkKind.IMAGE, image.destination, alt)
-            return listOf(MdBlock.Image(id(), imageResolver(image.destination), alt))
-        }
-
         val out = mutableListOf<MdBlock>()
         val run = mutableListOf<Node>()
 
@@ -178,14 +170,35 @@ class BlockFlattener(
 
     private fun Node.isBreak(): Boolean = this is SoftLineBreak || this is HardLineBreak
 
-    /** Whether [node] is a block that happens to have been written inside a paragraph. */
-    private fun isBreakout(node: Node): Boolean = node is DisplayMathNode
+    /**
+     * Whether [node] is a block that happens to have been written inside a
+     * paragraph.
+     *
+     * Embeds and images are among them, and not only when alone: two
+     * `![[image]]` lines, or an image with its caption on the line under it,
+     * are one paragraph, and only a lone embed used to become an image -- the
+     * rest were shown as the link text they were written as. An image inside a
+     * sentence is lifted out of it too; a picture cannot be a run of text, and
+     * a link standing in for one is worse than the sentence being cut.
+     */
+    private fun isBreakout(node: Node): Boolean =
+        node is DisplayMathNode ||
+            (node is WikiLinkNode && node.embed) ||
+            node is Image
 
     private fun breakout(node: Node): MdBlock =
         when (node) {
             is DisplayMathNode -> {
                 hasMath = true
                 MdBlock.MathBlock(id(), node.latex)
+            }
+
+            is WikiLinkNode -> embed(node)
+
+            is Image -> {
+                val alt = plainTextOf(node).takeIf { it.isNotBlank() }
+                links += ParsedLink(LinkKind.IMAGE, node.destination, alt)
+                MdBlock.Image(id(), imageResolver(node.destination), alt)
             }
 
             else -> error("not a breakout: $node")

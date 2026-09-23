@@ -48,6 +48,45 @@ class ParagraphSplitTest {
     }
 
     @Test
+    fun `two embeds on consecutive lines are two images`() {
+        val note = parse("![[uploads/a.png]]\n![[uploads/b.png]]")
+        assertThat(note.blocks.map { it.describe() })
+            .containsExactly("image:uploads/a.png", "image:uploads/b.png")
+            .inOrder()
+    }
+
+    @Test
+    fun `an image with a caption line under it keeps both`() {
+        val note = parse("![[uploads/a.png]]\n*Figure 1: the setup*")
+        assertThat(note.blocks.map { it.describe() })
+            .containsExactly("image:uploads/a.png", "p:Figure 1: the setup")
+            .inOrder()
+    }
+
+    @Test
+    fun `a markdown image inside a sentence is lifted out of it`() {
+        val note = parse("See ![a diagram](uploads/x.png) for the layout.")
+        assertThat(note.blocks.map { it.describe() })
+            .containsExactly("p:See", "image:uploads/x.png", "p:for the layout.")
+            .inOrder()
+        assertThat((note.blocks[1] as MdBlock.Image).alt).isEqualTo("a diagram")
+    }
+
+    @Test
+    fun `an attachment embed beside text is a card and the text stays`() {
+        val note = parse("The contract: ![[uploads/contract.pdf]]")
+        assertThat(note.blocks.map { it.describe() })
+            .containsExactly("p:The contract:", "attachment:uploads/contract.pdf")
+            .inOrder()
+    }
+
+    @Test
+    fun `an ordinary wikilink stays in its sentence`() {
+        val note = parse("See [[Other]] for more.")
+        assertThat(note.blocks.map { it.describe() }).containsExactly("p:See Other for more.")
+    }
+
+    @Test
     fun `ids stay unique and increasing across a split`() {
         val note = parse("# Title\n\nabove\n$d${d}x$d$d\nbelow\n\n## Next")
         val ids = note.blocks.map { it.id }
