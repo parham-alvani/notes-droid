@@ -172,4 +172,5 @@
         <item quantity="one">%1$d more not shown</item>
         <item quantity="other">%1$d more not shown</item>
     </plurals>
+    <string name="link_not_found">Nothing in the vault is called %1$s</string>
 </resources>

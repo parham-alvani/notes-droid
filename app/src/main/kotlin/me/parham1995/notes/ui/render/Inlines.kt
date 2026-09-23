@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.ui.theme.Markup
 
@@ -22,6 +23,12 @@ import me.parham1995.notes.ui.theme.Markup
 data class InlineActions(
     val onWikiLink: (target: String, heading: String?) -> Unit = { _, _ -> },
     val onExternalLink: (url: String) -> Unit = {},
+    /**
+     * `[text](destination)` where the destination has no scheme -- another
+     * note, a heading, a file. Handed over raw; deciding what it names is the
+     * screen's job, because only the screen knows the note it is in.
+     */
+    val onInternalLink: (destination: String) -> Unit = {},
     /**
      * A link already resolved to the note it names.
      *
@@ -116,7 +123,15 @@ private fun appendInlines(
                             TextLinkStyles(
                                 SpanStyle(color = colors.primary, textDecoration = TextDecoration.Underline),
                             ),
-                    ) { actions.onExternalLink(node.destination) }
+                    ) {
+                        // Only a scheme makes it the web. Everything else was
+                        // handed to the system as a URL too, and opened nothing.
+                        if (MarkdownLinks.isExternal(node.destination)) {
+                            actions.onExternalLink(node.destination)
+                        } else {
+                            actions.onInternalLink(node.destination)
+                        }
+                    }
                 builder.withLink(link) {
                     appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
                 }

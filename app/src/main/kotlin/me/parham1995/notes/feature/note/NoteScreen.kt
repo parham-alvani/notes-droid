@@ -108,6 +108,7 @@ fun NoteScreen(
     val nothingOpens = stringResource(R.string.error_nothing_opens)
     val noteMissing = stringResource(R.string.note_missing)
     val couldNotFetch = stringResource(R.string.error_could_not_fetch)
+    val linkNotFound = stringResource(R.string.link_not_found)
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -136,6 +137,25 @@ fun NoteScreen(
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val files: FileDrawerViewModel = hiltViewModel()
     val drawerState by files.state.collectAsStateWithLifecycle()
+
+    // An embedded file, or a Markdown link to one. A PDF is read here;
+    // everything else belongs to whatever app owns that type.
+    fun openAttachment(path: String) {
+        scope.launch {
+            val file = viewModel.attachment(path)
+            val message =
+                when {
+                    file == null -> couldNotFetch.format(path.substringAfterLast('/'))
+                    Attachments.isPdf(path) -> {
+                        reading = file
+                        null
+                    }
+                    Attachments.open(context, file) -> null
+                    else -> nothingOpens
+                }
+            message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+        }
+    }
 
     fun closeThen(action: () -> Unit) {
         scope.launch { drawer.close() }
@@ -479,6 +499,34 @@ fun NoteScreen(
                                                                 }
                                                             },
                                                             onBrokenLink = { target -> peekBroken = target },
+                                                            onInternalLink = { destination ->
+                                                                val route =
+                                                                    routeOf(destination, note.path) {
+                                                                        viewModel.targetOf(it)
+                                                                    }
+                                                                when (route) {
+                                                                    is LinkRoute.Here -> pendingHeading = route.heading
+                                                                    is LinkRoute.Note ->
+                                                                        if (route.noteId == note.id) {
+                                                                            pendingHeading = route.heading
+                                                                        } else {
+                                                                            scope.launch {
+                                                                                peeking =
+                                                                                    viewModel
+                                                                                        .peek(route.noteId)
+                                                                                        ?.copy(heading = route.heading)
+                                                                            }
+                                                                        }
+                                                                    is LinkRoute.File -> openAttachment(route.path)
+                                                                    is LinkRoute.Nowhere ->
+                                                                        Toast
+                                                                            .makeText(
+                                                                                context,
+                                                                                linkNotFound.format(route.target),
+                                                                                Toast.LENGTH_SHORT,
+                                                                            ).show()
+                                                                }
+                                                            },
                                                             onExternalLink = { url ->
                                                                 runCatching {
                                                                     context.startActivity(
@@ -505,29 +553,7 @@ fun NoteScreen(
                                                     // than offered to an app that had
                                                     // nothing to open.
                                                     transclude = viewModel::transclusion,
-                                                    onAttachment = { path ->
-                                                        scope.launch {
-                                                            val file = viewModel.attachment(path)
-                                                            val message =
-                                                                when {
-                                                                    file == null ->
-                                                                        couldNotFetch.format(
-                                                                            path.substringAfterLast('/'),
-                                                                        )
-                                                                    // A PDF is read here; everything else
-                                                                    // belongs to whatever app owns that type.
-                                                                    Attachments.isPdf(path) -> {
-                                                                        reading = file
-                                                                        null
-                                                                    }
-                                                                    Attachments.open(context, file) -> null
-                                                                    else -> nothingOpens
-                                                                }
-                                                            message?.let {
-                                                                Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-                                                            }
-                                                        }
-                                                    },
+                                                    onAttachment = { path -> openAttachment(path) },
                                                 ),
                                         )
                                     }

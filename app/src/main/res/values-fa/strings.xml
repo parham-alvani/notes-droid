@@ -172,4 +172,5 @@
         <item quantity="one">%1$d تای دیگر نشان داده نشده</item>
         <item quantity="other">%1$d تای دیگر نشان داده نشده</item>
     </plurals>
+    <string name="link_not_found">چیزی در این دفتر به نام %1$s نیست</string>
 </resources>

@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
+import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -139,12 +140,21 @@ internal fun NoteEmbedView(
                         actions.inline.copy(
                             onWikiLink = { target, heading ->
                                 val id = if (target.isBlank()) note.noteId else note.linkTargets[target]
-                                if (id !=
-                                    null
-                                ) {
+                                if (id != null) {
                                     actions.inline.onNoteLink(id, heading)
                                 } else {
                                     actions.inline.onBrokenLink(target)
+                                }
+                            },
+                            // A note it links to is looked up in its own table;
+                            // anything else -- a file -- goes on as it was.
+                            onInternalLink = { destination ->
+                                val link = MarkdownLinks.internal(destination)
+                                val id = if (link.target.isEmpty()) note.noteId else note.linkTargets[link.target]
+                                if (id != null) {
+                                    actions.inline.onNoteLink(id, link.heading)
+                                } else {
+                                    actions.inline.onInternalLink(destination)
                                 }
                             },
                         ),

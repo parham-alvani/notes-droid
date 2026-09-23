@@ -66,11 +66,21 @@ object LinkExtraction {
 
                 is MdInline.Link ->
                     out +=
-                        ParsedLink(
-                            kind = if (node.destination.startsWith("http")) LinkKind.EXTERNAL else LinkKind.MARKDOWN,
-                            rawTarget = node.destination,
-                            context = context,
-                        )
+                        if (MarkdownLinks.isExternal(node.destination)) {
+                            ParsedLink(LinkKind.EXTERNAL, node.destination, context = context)
+                        } else {
+                            // Decoded, and split from its heading, so that
+                            // `[t](Other%20Note.md#Part)` resolves the way
+                            // `[[Other Note#Part]]` does -- for the index's
+                            // backlinks and for a tap on the page alike.
+                            val internal = MarkdownLinks.internal(node.destination)
+                            ParsedLink(
+                                kind = LinkKind.MARKDOWN,
+                                rawTarget = internal.target,
+                                heading = internal.heading,
+                                context = context,
+                            )
+                        }
 
                 is MdInline.Emphasis -> inlines(node.children, context, out)
                 is MdInline.Strong -> inlines(node.children, context, out)
