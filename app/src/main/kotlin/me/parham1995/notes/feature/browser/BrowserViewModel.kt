@@ -5,14 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.BrowserSort
@@ -28,6 +26,7 @@ import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.folderListing
 import java.io.File
 import javax.inject.Inject
 
@@ -65,7 +64,6 @@ data class BrowserUiState(
         }
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class BrowserViewModel
     @Inject
@@ -88,23 +86,13 @@ class BrowserViewModel
         // version queried in init, which before the first sync is an empty
         // vault, and nothing asked again -- so the tree stayed empty while
         // search, which queries per keystroke, worked fine.
-        private val items: Flow<List<VaultItem>> =
-            path.flatMapLatest { current -> repository.childrenFlow(current) }
-
-        // Resolving here rather than in the row composable keeps the rule
-        // regexes off the composition: a rule is tested against every visible
-        // item, and the browser recomposes on every scroll.
         private val rows: Flow<List<VaultRowItem>> =
-            combine(
-                items,
-                icons.config,
-                settings.settings,
-                repository.activeVaultId,
-            ) { current, config, preferences, vaultId ->
-                current
-                    .sortedWith(preferences.reading.browserSort.comparator())
-                    .map { VaultRowItem(it, config.forPath(vaultId, it.path, it.isFolder)) }
-            }
+            repository
+                .folderListing(
+                    folder = path,
+                    icons = icons.config,
+                    order = settings.settings.map { it.reading.browserSort.comparator() },
+                ).map { it.rows }
 
         /**
          * Folders stay above files whatever the order, because a folder is

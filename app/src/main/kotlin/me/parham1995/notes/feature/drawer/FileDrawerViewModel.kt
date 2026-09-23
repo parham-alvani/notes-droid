@@ -4,16 +4,13 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
@@ -21,8 +18,10 @@ import me.parham1995.notes.data.VaultIcons
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.feature.note.NoteTabs
+import me.parham1995.notes.feature.search.settledIn
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.folderListing
 import javax.inject.Inject
 
 /** One note, as the drawer lists it. */
@@ -71,7 +70,6 @@ data class FileDrawerUiState(
  * at a time rather than an expandable tree -- a drawer is 320dp wide, and a
  * tree of 531 folders at depth seven is not something to put in it.
  */
-@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class FileDrawerViewModel
     @Inject
@@ -94,16 +92,13 @@ class FileDrawerViewModel
          * the vault does, and every list here would otherwise wait on a flow to
          * draw an icon.
          */
-        private var iconConfig: VaultIcons = VaultIcons.EMPTY
-        private var activeVault: Long = 0
+        private val iconConfig: StateFlow<VaultIcons> =
+            icons.config.stateIn(viewModelScope, SharingStarted.Eagerly, VaultIcons.EMPTY)
 
         init {
-            viewModelScope.launch { icons.config.collect { iconConfig = it } }
-
             viewModelScope.launch {
                 combine(repository.vaults(), repository.activeVaultId) { all, id -> all to id }
                     .collect { (all, id) ->
-                        activeVault = id
                         _state.update { current ->
                             current.copy(
                                 vaults = all.map { it.id to it.label },
@@ -132,19 +127,15 @@ class FileDrawerViewModel
             }
 
             viewModelScope.launch {
-                folder
-                    .flatMapLatest { at -> repository.childrenFlow(at).map { at to it } }
-                    .collect { (at, children) ->
-                        val rows =
-                            children.map { item ->
-                                VaultRowItem(item, iconConfig.forPath(activeVault, item.path, item.isFolder))
-                            }
-                        _state.update { it.copy(folder = at, items = rows) }
-                    }
+                repository.folderListing(folder, icons.config).collect { listing ->
+                    _state.update { it.copy(folder = listing.folder, items = listing.rows) }
+                }
             }
 
             viewModelScope.launch {
-                queries.debounce(DEBOUNCE_MS).distinctUntilChanged().collect { query ->
+                // The same settling as the search screen, and for the same
+                // reason asked again of a vault switched to.
+                queries.settledIn(repository.activeVaultId, DEBOUNCE_MS).collectLatest { (query, _) ->
                     val found =
                         if (query.isBlank()) {
                             emptyList()
@@ -199,7 +190,7 @@ class FileDrawerViewModel
                 id = id,
                 title = title,
                 folder = parent,
-                icon = iconConfig.forFile(vaultId, path),
+                icon = iconConfig.value.forFile(vaultId, path),
             )
 
         private companion object {
