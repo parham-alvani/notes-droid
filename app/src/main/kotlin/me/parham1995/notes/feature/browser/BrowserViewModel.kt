@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.browser
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
@@ -75,8 +76,13 @@ class BrowserViewModel
         private val icons: IconStore,
         private val scheduler: SyncScheduler,
         private val settings: SettingsStore,
+        private val savedState: SavedStateHandle,
     ) : ViewModel() {
-        private val path = MutableStateFlow("")
+        /**
+         * The folder being shown. Kept in saved state so a process killed in
+         * the background comes back to the folder it was in, not the root.
+         */
+        private val path: StateFlow<String> = savedState.getStateFlow(KEY_FOLDER, "")
 
         // Follows the database rather than sampling it once. The previous
         // version queried in init, which before the first sync is an empty
@@ -122,7 +128,7 @@ class BrowserViewModel
         fun switchVault(id: Long) =
             viewModelScope.launch {
                 repository.setActiveVault(id)
-                path.value = ""
+                open("")
             }
 
         /**
@@ -202,7 +208,20 @@ class BrowserViewModel
         suspend fun attachment(path: String): File? = files.localFile(repository.activeVaultId.first(), path)
 
         fun open(next: String) {
-            path.value = next
+            savedState[KEY_FOLDER] = next
+        }
+
+        /**
+         * Opens [initial], once for the life of this screen.
+         *
+         * Once, because the screen asks again every time it is composed --
+         * coming back from a note, or after the process was killed -- and each
+         * time it would have thrown away the folder the person had moved to.
+         */
+        fun start(initial: String) {
+            if (savedState.get<Boolean>(KEY_STARTED) == true) return
+            savedState[KEY_STARTED] = true
+            if (initial.isNotEmpty()) open(initial)
         }
 
         /** Up one level; returns false at the root so the caller can exit. */
@@ -257,6 +276,9 @@ internal fun browserStates(
             crashed = died,
         )
     }
+
+private const val KEY_FOLDER = "browser_folder"
+private const val KEY_STARTED = "browser_started"
 
 /** Kept short on purpose; see [BrowserViewModel.recent]. */
 private const val RECENT_ON_ROOT = 3

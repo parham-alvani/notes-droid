@@ -71,7 +71,7 @@ fun BrowserScreen(
     // Only on arrival. Keying on the argument rather than running every
     // composition means walking up the tree afterwards is not undone on the
     // next recomposition.
-    LaunchedEffect(initialPath) { if (initialPath.isNotEmpty()) viewModel.open(initialPath) }
+    LaunchedEffect(initialPath) { viewModel.start(initialPath) }
 
     val context = LocalContext.current
     val nothingOpens = stringResource(R.string.error_nothing_opens)

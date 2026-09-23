@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.tasks
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -75,6 +76,7 @@ class TasksViewModel
     constructor(
         private val repository: VaultRepository,
         private val writes: VaultWriteRepository,
+        private val savedState: SavedStateHandle,
     ) : ViewModel() {
         private val message = MutableStateFlow<String?>(null)
 
@@ -111,12 +113,13 @@ class TasksViewModel
          * Which file's tasks to show, or null for all of them.
          *
          * Held here rather than in the screen so it survives the screen being
-         * left and returned to, which happens every time a task is opened.
+         * left and returned to, which happens every time a task is opened --
+         * and in saved state, so it survives the process being killed too.
          */
-        private val selected = MutableStateFlow<String?>(null)
+        private val selected: StateFlow<String?> = savedState.getStateFlow(KEY_FILE, null)
 
         fun filterBy(notePath: String?) {
-            selected.value = notePath
+            savedState[KEY_FILE] = notePath
         }
 
         val state: StateFlow<TasksUiState> =
@@ -184,6 +187,7 @@ class TasksViewModel
 
         private companion object {
             const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
+            const val KEY_FILE = "tasks_file"
         }
     }
 

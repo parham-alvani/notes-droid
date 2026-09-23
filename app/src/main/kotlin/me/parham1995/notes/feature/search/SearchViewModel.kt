@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.search
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,11 +42,16 @@ class SearchViewModel
     constructor(
         private val repository: VaultRepository,
         icons: IconStore,
+        private val savedState: SavedStateHandle,
     ) : ViewModel() {
-        private val _state = MutableStateFlow(SearchUiState())
-        val state: StateFlow<SearchUiState> = _state.asStateFlow()
+        /**
+         * What was typed, in saved state so a search survives the process
+         * being killed while the app was in the background.
+         */
+        private val queries: StateFlow<String> = savedState.getStateFlow(KEY_QUERY, "")
 
-        private val queries = MutableStateFlow("")
+        private val _state = MutableStateFlow(SearchUiState(query = queries.value))
+        val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
         /**
          * Held rather than collected per query. Search runs on every keystroke
@@ -81,13 +87,14 @@ class SearchViewModel
         }
 
         fun onQueryChange(query: String) {
-            _state.value = _state.value.copy(query = query)
-            queries.value = query
+            _state.update { it.copy(query = query) }
+            savedState[KEY_QUERY] = query
         }
 
         fun clear() = onQueryChange("")
 
         private companion object {
             const val DEBOUNCE_MS = 200L
+            const val KEY_QUERY = "search_query"
         }
     }

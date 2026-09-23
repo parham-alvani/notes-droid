@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.drawer
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -78,12 +79,15 @@ class FileDrawerViewModel
         private val repository: VaultRepository,
         private val tabs: NoteTabs,
         icons: IconStore,
+        private val savedState: SavedStateHandle,
     ) : ViewModel() {
         private val _state = MutableStateFlow(FileDrawerUiState())
         val state: StateFlow<FileDrawerUiState> = _state.asStateFlow()
 
         private val queries = MutableStateFlow("")
-        private val folder = MutableStateFlow("")
+
+        /** In saved state, so the drawer reopens where it was after process death. */
+        private val folder: StateFlow<String> = savedState.getStateFlow(KEY_FOLDER, "")
 
         /**
          * Held rather than collected per row. The assignments change only when
@@ -167,7 +171,7 @@ class FileDrawerViewModel
         fun locate(noteId: Long) =
             viewModelScope.launch {
                 setQuery("")
-                folder.value =
+                savedState[KEY_FOLDER] =
                     repository
                         .locate(noteId)
                         ?.second
@@ -176,13 +180,13 @@ class FileDrawerViewModel
             }
 
         fun openFolder(path: String) {
-            folder.value = path
+            savedState[KEY_FOLDER] = path
         }
 
         fun switchVault(id: Long) =
             viewModelScope.launch {
                 repository.setActiveVault(id)
-                folder.value = ""
+                openFolder("")
                 setQuery("")
             }
 
@@ -201,5 +205,6 @@ class FileDrawerViewModel
         private companion object {
             const val RECENT = 8
             const val DEBOUNCE_MS = 150L
+            const val KEY_FOLDER = "drawer_folder"
         }
     }
