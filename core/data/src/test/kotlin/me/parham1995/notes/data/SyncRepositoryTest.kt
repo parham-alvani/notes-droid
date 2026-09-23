@@ -200,6 +200,27 @@ class SyncRepositoryTest {
         }
 
     @Test
+    fun `an index upgrade rebuilds the vault being synced and leaves the others alone`() =
+        runTest {
+            val current = syncedVault("current")
+            val sha = onDisk(current, "Note.md", "# Note\n")
+            indexer.indexAll(current, listOf(PathAndSha("Note.md", sha)))
+            val before = database.noteDao().byPath(current, "Note.md")!!.id
+
+            // Indexed by an older build: this one needs rebuilding.
+            val stale = syncedVault("stale")
+            database.vaultDao().update(database.vaultDao().byId(stale)!!.copy(indexVersion = 0))
+            onDisk(stale, "Other.md", "# Other\n")
+
+            repository.sync()
+
+            // A rebuild clears and re-inserts, so a note that was rebuilt has a
+            // new id. The current vault's must not have been touched.
+            assertThat(database.noteDao().byPath(current, "Note.md")!!.id).isEqualTo(before)
+            assertThat(database.noteDao().byPath(stale, "Other.md")).isNotNull()
+        }
+
+    @Test
     fun `switching transport forgets where the old one was up to`() =
         runTest {
             val id =

@@ -470,7 +470,12 @@ class SyncRepository
                 catchUpIndex(vault)
                 if (staleIndex) {
                     log.info("the indexer derives more than it used to - rebuilding from what is on disk")
-                    reindex()
+                    // This vault only. Each vault carries its own index
+                    // version and is brought up to date when it syncs; the
+                    // whole-app rebuild here ran once per stale vault, so
+                    // three vaults after an upgrade were each rebuilt three
+                    // times over.
+                    reindexVault(vault)
                 }
                 vaults.update(
                     vault.copy(
@@ -560,18 +565,21 @@ class SyncRepository
             log.info("reindexing everything on disk")
             val started = System.currentTimeMillis()
             var total = 0
-            vaults.all().forEach { vault ->
-                val theirs =
-                    blobs
-                        .byVaultKindAndState(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
-                        .map { PathAndSha(it.path, it.sha) }
-                // Named in the journal per vault, because "reindexed 2,400
-                // notes" says nothing about which vault came out empty.
-                log.info("reindexing ${theirs.size} notes in ${vault.label}")
-                indexer.indexAll(vault.id, theirs)
-                total += theirs.size
-            }
+            vaults.all().forEach { vault -> total += reindexVault(vault) }
             log.info("reindexed $total notes in ${(System.currentTimeMillis() - started) / 1000}s")
+        }
+
+        /** Reparses one vault from disk, and says how many notes that was. */
+        private suspend fun reindexVault(vault: VaultEntity): Int {
+            val theirs =
+                blobs
+                    .byVaultKindAndState(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
+                    .map { PathAndSha(it.path, it.sha) }
+            // Named in the journal per vault, because "reindexed 2,400
+            // notes" says nothing about which vault came out empty.
+            log.info("reindexing ${theirs.size} notes in ${vault.label}")
+            indexer.indexAll(vault.id, theirs)
+            return theirs.size
         }
 
         /** Forgets everything so the next sync starts from nothing. */
