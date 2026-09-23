@@ -281,4 +281,51 @@ class NoteTabsTest {
         assertThat(t.state.current!!.history).containsExactly(1L, 2L).inOrder()
         assertThat(t.state.current!!.canGoBack).isTrue()
     }
+
+    // -- restoring what was written down, while notes are already opening ----
+
+    @Test
+    fun `a note opened before the restore finishes survives it`() {
+        // The restore reads storage off the main thread. A launcher shortcut
+        // or a widget opens a note straight away, and the restore used to land
+        // afterwards and replace the set wholesale -- the note just opened
+        // was gone, and the reader showed something else.
+        val stored = TabsState(listOf(NoteTab(listOf(1L, 2L)), NoteTab(listOf(3L))), active = 0)
+        val t = tabs()
+        t.open(9, inNewTab = false, fresh = true)
+
+        val merged = t.state.restoring(stored)
+
+        assertThat(merged.tabs.map { it.noteId }).containsExactly(2L, 3L, 9L).inOrder()
+        assertThat(merged.current!!.noteId).isEqualTo(9L)
+    }
+
+    @Test
+    fun `with nothing opened meanwhile the restore is what was stored`() {
+        val stored = TabsState(listOf(NoteTab(listOf(1L)), NoteTab(listOf(3L))), active = 1)
+
+        assertThat(TabsState().restoring(stored)).isEqualTo(stored)
+    }
+
+    @Test
+    fun `a note both stored and opened meanwhile is one tab, as it is now`() {
+        val stored = TabsState(listOf(NoteTab(listOf(1L)), NoteTab(listOf(3L))), active = 0)
+        val t = tabs()
+        t.open(5, inNewTab = false, fresh = true)
+        t.open(3, inNewTab = false)
+
+        val merged = t.state.restoring(stored)
+
+        assertThat(merged.tabs.map { it.noteId }).containsExactly(1L, 3L).inOrder()
+        // The trail the reader is walking now, not the stored one.
+        assertThat(merged.current!!.history).containsExactly(5L, 3L).inOrder()
+    }
+
+    @Test
+    fun `nothing stored leaves what is open alone`() {
+        val t = tabs()
+        t.open(4, inNewTab = true)
+
+        assertThat(t.state.restoring(TabsState())).isEqualTo(t.state)
+    }
 }
