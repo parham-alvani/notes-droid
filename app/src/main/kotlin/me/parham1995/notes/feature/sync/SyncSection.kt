@@ -19,6 +19,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +40,10 @@ internal fun StatusCard(
 ) {
     SectionCard("Status") {
         LabelledValue("Notes", state.noteCount.toString())
-        LabelledValue("On disk", formatBytes(state.diskBytes))
+        // Measured here, where it is shown, rather than every time any settings
+        // screen opens.
+        LaunchedEffect(Unit) { viewModel.measureDisk() }
+        LabelledValue("On disk", state.diskBytes?.let(::formatBytes) ?: "-")
         LabelledValue("Commit", state.headCommit?.take(SHORT_SHA_LENGTH) ?: "never synced")
         LabelledValue(
             "Last sync",

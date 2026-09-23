@@ -4,13 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
@@ -56,7 +59,8 @@ data class SyncUiState(
     val attempt: Int = 0,
     val done: Int = 0,
     val total: Int = 0,
-    val diskBytes: Long = 0,
+    /** Null until measured, which is only when the sync section asks. */
+    val diskBytes: Long? = null,
     /** Result of the last "test connection", for immediate feedback. */
     val connectionMessage: String? = null,
     val tokenRejected: Boolean = false,
@@ -89,7 +93,7 @@ class SyncViewModel
 
         private data class LocalState(
             val hasToken: Boolean = false,
-            val diskBytes: Long = 0,
+            val diskBytes: Long? = null,
             val connectionMessage: String? = null,
             val generatingKey: Boolean = false,
             val reindexing: Boolean = false,
@@ -120,6 +124,10 @@ class SyncViewModel
                         )
                     }
             }
+                // Reading key files and parsing them with sshd is disk and
+                // crypto work, and a combine runs on whatever collects it --
+                // the main thread, for a screen.
+                .flowOn(Dispatchers.IO)
 
         val state: StateFlow<SyncUiState> =
             combine(
@@ -165,7 +173,7 @@ class SyncViewModel
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SyncUiState())
 
         init {
-            refreshLocal()
+            refreshCredentials()
         }
 
         /**
@@ -206,13 +214,13 @@ class SyncViewModel
         fun saveToken(token: String) =
             viewModelScope.launch {
                 tokenStore.setToken(token.trim())
-                refreshLocal()
+                refreshCredentials()
             }
 
         fun clearToken() =
             viewModelScope.launch {
                 tokenStore.clear()
-                refreshLocal()
+                refreshCredentials()
             }
 
         fun testConnection() =
@@ -316,13 +324,13 @@ class SyncViewModel
                 local.value = local.value.copy(generatingKey = true)
                 runCatching { sshKeys.generate(mount) }
                 local.value = local.value.copy(generatingKey = false)
-                refreshLocal()
+                refreshCredentials()
             }
 
         fun dismissCrash() =
             viewModelScope.launch {
                 crashLog.clear()
-                refreshLocal()
+                refreshCredentials()
             }
 
         fun reindex() =
@@ -347,14 +355,36 @@ class SyncViewModel
                 refreshLocal()
             }
 
-        fun refreshLocal() =
+        /** Everything read off the device, including the walk of the vault. */
+        fun refreshLocal() {
+            refreshCredentials()
+            measureDisk()
+        }
+
+        /**
+         * The cheap reads: whether there is a token, and whether the app
+         * crashed. Every settings screen needs these, so they are read when
+         * the view model is made.
+         */
+        private fun refreshCredentials() =
             viewModelScope.launch {
-                local.value =
-                    local.value.copy(
-                        hasToken = tokenStore.hasToken(),
-                        diskBytes = files.sizeOnDisk(),
-                        lastCrash = crashLog.read(),
-                    )
+                val hasToken = tokenStore.hasToken()
+                val crash = crashLog.read()
+                local.update { it.copy(hasToken = hasToken, lastCrash = crash) }
+            }
+
+        /**
+         * How much the vaults take on disk, which means visiting every file.
+         *
+         * Asked for by the one card that shows it rather than done on
+         * creation. The settings home and each section have a view model of
+         * their own, so doing it in init walked the whole vault twice on every
+         * visit to Settings to show a number on one screen.
+         */
+        fun measureDisk() =
+            viewModelScope.launch {
+                val bytes = files.sizeOnDisk()
+                local.update { it.copy(diskBytes = bytes) }
             }
 
         private companion object {
