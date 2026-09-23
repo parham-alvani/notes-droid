@@ -1,5 +1,6 @@
 package me.parham1995.notes.data.git
 
+import android.annotation.SuppressLint
 import org.apache.sshd.common.config.keys.KeyUtils
 import org.apache.sshd.common.config.keys.PublicKeyEntry
 import org.eclipse.jgit.transport.CredentialsProvider
@@ -73,6 +74,13 @@ class PinnedHostKeys(
     companion object {
         val GITHUB_HOSTS = setOf("github.com", "ssh.github.com")
 
+        /**
+         * Split across lines for length, and joined with no space on purpose:
+         * base64 has none. `PinnedHostKeysTest` checks each joined key's
+         * fingerprint against the published one, so a split in the wrong place
+         * fails the build.
+         */
+        @SuppressLint("TextConcatSpace")
         val GITHUB_KEYS =
             listOf(
                 "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl",
