@@ -19,7 +19,6 @@ import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.RepositoryInfo
-import me.parham1995.notes.sync.RestVaultSync
 import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.SyncPlan
 import me.parham1995.notes.sync.VaultFilter
@@ -468,6 +467,7 @@ class SyncRepository
                     index(vault, plan, firstSync = vault.headCommit == null)
                     log.info("indexed in ${(System.currentTimeMillis() - indexStart) / 1000}s")
                 }
+                catchUpIndex(vault)
                 if (staleIndex) {
                     log.info("the indexer derives more than it used to - rebuilding from what is on disk")
                     reindex()
@@ -526,6 +526,28 @@ class SyncRepository
         }
 
         /**
+         * Indexes markdown whose note lags the manifest.
+         *
+         * A sync that stopped between downloading and indexing -- killed,
+         * cancelled, a parse that threw -- leaves the manifest at the new sha
+         * and the note at the old one. The next plan diffs against the
+         * manifest, so it never mentions those files again, and without this
+         * the note would read as its old self until the file changed once
+         * more. One query when nothing is behind, which is nearly always.
+         */
+        private suspend fun catchUpIndex(vault: VaultEntity) {
+            val behind =
+                blobs
+                    .indexBehind(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
+                    .map { PathAndSha(it.path, it.sha) }
+                    // Guides are never notes, so they are always "behind".
+                    .filterNot { VaultIndexer.isGuide(it.path) }
+            if (behind.isEmpty()) return
+            log.info("${behind.size} notes were downloaded but not indexed - indexing them now")
+            indexer.indexChanged(vaultId = vault.id, changed = behind, removed = emptyList())
+        }
+
+        /**
          * Reparses everything already on disk, without touching the network.
          *
          * A sync only reindexes what changed, so anything derived during
@@ -568,29 +590,7 @@ class SyncRepository
          * The chosen transport, built fresh each sync so a settings change
          * takes effect on the next refresh rather than on the next launch.
          */
-        private suspend fun transportFor(vault: VaultEntity): VaultSync =
-            when (SyncTransport.parse(vault.transport)) {
-                SyncTransport.REST -> {
-                    val client = transports.client(vault)
-                    RestVaultSync(
-                        client = client,
-                        branch = vault.branch ?: client.repository().defaultBranch,
-                        filter = VaultFilter(),
-                        log = log::info,
-                    )
-                }
-
-                SyncTransport.SSH -> {
-                    transports.adoptLegacyKeys()
-                    if (!sshKeys.exists(vault.id)) {
-                        throw NotConfiguredException(
-                            "no SSH key for ${vault.label} yet - generate one in Settings and add it " +
-                                "as a deploy key on that repository",
-                        )
-                    }
-                    transports.ssh(vault)
-                }
-            }
+        private suspend fun transportFor(vault: VaultEntity): VaultSync = transports.reader(vault)
 
         /**
          * Asks the host what this vault's credential may do, and records it.

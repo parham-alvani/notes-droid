@@ -2,14 +2,24 @@ package me.parham1995.notes.data
 
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import me.parham1995.notes.data.database.BlobEntity
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.Author
+import me.parham1995.notes.sync.BlobKind
+import me.parham1995.notes.sync.LocalState
+import me.parham1995.notes.sync.SyncBase
+import me.parham1995.notes.sync.SyncPlan
+import me.parham1995.notes.sync.VaultFilter
+import me.parham1995.notes.sync.VaultSink
+import me.parham1995.notes.sync.VaultSync
 import me.parham1995.notes.sync.TextEdit
 import me.parham1995.notes.sync.VaultWriter
 import me.parham1995.notes.sync.WriteOutcome
+import me.parham1995.notes.sync.gitBlobSha
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Before
@@ -32,6 +42,26 @@ class SyncRepositoryTest {
     private lateinit var indexer: VaultIndexer
     private lateinit var gate: VaultGate
     private lateinit var repository: SyncRepository
+
+    /** A transport that has nothing new to say, unless told otherwise. */
+    private inner class FakeSync : VaultSync {
+        var plans = 0
+
+        override suspend fun plan(base: SyncBase): SyncPlan {
+            plans++
+            return SyncPlan(base.commit, base.commit ?: "head")
+        }
+
+        override suspend fun apply(
+            plan: SyncPlan,
+            sink: VaultSink,
+            onProgress: (done: Int, total: Int) -> Unit,
+        ) = Unit
+    }
+
+    private val readers = mutableMapOf<Long, FakeSync>()
+
+    private fun readerFor(vaultId: Long) = readers.getOrPut(vaultId) { FakeSync() }
 
     private object ReadOnly : VaultWriter {
         override suspend fun canPush(): Boolean = false
@@ -75,6 +105,8 @@ class SyncRepositoryTest {
                 vaults = database.vaultDao(),
             ) {
                 override suspend fun writer(vault: VaultEntity): VaultWriter = ReadOnly
+
+                override suspend fun reader(vault: VaultEntity): VaultSync = readerFor(vault.id)
             }
         val writes =
             VaultWriteRepository(
@@ -112,6 +144,59 @@ class SyncRepositoryTest {
         runTest {
             database.close()
             files.clear()
+        }
+
+    /** A vault that has synced before, under the current filter and indexer. */
+    private suspend fun syncedVault(name: String): Long =
+        database.vaultDao().insert(
+            VaultEntity(
+                owner = "o",
+                repo = name,
+                name = name,
+                headCommit = "head",
+                filterVersion = VaultFilter.VERSION,
+                indexVersion = VaultIndexer.VERSION,
+            ),
+        )
+
+    private suspend fun onDisk(
+        vaultId: Long,
+        path: String,
+        text: String,
+    ): String {
+        val bytes = text.toByteArray()
+        val sha = gitBlobSha(bytes)
+        files.write(vaultId, path, bytes)
+        database.blobDao().upsert(
+            BlobEntity(
+                path = path,
+                vaultId = vaultId,
+                sha = sha,
+                size = bytes.size.toLong(),
+                kind = BlobKind.MARKDOWN,
+                localState = LocalState.DOWNLOADED,
+            ),
+        )
+        return sha
+    }
+
+    @Test
+    fun `a note downloaded but never indexed is indexed by the next sync`() =
+        runTest {
+            val id = syncedVault("notes")
+            val old = onDisk(id, "Plan.md", "# Plan\n\n- [ ] the old task\n")
+            indexer.indexAll(id, listOf(PathAndSha("Plan.md", old)))
+
+            // The sync that brought the new version was stopped after the
+            // download and before the index: file and manifest are new, the
+            // note is not. The next plan diffs against the manifest and says
+            // nothing changed.
+            val new = onDisk(id, "Plan.md", "# Plan\n\n- [ ] the new task\n")
+
+            repository.sync()
+
+            assertThat(database.noteDao().byPath(id, "Plan.md")!!.blobSha).isEqualTo(new)
+            assertThat(database.taskDao().open(id).first().map { it.text }).containsExactly("the new task")
         }
 
     @Test

@@ -10,7 +10,10 @@ import me.parham1995.notes.data.git.GitSshVaultSync
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.GitHubClient
 import me.parham1995.notes.sync.GitHubConfig
+import me.parham1995.notes.sync.RestVaultSync
 import me.parham1995.notes.sync.RestVaultWriter
+import me.parham1995.notes.sync.VaultFilter
+import me.parham1995.notes.sync.VaultSync
 import me.parham1995.notes.sync.VaultWriter
 import okhttp3.OkHttpClient
 import java.io.File
@@ -90,6 +93,36 @@ open class VaultTransports
                 log = log::info,
             )
         }
+
+        /**
+         * The read half of whichever transport this vault syncs over.
+         *
+         * Open for the same reason as [writer]: what a sync does around the
+         * transport is worth testing, and unreachable behind a real one.
+         */
+        open suspend fun reader(vault: VaultEntity): VaultSync =
+            when (SyncTransport.parse(vault.transport)) {
+                SyncTransport.REST -> {
+                    val client = client(vault)
+                    RestVaultSync(
+                        client = client,
+                        branch = vault.branch ?: client.repository().defaultBranch,
+                        filter = VaultFilter(),
+                        log = log::info,
+                    )
+                }
+
+                SyncTransport.SSH -> {
+                    adoptLegacyKeys()
+                    if (!sshKeys.exists(vault.id)) {
+                        throw NotConfiguredException(
+                            "no SSH key for ${vault.label} yet - generate one in Settings and add it " +
+                                "as a deploy key on that repository",
+                        )
+                    }
+                    ssh(vault)
+                }
+            }
 
         /**
          * The write half of whichever transport this vault syncs over.
