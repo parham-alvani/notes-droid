@@ -255,6 +255,33 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `an image embedded by its bare name is found in its own vault`() =
+        runTest {
+            // `![[photo.png]]` is what Obsidian writes for a file anywhere in
+            // the vault. It used to be looked up at the root, and the other
+            // vault holding a file of the same name must not answer for it.
+            index("Journal/Day.md" to "![[photo.png]]\n\n![scan](Scans/first%20page.png)")
+            attachment("Assets/2024/photo.png")
+            attachment("Scans/first page.png")
+            ensureVault(second)
+            database.blobDao().upsert(
+                me.parham1995.notes.data.database.BlobEntity(
+                    path = "photo.png",
+                    vaultId = second,
+                    sha = "other",
+                    size = 1,
+                    kind = me.parham1995.notes.sync.BlobKind.IMAGE,
+                    localState = me.parham1995.notes.sync.LocalState.DOWNLOADED,
+                ),
+            )
+
+            val note = repository.note(database.noteDao().idOf(first, "Journal/Day.md")!!)!!
+
+            val images = note.blocks.filterIsInstance<me.parham1995.notes.markdown.MdBlock.Image>()
+            assertThat(images.map { it.path }).containsExactly("Assets/2024/photo.png", "Scans/first page.png")
+        }
+
+    @Test
     fun `backlinks name the source and quote the line`() =
         runTest {
             index(

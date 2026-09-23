@@ -266,12 +266,13 @@ class VaultRepository
             withContext(Dispatchers.Default) {
                 val entity = notes.byId(id) ?: return@withContext null
                 val text = files.readText(entity.vaultId, entity.path) ?: return@withContext null
+                // This vault's files only: an embed resolves inside the vault
+                // that wrote it, like a link.
+                val attachments = blobs.attachmentPaths(entity.vaultId).first().toHashSet()
 
                 val parsed =
                     MarkdownParser.parseNote(text) { target ->
-                        // Embeds are written vault-relative or note-relative;
-                        // both have to land on a real path.
-                        resolveAttachment(target, entity.path)
+                        AttachmentResolver.resolve(target, entity.path, attachments)
                     }
 
                 val refs = notes.allIds(entity.vaultId)
@@ -306,28 +307,6 @@ class VaultRepository
                     brokenTargets = allTargets - targets.keys,
                 )
             }
-
-        /** Where an embed's file actually lives, vault-relative. */
-        private fun resolveAttachment(
-            target: String,
-            source: String,
-        ): String {
-            if (!target.contains("..")) return target
-            val base =
-                source
-                    .substringBeforeLast('/', "")
-                    .split('/')
-                    .filter { it.isNotEmpty() }
-                    .toMutableList()
-            target.split('/').forEach { segment ->
-                when (segment) {
-                    "." -> Unit
-                    ".." -> if (base.isNotEmpty()) base.removeAt(base.lastIndex)
-                    else -> base += segment
-                }
-            }
-            return base.joinToString("/")
-        }
 
         suspend fun markOpened(id: Long) = notes.markOpened(id, System.currentTimeMillis())
 
