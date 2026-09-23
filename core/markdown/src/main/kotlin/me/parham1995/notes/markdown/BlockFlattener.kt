@@ -133,39 +133,128 @@ class BlockFlattener(
     }
 
     /**
-     * A paragraph holding nothing but a display formula or a single embed is
-     * promoted to a block of its own, so it can be centred, zoomed and cached
-     * rather than squeezed into a line of text.
+     * A paragraph, split around anything in it that has to be a block.
+     *
+     * A display formula or a single embed on its own is promoted to a block of
+     * its own, so it can be centred, zoomed and cached rather than squeezed
+     * into a line of text. Written straight under a line of prose -- which is
+     * how they are usually written -- they are part of that paragraph as far
+     * as Markdown is concerned, so the paragraph is cut around them: the text
+     * before, the block, the text after. Promoting only a lone one dropped a
+     * formula with a sentence above it without trace.
      */
     private fun paragraph(node: Paragraph): List<MdBlock> {
-        val children = node.children()
-        val meaningful = children.filterNot { it is SoftLineBreak }
+        val out = mutableListOf<MdBlock>()
+        val run = mutableListOf<Node>()
 
-        (meaningful.singleOrNull() as? DisplayMathNode)?.let {
-            hasMath = true
-            return listOf(MdBlock.MathBlock(id(), it.latex))
-        }
-        (meaningful.singleOrNull() as? WikiLinkNode)?.takeIf { it.embed }?.let { return listOf(embed(it)) }
-        (meaningful.singleOrNull() as? Image)?.let { image ->
-            val alt = plainTextOf(image).takeIf { it.isNotBlank() }
-            links += ParsedLink(LinkKind.IMAGE, image.destination, alt)
-            return listOf(MdBlock.Image(id(), imageResolver(image.destination), alt))
+        fun flush() {
+            val trimmed = run.dropWhile { it.isBreak() }.dropLastWhile { it.isBreak() }
+            run.clear()
+            if (trimmed.isEmpty() || trimmed.all { it.isBreak() || (it is Text && it.literal.isBlank()) }) return
+            val text = plainTextOf(trimmed)
+            plain.append(text).append('\n')
+            out += MdBlock.Paragraph(id(), inlinesOf(trimmed), TextDirection.of(text))
         }
 
-        val text = plainTextOf(node)
-        plain.append(text).append('\n')
-        return listOf(MdBlock.Paragraph(id(), inlines(node), TextDirection.of(text)))
+        node.children().forEach { child ->
+            if (isBreakout(child)) {
+                flush()
+                out += breakout(child)
+            } else {
+                run += child
+            }
+        }
+        flush()
+        return out
     }
+
+    private fun Node.isBreak(): Boolean = this is SoftLineBreak || this is HardLineBreak
+
+    /**
+     * Whether [node] is a block that happens to have been written inside a
+     * paragraph.
+     *
+     * Embeds and images are among them, and not only when alone: two
+     * `![[image]]` lines, or an image with its caption on the line under it,
+     * are one paragraph, and only a lone embed used to become an image -- the
+     * rest were shown as the link text they were written as. An image inside a
+     * sentence is lifted out of it too; a picture cannot be a run of text, and
+     * a link standing in for one is worse than the sentence being cut.
+     */
+    private fun isBreakout(node: Node): Boolean =
+        node is DisplayMathNode ||
+            (node is WikiLinkNode && node.embed) ||
+            node is Image
+
+    private fun breakout(node: Node): MdBlock =
+        when (node) {
+            is DisplayMathNode -> {
+                hasMath = true
+                MdBlock.MathBlock(id(), node.latex)
+            }
+
+            is WikiLinkNode -> embed(node)
+
+            is Image -> {
+                val sized = Sized.of(plainTextOf(node))
+                links += ParsedLink(LinkKind.IMAGE, node.destination, sized.alt)
+                MdBlock.Image(id(), imageResolver(node.destination), sized.alt, sized.width, sized.height)
+            }
+
+            else -> error("not a breakout: $node")
+        }
 
     private fun embed(node: WikiLinkNode): MdBlock {
         links += ParsedLink(LinkKind.WIKI_EMBED, node.target, node.alias)
         val extension = node.target.substringAfterLast('.', "").lowercase()
-        return if (extension in RENDERABLE_IMAGES) {
-            MdBlock.Image(id(), imageResolver(node.target), node.alias)
-        } else {
+        return when {
+            extension in RENDERABLE_IMAGES -> {
+                val sized = Sized.of(node.alias.orEmpty())
+                MdBlock.Image(id(), imageResolver(node.target), sized.alt, sized.width, sized.height)
+            }
+
+            // No extension, or `.md`: another note, which Obsidian draws in
+            // place. Offered as an attachment it went to "another app" that
+            // had nothing to open. A name like "Release v1.2 notes" has a dot
+            // in it and is still a note, which is why a file extension has to
+            // look like one.
+            extension == "md" || !FILE_EXTENSION.matches(extension) ->
+                MdBlock.NoteEmbed(
+                    id = id(),
+                    target = node.target,
+                    heading = node.heading,
+                    label = node.alias ?: node.target.substringAfterLast('/').removeSuffix(".md"),
+                )
+
             // Video and audio are handed to another app rather than shown, so
             // the block is a card, not a broken image.
-            MdBlock.Attachment(id(), node.target, node.alias ?: node.target.substringAfterLast('/'))
+            else -> MdBlock.Attachment(id(), node.target, node.alias ?: node.target.substringAfterLast('/'))
+        }
+    }
+
+    /**
+     * An image's alias, which Obsidian overloads: a trailing `300` or
+     * `300x200` is a size, and whatever is left before it is the caption.
+     * Read as a caption, the size ended up printed under the picture.
+     */
+    private class Sized(
+        val alt: String?,
+        val width: Int?,
+        val height: Int?,
+    ) {
+        companion object {
+            private val SIZE = Regex("""^(\d{1,5})(?:x(\d{1,5}))?$""")
+
+            fun of(alias: String): Sized {
+                val parts = alias.split('|')
+                val size = SIZE.matchEntire(parts.last().trim())
+                val caption = (if (size != null) parts.dropLast(1) else parts).joinToString("|").trim()
+                return Sized(
+                    alt = caption.takeIf { it.isNotEmpty() },
+                    width = size?.groupValues?.get(1)?.toIntOrNull(),
+                    height = size?.groupValues?.get(2)?.toIntOrNull(),
+                )
+            }
         }
     }
 
@@ -182,9 +271,9 @@ class BlockFlattener(
             }
             // A reader gains nothing from the query source, and showing it
             // reads as a bug rather than as an unsupported feature.
-            "dataview", "dataviewjs" -> MdBlock.Unsupported(id(), "Dataview query")
-            "tasks" -> MdBlock.Unsupported(id(), "Tasks query")
-            "compressed-json" -> MdBlock.Unsupported(id(), "Excalidraw drawing")
+            "dataview", "dataviewjs" -> MdBlock.Unsupported(id(), "Dataview query", UnsupportedKind.DATAVIEW)
+            "tasks" -> MdBlock.Unsupported(id(), "Tasks query", UnsupportedKind.TASKS_QUERY)
+            "compressed-json" -> MdBlock.Unsupported(id(), "Excalidraw drawing", UnsupportedKind.EXCALIDRAW)
             else -> {
                 plain.append(node.literal)
                 MdBlock.CodeBlock(id(), language, node.literal.trimEnd('\n'))
@@ -199,11 +288,20 @@ class BlockFlattener(
         return MdBlock.Callout(
             id = self,
             kind = node.kind,
-            title = if (node.titleText.isEmpty()) emptyList() else listOf(MdInline.Text(node.titleText)),
+            title = if (node.titleText.isEmpty()) emptyList() else trimmedTitle(inlines(node.title)),
             children = children,
             collapsed = node.collapsed,
             direction = TextDirection.of(node.titleText),
+            foldable = node.foldable,
+            type = node.type,
         )
+    }
+
+    /** The space after `[!type]` is not part of the title. */
+    private fun trimmedTitle(title: List<MdInline>): List<MdInline> {
+        val first = title.firstOrNull() as? MdInline.Text ?: return title
+        val trimmed = first.text.trimStart()
+        return if (trimmed.isEmpty()) title.drop(1) else listOf(MdInline.Text(trimmed)) + title.drop(1)
     }
 
     private fun quote(node: BlockQuote): MdBlock {
@@ -227,11 +325,17 @@ class BlockFlattener(
                         marker.isChecked -> TaskState.CHECKED
                         else -> TaskState.UNCHECKED
                     }
+                var status = if (marker?.isChecked == true) 'x' else ' '
 
-                // The GFM extension only knows `[ ]` and `[x]`. Obsidian's
-                // cancelled and in-progress markers arrive as literal text.
-                val custom = stripCustomMarker(item)
-                if (custom != null) state = custom
+                // The GFM extension only knows `[ ]` and `[x]`. Every other
+                // status -- Obsidian's cancelled and in-progress, and the
+                // `[>]` `[!]` `[?]` a theme gives a glyph -- arrives as text.
+                if (marker == null) {
+                    stripCustomMarker(item)?.let { custom ->
+                        status = custom
+                        state = stateOf(custom)
+                    }
+                }
 
                 val meta = extractTaskMeta(item)
                 MdListItem(
@@ -239,6 +343,7 @@ class BlockFlattener(
                     task = state,
                     taskMeta = meta,
                     line = item.sourceSpans.firstOrNull()?.lineIndex ?: -1,
+                    status = status,
                 )
             }
         return MdBlock.ListBlock(self, ordered, start, items)
@@ -247,20 +352,34 @@ class BlockFlattener(
     private fun findTaskMarker(item: ListItem): TaskListItemMarker? =
         item.children().filterIsInstance<TaskListItemMarker>().firstOrNull()
 
-    /** Rewrites a leading `[-]` / `[/]` into a state and removes it from the text. */
-    private fun stripCustomMarker(item: ListItem): TaskState? {
+    /**
+     * Takes a leading `[c] ` off the item's text and returns `c`, or null when
+     * the item does not start with one.
+     *
+     * Any single character, as the Tasks plugin has it. Only the first text
+     * node is looked at, so `[see](url)` -- a link, not a status -- is never
+     * mistaken for one.
+     */
+    private fun stripCustomMarker(item: ListItem): Char? {
         val paragraph = item.children().filterIsInstance<Paragraph>().firstOrNull() ?: return null
         val text = paragraph.firstChild as? Text ?: return null
-        val literal = text.literal
-        val state =
-            when {
-                literal.startsWith("[-] ") -> TaskState.CANCELLED
-                literal.startsWith("[/] ") -> TaskState.IN_PROGRESS
-                else -> return null
-            }
-        text.literal = literal.removeRange(0, "[-] ".length)
-        return state
+        val match = CUSTOM_STATUS.find(text.literal) ?: return null
+        text.literal = text.literal.substring(match.range.last + 1)
+        return match.groupValues[1].single()
     }
+
+    /**
+     * What a status means. The Tasks plugin's rule: `x` is done, `-` is
+     * cancelled, `/` is under way, and anything else it does not know is
+     * still a thing to do.
+     */
+    private fun stateOf(status: Char): TaskState =
+        when (status) {
+            'x', 'X' -> TaskState.CHECKED
+            '-' -> TaskState.CANCELLED
+            '/' -> TaskState.IN_PROGRESS
+            else -> TaskState.UNCHECKED
+        }
 
     private fun extractTaskMeta(item: ListItem): List<TaskMeta> {
         val paragraph = item.children().filterIsInstance<Paragraph>().firstOrNull() ?: return emptyList()
@@ -332,15 +451,9 @@ class BlockFlattener(
 
     // -- inline conversion ------------------------------------------------
 
-    private fun inlines(parent: Node): List<MdInline> {
-        val out = mutableListOf<MdInline>()
-        var child = parent.firstChild
-        while (child != null) {
-            inline(child)?.let { out += it }
-            child = child.next
-        }
-        return out
-    }
+    private fun inlines(parent: Node): List<MdInline> = inlinesOf(parent.children())
+
+    private fun inlinesOf(nodes: List<Node>): List<MdInline> = nodes.mapNotNull { inline(it) }
 
     private fun inline(node: Node): MdInline? =
         when (node) {
@@ -386,7 +499,9 @@ class BlockFlattener(
             else -> null
         }
 
-    private fun plainTextOf(node: Node): String =
+    private fun plainTextOf(node: Node): String = plainTextOf(node.children())
+
+    private fun plainTextOf(nodes: List<Node>): String =
         buildString {
             fun walk(current: Node) {
                 when (current) {
@@ -403,17 +518,19 @@ class BlockFlattener(
                     child = child.next
                 }
             }
-            var child = node.firstChild
-            while (child != null) {
-                walk(child)
-                child = child.next
-            }
+            nodes.forEach { walk(it) }
         }.trim()
 
     private companion object {
         val BR = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
+
+        /** `[c] ` at the very start: one character that is not a bracket or a space. */
+        val CUSTOM_STATUS = Regex("""^\[([^\]\s])] """)
         val HTML_TAG = Regex("""<[^>]+>""")
         val RENDERABLE_IMAGES = setOf("jpg", "jpeg", "png", "gif", "svg", "webp")
+
+        /** Short and alphanumeric: `pdf`, `mp4`, `drawio`, `7z` -- not `2 notes`. */
+        val FILE_EXTENSION = Regex("""[a-z0-9]{1,6}""")
     }
 }
 

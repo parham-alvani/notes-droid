@@ -44,7 +44,7 @@ class CalloutPostProcessor : PostProcessor {
             val match = HEADER.find(firstText.literal) ?: return
 
             val kind = CalloutKind.parse(match.groupValues[1])
-            val collapsed = match.groupValues[2] == "-"
+            val fold = match.groupValues[2]
 
             // Everything after the marker, up to the first line break, is the
             // title; the remainder of the paragraph stays as body.
@@ -64,11 +64,22 @@ class CalloutPostProcessor : PostProcessor {
                 buildString {
                     titleParts.forEach { part -> appendPlainText(part, this) }
                 }.trim()
-            titleParts.forEach { it.unlink() }
+            // Moved, not flattened to text: a title is inline content like any
+            // other, and "See [[Plan]]" there is a link to follow.
+            val title = CalloutTitleNode()
+            titleParts.forEach { title.appendChild(it) }
 
             if (paragraph.firstChild == null) paragraph.unlink()
 
-            val callout = CalloutNode(kind, titleText, collapsed)
+            val callout =
+                CalloutNode(
+                    kind = kind,
+                    titleText = titleText,
+                    collapsed = fold == "-",
+                    foldable = fold.isNotEmpty(),
+                    type = match.groupValues[1].lowercase(),
+                    title = title,
+                )
             var child: Node? = quote.firstChild
             while (child != null) {
                 val next = child.next

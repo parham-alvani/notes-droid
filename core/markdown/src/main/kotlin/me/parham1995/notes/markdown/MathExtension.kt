@@ -42,14 +42,32 @@ internal class MathInlineParser : InlineContentParser {
         }
         val display = scanner.next('$')
 
+        // Obsidian's rule for inline maths, which is Pandoc's: the opening `$`
+        // is followed by something other than whitespace, the closing one is
+        // preceded by something other than whitespace, and the closing one is
+        // not followed by a digit. Without it "$5 and $10" is a formula.
+        if (!display && (!scanner.hasNext() || scanner.peek().isWhitespace())) {
+            scanner.setPosition(start)
+            return ParsedInline.none()
+        }
+
         val contentStart = scanner.position()
         var scanned = 0
         val limit = if (display) MAX_DISPLAY else MAX_INLINE
+        var previous = '$'
         while (scanner.hasNext() && scanned < limit) {
             if (scanner.peek() == '$') {
                 val beforeClose = scanner.position()
                 scanner.next()
+                if (!display && (previous.isWhitespace() || (scanner.hasNext() && scanner.peek().isDigit()))) {
+                    // A dollar that cannot close this formula is a price, and
+                    // so was the one that opened it. Giving up here lets the
+                    // parser try this one as an opener in its own right, so
+                    // "costs $5, and $x$" still finds the formula at the end.
+                    break
+                }
                 val closed = if (display) scanner.next('$') else true
+                previous = '$'
                 if (closed) {
                     val latex = scanner.getSource(contentStart, beforeClose).content.trim()
                     if (latex.isEmpty()) break
@@ -57,6 +75,7 @@ internal class MathInlineParser : InlineContentParser {
                     return ParsedInline.of(node, scanner.position())
                 }
             } else {
+                previous = scanner.peek()
                 scanner.next()
             }
             scanned++

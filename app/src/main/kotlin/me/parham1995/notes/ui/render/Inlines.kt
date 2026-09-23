@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.ui.theme.Markup
 
@@ -22,6 +23,23 @@ import me.parham1995.notes.ui.theme.Markup
 data class InlineActions(
     val onWikiLink: (target: String, heading: String?) -> Unit = { _, _ -> },
     val onExternalLink: (url: String) -> Unit = {},
+    /**
+     * `[text](destination)` where the destination has no scheme -- another
+     * note, a heading, a file. Handed over raw; deciding what it names is the
+     * screen's job, because only the screen knows the note it is in.
+     */
+    val onInternalLink: (destination: String) -> Unit = {},
+    /**
+     * A link already resolved to the note it names.
+     *
+     * Separate from [onWikiLink] because a link inside an embedded note is
+     * resolved against *that* note's links, not the one on screen: the two
+     * rarely link to the same things, and looking a target up in the wrong
+     * note's table reports a working link as broken.
+     */
+    val onNoteLink: (noteId: Long, heading: String?) -> Unit = { _, _ -> },
+    /** A link that resolves to nothing, said plainly rather than ignored. */
+    val onBrokenLink: (target: String) -> Unit = {},
 )
 
 /**
@@ -38,13 +56,26 @@ data class InlineActions(
 fun List<MdInline>.toAnnotated(
     actions: InlineActions = InlineActions(),
     brokenLinks: Set<String> = emptySet(),
+): Pair<AnnotatedString, List<String>> = annotate(this, MaterialTheme.colorScheme, actions, brokenLinks)
+
+/**
+ * The same, outside composition, so a caller can remember the result.
+ *
+ * Building the string walks every inline and allocates every span; doing it on
+ * each recomposition -- which a keystroke in the find bar used to cause for
+ * every block on screen -- is work thrown away the moment it is done.
+ */
+internal fun annotate(
+    inlines: List<MdInline>,
+    colors: ColorScheme,
+    actions: InlineActions,
+    brokenLinks: Set<String>,
 ): Pair<AnnotatedString, List<String>> {
-    val colors = MaterialTheme.colorScheme
     val formulas = mutableListOf<String>()
 
     val text =
         buildAnnotatedString {
-            appendInlines(this, this@toAnnotated, colors, actions, brokenLinks, formulas)
+            appendInlines(this, inlines, colors, actions, brokenLinks, formulas)
         }
     return text to formulas
 }
@@ -105,7 +136,15 @@ private fun appendInlines(
                             TextLinkStyles(
                                 SpanStyle(color = colors.primary, textDecoration = TextDecoration.Underline),
                             ),
-                    ) { actions.onExternalLink(node.destination) }
+                    ) {
+                        // Only a scheme makes it the web. Everything else was
+                        // handed to the system as a URL too, and opened nothing.
+                        if (MarkdownLinks.isExternal(node.destination)) {
+                            actions.onExternalLink(node.destination)
+                        } else {
+                            actions.onInternalLink(node.destination)
+                        }
+                    }
                 builder.withLink(link) {
                     appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
                 }

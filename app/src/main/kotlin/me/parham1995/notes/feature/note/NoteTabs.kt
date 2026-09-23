@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.VaultRepository
@@ -122,6 +123,26 @@ data class TabsState(
         noteId: Long,
         title: String,
     ): TabsState = copy(tabs = tabs.map { if (it.noteId == noteId) it.copy(title = title) else it })
+
+    /**
+     * What was written down, with whatever was opened while it was being read.
+     *
+     * The restore reads storage off the main thread, and a launcher shortcut,
+     * a widget or a search can open a note before it finishes. Replacing the
+     * set wholesale threw that note away and showed something else. So the
+     * stored tabs come back, a note opened meanwhile is kept beside them -- as
+     * it is now, where the two name the same note -- and the one being read
+     * stays the one being read.
+     */
+    fun restoring(stored: TabsState): TabsState {
+        if (tabs.isEmpty()) return stored
+        if (stored.tabs.isEmpty()) return this
+        val kept = stored.tabs.map { old -> tabs.firstOrNull { it.noteId == old.noteId } ?: old }
+        val opened = tabs.filter { tab -> kept.none { it.noteId == tab.noteId } }
+        val merged = kept + opened
+        val reading = current?.noteId
+        return TabsState(merged, merged.indexOfFirst { it.noteId == reading }.coerceAtLeast(0))
+    }
 }
 
 /**
@@ -161,9 +182,14 @@ class NoteTabs
 
         init {
             scope.launch {
-                val stored = TabsCodec.decode(settings.openTabs.first())
-                if (stored != null) _state.value = resolve(stored)
+                val stored = TabsCodec.decode(settings.openTabs.first())?.let { resolve(it) }
+                // Merged, not assigned: a note opened while storage was being
+                // read is still open afterwards.
+                if (stored != null) _state.update { it.restoring(stored) }
                 _restored.value = true
+                // Anything opened meanwhile could not be written down then.
+                val now = _state.value
+                if (now.tabs.isNotEmpty() && now != stored) remember()
             }
         }
 
@@ -245,9 +271,10 @@ class NoteTabs
         fun clear() = update { TabsState() }
 
         private fun update(block: (TabsState) -> TabsState) {
-            val next = block(_state.value)
-            if (next == _state.value) return
-            _state.value = next
-            remember()
+            // Compare-and-set, because the restore writes from another thread:
+            // a read-then-assign here could land on top of it and undo it.
+            var changed = false
+            _state.update { current -> block(current).also { changed = it != current } }
+            if (changed) remember()
         }
     }

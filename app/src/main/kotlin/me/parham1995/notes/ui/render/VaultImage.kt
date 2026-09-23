@@ -2,9 +2,11 @@ package me.parham1995.notes.ui.render
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,7 +23,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import me.parham1995.notes.R
-import me.parham1995.notes.ui.image.rememberVaultImageBytes
+import me.parham1995.notes.ui.image.rememberVaultImage
+import me.parham1995.notes.ui.inScript
 
 /**
  * An embedded image.
@@ -36,27 +39,44 @@ fun VaultImage(
     path: String,
     alt: String?,
     modifier: Modifier = Modifier,
+    /** The size asked for after the pipe, `![[x.png|300x200]]`, in dp. */
+    width: Int? = null,
+    height: Int? = null,
     onClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val image by rememberVaultImageBytes(vaultId, path)
-    val bytes = image.bytes
+    val image by rememberVaultImage(vaultId, path)
+    val file = image.file
     val failed = image.failed
+
+    // Never wider than the page, whatever was asked for: the size was chosen
+    // on a desktop window, and the order matters -- capping first and filling
+    // after gives the smaller of the two. The shape is the one asked for, or
+    // failing that the file's own, read from its header: either way the space
+    // is reserved before the picture is decoded, so the note does not jump
+    // under the reader when it lands.
+    val shape =
+        if (width != null && height != null && height > 0) width.toFloat() / height else image.aspectRatio
+    val sized =
+        (if (width != null) Modifier.widthIn(max = width.dp).fillMaxWidth() else Modifier.fillMaxWidth())
+            .let { base -> if (shape != null) base.aspectRatio(shape) else base }
 
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         when {
-            bytes != null ->
+            file != null ->
                 AsyncImage(
+                    // The file, not its bytes: Coil caches it by path and
+                    // decodes it at the size it is drawn, instead of the whole
+                    // image being read into memory each time it scrolls in.
                     model =
                         ImageRequest
                             .Builder(context)
-                            .data(bytes)
+                            .data(file)
                             .build(),
                     contentDescription = alt,
-                    contentScale = ContentScale.FillWidth,
+                    contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,
                     modifier =
-                        Modifier
-                            .fillMaxWidth()
+                        sized
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onClick),
                 )
@@ -75,7 +95,7 @@ fun VaultImage(
                                 stringResource(R.string.image_loading)
                             },
                         modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelMedium.inScript(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -84,7 +104,7 @@ fun VaultImage(
     alt?.takeIf { it.isNotBlank() }?.let {
         Text(
             text = it,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.inScript(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         )

@@ -58,9 +58,9 @@ fun ImageViewer(
     onDismiss: () -> Unit,
     onOpenExternally: () -> Unit,
 ) {
-    val image by rememberVaultImageBytes(vaultId, path)
+    val image by rememberVaultImage(vaultId, path)
     ZoomableViewer(
-        model = image.bytes,
+        model = image.file,
         unavailable =
             stringResource(R.string.image_unavailable, path.substringAfterLast('/'))
                 .takeIf { image.failed },

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -37,7 +38,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -56,6 +63,7 @@ import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.markdown.MdListItem
 import me.parham1995.notes.markdown.TaskMeta
 import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.markdown.UnsupportedKind
 import me.parham1995.notes.markdown.isFinishedAndEmpty
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -83,6 +91,13 @@ data class RenderActions(
      * checkbox inert rather than offering something that fails at the push.
      */
     val onCompleteTask: ((line: Int) -> Unit)? = null,
+    /**
+     * Another note's blocks for an `![[embed]]`, the section its heading names
+     * when it names one, or null when there is no such note or heading.
+     *
+     * Null as a whole means embeds are drawn as links only.
+     */
+    val transclude: (suspend (target: String, heading: String?) -> Transcluded?)? = null,
 )
 
 @Composable
@@ -132,12 +147,15 @@ fun MdBlockView(
                     vaultId = actions.vaultId,
                     path = block.path,
                     alt = block.alt,
+                    width = block.width,
+                    height = block.height,
                     modifier = modifier,
                     onClick = { actions.onImage(block.path, block.alt) },
                 )
             is MdBlock.Attachment -> AttachmentView(block, actions, modifier)
+            is MdBlock.NoteEmbed -> NoteEmbedView(block, actions, modifier)
             is MdBlock.ThematicBreak -> HorizontalDivider(modifier.padding(vertical = 8.dp))
-            is MdBlock.Unsupported -> UnsupportedView(block.label, modifier)
+            is MdBlock.Unsupported -> UnsupportedView(block, modifier)
             // Front matter is metadata; only `direction` and `cssclasses` ever
             // affected rendering, and both are handled by detection instead.
             is MdBlock.FrontMatter -> Unit
@@ -166,7 +184,9 @@ private fun HeadingView(
         Spacer(Modifier.height(if (block.level <= 2) 18.dp else 12.dp))
         RichText(
             inlines = block.inlines,
-            modifier = Modifier.fillMaxWidth(),
+            // A heading to a screen reader too, so it can be jumped between
+            // the way the outline jumps between them.
+            modifier = Modifier.fillMaxWidth().semantics { heading() },
             // naz gives @markup.heading.1 through .4 their own colours, and
             // this follows them rather than picking a scale.
             style = style.copy(color = Markup.heading(block.level)).inScript(),
@@ -199,32 +219,11 @@ private fun CodeBlockView(
         shape = RoundedCornerShape(8.dp),
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            block.language?.let { language ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = language,
-                        style = MaterialTheme.typography.labelSmall,
-                        // Dimmer when the label is only a label: nothing is
-                        // being highlighted for it.
-                        color =
-                            if (CodeHighlighter.isKnown(language)) {
-                                MaterialTheme.colorScheme.secondary
-                            } else {
-                                MaterialTheme.colorScheme.outline
-                            },
-                    )
-                    Text(
-                        text = "copy",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { actions.onCopyCode(block.code) },
-                    )
-                }
-            }
+            CodeBlockHeader(
+                language = block.language,
+                known = block.language?.let { CodeHighlighter.isKnown(it) } == true,
+                onCopy = { actions.onCopyCode(block.code) },
+            )
             // Code is left-to-right whatever the surrounding prose does, and
             // scrolls on its own rather than wrapping mid-statement.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -232,10 +231,55 @@ private fun CodeBlockView(
                     text = highlighted ?: AnnotatedString(block.code),
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = CODE_LINE_HEIGHT),
+                    // Code is text too: the reader's size reaches it, and
+                    // the fixed line height is scaled with it, or the
+                    // lines of a bigger font overlap.
+                    style =
+                        MaterialTheme.typography.bodySmall
+                            .copy(lineHeight = CODE_LINE_HEIGHT)
+                            .inScript(),
                 )
             }
         }
+    }
+}
+
+/**
+ * A code block's language and its copy button.
+ *
+ * The button was the word "copy" in small type -- in English whatever the
+ * phone was set to, with no role for a screen reader, and only there when the
+ * fence named a language, so a bare fenced block could not be copied at all.
+ * It is now an icon button with a spoken name, on every block.
+ */
+@Composable
+internal fun CodeBlockHeader(
+    language: String?,
+    known: Boolean,
+    onCopy: () -> Unit,
+) {
+    val scale = LocalReading.current.textScale
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = language.orEmpty(),
+            style = MaterialTheme.typography.labelSmall.inScript(),
+            // Dimmer when the label is only a label: nothing is being
+            // highlighted for it.
+            color = if (known) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline,
+        )
+        // The icon's own size on the page; Compose extends the touch target
+        // of a small clickable to 48dp by itself.
+        LucideGlyph(
+            name = "copy",
+            modifier = Modifier.clickable(role = Role.Button, onClick = onCopy),
+            size = COPY_ICON * scale,
+            tint = MaterialTheme.colorScheme.primary,
+            contentDescription = stringResource(R.string.action_copy),
+        )
     }
 }
 
@@ -248,6 +292,9 @@ private fun CalloutView(
 ) {
     var expanded by remember(block.id) { mutableStateOf(!block.collapsed) }
     val accent = block.kind.accent()
+    val scale = LocalReading.current.textScale
+    val expandedLabel = stringResource(R.string.state_expanded)
+    val collapsedLabel = stringResource(R.string.state_collapsed)
 
     // A bar down the side rather than a tinted box alone. Obsidian's own
     // callouts read as a margin note, and the bar is what does that: the tint
@@ -267,22 +314,65 @@ private fun CalloutView(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().clickable(enabled = block.collapsed) { expanded = !expanded },
+                // `+` and `-` both fold; `+` just starts open. Only `-` used to
+                // be tappable, so a callout written to start open could never
+                // be shut.
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (block.foldable) {
+                                // A button that says which way it is, so a
+                                // screen reader can tell a folded callout
+                                // from one with nothing in it.
+                                Modifier
+                                    .clickable(role = Role.Button) { expanded = !expanded }
+                                    .semantics { stateDescription = if (expanded) expandedLabel else collapsedLabel }
+                            } else {
+                                Modifier
+                            },
+                        ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 LucideGlyph(
                     name = block.kind.icon(),
-                    size = CALLOUT_ICON,
+                    size = CALLOUT_ICON * scale,
                     tint = accent,
-                    contentDescription = block.kind.label(),
+                    contentDescription = block.label(),
                 )
-                Text(
-                    text = block.title.plainText().ifBlank { block.kind.label() },
-                    style = MaterialTheme.typography.titleSmall.inScript(),
-                    color = accent,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                // A title is inline content like any other: a link in it is a
+                // link, and code is code. Flattened to plain text, both were
+                // just words.
+                if (block.title.isEmpty()) {
+                    Text(
+                        text = block.label(),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall.inScript(),
+                        color = accent,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                } else {
+                    RichText(
+                        inlines = block.title,
+                        modifier = Modifier.weight(1f),
+                        style =
+                            MaterialTheme.typography.titleSmall
+                                .copy(color = accent, fontWeight = FontWeight.SemiBold)
+                                .inScript(),
+                        actions = actions.inline,
+                        brokenLinks = brokenLinks,
+                    )
+                }
+                // Says it folds, and which way it is: a header that collapses
+                // the body when tapped looked exactly like one that does not.
+                if (block.foldable) {
+                    LucideGlyph(
+                        name = if (expanded) "chevron-down" else "chevron-right",
+                        size = CALLOUT_ICON * scale,
+                        tint = accent,
+                    )
+                }
             }
             if (expanded) {
                 block.children.forEach { child ->
@@ -300,10 +390,19 @@ private fun QuoteView(
     brokenLinks: Set<String>,
     modifier: Modifier,
 ) {
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    // The row is as tall as its tallest child and the rule fills it, which is
+    // how the callout draws its bar. A box with a width and no height in a row
+    // that never asked its children how tall they were came out zero tall, so
+    // no quote in the vault ever had its rule.
+    Row(
+        modifier = modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Box(
             Modifier
+                .testTag(QUOTE_BAR_TAG)
                 .width(3.dp)
+                .fillMaxHeight()
                 .background(Markup.Quote, RoundedCornerShape(2.dp)),
         )
         // @markup.quote paints the quoted text itself, not just the rule.
@@ -372,9 +471,14 @@ private fun ItemMarker(
     number: Int,
     onComplete: ((line: Int) -> Unit)? = null,
 ) {
+    // The marker is set beside the text, so it follows the reader's size
+    // with it -- a bullet the size of a full stop beside a line twice as tall
+    // reads as a mistake.
+    val scale = LocalReading.current.textScale
+    val custom = item.customStatus()
     val icon =
         when (item.task) {
-            TaskState.UNCHECKED -> "square"
+            TaskState.UNCHECKED -> custom?.icon ?: "square"
             TaskState.CHECKED -> "square-check-big"
             TaskState.CANCELLED -> "square-x"
             TaskState.IN_PROGRESS -> "square-dot"
@@ -383,9 +487,9 @@ private fun ItemMarker(
     if (icon == null) {
         Text(
             text = if (ordered) "$number." else "\u2022",
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.inScript(),
             color = Markup.ListMarker,
-            modifier = Modifier.widthIn(min = MARKER_WIDTH),
+            modifier = Modifier.widthIn(min = MARKER_WIDTH * scale),
         )
         return
     }
@@ -394,22 +498,40 @@ private fun ItemMarker(
     // than one that never does, so the three conditions are checked together.
     val open = item.task == TaskState.UNCHECKED || item.task == TaskState.IN_PROGRESS
     val complete = onComplete?.takeIf { open && item.line >= 0 }
-    LucideGlyph(
-        name = icon,
+    // A checkbox to a screen reader, with its state. No
+    // minimumInteractiveComponentSize: Compose already extends a small
+    // clickable's touch target to 48dp without growing its layout, and the
+    // modifier would grow it -- every line of a task list twice as tall.
+    Box(
         // Nudged down to sit on the first line of the item's text rather than
         // above it; an icon has no baseline of its own.
         modifier =
             Modifier
-                .widthIn(min = MARKER_WIDTH)
-                .padding(top = MARKER_NUDGE)
-                .then(complete?.let { Modifier.clickable { it(item.line) } } ?: Modifier),
-        size = MARKER_ICON,
-        tint = item.markerColor(),
-        contentDescription =
-            item.task.name
-                .lowercase()
-                .replace('_', ' '),
-    )
+                .padding(top = MARKER_NUDGE * scale)
+                .widthIn(min = MARKER_WIDTH * scale)
+                .triStateToggleable(
+                    state =
+                        when (item.task) {
+                            TaskState.CHECKED -> ToggleableState.On
+                            TaskState.CANCELLED -> ToggleableState.Indeterminate
+                            else -> ToggleableState.Off
+                        },
+                    enabled = complete != null,
+                    role = Role.Checkbox,
+                    onClick = { complete?.invoke(item.line) },
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        LucideGlyph(
+            name = icon,
+            size = MARKER_ICON * scale,
+            tint = custom?.tint ?: item.markerColor(),
+            contentDescription =
+                custom?.description ?: item.task.name
+                    .lowercase()
+                    .replace('_', ' '),
+        )
+    }
 }
 
 /**
@@ -421,6 +543,7 @@ private fun ItemMarker(
  */
 @Composable
 private fun TaskChips(item: MdListItem) {
+    val scale = LocalReading.current.textScale
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         item.taskMeta.forEach { meta ->
             val (icon, tint, label) = meta.chip()
@@ -433,10 +556,10 @@ private fun TaskChips(item: MdListItem) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    LucideGlyph(name = icon, size = CHIP_ICON, tint = tint, contentDescription = label)
+                    LucideGlyph(name = icon, size = CHIP_ICON * scale, tint = tint, contentDescription = label)
                     Text(
                         text = meta.value,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.inScript(),
                         color = tint,
                     )
                 }
@@ -578,14 +701,14 @@ private fun AttachmentView(
         ) {
             LucideGlyph(
                 name = Attachments.iconOf(block.path),
-                size = ATTACHMENT_ICON,
+                size = ATTACHMENT_ICON * LocalReading.current.textScale,
                 tint = MaterialTheme.colorScheme.primary,
             )
             Column {
-                Text(block.label, style = MaterialTheme.typography.bodyMedium)
+                Text(block.label, style = MaterialTheme.typography.bodyMedium.inScript())
                 Text(
                     stringResource(R.string.attachment_open_with),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.inScript(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -595,9 +718,16 @@ private fun AttachmentView(
 
 @Composable
 private fun UnsupportedView(
-    label: String,
+    block: MdBlock.Unsupported,
     modifier: Modifier,
 ) {
+    val what =
+        when (block.kind) {
+            UnsupportedKind.DATAVIEW -> stringResource(R.string.unsupported_dataview)
+            UnsupportedKind.TASKS_QUERY -> stringResource(R.string.unsupported_tasks_query)
+            UnsupportedKind.EXCALIDRAW -> stringResource(R.string.unsupported_excalidraw)
+            UnsupportedKind.OTHER -> block.label
+        }
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -605,15 +735,51 @@ private fun UnsupportedView(
     ) {
         Text(
             // Saying so plainly beats showing the reader the query source.
-            text = "$label - not supported here",
+            text = stringResource(R.string.unsupported_block, what),
             modifier = Modifier.padding(12.dp),
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.inScript(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
-private fun List<MdInline>.plainText(): String = joinToString("") { if (it is MdInline.Text) it.text else "" }
+/** How one of the statuses beyond the four is drawn. */
+private class CustomStatus(
+    val icon: String,
+    val tint: Color,
+    val description: String,
+)
+
+/**
+ * The statuses themes and the Tasks plugin give meaning to beyond the four --
+ * forwarded, scheduled, important, a question -- each with its own glyph.
+ *
+ * They are all still open, which is what the Tasks plugin makes of any status
+ * it does not know, so they tick like any other. One this table has never
+ * heard of is still a task: a dashed box, rather than `[k]` printed in front
+ * of the text.
+ */
+private fun MdListItem.customStatus(): CustomStatus? =
+    when (status) {
+        ' ', 'x', 'X', '-', '/' -> null
+        '>' -> CustomStatus("square-arrow-right", Naz.Blue, "forwarded")
+        '<' -> CustomStatus("calendar-clock", Naz.Blue, "scheduled")
+        '!' -> CustomStatus("circle-alert", Naz.Red, "important")
+        '?' -> CustomStatus("circle-help", Naz.Yellow, "question")
+        '*' -> CustomStatus("star", Naz.VividYellow, "star")
+        '"' -> CustomStatus("quote", Naz.WarmGrey, "quote")
+        'i' -> CustomStatus("info", Naz.Blue, "information")
+        'b' -> CustomStatus("bookmark", Naz.Orange, "bookmark")
+        'l' -> CustomStatus("map-pin", Naz.Red, "location")
+        'I' -> CustomStatus("lightbulb", Naz.VividYellow, "idea")
+        'S' -> CustomStatus("piggy-bank", Naz.SpringGreen, "savings")
+        'f' -> CustomStatus("flame", Naz.Red, "fire")
+        'k' -> CustomStatus("key", Naz.VividYellow, "key")
+        'w' -> CustomStatus("trophy", Naz.VividYellow, "win")
+        'u', 'p' -> CustomStatus("thumbs-up", Naz.SpringGreen, if (status == 'p') "pro" else "up")
+        'd', 'c' -> CustomStatus("thumbs-down", Naz.Red, if (status == 'c') "con" else "down")
+        else -> CustomStatus("square-dashed", Markup.ListMarker, "status $status")
+    }
 
 @Composable
 private fun MdListItem.markerColor(): Color =
@@ -665,7 +831,16 @@ private fun CalloutKind.icon(): String =
         CalloutKind.INFO, CalloutKind.NOTE -> "info"
     }
 
-private fun CalloutKind.label(): String = name.lowercase().replaceFirstChar { it.uppercase() }
+/**
+ * What an untitled callout is called: its type as written, capitalised, which
+ * is what Obsidian shows. `[!recipe]` falls back to a note's colours and icon,
+ * but it is still called "Recipe" -- labelling it "Note" lost the one thing
+ * the author said about it.
+ */
+private fun MdBlock.Callout.label(): String = type.replaceFirstChar { it.uppercase() }
+
+/** The rule down a quote's side, so a test can find it and measure it. */
+internal const val QUOTE_BAR_TAG = "quote-bar"
 
 private const val CONTAINER_ALPHA = 0.10f
 private const val CHIP_ALPHA = 0.16f
@@ -675,6 +850,7 @@ private val CALLOUT_ICON = 16.dp
 private val CHIP_ICON = 11.dp
 private val ATTACHMENT_ICON = 22.dp
 private val MARKER_ICON = 16.dp
+private val COPY_ICON = 16.dp
 private val MARKER_NUDGE = 3.dp
 private const val RULE_ALPHA = 0.35f
 private val CODE_LINE_HEIGHT = 18.sp

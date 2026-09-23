@@ -139,6 +139,9 @@ enum class CalloutKind {
 
 enum class MdAlign { START, CENTER, END }
 
+/** What an [MdBlock.Unsupported] block would have been. */
+enum class UnsupportedKind { DATAVIEW, TASKS_QUERY, EXCALIDRAW, OTHER }
+
 /** Obsidian Tasks adds two states GFM does not have. */
 enum class TaskState { UNCHECKED, CHECKED, CANCELLED, IN_PROGRESS, NONE }
 
@@ -163,6 +166,12 @@ data class MdListItem(
      * be ticked. Everything else about a list item is content.
      */
     val line: Int = -1,
+    /**
+     * The character between the brackets, as written: `' '`, `'x'`, `'>'`,
+     * `'!'`. [task] says what it means; this says which glyph draws it, since
+     * a forwarded task and a question are both open and look nothing alike.
+     */
+    val status: Char = ' ',
 )
 
 /** Text direction, detected per block from its first strong character. */
@@ -218,6 +227,14 @@ sealed interface MdBlock {
         val children: List<MdBlock>,
         val collapsed: Boolean = false,
         override val direction: MdDirection = MdDirection.LTR,
+        /** `[!type]+` or `[!type]-`: it can be folded, and [collapsed] says how it starts. */
+        val foldable: Boolean = collapsed,
+        /**
+         * The type as written, lowercased. Obsidian titles an untitled callout
+         * with it, so `[!recipe]` reads "Recipe" even though [kind] fell back
+         * to a note.
+         */
+        val type: String = kind.name.lowercase(),
     ) : MdBlock
 
     data class ListBlock(
@@ -236,17 +253,39 @@ sealed interface MdBlock {
         override val direction: MdDirection = MdDirection.LTR,
     ) : MdBlock
 
-    /** `![[uploads/x.jpg]]` or `![alt](../uploads/x.jpg)`, already resolved. */
+    /**
+     * `![[uploads/x.jpg]]` or `![alt](../uploads/x.jpg)`, already resolved.
+     *
+     * [width] and [height] are the size Obsidian reads from after the pipe --
+     * `![[x.jpg|300]]`, `![[x.jpg|300x200]]` -- in its own CSS pixels, which is
+     * to say density-independent ones.
+     */
     data class Image(
         override val id: Int,
         val path: String,
         val alt: String? = null,
+        val width: Int? = null,
+        val height: Int? = null,
     ) : MdBlock
 
     /** An embed pointing at something that cannot be shown inline. */
     data class Attachment(
         override val id: Int,
         val path: String,
+        val label: String,
+    ) : MdBlock
+
+    /**
+     * `![[Another note]]` or `![[Another note#Heading]]`: another note, or one
+     * section of it, drawn in place.
+     *
+     * [target] is the raw link target, resolved the way a wikilink is -- it is
+     * a note name, not a file path.
+     */
+    data class NoteEmbed(
+        override val id: Int,
+        val target: String,
+        val heading: String?,
         val label: String,
     ) : MdBlock
 
@@ -262,6 +301,8 @@ sealed interface MdBlock {
     data class Unsupported(
         override val id: Int,
         val label: String,
+        /** Which kind, so the reader can be told in their own language. */
+        val kind: UnsupportedKind = UnsupportedKind.OTHER,
     ) : MdBlock
 
     data class FrontMatter(

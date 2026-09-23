@@ -2,6 +2,7 @@ package me.parham1995.notes.markdown
 
 import org.commonmark.node.CustomBlock
 import org.commonmark.node.CustomNode
+import org.commonmark.node.Node
 
 /** `[[target#heading|alias]]`, or `![[target]]` when [embed] is set. */
 class WikiLinkNode(
@@ -31,4 +32,16 @@ class CalloutNode(
     val kind: CalloutKind,
     val titleText: String,
     val collapsed: Boolean,
+    /** `+` or `-` after the type. */
+    val foldable: Boolean = collapsed,
+    /** The type as written, lowercased. */
+    val type: String = kind.name.lowercase(),
+    /**
+     * The first line's inline nodes -- links, code, maths -- held apart from
+     * the tree, because the title is not part of the callout's body.
+     */
+    val title: Node = CalloutTitleNode(),
 ) : CustomBlock()
+
+/** A detached container for a callout title's inline nodes. */
+class CalloutTitleNode : CustomNode()
