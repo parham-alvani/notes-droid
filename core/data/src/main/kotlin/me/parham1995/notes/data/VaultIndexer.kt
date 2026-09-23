@@ -231,12 +231,15 @@ class VaultIndexer
             val ids = index.writeBatch(writes)
 
             // Outside the transaction: the FTS table is not one of Room's, and
-            // taking its writer connection from inside would deadlock.
-            ids.forEachIndexed { position, id ->
-                val indexed = batch[position]
-                val name = indexed.path.substringAfterLast('/').removeSuffix(MD)
-                search.upsert(id, name, indexed.note.plainText)
-            }
+            // taking its writer connection from inside would deadlock. Still
+            // one transaction of its own, rather than a commit per note.
+            search.upsertAll(
+                ids.mapIndexed { position, id ->
+                    val indexed = batch[position]
+                    val name = indexed.path.substringAfterLast('/').removeSuffix(MD)
+                    SearchDocument(id, name, indexed.note.plainText)
+                },
+            )
         }
 
         /**

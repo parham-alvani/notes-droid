@@ -14,6 +14,13 @@ data class SearchHit(
     val snippet: String,
 )
 
+/** One note as the search index holds it. */
+data class SearchDocument(
+    val noteId: Long,
+    val title: String,
+    val body: String,
+)
+
 /**
  * The FTS5 index, driven through raw SQL.
  *
@@ -33,17 +40,36 @@ class SearchIndex
             noteId: Long,
             title: String,
             body: String,
-        ) {
-            database.useWriterConnection { connection ->
-                connection.usePrepared("DELETE FROM $FTS WHERE rowid = ?") { statement ->
-                    statement.bindLong(1, noteId)
-                    statement.step()
-                }
-                connection.usePrepared("INSERT INTO $FTS(rowid, title, body) VALUES (?, ?, ?)") { statement ->
-                    statement.bindLong(1, noteId)
-                    statement.bindText(2, title)
-                    statement.bindText(3, body)
-                    statement.step()
+        ) = upsertAll(listOf(SearchDocument(noteId, title, body)))
+
+        /**
+         * Replaces many notes' entries in one transaction.
+         *
+         * A statement outside a transaction is its own commit, and a commit is
+         * an fsync: indexed one note at a time, a vault of 4,600 notes paid for
+         * 4,600 of them after the rest of the index had been written in
+         * batches of two hundred.
+         */
+        suspend fun upsertAll(documents: List<SearchDocument>) {
+            if (documents.isEmpty()) return
+            database.useWriterConnection { transactor ->
+                transactor.immediateTransaction {
+                    usePrepared("DELETE FROM $FTS WHERE rowid = ?") { statement ->
+                        documents.forEach { document ->
+                            statement.bindLong(1, document.noteId)
+                            statement.step()
+                            statement.reset()
+                        }
+                    }
+                    usePrepared("INSERT INTO $FTS(rowid, title, body) VALUES (?, ?, ?)") { statement ->
+                        documents.forEach { document ->
+                            statement.bindLong(1, document.noteId)
+                            statement.bindText(2, document.title)
+                            statement.bindText(3, document.body)
+                            statement.step()
+                            statement.reset()
+                        }
+                    }
                 }
             }
         }

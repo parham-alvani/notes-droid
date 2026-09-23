@@ -311,4 +311,17 @@ class VaultIndexerTest {
                 statement.getLong(0)
             }
         }
+
+    @Test
+    fun `a batch of notes is searchable, once each, after reindexing`() =
+        runTest {
+            // Written as one transaction per batch now rather than a commit per
+            // note, and every note in it still has to come out the other side.
+            val entries = (1..250).map { write("Batch/Note $it.md", "shared word plus unique$it") }
+            indexer.indexAll(1L, entries)
+            indexer.indexChanged(1L, changed = entries.take(3), removed = emptyList())
+
+            assertThat(ftsRows()).isEqualTo(250L)
+            assertThat(search.search(1L, "unique137").map { it.title }).containsExactly("Note 137")
+        }
 }
