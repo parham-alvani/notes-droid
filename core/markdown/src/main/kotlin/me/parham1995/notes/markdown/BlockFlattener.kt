@@ -228,7 +228,14 @@ class BlockFlattener(
 
             // Video and audio are handed to another app rather than shown, so
             // the block is a card, not a broken image.
-            else -> MdBlock.Attachment(id(), node.target, node.alias ?: node.target.substringAfterLast('/'))
+            // Resolved like an image: `![[clip.mp4]]` names a file wherever it
+            // sits, and passed through raw it was looked for at the vault root.
+            else ->
+                MdBlock.Attachment(
+                    id(),
+                    imageResolver(node.target),
+                    node.alias ?: node.target.substringAfterLast('/'),
+                )
         }
     }
 

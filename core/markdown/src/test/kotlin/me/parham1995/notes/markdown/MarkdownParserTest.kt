@@ -405,6 +405,27 @@ class MarkdownParserTest {
                 .code,
         ).contains("<br>")
     }
+
+    @Test
+    fun `an attachment embedded by its bare name is resolved like an image`() {
+        val note =
+            MarkdownParser.parseNote("![[clip.mp4]]\n\n![[photo.png]]") { target ->
+                "uploads/$target"
+            }
+
+        assertThat(
+            note.blocks
+                .filterIsInstance<MdBlock.Attachment>()
+                .single()
+                .path,
+        ).isEqualTo("uploads/clip.mp4")
+        assertThat(
+            note.blocks
+                .filterIsInstance<MdBlock.Image>()
+                .single()
+                .path,
+        ).isEqualTo("uploads/photo.png")
+    }
 }
 
 private fun List<MdInline>.flat(): String =
