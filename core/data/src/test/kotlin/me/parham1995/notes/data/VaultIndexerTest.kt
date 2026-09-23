@@ -273,4 +273,18 @@ class VaultIndexerTest {
             assertThat(note.openedAt).isEqualTo(1234L)
             assertThat(note.scrollIndex).isEqualTo(7)
         }
+
+    @Test
+    fun `a note that moves keeps its backlinks`() =
+        runTest {
+            // The link from A still names B, but it pointed at the id B had
+            // before the move, and resolving only revisits links with no
+            // target -- so it stayed attached to a note that no longer existed.
+            indexer.indexAll(1L, listOf(write("A.md", "see [[B]]"), write("X/B.md", "the target")))
+
+            indexer.indexChanged(1L, changed = listOf(write("Y/B.md", "the target")), removed = listOf("X/B.md"))
+
+            val moved = database.noteDao().idOf(1L, "Y/B.md")!!
+            assertThat(database.linkDao().backlinks(moved).map { it.title }).containsExactly("A")
+        }
 }

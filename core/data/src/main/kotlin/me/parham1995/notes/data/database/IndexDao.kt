@@ -131,6 +131,11 @@ abstract class IndexDao {
      *
      * There are no foreign keys to cascade, so each derived table is cleared
      * by hand; one left out is rows that nothing will ever delete.
+     *
+     * Links *into* a removed note are kept but detached. Resolving only ever
+     * revisits links with no target, so one left pointing at a dead id stayed
+     * broken for good -- a note moved to another folder lost every backlink
+     * it had, although the links still named it.
      */
     @Transaction
     open suspend fun removeNotes(
@@ -139,12 +144,16 @@ abstract class IndexDao {
     ): List<Long> =
         paths.mapNotNull { path ->
             idOf(vaultId, path)?.also { id ->
+                detachInbound(id)
                 deleteLinks(id)
                 deleteHeadings(id)
                 deleteTasks(id)
                 deleteNote(id)
             }
         }
+
+    @Query("UPDATE links SET targetId = NULL WHERE targetId = :noteId")
+    abstract suspend fun detachInbound(noteId: Long)
 
     /** Attaches resolved links to their targets, nulls included. */
     @Transaction
