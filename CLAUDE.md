@@ -90,7 +90,7 @@ So: **a migration that touches data gets a test with data in it.** `two vaults k
 
 Anything resolved reflectively or by name string gets renamed or removed in release builds, and **only release builds**. `net.i2p.crypto.eddsa` was stripped once and SSH failed with "no keys to try" on a signed APK while debug worked perfectly. The keep rules in `app/proguard-rules.pro` cover jlatexmath, JGit, Apache sshd and eddsa.
 
-`tools/verify-apk.sh` checks the built APK still contains what it needs. `just verify-apk` runs it, and CI runs it before publishing.
+`tools/verify-apk.sh` checks the built APK still contains what it needs, including every class JGit and sshd name in `META-INF/services`. `just verify-apk` runs it. CI builds a debug-key-signed release APK on every push and runs it there too, so R8 trouble shows up before a tag rather than after one.
 
 ## Releasing
 
