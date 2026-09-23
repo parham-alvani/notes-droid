@@ -61,7 +61,7 @@ class RestVaultSync(
         head: String,
     ): SyncPlan? {
         val from = base.commit ?: return null
-        val changes =
+        val comparison =
             try {
                 client.compare(from, head)
             } catch (_: GitHubException.NotFound) {
@@ -69,6 +69,17 @@ class RestVaultSync(
                 log("base commit unreachable - falling back to a full tree listing")
                 return null
             }
+        // Still reachable is not the same as still an ancestor: a force-push
+        // that GitHub has not collected yet compares fine and says
+        // "diverged", and its file list is from a merge base the device
+        // never had.
+        if (!SyncPlanner.compareIsUsable(comparison.status)) {
+            log(
+                "head is ${comparison.status ?: "of unknown relation"} to the base - falling back to a full tree listing",
+            )
+            return null
+        }
+        val changes = comparison.files
         // At the cap the response is truncated and would silently miss files.
         if (changes.size >= COMPARE_FILE_LIMIT) {
             log("compare hit its ${COMPARE_FILE_LIMIT}-file cap - falling back to a full tree listing")
@@ -112,12 +123,15 @@ class RestVaultSync(
                 .map { entry ->
                     async {
                         gate.withPermit {
-                            // Images are known but deliberately not fetched;
-                            // they arrive when a note that embeds one is opened.
-                            if (entry.kind == BlobKind.IMAGE) {
-                                sink.record(entry, LocalState.ABSENT)
-                            } else {
+                            // Only what the reader parses is fetched up front.
+                            // Images and attachments are known but not
+                            // fetched; they arrive when something opens them,
+                            // which is what keeps a 40MB video off a device
+                            // that only ever reads the notes around it.
+                            if (entry.kind in FETCHED_UP_FRONT) {
                                 sink.write(entry.path, client.blob(entry.sha), entry.sha)
+                            } else {
+                                sink.record(entry, LocalState.ABSENT)
                             }
                             step()
                         }
@@ -128,6 +142,9 @@ class RestVaultSync(
 
     private companion object {
         const val DEFAULT_CONCURRENCY = 6
+
+        /** Kinds the app reads itself; everything else is fetched on open. */
+        val FETCHED_UP_FRONT = setOf(BlobKind.MARKDOWN, BlobKind.CONFIG)
 
         /** GitHub caps the compare endpoint's `files` array at 300. */
         const val COMPARE_FILE_LIMIT = 300

@@ -14,7 +14,9 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import me.parham1995.notes.sync.GitHubException
+import java.time.Duration
 
 /**
  * Runs a sync outside the UI.
@@ -32,6 +34,8 @@ class SyncWorker
         @Assisted params: WorkerParameters,
         private val repository: SyncRepository,
         private val log: SyncLog,
+        private val scheduler: SyncScheduler,
+        private val settings: SettingsStore,
     ) : CoroutineWorker(context, params) {
         /**
          * Run after a successful sync, for anything outside the app that shows
@@ -65,7 +69,7 @@ class SyncWorker
             val userInitiated = inputData.getBoolean(KEY_USER_INITIATED, false)
             val foreground =
                 userInitiated &&
-                    runCatching { setForeground(foregroundInfo(0, 0)) }
+                    runCatchingUnlessCancelled { setForeground(foregroundInfo(0, 0)) }
                         .onFailure {
                             log.warn(
                                 "cannot run in the foreground (${it::class.simpleName}): " +
@@ -92,6 +96,13 @@ class SyncWorker
                         KEY_DELETED to plan.deletes.size,
                     ),
                 )
+            } catch (cancelled: CancellationException) {
+                // WorkManager stopped this -- Cancel was pressed, a newer
+                // sync replaced it, or the constraints no longer hold. Not a
+                // failure to retry: returning one here would count an
+                // attempt and schedule another run of the work just stopped.
+                log.info("sync cancelled")
+                throw cancelled
             } catch (failure: NotConfiguredException) {
                 // Nothing to retry: the app has not been set up yet.
                 log.error("not configured: ${failure.message}")
@@ -103,23 +114,40 @@ class SyncWorker
             } catch (failure: GitHubException.NotFound) {
                 log.error("not found: ${failure.message}")
                 Result.failure(errorData(failure.message))
+            } catch (failure: GitHubException) {
+                // GitHub said when to come back. WorkManager's own backoff
+                // knows nothing of that: it retried within minutes into an
+                // hour-long limit, spent every attempt, and gave up.
+                val wait = waitFor(failure, System.currentTimeMillis() / MILLIS_PER_SECOND)
+                if (wait != null) {
+                    scheduler.syncAfter(wait, settings.current().syncOnWifiOnly)
+                    val minutes = wait.toMinutes().coerceAtLeast(1)
+                    log.warn("GitHub asked to wait - syncing again in $minutes min")
+                    Result.failure(errorData("GitHub's rate limit - syncing again in $minutes min"))
+                } else {
+                    retryOrGiveUp(failure)
+                }
             } catch (failure: Exception) {
                 // Rate limits, connectivity, a half-finished download: all worth
                 // another go, and the manifest makes resuming free. But not
                 // forever -- an unbounded retry backs off into the distance
                 // while the UI still calls it "syncing", which is
                 // indistinguishable from a hang.
-                log.error(failure.describeChain())
-                if (runAttemptCount >= MAX_ATTEMPTS) {
-                    Result.failure(
-                        errorData(
-                            "gave up after $MAX_ATTEMPTS attempts - " +
-                                "${failure::class.simpleName}: ${failure.message}",
-                        ),
-                    )
-                } else {
-                    Result.retry()
-                }
+                retryOrGiveUp(failure)
+            }
+        }
+
+        private suspend fun retryOrGiveUp(failure: Exception): Result {
+            log.error(failure.describeChain())
+            return if (runAttemptCount >= MAX_ATTEMPTS) {
+                Result.failure(
+                    errorData(
+                        "gave up after $MAX_ATTEMPTS attempts - " +
+                            "${failure::class.simpleName}: ${failure.message}",
+                    ),
+                )
+            } else {
+                Result.retry()
             }
         }
 
@@ -192,5 +220,27 @@ class SyncWorker
 
             /** Distinguishes an expired or revoked token from any other failure. */
             const val TOKEN_REJECTED = "token-rejected"
+
+            private const val MILLIS_PER_SECOND = 1000L
+
+            /** A little past the reset, so the first request is not early. */
+            private const val MARGIN_SECONDS = 30L
+
+            /**
+             * How long GitHub asked to be left alone, or null when it did not
+             * say. [nowEpochSeconds] is passed in so this can be tested.
+             */
+            fun waitFor(
+                failure: GitHubException,
+                nowEpochSeconds: Long,
+            ): Duration? =
+                when (failure) {
+                    is GitHubException.RateLimited ->
+                        failure.resetEpochSeconds
+                            .takeIf { it > 0 }
+                            ?.let { Duration.ofSeconds((it - nowEpochSeconds).coerceAtLeast(0) + MARGIN_SECONDS) }
+                    is GitHubException.SlowDown -> Duration.ofSeconds(failure.retryAfterSeconds + MARGIN_SECONDS)
+                    else -> null
+                }
         }
     }

@@ -1,6 +1,8 @@
 package me.parham1995.notes.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -8,9 +10,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.database.BlobDao
+import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.PendingEditDao
 import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.data.database.SyncStateEntity
@@ -21,7 +26,6 @@ import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.RepositoryInfo
-import me.parham1995.notes.sync.RestVaultSync
 import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.SyncPlan
 import me.parham1995.notes.sync.VaultFilter
@@ -52,6 +56,7 @@ class SyncRepository
         private val settings: SettingsStore,
         private val tokens: TokenStore,
         private val blobs: BlobDao,
+        private val notes: NoteDao,
         private val syncState: SyncStateDao,
         private val vaults: VaultDao,
         private val sinkProvider: Provider<RoomVaultSink>,
@@ -80,8 +85,18 @@ class SyncRepository
             }.distinctUntilChanged()
                 .flatMapLatest { id -> if (id == null) flowOf(0) else blobs.countOfKind(id, BlobKind.MARKDOWN) }
 
-        /** Every repository this app reads, in the order they are shown. */
-        fun vaults(): Flow<List<VaultEntity>> = vaults.observe()
+        /**
+         * Every repository this app reads, in the order they are shown.
+         *
+         * Keys are moved to their id-based names on the way past, because
+         * this is what every screen that shows a key is built from -- and it
+         * has to have happened before one asks whether a vault has a key.
+         */
+        fun vaults(): Flow<List<VaultEntity>> =
+            vaults
+                .observe()
+                .onEach { sshKeys.adoptLegacyNames(it) }
+                .flowOn(Dispatchers.IO)
 
         /**
          * Moves the single repository from settings into the table, once.
@@ -149,6 +164,34 @@ class SyncRepository
         suspend fun updateVault(vault: VaultEntity) = vaults.update(vault)
 
         /**
+         * Moves a vault to another transport.
+         *
+         * The commit and ETag go with the change. Each transport's idea of
+         * "where the device is up to" is its own: an SSH clone is shallow and
+         * does not hold the commit a REST sync recorded, and a REST sync
+         * replaying an SSH-era ETag can be told nothing moved when the files
+         * on disk were never its own. Planning the next sync from the full
+         * tree still diffs against the manifest, so nothing already here is
+         * fetched again. Whether the credential can write is a question for
+         * the new credential, so that goes too until it is asked.
+         *
+         * Under the gate, and read fresh: a sync that is running holds the
+         * row it started with and writes it back at the end, which would put
+         * the old transport back.
+         */
+        suspend fun setTransport(
+            vaultId: Long,
+            transport: SyncTransport,
+        ) = gate.withVault {
+            val vault = vaults.byId(vaultId) ?: return@withVault
+            if (SyncTransport.parse(vault.transport) == transport) return@withVault
+            vaults.update(
+                vault.copy(transport = transport.name, headCommit = null, etagRef = null, canWrite = false),
+            )
+            log.info("${vault.label} now syncs over ${transport.name} - the next sync reads the whole tree once")
+        }
+
+        /**
          * Forgets a repository and everything it brought with it.
          *
          * The notes are removed through the indexer rather than by deleting
@@ -156,15 +199,27 @@ class SyncRepository
          * a note deleted from `notes` alone leaves an FTS row that still
          * matches and a backlink that still resolves.
          */
-        suspend fun removeVault(id: Long) {
+        suspend fun removeVault(id: Long) =
+            gate.withVault {
+                removeVaultLocked(id)
+            }
+
+        /**
+         * Under the gate, like everything else here that touches a vault's
+         * files or rows. Deleting a working tree while a sync checks it out,
+         * or while a write commits from it, is the race the gate exists for.
+         */
+        private suspend fun removeVaultLocked(id: Long) {
             val vault = vaults.byId(id) ?: return
             // Through the indexer rather than by deleting rows: a note removed
             // from `notes` alone leaves a search entry that still matches and a
             // backlink that still resolves.
-            val owned =
-                blobs
-                    .byVaultKindAndState(id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
-                    .map { it.path }
+            // Every note the vault has in the index, not every markdown file
+            // its manifest calls downloaded: a note indexed from a row that
+            // has since changed state -- or from no row at all -- was left
+            // behind with its tasks, links and search entry, showing up in
+            // task lists for a vault that no longer existed.
+            val owned = notes.allIds(id).map { it.path }
             indexer.indexChanged(vaultId = id, changed = emptyList(), removed = owned)
             blobs.clearVault(id)
             // Its queued edits go too. A flush would eventually notice the
@@ -172,7 +227,7 @@ class SyncRepository
             // queue looking like work still to do.
             pending.clearVault(id)
             files.deleteVault(id)
-            sshKeys.delete(vault.name)
+            sshKeys.delete(vault.id)
             vaults.delete(id)
             log.warn("removed ${vault.owner}/${vault.repo}")
         }
@@ -188,8 +243,14 @@ class SyncRepository
          * seconds and a handshake answers it outright.
          */
         suspend fun testSshKey(vault: VaultEntity): Result<String> =
-            runCatching {
-                if (!sshKeys.exists(vault.name)) {
+            // Gated: it opens the same working tree a sync drives, and records
+            // what it learned on the vault row a sync writes back at the end.
+            gate.withVault { testSshKeyLocked(vault) }
+
+        private suspend fun testSshKeyLocked(vault: VaultEntity): Result<String> =
+            runCatchingUnlessCancelled {
+                transports.adoptLegacyKeys()
+                if (!sshKeys.exists(vault.id)) {
                     error("no key for ${vault.label} yet")
                 }
                 val transport = transports.ssh(vault)
@@ -208,7 +269,12 @@ class SyncRepository
          * the next background sync to notice is a long time to stare at a
          * checkbox that is not there.
          */
-        suspend fun refreshWriteAccess(): String {
+        suspend fun refreshWriteAccess(): String =
+            // A sync writes back the row it started with; an answer recorded
+            // underneath it would be overwritten with the old one.
+            gate.withVault { refreshWriteAccessLocked() }
+
+        private suspend fun refreshWriteAccessLocked(): String {
             val targets = vaults.all().filter { it.enabled }
             if (targets.isEmpty()) throw NotConfiguredException("no repository configured")
             return targets
@@ -321,7 +387,7 @@ class SyncRepository
                 // reset during a sync, which would take an edit's local copy
                 // with it and make a queued change look like a lost one. The
                 // unlocked form, because the gate is already held here.
-                runCatching { writes.drain() }
+                runCatchingUnlessCancelled { writes.drain() }
                     .onFailure { log.warn("could not send queued edits: " + it.describeChain()) }
                 val targets = vaults.all().filter { it.enabled }
                 if (targets.isEmpty()) throw NotConfiguredException("no repository configured")
@@ -343,6 +409,10 @@ class SyncRepository
                         plans += plan
                         done += plan.downloads.size
                         total += plan.downloads.size
+                    } catch (cancelled: CancellationException) {
+                        // Not a failure of this vault: the whole sync was
+                        // stopped, and the next vault must not start.
+                        throw cancelled
                     } catch (thrown: Exception) {
                         log.error("${vault.owner}/${vault.repo}: " + thrown.describeChain())
                         vaults.update(
@@ -366,7 +436,7 @@ class SyncRepository
                 // Again at the end: an edit made *during* this sync could not
                 // take the gate and queued instead, and the flush at the start
                 // is long past. Without this it would wait for the next one.
-                runCatching { writes.drain() }
+                runCatchingUnlessCancelled { writes.drain() }
                     .onFailure { log.warn("could not send queued edits: " + it.describeChain()) }
 
                 failure?.let { throw it }
@@ -440,9 +510,15 @@ class SyncRepository
                     index(vault, plan, firstSync = vault.headCommit == null)
                     log.info("indexed in ${(System.currentTimeMillis() - indexStart) / 1000}s")
                 }
+                catchUpIndex(vault)
                 if (staleIndex) {
                     log.info("the indexer derives more than it used to - rebuilding from what is on disk")
-                    reindex()
+                    // This vault only. Each vault carries its own index
+                    // version and is brought up to date when it syncs; the
+                    // whole-app rebuild here ran once per stale vault, so
+                    // three vaults after an upgrade were each rebuilt three
+                    // times over.
+                    reindexVault(vault)
                 }
                 vaults.update(
                     vault.copy(
@@ -498,6 +574,28 @@ class SyncRepository
         }
 
         /**
+         * Indexes markdown whose note lags the manifest.
+         *
+         * A sync that stopped between downloading and indexing -- killed,
+         * cancelled, a parse that threw -- leaves the manifest at the new sha
+         * and the note at the old one. The next plan diffs against the
+         * manifest, so it never mentions those files again, and without this
+         * the note would read as its old self until the file changed once
+         * more. One query when nothing is behind, which is nearly always.
+         */
+        private suspend fun catchUpIndex(vault: VaultEntity) {
+            val behind =
+                blobs
+                    .indexBehind(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
+                    .map { PathAndSha(it.path, it.sha) }
+                    // Guides are never notes, so they are always "behind".
+                    .filterNot { VaultIndexer.isGuide(it.path) }
+            if (behind.isEmpty()) return
+            log.info("${behind.size} notes were downloaded but not indexed - indexing them now")
+            indexer.indexChanged(vaultId = vault.id, changed = behind, removed = emptyList())
+        }
+
+        /**
          * Reparses everything already on disk, without touching the network.
          *
          * A sync only reindexes what changed, so anything derived during
@@ -506,26 +604,39 @@ class SyncRepository
          * rebuild it, and it spans every repository because links and search
          * do.
          */
-        suspend fun reindex() {
+        suspend fun reindex() =
+            // Clearing a vault's notes while a sync is adding to them leaves
+            // whichever finished second holding half the answer.
+            gate.withVault { reindexLocked() }
+
+        private suspend fun reindexLocked() {
             log.info("reindexing everything on disk")
             val started = System.currentTimeMillis()
             var total = 0
-            vaults.all().forEach { vault ->
-                val theirs =
-                    blobs
-                        .byVaultKindAndState(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
-                        .map { PathAndSha(it.path, it.sha) }
-                // Named in the journal per vault, because "reindexed 2,400
-                // notes" says nothing about which vault came out empty.
-                log.info("reindexing ${theirs.size} notes in ${vault.label}")
-                indexer.indexAll(vault.id, theirs)
-                total += theirs.size
-            }
+            vaults.all().forEach { vault -> total += reindexVault(vault) }
             log.info("reindexed $total notes in ${(System.currentTimeMillis() - started) / 1000}s")
         }
 
+        /** Reparses one vault from disk, and says how many notes that was. */
+        private suspend fun reindexVault(vault: VaultEntity): Int {
+            val theirs =
+                blobs
+                    .byVaultKindAndState(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
+                    .map { PathAndSha(it.path, it.sha) }
+            // Named in the journal per vault, because "reindexed 2,400
+            // notes" says nothing about which vault came out empty.
+            log.info("reindexing ${theirs.size} notes in ${vault.label}")
+            indexer.indexAll(vault.id, theirs)
+            return theirs.size
+        }
+
         /** Forgets everything so the next sync starts from nothing. */
-        suspend fun reset() {
+        suspend fun reset() =
+            // A sync in flight would write rows back into the manifest this
+            // just emptied, and the next one would trust them.
+            gate.withVault { resetLocked() }
+
+        private suspend fun resetLocked() {
             blobs.clear()
             syncState.clear()
             vaults.all().forEach {
@@ -540,28 +651,7 @@ class SyncRepository
          * The chosen transport, built fresh each sync so a settings change
          * takes effect on the next refresh rather than on the next launch.
          */
-        private suspend fun transportFor(vault: VaultEntity): VaultSync =
-            when (SyncTransport.parse(vault.transport)) {
-                SyncTransport.REST -> {
-                    val client = transports.client(vault)
-                    RestVaultSync(
-                        client = client,
-                        branch = vault.branch ?: client.repository().defaultBranch,
-                        filter = VaultFilter(),
-                        log = log::info,
-                    )
-                }
-
-                SyncTransport.SSH -> {
-                    if (!sshKeys.exists(vault.name)) {
-                        throw NotConfiguredException(
-                            "no SSH key for ${vault.label} yet - generate one in Settings and add it " +
-                                "as a deploy key on that repository",
-                        )
-                    }
-                    transports.ssh(vault)
-                }
-            }
+        private suspend fun transportFor(vault: VaultEntity): VaultSync = transports.reader(vault)
 
         /**
          * Asks the host what this vault's credential may do, and records it.
@@ -574,7 +664,7 @@ class SyncRepository
          */
         private suspend fun refreshWritability(vault: VaultEntity) {
             val can =
-                runCatching { transports.writer(vault).canPush() }
+                runCatchingUnlessCancelled { transports.writer(vault).canPush() }
                     .onFailure { log.warn("could not check write access for ${vault.label}: ${it.describeChain()}") }
                     .getOrDefault(false)
             if (can != vault.canWrite) {

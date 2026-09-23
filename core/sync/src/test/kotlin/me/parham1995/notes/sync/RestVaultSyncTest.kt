@@ -115,13 +115,45 @@ class RestVaultSyncTest {
         }
 
     @Test
+    fun `attachments are recorded, not downloaded, and the icon config is fetched`() =
+        runTest {
+            server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head1","type":"commit"}}"""))
+            server.enqueue(
+                json(
+                    """
+                    {"sha":"tree1","truncated":false,"tree":[
+                      {"path":"a.md","mode":"100644","type":"blob","sha":"sha-a","size":10},
+                      {"path":"uploads/contract.pdf","mode":"100644","type":"blob","sha":"sha-pdf","size":4000000},
+                      {"path":"uploads/talk.mp4","mode":"100644","type":"blob","sha":"sha-mp4","size":40000000},
+                      {"path":".obsidian/plugins/iconic/data.json","mode":"100644","type":"blob","sha":"sha-i","size":20}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+
+            val plan = sync.plan(SyncBase(commit = null, manifest = emptyMap()))
+            server.enqueue(json("note body"))
+            server.enqueue(json("{}"))
+            sync.apply(plan, recorded)
+
+            assertThat(recorded.written.keys)
+                .containsExactly("a.md", ".obsidian/plugins/iconic/data.json")
+            assertThat(recorded.recorded).containsExactly(
+                "uploads/contract.pdf" to LocalState.ABSENT,
+                "uploads/talk.mp4" to LocalState.ABSENT,
+            )
+            // ref + tree + two blobs: neither attachment crossed the network.
+            assertThat(server.requestCount).isEqualTo(4)
+        }
+
+    @Test
     fun `a moved note is applied without downloading it again`() =
         runTest {
             server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head2","type":"commit"}}"""))
             server.enqueue(
                 json(
                     """
-                    {"files":[
+                    {"status":"ahead","files":[
                       {"filename":"beta/note.md","status":"renamed",
                        "sha":"sha-x","previous_filename":"alpha/note.md"}
                     ]}
@@ -162,6 +194,40 @@ class RestVaultSyncTest {
         }
 
     @Test
+    fun `a force-pushed branch is re-read from the tree, not diffed from the merge base`() =
+        runTest {
+            server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head9","type":"commit"}}"""))
+            // The old commit is still reachable, so compare answers -- but the
+            // branch was rewritten under it, and the files listed are from a
+            // merge base. `gone.md` is only in the old history and is not
+            // mentioned at all.
+            server.enqueue(
+                json(
+                    """
+                    {"status":"diverged","files":[
+                      {"filename":"a.md","status":"modified","sha":"sha-a2"}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+            server.enqueue(
+                json(
+                    """
+                    {"sha":"tree9","truncated":false,"tree":[
+                      {"path":"a.md","mode":"100644","type":"blob","sha":"sha-a2","size":10}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+
+            val plan = sync.plan(SyncBase("old-head", mapOf("a.md" to "sha-a1", "gone.md" to "sha-g")))
+
+            assertThat(plan.modifies.map { it.path }).containsExactly("a.md")
+            assertThat(plan.deletes).containsExactly("gone.md")
+            assertThat(server.requestCount).isEqualTo(3)
+        }
+
+    @Test
     fun `a rejected token is reported as such`() =
         runTest {
             server.enqueue(json("""{"message":"Bad credentials"}""", code = 401))
@@ -173,9 +239,46 @@ class RestVaultSyncTest {
         }
 
     @Test
-    fun `a truncated tree is refused rather than treated as complete`() =
+    fun `a tree too large to list at once is walked a directory at a time`() =
         runTest {
             server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head1","type":"commit"}}"""))
+            // The recursive listing is cut off...
+            server.enqueue(json("""{"sha":"root","truncated":true,"tree":[]}"""))
+            // ...so the top level is listed alone. node_modules can hold no
+            // vault content and is never asked for.
+            server.enqueue(
+                json(
+                    """
+                    {"sha":"root","truncated":false,"tree":[
+                      {"path":"a.md","mode":"100644","type":"blob","sha":"sha-a","size":10},
+                      {"path":"node_modules","mode":"040000","type":"tree","sha":"sha-nm"},
+                      {"path":"notes","mode":"040000","type":"tree","sha":"sha-notes"}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+            server.enqueue(
+                json(
+                    """
+                    {"sha":"sha-notes","truncated":false,"tree":[
+                      {"path":"deep/b.md","mode":"100644","type":"blob","sha":"sha-b","size":10}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+
+            val plan = sync.plan(SyncBase(null, emptyMap()))
+
+            // Paths come back whole, not relative to the directory listed.
+            assertThat(plan.adds.map { it.path }).containsExactly("a.md", "notes/deep/b.md")
+            assertThat(server.requestCount).isEqualTo(4)
+        }
+
+    @Test
+    fun `a single directory too large to list is refused rather than treated as complete`() =
+        runTest {
+            server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head1","type":"commit"}}"""))
+            server.enqueue(json("""{"sha":"t","truncated":true,"tree":[]}"""))
             server.enqueue(json("""{"sha":"t","truncated":true,"tree":[]}"""))
 
             val failure =

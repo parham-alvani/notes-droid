@@ -63,6 +63,11 @@ class RoomVaultSink
             entry: VaultEntry,
             state: LocalState,
         ) {
+            // A PDF opened once is on disk. When it changes upstream it is
+            // recorded as absent again, and the old copy would otherwise be
+            // served in its place for ever: opening a file reads the disk
+            // before it thinks of fetching.
+            if (state == LocalState.ABSENT) files.delete(vaultId, entry.path)
             blobs.upsert(
                 BlobEntity(
                     path = entry.path,

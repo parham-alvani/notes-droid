@@ -1,8 +1,6 @@
 package me.parham1995.notes.sync
 
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Keeps request pacing under GitHub's secondary limit.
@@ -18,14 +16,20 @@ class RateLimiter(
     private val nanoTime: () -> Long = System::nanoTime,
     private val sleep: suspend (Long) -> Unit = { delay(it) },
 ) {
-    private val mutex = Mutex()
+    /**
+     * Guards [nextAvailable]. A plain lock rather than a coroutine mutex:
+     * nothing suspends while it is held, and [observe] runs on OkHttp's own
+     * threads, where it used to write the field with no lock at all while a
+     * download on another thread was reading it.
+     */
+    private val lock = Any()
     private val intervalNanos = NANOS_PER_SECOND / permitsPerSecond
     private var nextAvailable = 0L
 
     /** Suspends until it is this caller's turn to issue a request. */
     suspend fun acquire() {
         val waitNanos =
-            mutex.withLock {
+            synchronized(lock) {
                 val now = nanoTime()
                 val scheduled = maxOf(now, nextAvailable)
                 nextAvailable = scheduled + intervalNanos
@@ -46,7 +50,7 @@ class RateLimiter(
         val secondsLeft = reset - System.currentTimeMillis() / MILLIS_PER_SECOND
         if (secondsLeft <= 0 || remaining <= 0) return
         val spacing = secondsLeft * NANOS_PER_SECOND / remaining
-        nextAvailable = maxOf(nextAvailable, nanoTime() + spacing)
+        synchronized(lock) { nextAvailable = maxOf(nextAvailable, nanoTime() + spacing) }
     }
 
     private companion object {

@@ -28,6 +28,27 @@ interface BlobDao {
     @Query("SELECT path, sha FROM blobs WHERE vaultId = :vaultId")
     suspend fun manifestRows(vaultId: Long): List<ManifestRow>
 
+    /**
+     * Markdown on disk whose note is missing or was indexed from other bytes.
+     *
+     * A sync downloads and then indexes, and the manifest row is written with
+     * each download. Stopped in between -- the app killed, the worker
+     * cancelled -- the manifest already says the new sha, so the next plan
+     * does not mention the file, and its note stays what it was. This is how
+     * the next sync finds those and catches up.
+     */
+    @Query(
+        "SELECT b.path AS path, b.sha AS sha FROM blobs b " +
+            "LEFT JOIN notes n ON n.vaultId = b.vaultId AND n.path = b.path " +
+            "WHERE b.vaultId = :vaultId AND b.kind = :kind AND b.localState = :state " +
+            "AND (n.id IS NULL OR n.blobSha != b.sha)",
+    )
+    suspend fun indexBehind(
+        vaultId: Long,
+        kind: BlobKind,
+        state: LocalState,
+    ): List<ManifestRow>
+
     @Query("SELECT * FROM blobs WHERE vaultId = :vaultId AND path = :path")
     suspend fun byPath(
         vaultId: Long,

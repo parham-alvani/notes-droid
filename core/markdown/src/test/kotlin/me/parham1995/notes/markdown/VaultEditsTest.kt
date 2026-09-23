@@ -141,6 +141,17 @@ class VaultEditsTest {
     }
 
     @Test
+    fun `appending twice leaves one copy`() {
+        // A push that landed but whose answer never arrived is sent again on
+        // the next flush, against the file that already holds it.
+        val edit = VaultEdits.append("09:14\n\na longer thought\nover two lines")
+        val once = edit("# Scratch\n\nolder\n")
+
+        assertThat(once).isNotNull()
+        assertThat(edit(once)).isNull()
+    }
+
+    @Test
     fun `an empty capture is not applicable`() {
         assertThat(VaultEdits.append("   ")("# Scratch\n")).isNull()
     }

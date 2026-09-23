@@ -1,5 +1,6 @@
 package me.parham1995.notes.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -323,7 +324,7 @@ class VaultWriteRepository
                 // Anything that queued while this held the gate goes now, which
                 // is what makes two quick taps behave like two writes rather
                 // than one write and one thing waiting for a refresh.
-                if (outcome == WriteResult.Pushed) runCatching { drain() }
+                if (outcome == WriteResult.Pushed) runCatchingUnlessCancelled { drain() }
                 outcome
             } ?: queueWhileBusy(edit)
         }
@@ -372,6 +373,10 @@ class VaultWriteRepository
                 }
                 pending.delete(edit.id)
                 true
+            } catch (cancelled: CancellationException) {
+                // Stopped, not failed: no attempt is counted against it, and
+                // it is still in the queue for the next sync.
+                throw cancelled
             } catch (failure: Exception) {
                 note(edit, failure.describeChain())
                 log.warn("could not send \"${edit.summary}\": " + failure.describeChain())

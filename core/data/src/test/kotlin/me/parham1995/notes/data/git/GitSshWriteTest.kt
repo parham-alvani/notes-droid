@@ -5,9 +5,13 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.markdown.VaultEdits
 import me.parham1995.notes.sync.Author
+import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.WriteOutcome
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.revwalk.RevWalk
+import org.eclipse.jgit.transport.SshTransport
+import org.eclipse.jgit.transport.Transport
+import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.treewalk.TreeWalk
 import org.junit.After
 import org.junit.Before
@@ -63,12 +67,13 @@ class GitSshWriteTest {
         root.deleteRecursively()
     }
 
-    private fun writer() =
+    private fun writer(vaultId: Long = 1) =
         GitSshVaultSync(
             workTree = workTree,
             remoteUrl = origin.toURI().toString(),
             branch = BRANCH,
             keys = SshKeyStore(ApplicationProvider.getApplicationContext()),
+            vaultId = vaultId,
             configDir = File(root, "config"),
             // A local transport cannot serve a shallow fetch, and depth is
             // about the size of a clone over the network, not about this.
@@ -124,6 +129,43 @@ class GitSshWriteTest {
 
             assertThat(outcome).isInstanceOf(WriteOutcome.Written::class.java)
             assertThat(originText(NOTE)).isEqualTo("## Alpha\n\n- [x] first ✅ 2026-09-20\n")
+        }
+
+    @Test
+    fun `each vault's connections use its own key, whatever was built after it`() {
+        val first = writer(vaultId = 1)
+        // Building a second transport -- testing another vault's key in
+        // Settings, say -- used to replace the process-wide factory.
+        val second = writer(vaultId = 2)
+
+        Git.open(workTree).use { git ->
+            Transport.open(git.repository, URIish("ssh://git@github.com/owner/repo.git")).use { transport ->
+                first.sshConfig.configure(transport)
+
+                assertThat((transport as SshTransport).sshSessionFactory).isSameInstanceAs(first.sessions)
+                assertThat(transport.sshSessionFactory).isNotSameInstanceAs(second.sessions)
+            }
+        }
+    }
+
+    @Test
+    fun `a base commit this clone never had plans from the whole tree`() =
+        runTest {
+            // A vault switched from REST: the commit it recorded was never
+            // fetched into this shallow clone. `resolve` hands back an id for
+            // any full sha, so this used to reach parseCommit and throw
+            // MissingObjectException on every sync.
+            val base =
+                SyncBase(
+                    commit = "0123456789abcdef0123456789abcdef01234567",
+                    manifest = mapOf(NOTE to "sha-from-the-rest-era"),
+                )
+
+            val plan = writer().plan(base)
+
+            assertThat(plan.modifies.map { it.path }).containsExactly(NOTE)
+            assertThat(plan.adds).isEmpty()
+            assertThat(plan.deletes).isEmpty()
         }
 
     private companion object {

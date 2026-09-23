@@ -53,6 +53,19 @@ class VaultFilter(
 
     fun accepts(path: String): Boolean = kindOf(path) != null
 
+    /**
+     * Whether anything under the directory [path] could be vault content.
+     *
+     * False for a dot-directory or an excluded root, unless a config path
+     * lives underneath -- which is what lets a walk of a very large tree skip
+     * `node_modules` and `.git`-like tooling without skipping `.obsidian`.
+     */
+    fun mayContain(path: String): Boolean {
+        val segments = path.split('/')
+        val closed = segments.any { it.startsWith(".") } || segments.first() in excludedRoots
+        return !closed || configPaths.any { it.startsWith("$path/") }
+    }
+
     companion object {
         /**
          * Bumped whenever this class starts or stops accepting a path.

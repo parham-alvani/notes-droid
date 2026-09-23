@@ -1,5 +1,6 @@
 package me.parham1995.notes.data.git
 
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,23 @@ import org.eclipse.jgit.lib.ProgressMonitor
  * meant to narrate. Assigning to a StateFlow cannot block.
  */
 class GitProgress : ProgressMonitor {
+    /** The coroutine the current operation runs for; see [bindTo]. */
+    @Volatile
+    private var job: Job? = null
+
+    /**
+     * Ties JGit's own cancellation to [job]'s.
+     *
+     * A clone or fetch is a blocking call that a coroutine cannot interrupt,
+     * and JGit asks this monitor between steps whether to stop. It used to
+     * answer no, always, so cancelling a sync -- the button, WorkManager, a
+     * newer sync replacing it -- left the transfer running to the end in the
+     * background, holding the vault's lock, however long that was.
+     */
+    fun bindTo(job: Job?) {
+        this.job = job
+    }
+
     private val _stage = MutableStateFlow("")
 
     /** The current stage, e.g. `Receiving objects (1204/3301)`. */
@@ -58,7 +76,7 @@ class GitProgress : ProgressMonitor {
         task = ""
     }
 
-    override fun isCancelled(): Boolean = false
+    override fun isCancelled(): Boolean = job?.isCancelled == true
 
     override fun showDuration(enabled: Boolean) = Unit
 

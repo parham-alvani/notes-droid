@@ -92,6 +92,7 @@ class VaultWriteRepositoryTest {
                     log = SyncLog(database.syncLogDao()),
                     context = context,
                     http = OkHttpClient(),
+                    vaults = database.vaultDao(),
                 ) {
                     override suspend fun writer(vault: VaultEntity) = transport
                 }

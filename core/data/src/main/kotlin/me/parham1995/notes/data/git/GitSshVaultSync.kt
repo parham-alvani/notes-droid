@@ -1,6 +1,8 @@
 package me.parham1995.notes.data.git
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.describeChain
 import me.parham1995.notes.sync.Author
@@ -19,6 +21,7 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.api.TransportConfigCallback
 import org.eclipse.jgit.diff.DiffEntry
+import org.eclipse.jgit.errors.MissingObjectException
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.PersonIdent
@@ -31,7 +34,6 @@ import org.eclipse.jgit.transport.SshSessionFactory
 import org.eclipse.jgit.transport.SshTransport
 import org.eclipse.jgit.transport.Transport
 import org.eclipse.jgit.transport.URIish
-import org.eclipse.jgit.transport.sshd.ServerKeyDatabase
 import org.eclipse.jgit.transport.sshd.SshdSessionFactoryBuilder
 import org.eclipse.jgit.treewalk.CanonicalTreeParser
 import org.eclipse.jgit.treewalk.TreeWalk
@@ -40,7 +42,6 @@ import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.security.PublicKey
 
 /**
  * Syncs over git-over-SSH, as an alternative to the REST transport.
@@ -67,23 +68,41 @@ class GitSshVaultSync(
     configDir: File,
     private val filter: VaultFilter = VaultFilter(),
     /** Names this repository's own key, since a deploy key serves only one. */
-    private val keyMount: String = "",
+    private val vaultId: Long,
     private val shallowDepth: Int = DEFAULT_DEPTH,
     /** Narrates each stage, so a long clone is visibly working. */
     private val log: suspend (String) -> Unit = {},
     val progress: GitProgress = GitProgress(),
+    private val hostKeys: PinnedHostKeys = PinnedHostKeys(),
 ) : VaultSync,
     VaultWriter {
     init {
         // Must happen before any other JGit call touches configuration.
         AndroidGitEnvironment.install(configDir)
-        SshSessionFactory.setInstance(sessionFactory())
     }
+
+    /**
+     * This vault's own SSH sessions, offering this vault's own key.
+     *
+     * Never installed as JGit's process-wide instance, which is what this
+     * used to do: every transport built replaced the global factory, so
+     * testing vault B's key in Settings while vault A was syncing had A's
+     * next connection authenticate with B's key -- refused by A's repository
+     * and reported as A's key being wrong. Each transport now hands its own
+     * factory to each connection it opens.
+     */
+    internal val sessions: SshSessionFactory by lazy { sessionFactory() }
 
     override suspend fun plan(base: SyncBase): SyncPlan =
         withContext(Dispatchers.IO) {
-            checkReachable()
-            checkAuthentication()
+            progress.bindTo(coroutineContext[Job])
+            // Only a remote over SSH has a port to reach and a key to offer. A
+            // repository on disk has neither, and is how the planning is
+            // tested without a network.
+            if (overSsh) {
+                checkReachable()
+                checkAuthentication()
+            }
 
             val fresh = !File(workTree, Constants.DOT_GIT).isDirectory
             if (fresh) {
@@ -93,6 +112,9 @@ class GitSshVaultSync(
                 try {
                     cloneRepository()
                 } catch (failure: Exception) {
+                    // Cancelled rather than failed: JGit stops when asked and
+                    // says so as a transport error, which is not one.
+                    ensureActive()
                     log("clone threw: " + failure.describeChain())
                     // Name the stage it died at. "Remote hung up" says nothing
                     // about whether it failed immediately or three quarters of
@@ -136,6 +158,7 @@ class GitSshVaultSync(
         sink: VaultSink,
         onProgress: (done: Int, total: Int) -> Unit,
     ) = withContext(Dispatchers.IO) {
+        progress.bindTo(coroutineContext[Job])
         openGit().use { git ->
             // Git writes the working tree itself, so "applying" is a checkout
             // plus recording what is now on disk. Nothing is downloaded twice.
@@ -188,7 +211,7 @@ class GitSshVaultSync(
     }
 
     /** The public line to register with the host as a deploy key. */
-    suspend fun publicKey(): String = keys.publicKeyLine(keyMount) ?: keys.generate(keyMount)
+    suspend fun publicKey(): String = keys.publicKeyLine(vaultId) ?: keys.generate(vaultId)
 
     /**
      * Whether this key may push, asked by starting a push and stopping at the
@@ -206,9 +229,7 @@ class GitSshVaultSync(
             runCatching {
                 openGit().use { git ->
                     Transport.open(git.repository, URIish(remoteUrl)).use { transport ->
-                        if (transport is SshTransport) {
-                            transport.sshSessionFactory = SshSessionFactory.getInstance()
-                        }
+                        if (transport is SshTransport) transport.sshSessionFactory = sessions
                         transport.timeout = AUTH_TIMEOUT_MS / MILLIS_PER_SECOND
                         transport.openPush().close()
                     }
@@ -248,6 +269,7 @@ class GitSshVaultSync(
         edit: TextEdit,
     ): WriteOutcome =
         withContext(Dispatchers.IO) {
+            progress.bindTo(coroutineContext[Job])
             openGit().use { git ->
                 repeat(PUSH_ATTEMPTS) {
                     fetch(git)
@@ -463,8 +485,7 @@ class GitSshVaultSync(
         val failure =
             withContext(Dispatchers.IO) {
                 runCatching {
-                    SshSessionFactory
-                        .getInstance()
+                    sessions
                         .getSession(URIish(remoteUrl), null, FS.DETECTED, AUTH_TIMEOUT_MS)
                         .disconnect()
                 }.exceptionOrNull()
@@ -475,6 +496,17 @@ class GitSshVaultSync(
         }
         // Say exactly what the handshake did before interpreting it.
         log("authentication failed: " + failure.describeChain())
+
+        // Before anything about keys of ours: the other end was not GitHub,
+        // or not a GitHub this app recognises, and nothing was sent to it.
+        hostKeys.lastRefused?.let { refused ->
+            throw IOException(
+                "the server did not prove it is GitHub: $refused, which is not one of GitHub's " +
+                    "published host keys. Nothing was sent. On a public or captive network this is " +
+                    "what interception looks like; if GitHub has rotated its keys, the app needs an update.",
+                failure,
+            )
+        }
 
         // An environment failure is not a rejected key, and saying so sent this
         // hunt in the wrong direction for hours. Only claim rejection when the
@@ -493,11 +525,11 @@ class GitSshVaultSync(
         // the natural response is to go and replace a deploy key that was
         // never the problem. A key the device cannot read is a local fault and
         // has to say so.
-        val fingerprint = keys.fingerprint(keyMount)
+        val fingerprint = keys.fingerprint(vaultId)
         if (NO_KEY_OFFERED in failure.describeChain() || fingerprint in UNUSABLE_KEY) {
             throw IOException(
                 "this device could not use its own SSH key, so nothing was sent to the server " +
-                    "and nothing was refused. The key is at ${keys.identity(keyMount).name} and reads as " +
+                    "and nothing was refused. The key is at ${keys.identity(vaultId).name} and reads as " +
                     "\"$fingerprint\". Generating a new one in Settings will not help if the old " +
                     "one was readable before: " + failure.describeChain(),
                 failure,
@@ -526,6 +558,8 @@ class GitSshVaultSync(
     }
 
     private fun openGit(): Git = Git.open(workTree)
+
+    private val overSsh: Boolean get() = !remoteUrl.startsWith("file:")
 
     private fun filesAt(
         repository: Repository,
@@ -565,14 +599,26 @@ class GitSshVaultSync(
         toSha: String,
     ): List<Pair<VaultEntry, ChangeKind>> {
         val repository = git.repository
-        val from =
-            repository.resolve(fromSha) ?: return filesAt(repository, repository.resolve(toSha)!!)
-                .map { it to ChangeKind.ADDED }
         val to = repository.resolve(toSha) ?: return emptyList()
+        // `resolve` answers a full sha without looking for the object, so it
+        // is no evidence the commit is here. A vault switched from REST
+        // arrives with a base commit this shallow clone never fetched, and a
+        // force-push leaves one that is no longer in the history; either way
+        // parseCommit threw MissingObjectException on every sync after. The
+        // whole tree, diffed against the manifest, is the honest answer.
+        val from =
+            repository.resolve(fromSha)?.takeIf { repository.getObjectDatabase().has(it) }
+                ?: return filesAt(repository, to).map { it to ChangeKind.ADDED }
 
         repository.newObjectReader().use { reader ->
             RevWalk(repository).use { walk ->
-                val oldTree = CanonicalTreeParser().apply { reset(reader, walk.parseCommit(from).tree) }
+                val base =
+                    try {
+                        walk.parseCommit(from)
+                    } catch (_: MissingObjectException) {
+                        return filesAt(repository, to).map { it to ChangeKind.ADDED }
+                    }
+                val oldTree = CanonicalTreeParser().apply { reset(reader, base.tree) }
                 val newTree = CanonicalTreeParser().apply { reset(reader, walk.parseCommit(to).tree) }
                 return git
                     .diff()
@@ -599,9 +645,9 @@ class GitSshVaultSync(
             }
     }
 
-    private val sshConfig =
+    internal val sshConfig =
         TransportConfigCallback { transport ->
-            if (transport is SshTransport) transport.sshSessionFactory = SshSessionFactory.getInstance()
+            if (transport is SshTransport) transport.sshSessionFactory = sessions
         }
 
     private fun sessionFactory() =
@@ -609,29 +655,16 @@ class GitSshVaultSync(
             .setHomeDirectory(keys.directory.parentFile)
             .setSshDirectory(keys.directory)
             .setPreferredAuthentications("publickey")
-            .setDefaultIdentities { listOf(keys.identity(keyMount).toPath()) }
+            .setDefaultIdentities { listOf(keys.identity(vaultId).toPath()) }
             .setConfigFile { keys.configFile() }
-            // There is no interactive prompt on a phone and no known_hosts to
-            // seed, so the host key is accepted on first use and pinned by
-            // sshd's own store from then on.
-            .setServerKeyDatabase { _, _ -> AcceptFirstConnection() }
+            // GitHub's published host keys and nothing else. This once said
+            // the key was "accepted on first use and pinned by sshd's own
+            // store from then on", and it was not: the database it installed
+            // returned no known keys and accepted every key it was shown, on
+            // every connection, so anything that could answer for github.com
+            // was github.com.
+            .setServerKeyDatabase { _, _ -> hostKeys }
             .build(null)
-
-    private class AcceptFirstConnection : ServerKeyDatabase {
-        override fun lookup(
-            connectAddress: String?,
-            remoteAddress: InetSocketAddress?,
-            config: ServerKeyDatabase.Configuration?,
-        ): List<PublicKey> = emptyList()
-
-        override fun accept(
-            connectAddress: String?,
-            remoteAddress: InetSocketAddress?,
-            serverKey: PublicKey?,
-            config: ServerKeyDatabase.Configuration?,
-            provider: org.eclipse.jgit.transport.CredentialsProvider?,
-        ): Boolean = true
-    }
 
     private companion object {
         const val DEFAULT_DEPTH = 1

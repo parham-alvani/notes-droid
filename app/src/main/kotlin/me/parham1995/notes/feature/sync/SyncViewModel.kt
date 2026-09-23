@@ -40,7 +40,7 @@ import javax.inject.Inject
 
 /** One repository's SSH key, since a deploy key serves exactly one. */
 data class VaultKey(
-    val mount: String,
+    val vaultId: Long,
     val label: String,
     val publicKey: String?,
     val fingerprint: String?,
@@ -116,12 +116,12 @@ class SyncViewModel
                 vaults
                     .filter { SyncTransport.parse(it.transport) == SyncTransport.SSH }
                     .map { vault ->
-                        val line = sshKeys.publicKeyLine(vault.name)
+                        val line = sshKeys.publicKeyLine(vault.id)
                         VaultKey(
-                            mount = vault.name,
+                            vaultId = vault.id,
                             label = vault.label,
                             publicKey = line,
-                            fingerprint = line?.let { sshKeys.fingerprint(vault.name) },
+                            fingerprint = line?.let { sshKeys.fingerprint(vault.id) },
                         )
                     }
             }
@@ -208,7 +208,7 @@ class SyncViewModel
             vault: VaultEntity,
             transport: SyncTransport,
         ) = viewModelScope.launch {
-            repository.updateVault(vault.copy(transport = transport.name))
+            repository.setTransport(vault.id, transport)
         }
 
         fun saveToken(token: String) =
@@ -331,10 +331,10 @@ class SyncViewModel
          * The private half never leaves the device; only this public line does,
          * and it goes to GitHub as a read-only deploy key.
          */
-        fun generateSshKey(mount: String) =
+        fun generateSshKey(vaultId: Long) =
             viewModelScope.launch {
                 local.value = local.value.copy(generatingKey = true)
-                runCatching { sshKeys.generate(mount) }
+                runCatching { sshKeys.generate(vaultId) }
                 local.value = local.value.copy(generatingKey = false)
                 refreshCredentials()
             }

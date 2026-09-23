@@ -4,6 +4,20 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class VaultFilterTest {
+    @Test
+    fun `a walk skips directories that can hold no vault content`() {
+        val filter = VaultFilter()
+
+        assertThat(filter.mayContain("notes")).isTrue()
+        assertThat(filter.mayContain("notes/deep")).isTrue()
+        assertThat(filter.mayContain("node_modules")).isFalse()
+        assertThat(filter.mayContain(".github")).isFalse()
+        // Except on the way to the one file under .obsidian that is content.
+        assertThat(filter.mayContain(".obsidian")).isTrue()
+        assertThat(filter.mayContain(".obsidian/plugins/iconic")).isTrue()
+        assertThat(filter.mayContain(".obsidian/themes")).isFalse()
+    }
+
     private val filter = VaultFilter()
 
     @Test

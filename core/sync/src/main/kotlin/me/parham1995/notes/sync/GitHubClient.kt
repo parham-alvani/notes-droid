@@ -1,8 +1,9 @@
 package me.parham1995.notes.sync
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -11,6 +12,7 @@ import okhttp3.Response
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.Base64
+import kotlin.coroutines.resumeWithException
 
 /** Which repository to read, and with what credential. */
 data class GitHubConfig(
@@ -86,7 +88,10 @@ sealed class GitHubException(
         path: String,
     ) : GitHubException("$path changed upstream while it was being edited")
 
-    /** The tree was truncated, so it cannot be treated as a full listing. */
+    /**
+     * A tree too large to list even one directory at a time, so it cannot be
+     * treated as a full listing.
+     */
     class TreeTruncated : GitHubException("the repository tree was truncated and cannot be used as a manifest")
 }
 
@@ -117,31 +122,62 @@ class GitHubClient(
             .apply { etag?.let { header("If-None-Match", it) } }
             .build()
 
+    /**
+     * Sends [request] and hands a successful response to [onSuccess].
+     *
+     * Enqueued rather than executed, with the call cancelled when the
+     * coroutine is. `execute()` blocks a thread that cancellation cannot
+     * reach, so a cancelled sync went on downloading -- a blob of forty
+     * megabytes, a tree of thousands of entries -- until the transfer ended
+     * of its own accord. [onSuccess] runs on OkHttp's thread while the body
+     * streams, so cancelling part way through a body stops that too.
+     */
     private suspend fun <T> call(
         request: Request,
         resource: String,
         onSuccess: (Response) -> T,
-    ): T =
-        withContext(Dispatchers.IO) {
-            limiter.acquire()
-            http.newCall(request).execute().use { response ->
-                limiter.observe(response)
-                when {
-                    // 304 is not "successful" to OkHttp, but it is exactly what a
-                    // conditional request wants back.
-                    response.isSuccessful || response.code == 304 -> onSuccess(response)
-                    response.code == 401 -> throw GitHubException.Unauthorized()
-                    response.code == 404 -> throw GitHubException.NotFound(resource)
-                    response.code == 409 -> throw GitHubException.Conflict(resource)
-                    // GitHub answers a stale blob sha with 422 as often as
-                    // with 409, and the two mean the same thing to a write.
-                    response.code == 422 && STALE_SHA in response.peekBody(BODY_PEEK).string() ->
-                        throw GitHubException.Conflict(resource)
-                    response.code == 403 || response.code == 429 -> throw response.toLimitException()
-                    else -> throw GitHubException.Unexpected(response.code, response.peekBody(BODY_PEEK).string())
-                }
-            }
+    ): T {
+        limiter.acquire()
+        val call = http.newCall(request)
+        return suspendCancellableCoroutine { continuation ->
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(
+                object : Callback {
+                    override fun onFailure(
+                        call: Call,
+                        e: IOException,
+                    ) = continuation.resumeWithException(e)
+
+                    override fun onResponse(
+                        call: Call,
+                        response: Response,
+                    ) = continuation.resumeWith(runCatching { response.use { handle(it, resource, onSuccess) } })
+                },
+            )
         }
+    }
+
+    private fun <T> handle(
+        response: Response,
+        resource: String,
+        onSuccess: (Response) -> T,
+    ): T {
+        limiter.observe(response)
+        return when {
+            // 304 is not "successful" to OkHttp, but it is exactly what a
+            // conditional request wants back.
+            response.isSuccessful || response.code == 304 -> onSuccess(response)
+            response.code == 401 -> throw GitHubException.Unauthorized()
+            response.code == 404 -> throw GitHubException.NotFound(resource)
+            response.code == 409 -> throw GitHubException.Conflict(resource)
+            // GitHub answers a stale blob sha with 422 as often as
+            // with 409, and the two mean the same thing to a write.
+            response.code == 422 && STALE_SHA in response.peekBody(BODY_PEEK).string() ->
+                throw GitHubException.Conflict(resource)
+            response.code == 403 || response.code == 429 -> throw response.toLimitException()
+            else -> throw GitHubException.Unexpected(response.code, response.peekBody(BODY_PEEK).string())
+        }
+    }
 
     private fun Response.toLimitException(): GitHubException {
         header("retry-after")?.toLongOrNull()?.let { return GitHubException.SlowDown(it) }
@@ -149,11 +185,17 @@ class GitHubClient(
             val reset = header("x-ratelimit-reset")?.toLongOrNull() ?: 0L
             return GitHubException.RateLimited(reset)
         }
+        // GitHub's secondary limit does not always send retry-after, and then
+        // the body is the only thing that says so. Read as a permission
+        // failure, it gave up on a sync that a minute's wait would have let
+        // through.
+        val body = peekBody(BODY_PEEK).string()
+        if (SECONDARY_LIMIT in body.lowercase()) return GitHubException.SlowDown(DEFAULT_BACKOFF_SECONDS)
         // A 403 carrying none of the rate-limit headers is a permission
         // answer, not a pacing one -- which is what a read-only token returns
         // to a write. Treating it as a secondary limit would have the app back
         // off and try again forever over something no amount of waiting fixes.
-        if (code == 403) return GitHubException.Forbidden(peekBody(BODY_PEEK).string())
+        if (code == 403) return GitHubException.Forbidden(body)
         return GitHubException.SlowDown(DEFAULT_BACKOFF_SECONDS)
     }
 
@@ -189,21 +231,63 @@ class GitHubClient(
         }
     }
 
-    /** The full recursive tree at [commit], filtered down to vault content. */
+    /**
+     * The full tree at [commit], filtered down to vault content.
+     *
+     * One recursive listing when it fits. GitHub cuts a recursive listing off
+     * at 100,000 entries or 7MB and says `truncated`, and a repository past
+     * that -- a vault that checked in a dependency tree, say -- could not be
+     * synced at all. Then this level is listed on its own and each directory
+     * is walked the same way, skipping those that can hold no vault content,
+     * so only the parts too big to list in one go cost more than one request.
+     */
     suspend fun tree(
         commit: String,
         filter: VaultFilter,
-    ): List<VaultEntry> =
-        call(request(url("/git/trees/$commit?recursive=1")), "tree/$commit") { response ->
-            val dto = json.decodeFromString<TreeDto>(response.body.string())
-            if (dto.truncated) throw GitHubException.TreeTruncated()
-            dto.tree.mapNotNull { entry ->
-                if (entry.type != "blob") return@mapNotNull null
-                val sha = entry.sha ?: return@mapNotNull null
-                val kind = filter.kindOf(entry.path) ?: return@mapNotNull null
-                VaultEntry(entry.path, sha, entry.size ?: 0L, kind)
+    ): List<VaultEntry> = walk(commit, prefix = "", filter)
+
+    private suspend fun walk(
+        sha: String,
+        prefix: String,
+        filter: VaultFilter,
+    ): List<VaultEntry> {
+        val whole = listTree(sha, recursive = true)
+        if (!whole.truncated) return whole.tree.mapNotNull { it.toVaultEntry(prefix, filter) }
+
+        // A single level past the limit cannot be walked any further down.
+        val level = listTree(sha, recursive = false)
+        if (level.truncated) throw GitHubException.TreeTruncated()
+        return level.tree.flatMap { entry ->
+            val path = prefix + entry.path
+            val child = entry.sha
+            when {
+                entry.type == "blob" -> listOfNotNull(entry.toVaultEntry(prefix, filter))
+                entry.type == "tree" && child != null && filter.mayContain(path) -> walk(child, "$path/", filter)
+                else -> emptyList()
             }
         }
+    }
+
+    private suspend fun listTree(
+        sha: String,
+        recursive: Boolean,
+    ): TreeDto {
+        val query = if (recursive) "?recursive=1" else ""
+        return call(request(url("/git/trees/$sha$query")), "tree/$sha") { response ->
+            json.decodeFromString<TreeDto>(response.body.string())
+        }
+    }
+
+    private fun TreeEntryDto.toVaultEntry(
+        prefix: String,
+        filter: VaultFilter,
+    ): VaultEntry? {
+        if (type != "blob") return null
+        val blobSha = sha ?: return null
+        val fullPath = prefix + path
+        val kind = filter.kindOf(fullPath) ?: return null
+        return VaultEntry(fullPath, blobSha, size ?: 0L, kind)
+    }
 
     /**
      * What changed between two commits, renames included. Capped by GitHub at
@@ -212,17 +296,21 @@ class GitHubClient(
     suspend fun compare(
         base: String,
         head: String,
-    ): List<CompareChange> =
+    ): Comparison =
         call(request(url("/compare/$base...$head")), "compare/$base...$head") { response ->
             val dto = json.decodeFromString<CompareDto>(response.body.string())
-            dto.files.map {
-                CompareChange(
-                    path = it.filename,
-                    status = ChangeStatus.parse(it.status),
-                    sha = it.sha,
-                    previousPath = it.previousFilename,
-                )
-            }
+            Comparison(
+                status = dto.status,
+                files =
+                    dto.files.map {
+                        CompareChange(
+                            path = it.filename,
+                            status = ChangeStatus.parse(it.status),
+                            sha = it.sha,
+                            previousPath = it.previousFilename,
+                        )
+                    },
+            )
         }
 
     /** The raw bytes of one blob. */
@@ -238,19 +326,34 @@ class GitHubClient(
      * Read through the contents endpoint rather than as a blob because a write
      * has to quote the file's current sha back, and only this call hands both
      * the text and that sha over together.
+     *
+     * Except past a megabyte, where the endpoint still answers with the sha
+     * but says `"encoding": "none"` and leaves the content empty. Decoding
+     * that as base64 reads as an empty file, the edit is applied to nothing,
+     * and the write replaces a whole note with one line -- quoting the right
+     * sha, so GitHub accepts it. The bytes come from the blob instead.
      */
     suspend fun file(
         path: String,
         ref: String,
-    ): RemoteFile? =
-        try {
-            call(request(url("/contents/${encodePath(path)}?ref=$ref")), path) { response ->
-                val dto = json.decodeFromString<ContentsDto>(response.body.string())
-                RemoteFile(dto.path, dto.sha, decodeContent(dto))
+    ): RemoteFile? {
+        val dto =
+            try {
+                call(request(url("/contents/${encodePath(path)}?ref=$ref")), path) { response ->
+                    json.decodeFromString<ContentsDto>(response.body.string())
+                }
+            } catch (_: GitHubException.NotFound) {
+                return null
             }
-        } catch (_: GitHubException.NotFound) {
-            null
-        }
+        val text =
+            when {
+                dto.encoding == "base64" && (dto.content.isNotBlank() || dto.size == 0L) -> decodeContent(dto)
+                // Too large to be inlined: the same bytes, by their sha.
+                dto.encoding == "none" || dto.content.isBlank() -> String(blob(dto.sha))
+                else -> throw GitHubException.Unexpected(0, "$path came back as ${dto.encoding}")
+            }
+        return RemoteFile(dto.path, dto.sha, text)
+    }
 
     /**
      * Replaces [path] with [text] in one commit.
@@ -305,6 +408,9 @@ class GitHubClient(
         const val BODY_PEEK = 512L
         const val DEFAULT_BACKOFF_SECONDS = 60L
         const val STALE_SHA = "does not match"
+
+        /** How GitHub words a secondary limit, lowercased. */
+        const val SECONDARY_LIMIT = "secondary rate limit"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }

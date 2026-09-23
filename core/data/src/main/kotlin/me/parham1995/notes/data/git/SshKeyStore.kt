@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import me.parham1995.notes.data.SyncTransport
+import me.parham1995.notes.data.database.VaultEntity
 import org.apache.sshd.common.config.keys.KeyUtils
 import org.apache.sshd.common.config.keys.PublicKeyEntry
 import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter
@@ -29,9 +31,12 @@ import javax.inject.Singleton
  * the repository -- would be one key, and would also grant write access to
  * everything the account can reach, which is a poor trade for a reader.
  *
- * Keys are named after the mount so that the vault mounted at the root keeps
- * the file it already had, and an existing install does not have to register
- * anything again.
+ * Keys are named after the vault's id, which is the one thing about a vault
+ * that never changes and is never shared. They used to be named after the
+ * vault's *name*, lowercased with anything outside `[a-z0-9._-]` replaced --
+ * so every Persian name collapsed to `id_____`, `Work` and `work` were one
+ * file, and renaming a vault orphaned its key. [adoptLegacyNames] moves keys
+ * from those names once, so a deploy key already registered keeps working.
  */
 @Singleton
 class SshKeyStore
@@ -64,30 +69,66 @@ class SshKeyStore
 
         val directory: File get() = sshDir
 
-        /**
-         * `id_notes` for the root-mounted vault -- the name it has always had,
-         * so the key already registered on GitHub keeps working -- and a name
-         * derived from the mount for every other repository.
-         */
-        private fun baseName(mount: String): String =
-            if (mount.isEmpty()) "id_notes" else "id_" + mount.lowercase().replace(UNSAFE, "_")
+        private fun baseName(vaultId: Long): String = "id_vault_$vaultId"
 
-        fun identity(mount: String = ""): File = File(sshDir, baseName(mount))
+        fun identity(vaultId: Long): File = File(sshDir, baseName(vaultId))
 
-        private fun publicFile(mount: String): File = File(sshDir, baseName(mount) + ".pub")
+        private fun publicFile(vaultId: Long): File = File(sshDir, baseName(vaultId) + PUBLIC_SUFFIX)
 
-        fun exists(mount: String = ""): Boolean = identity(mount).isFile && publicFile(mount).isFile
+        fun exists(vaultId: Long): Boolean = identity(vaultId).isFile && publicFile(vaultId).isFile
 
         /** The line to paste into GitHub's deploy-key box. */
-        fun publicKeyLine(mount: String = ""): String? = publicFile(mount).takeIf { it.isFile }?.readText()?.trim()
+        fun publicKeyLine(vaultId: Long): String? = publicFile(vaultId).takeIf { it.isFile }?.readText()?.trim()
+
+        /**
+         * Moves each SSH vault's key from the file its name used to give it to
+         * the one its id gives it. Idempotent, and cheap once done: a key that
+         * is already where it belongs is left alone.
+         *
+         * Two vaults whose names collapsed to the same file -- `Work` and
+         * `work`, or any two Persian names -- were sharing one key, and it can
+         * only be registered on one of the two repositories. The vault that
+         * was added first keeps it; the other finds no key and is asked to
+         * generate its own, which is what it needed all along.
+         *
+         * Must be handed *every* vault, never one: which vault was first is
+         * the whole decision, and a partial list would hand a shared file to
+         * whichever vault happened to be asked about first.
+         */
+        fun adoptLegacyNames(vaults: List<VaultEntity>) {
+            val claimed = mutableSetOf<String>()
+            var moved = false
+            vaults
+                .filter { SyncTransport.parse(it.transport) == SyncTransport.SSH }
+                .sortedBy { it.id }
+                .forEach { vault ->
+                    val legacy = legacyName(vault.name)
+                    // Claimed whether or not this vault takes it, so a later
+                    // vault can never inherit a file an earlier one owns.
+                    if (!claimed.add(legacy) || exists(vault.id)) return@forEach
+                    val oldPrivate = File(sshDir, legacy)
+                    val oldPublic = File(sshDir, legacy + PUBLIC_SUFFIX)
+                    if (!oldPrivate.isFile || !oldPublic.isFile) return@forEach
+                    if (oldPrivate.renameTo(identity(vault.id))) {
+                        if (oldPublic.renameTo(publicFile(vault.id))) {
+                            moved = true
+                        } else {
+                            // Half a key is no key; put the private half back
+                            // where it was and try again next time.
+                            identity(vault.id).renameTo(oldPrivate)
+                        }
+                    }
+                }
+            if (moved) _revision.value++
+        }
 
         suspend fun generate(
-            mount: String = "",
+            vaultId: Long,
             comment: String = "notes-droid",
         ): String =
             withContext(Dispatchers.IO) {
-                val privateKey = identity(mount)
-                val publicKey = publicFile(mount)
+                val privateKey = identity(vaultId)
+                val publicKey = publicFile(vaultId)
                 val generated = SshKeyGenerator.generate()
                 val pair = generated.pair
 
@@ -121,8 +162,10 @@ class SshKeyStore
                     appendLine("    ServerAliveInterval 20")
                     appendLine("    ServerAliveCountMax 12")
                     appendLine("    TCPKeepAlive yes")
-                    // There is no prompt on a phone and no known_hosts to seed.
-                    appendLine("    StrictHostKeyChecking no")
+                    // Host keys are checked against GitHub's published ones
+                    // (PinnedHostKeys); an unknown key is refused, never
+                    // accepted, because there is nobody on a phone to ask.
+                    appendLine("    StrictHostKeyChecking yes")
                 }
             val file = File(sshDir, "config")
             if (!file.isFile || file.readText() != desired) file.writeText(desired)
@@ -135,7 +178,7 @@ class SshKeyStore
          * Without it there is no way to tell a key that was never registered
          * from one that was replaced by a reinstall, and both fail identically.
          */
-        fun fingerprint(mount: String = ""): String = fingerprintOf(publicKeyLine(mount) ?: return "no key")
+        fun fingerprint(vaultId: Long): String = fingerprintOf(publicKeyLine(vaultId) ?: return "no key")
 
         private fun fingerprintOf(line: String): String =
             runCatching {
@@ -173,9 +216,9 @@ class SshKeyStore
 
         private fun identityFile(base: String): File = File(sshDir, base)
 
-        fun delete(mount: String = "") {
-            identity(mount).delete()
-            publicFile(mount).delete()
+        fun delete(vaultId: Long) {
+            identity(vaultId).delete()
+            publicFile(vaultId).delete()
             _revision.value++
         }
 
@@ -183,6 +226,10 @@ class SshKeyStore
             /** Anything a file name should not carry, whatever a folder is called. */
             val UNSAFE = Regex("[^a-z0-9._-]")
             const val PUBLIC_SUFFIX = ".pub"
+
+            /** The file a vault's name used to give its key. */
+            fun legacyName(name: String): String =
+                if (name.isEmpty()) "id_notes" else "id_" + name.lowercase().replace(UNSAFE, "_")
         }
     }
 
