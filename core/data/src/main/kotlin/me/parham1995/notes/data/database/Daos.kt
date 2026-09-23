@@ -34,12 +34,6 @@ interface BlobDao {
         path: String,
     ): BlobEntity?
 
-    @Query("SELECT * FROM blobs WHERE kind = :kind AND localState = :state")
-    suspend fun byKindAndState(
-        kind: BlobKind,
-        state: LocalState,
-    ): List<BlobEntity>
-
     @Query("DELETE FROM blobs WHERE vaultId = :vaultId AND path = :path")
     suspend fun deleteByPath(
         vaultId: Long,
@@ -60,8 +54,15 @@ interface BlobDao {
         to: String,
     )
 
-    @Query("SELECT COUNT(*) FROM blobs WHERE kind = :kind")
-    fun countOfKind(kind: BlobKind): Flow<Int>
+    /**
+     * One vault's files of a kind. Unscoped, the "Notes" figure on the sync
+     * screen added up every repository while the screen around it showed one.
+     */
+    @Query("SELECT COUNT(*) FROM blobs WHERE vaultId = :vaultId AND kind = :kind")
+    fun countOfKind(
+        vaultId: Long,
+        kind: BlobKind,
+    ): Flow<Int>
 
     /**
      * Files the reader does not parse but can still open -- images, PDFs,
@@ -87,9 +88,6 @@ interface BlobDao {
         vaultId: Long,
         kinds: List<BlobKind> = BROWSABLE_KINDS,
     ): Flow<List<String>>
-
-    @Query("SELECT COALESCE(SUM(size), 0) FROM blobs WHERE localState = :state")
-    suspend fun bytesInState(state: LocalState): Long
 
     @Query("DELETE FROM blobs")
     suspend fun clear()

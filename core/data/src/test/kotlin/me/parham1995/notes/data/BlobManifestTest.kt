@@ -93,4 +93,21 @@ class BlobManifestTest {
             // to its neighbour is a file that disappears from the tree.
             assertThat(blobs.attachmentPaths(notes).first()).containsExactly("LICENSE")
         }
+
+    @Test
+    fun `a vault's note count is its own`() =
+        runTest {
+            val blobs = database.blobDao()
+            blobs.upsertAll(
+                listOf(
+                    blob(notes, "README.md", "a").copy(kind = BlobKind.MARKDOWN),
+                    blob(notes, "Ideas.md", "b").copy(kind = BlobKind.MARKDOWN),
+                    blob(notes, "uploads/logo.png", "c"),
+                    blob(documents, "README.md", "d").copy(kind = BlobKind.MARKDOWN),
+                ),
+            )
+
+            assertThat(blobs.countOfKind(notes, BlobKind.MARKDOWN).first()).isEqualTo(2)
+            assertThat(blobs.countOfKind(documents, BlobKind.MARKDOWN).first()).isEqualTo(1)
+        }
 }
