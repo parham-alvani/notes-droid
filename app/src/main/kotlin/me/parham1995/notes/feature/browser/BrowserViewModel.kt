@@ -145,6 +145,11 @@ class BrowserViewModel
          * open. The card in Settings holds the trace; this only says to go and
          * look, because for three days it crashed on launch and nothing
          * anywhere said so.
+         *
+         * An input to the state like everything else, not a value sampled
+         * while building it: sampled, the banner appeared only if the database
+         * happened to change after the read, and Dismiss did nothing until it
+         * changed again.
          */
         private val crashed = MutableStateFlow(false)
 
@@ -158,24 +163,14 @@ class BrowserViewModel
         init {
             viewModelScope.launch { crashed.value = crashLog.read() != null }
             viewModelScope.launch {
-                combine(
-                    path,
-                    rows,
-                    recent,
-                    repository.noteCount,
-                    combine(vaults, repository.activeVaultId) { all, active -> all to active },
-                ) { currentPath, currentItems, recentRows, count, (repositories, active) ->
-                    BrowserUiState(
-                        path = currentPath,
-                        items = currentItems,
-                        recent = recentRows,
-                        noteCount = count,
-                        vaults = repositories,
-                        activeVaultId = active,
-                        loading = false,
-                        crashed = crashed.value,
-                    )
-                }.collect { next ->
+                browserStates(
+                    path = path,
+                    rows = rows,
+                    recent = recent,
+                    noteCount = repository.noteCount,
+                    vaults = combine(vaults, repository.activeVaultId) { all, active -> all to active },
+                    crashed = crashed,
+                ).collect { next ->
                     _state.value = next.copy(syncing = _state.value.syncing, syncProgress = _state.value.syncProgress)
                 }
             }
@@ -228,6 +223,39 @@ class BrowserViewModel
             viewModelScope.launch {
                 scheduler.syncNow(settings.current().syncOnWifiOnly)
             }
+    }
+
+/**
+ * The browser's state from its inputs.
+ *
+ * Nested because `combine` is typed up to five flows and the vararg form loses
+ * every type in the lambda.
+ */
+internal fun browserStates(
+    path: Flow<String>,
+    rows: Flow<List<VaultRowItem>>,
+    recent: Flow<List<RecentRow>>,
+    noteCount: Flow<Int>,
+    vaults: Flow<Pair<List<VaultEntity>, Long>>,
+    crashed: Flow<Boolean>,
+): Flow<BrowserUiState> =
+    combine(
+        path,
+        rows,
+        recent,
+        noteCount,
+        combine(vaults, crashed) { pair, died -> pair to died },
+    ) { currentPath, currentItems, recentRows, count, (repositories, died) ->
+        BrowserUiState(
+            path = currentPath,
+            items = currentItems,
+            recent = recentRows,
+            noteCount = count,
+            vaults = repositories.first,
+            activeVaultId = repositories.second,
+            loading = false,
+            crashed = died,
+        )
     }
 
 /** Kept short on purpose; see [BrowserViewModel.recent]. */
