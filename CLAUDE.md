@@ -82,7 +82,7 @@ A task is found again by the source line the indexer recorded (`tasks.line`, fro
 
 `MigrationTest` builds each old version from its exported schema JSON, runs the migrations, and asserts the resulting shape. **Until recently every one of those ran against empty tables**, and a shape assertion on an empty database cannot fail the way a real one does: `UNIQUE constraint failed` needs two rows to collide. That is exactly how a migration that bricked the app shipped through a green suite.
 
-So: **a migration that touches data gets a test with data in it.** `two vaults keep a file they both name the same` is the pattern to copy. The other cases still run dry and are worth seeding when you next touch them.
+So: **a migration that touches data gets a test with data in it.** `two vaults keep a file they both name the same` is the pattern to copy, and `withData` in `MigrationTest` is the short form: build one version, seed it, run one migration, check. 3→4, 10→11 and 11→12 are seeded; the rest still run dry and are worth seeding when you next touch them.
 
 `CURRENT` is derived from the registered migrations, not written down — a stale literal silently checks every migration against an older schema. `the schema and the migrations agree on the version` catches a `@Database` bump that arrived without a migration.
 

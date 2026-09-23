@@ -207,6 +207,84 @@ class MigrationTest {
         }
     }
 
+    /** Builds [version], seeds it, runs [migration] alone, and checks the result. */
+    private fun withData(
+        version: Int,
+        migration: Migration,
+        seed: (SQLiteConnection) -> Unit,
+        check: (SQLiteConnection) -> Unit,
+    ) {
+        val file = File.createTempFile("seeded-$version-", ".db").also { it.delete() }
+        try {
+            BundledSQLiteDriver().open(file.path).use { connection ->
+                build(connection, schema(version))
+                NotesDatabase.createSearchIndex(connection)
+                seed(connection)
+                migration.migrate(connection)
+                check(connection)
+            }
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `notes are retitled after their file names, in the search index too`() =
+        withData(
+            version = 3,
+            migration = NotesDatabase.MIGRATION_3_4,
+            seed = { connection ->
+                // Titled by their first heading, as the indexer used to. The
+                // SQL finds the file name with rtrim rather than a
+                // lastIndexOf, which is exactly the kind of thing that is
+                // right for `a.md` and wrong two folders down.
+                connection.execSQL(
+                    "INSERT INTO notes (id, path, parent, name, slug, title, blobSha, size, isFolderNote, " +
+                        "isRtl, hasMermaid, hasMath, indexedAt) VALUES " +
+                        "(1, 'a.md', '', 'a', 'a', 'A Heading', 's', 1, 0, 0, 0, 0, 0), " +
+                        "(2, 'dir/sub/b.md', 'dir/sub', 'b', 'b', 'Another', 's', 1, 0, 0, 0, 0, 0), " +
+                        "(3, 'dir/README', 'dir', 'README', 'readme', 'Readme Heading', 's', 1, 0, 0, 0, 0, 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO note_fts (rowid, title, body) VALUES " +
+                        "(1, 'A Heading', 'x'), (2, 'Another', 'y'), (3, 'Readme Heading', 'z')",
+                )
+            },
+            check = { connection ->
+                assertThat(texts(connection, "SELECT id || ':' || title FROM notes ORDER BY id"))
+                    .containsExactly("1:a", "2:b", "3:README")
+                    .inOrder()
+                assertThat(texts(connection, "SELECT rowid || ':' || title FROM note_fts ORDER BY rowid"))
+                    .containsExactly("1:a", "2:b", "3:README")
+                    .inOrder()
+            },
+        )
+
+    @Test
+    fun `existing tasks and vaults start out unable to write`() =
+        withData(
+            version = 10,
+            migration = NotesDatabase.MIGRATION_10_11,
+            seed = { connection ->
+                connection.execSQL(
+                    "INSERT INTO vaults (id, owner, repo, name, transport, ordinal, enabled, filterVersion, " +
+                        "indexVersion) VALUES (1, 'o', 'notes', 'notes', 'REST', 0, 1, 0, 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO tasks (noteId, text, state, section, blockIndex, ordinal, open) VALUES " +
+                        "(1, 'a task', 'OPEN', '', 0, 0, 1)",
+                )
+            },
+            check = { connection ->
+                // -1, not 0: line 0 is a real line, and a task claiming it
+                // would be ticked by editing whatever is actually there.
+                assertThat(texts(connection, "SELECT text || ':' || line FROM tasks")).containsExactly("a task:-1")
+                // Nothing may write until a sync has asked the host.
+                assertThat(texts(connection, "SELECT name || ':' || canWrite FROM vaults")).containsExactly("notes:0")
+                assertThat(texts(connection, "SELECT COUNT(*) FROM pending_edits")).containsExactly("0")
+            },
+        )
+
     @Test
     fun `what an old reindex left behind is cleared, and nothing else`() {
         // Every full reindex used to leave the vault's previous rows behind:
