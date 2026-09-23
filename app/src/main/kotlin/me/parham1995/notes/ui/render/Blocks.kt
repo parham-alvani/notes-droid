@@ -411,9 +411,10 @@ private fun ItemMarker(
     number: Int,
     onComplete: ((line: Int) -> Unit)? = null,
 ) {
+    val custom = item.customStatus()
     val icon =
         when (item.task) {
-            TaskState.UNCHECKED -> "square"
+            TaskState.UNCHECKED -> custom?.icon ?: "square"
             TaskState.CHECKED -> "square-check-big"
             TaskState.CANCELLED -> "square-x"
             TaskState.IN_PROGRESS -> "square-dot"
@@ -443,9 +444,9 @@ private fun ItemMarker(
                 .padding(top = MARKER_NUDGE)
                 .then(complete?.let { Modifier.clickable { it(item.line) } } ?: Modifier),
         size = MARKER_ICON,
-        tint = item.markerColor(),
+        tint = custom?.tint ?: item.markerColor(),
         contentDescription =
-            item.task.name
+            custom?.description ?: item.task.name
                 .lowercase()
                 .replace('_', ' '),
     )
@@ -651,6 +652,44 @@ private fun UnsupportedView(
         )
     }
 }
+
+/** How one of the statuses beyond the four is drawn. */
+private class CustomStatus(
+    val icon: String,
+    val tint: Color,
+    val description: String,
+)
+
+/**
+ * The statuses themes and the Tasks plugin give meaning to beyond the four --
+ * forwarded, scheduled, important, a question -- each with its own glyph.
+ *
+ * They are all still open, which is what the Tasks plugin makes of any status
+ * it does not know, so they tick like any other. One this table has never
+ * heard of is still a task: a dashed box, rather than `[k]` printed in front
+ * of the text.
+ */
+private fun MdListItem.customStatus(): CustomStatus? =
+    when (status) {
+        ' ', 'x', 'X', '-', '/' -> null
+        '>' -> CustomStatus("square-arrow-right", Naz.Blue, "forwarded")
+        '<' -> CustomStatus("calendar-clock", Naz.Blue, "scheduled")
+        '!' -> CustomStatus("circle-alert", Naz.Red, "important")
+        '?' -> CustomStatus("circle-help", Naz.Yellow, "question")
+        '*' -> CustomStatus("star", Naz.VividYellow, "star")
+        '"' -> CustomStatus("quote", Naz.WarmGrey, "quote")
+        'i' -> CustomStatus("info", Naz.Blue, "information")
+        'b' -> CustomStatus("bookmark", Naz.Orange, "bookmark")
+        'l' -> CustomStatus("map-pin", Naz.Red, "location")
+        'I' -> CustomStatus("lightbulb", Naz.VividYellow, "idea")
+        'S' -> CustomStatus("piggy-bank", Naz.SpringGreen, "savings")
+        'f' -> CustomStatus("flame", Naz.Red, "fire")
+        'k' -> CustomStatus("key", Naz.VividYellow, "key")
+        'w' -> CustomStatus("trophy", Naz.VividYellow, "win")
+        'u', 'p' -> CustomStatus("thumbs-up", Naz.SpringGreen, if (status == 'p') "pro" else "up")
+        'd', 'c' -> CustomStatus("thumbs-down", Naz.Red, if (status == 'c') "con" else "down")
+        else -> CustomStatus("square-dashed", Markup.ListMarker, "status $status")
+    }
 
 @Composable
 private fun MdListItem.markerColor(): Color =

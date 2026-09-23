@@ -13,8 +13,13 @@ import java.time.temporal.ChronoUnit
  * have made of it, and from a raw line to the same line completed.
  */
 object TaskLine {
-    /** `- [ ] `, `* [x] `, `1. [/] ` -- marker, state, and the rest. */
-    private val LINE = Regex("""^(\s*(?:[-*+]|\d+[.)])\s+)\[([ xX/\-])]\s*(.*)$""")
+    /**
+     * `- [ ] `, `* [x] `, `1. [/] `, `- [>] ` -- marker, status, and the rest.
+     *
+     * Any single character is a status, as it is to the Tasks plugin and to
+     * the parser: a line the note shows as a task has to be one this can tick.
+     */
+    private val LINE = Regex("""^(\s*(?:[-*+]|\d+[.)])\s+)\[([^\]\n])]\s*(.*)$""")
 
     fun isTask(raw: String): Boolean = LINE.matches(raw)
 
@@ -23,7 +28,10 @@ object TaskLine {
             .find(raw)
             ?.groupValues
             ?.get(2)
-            ?.let { it == " " || it == "/" } ?: false
+            ?.let { isOpenStatus(it) } ?: false
+
+    /** Done is `x`, cancelled is `-`; everything else is still to do. */
+    private fun isOpenStatus(status: String): Boolean = status !in CLOSED
 
     /** Whether completing it would drop a repeat rule the app cannot re-create. */
     fun isRecurring(raw: String): Boolean =
@@ -47,7 +55,7 @@ object TaskLine {
     ): String? {
         val match = LINE.find(raw) ?: return null
         val (prefix, state, body) = match.destructured
-        if (state != " " && state != "/") return null
+        if (!isOpenStatus(state)) return null
         if (body.contains(DONE)) return null
         return "$prefix[x] ${body.trimEnd()} $DONE $today"
     }
@@ -75,7 +83,7 @@ object TaskLine {
     ): List<String>? {
         val match = LINE.find(raw) ?: return null
         val (prefix, state, body) = match.destructured
-        if (state != " " && state != "/") return null
+        if (!isOpenStatus(state)) return null
 
         val split = TaskMetadata.split(body)
         val rule = split.meta.firstOrNull { it.emoji == RECUR }?.value ?: return null
@@ -124,6 +132,8 @@ object TaskLine {
         val note = MarkdownParser.parseNote(raw.trimStart())
         return TaskExtractor.extract(note).firstOrNull()?.text
     }
+
+    private val CLOSED = setOf("x", "X", "-")
 
     private const val DONE = "✅"
     private const val RECUR = "🔁"

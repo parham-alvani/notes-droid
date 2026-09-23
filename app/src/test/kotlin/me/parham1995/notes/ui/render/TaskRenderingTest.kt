@@ -60,6 +60,22 @@ class TaskRenderingTest {
     }
 
     @Test
+    fun `a status beyond the four is a task with its own glyph, not printed text`() {
+        val ticked = mutableListOf<Int>()
+        render(
+            markdown = "- [>] call the bank\n- [k] a status nobody named\n",
+            actions = RenderActions(onCompleteTask = { line -> ticked += line }),
+        )
+
+        compose.onNodeWithText("call the bank").assertExists()
+        compose.onNodeWithText("[>]", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("[k]", substring = true).assertDoesNotExist()
+        // Still open, so still something to tick.
+        compose.onNodeWithContentDescription("forwarded").performClick()
+        assertThat(ticked).containsExactly(0)
+    }
+
+    @Test
     fun `a vault that cannot be written to has an inert box`() {
         render(markdown = "- [ ] first\n", actions = RenderActions(onCompleteTask = null))
 

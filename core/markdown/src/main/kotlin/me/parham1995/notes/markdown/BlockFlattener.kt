@@ -325,11 +325,17 @@ class BlockFlattener(
                         marker.isChecked -> TaskState.CHECKED
                         else -> TaskState.UNCHECKED
                     }
+                var status = if (marker?.isChecked == true) 'x' else ' '
 
-                // The GFM extension only knows `[ ]` and `[x]`. Obsidian's
-                // cancelled and in-progress markers arrive as literal text.
-                val custom = stripCustomMarker(item)
-                if (custom != null) state = custom
+                // The GFM extension only knows `[ ]` and `[x]`. Every other
+                // status -- Obsidian's cancelled and in-progress, and the
+                // `[>]` `[!]` `[?]` a theme gives a glyph -- arrives as text.
+                if (marker == null) {
+                    stripCustomMarker(item)?.let { custom ->
+                        status = custom
+                        state = stateOf(custom)
+                    }
+                }
 
                 val meta = extractTaskMeta(item)
                 MdListItem(
@@ -337,6 +343,7 @@ class BlockFlattener(
                     task = state,
                     taskMeta = meta,
                     line = item.sourceSpans.firstOrNull()?.lineIndex ?: -1,
+                    status = status,
                 )
             }
         return MdBlock.ListBlock(self, ordered, start, items)
@@ -345,20 +352,34 @@ class BlockFlattener(
     private fun findTaskMarker(item: ListItem): TaskListItemMarker? =
         item.children().filterIsInstance<TaskListItemMarker>().firstOrNull()
 
-    /** Rewrites a leading `[-]` / `[/]` into a state and removes it from the text. */
-    private fun stripCustomMarker(item: ListItem): TaskState? {
+    /**
+     * Takes a leading `[c] ` off the item's text and returns `c`, or null when
+     * the item does not start with one.
+     *
+     * Any single character, as the Tasks plugin has it. Only the first text
+     * node is looked at, so `[see](url)` -- a link, not a status -- is never
+     * mistaken for one.
+     */
+    private fun stripCustomMarker(item: ListItem): Char? {
         val paragraph = item.children().filterIsInstance<Paragraph>().firstOrNull() ?: return null
         val text = paragraph.firstChild as? Text ?: return null
-        val literal = text.literal
-        val state =
-            when {
-                literal.startsWith("[-] ") -> TaskState.CANCELLED
-                literal.startsWith("[/] ") -> TaskState.IN_PROGRESS
-                else -> return null
-            }
-        text.literal = literal.removeRange(0, "[-] ".length)
-        return state
+        val match = CUSTOM_STATUS.find(text.literal) ?: return null
+        text.literal = text.literal.substring(match.range.last + 1)
+        return match.groupValues[1].single()
     }
+
+    /**
+     * What a status means. The Tasks plugin's rule: `x` is done, `-` is
+     * cancelled, `/` is under way, and anything else it does not know is
+     * still a thing to do.
+     */
+    private fun stateOf(status: Char): TaskState =
+        when (status) {
+            'x', 'X' -> TaskState.CHECKED
+            '-' -> TaskState.CANCELLED
+            '/' -> TaskState.IN_PROGRESS
+            else -> TaskState.UNCHECKED
+        }
 
     private fun extractTaskMeta(item: ListItem): List<TaskMeta> {
         val paragraph = item.children().filterIsInstance<Paragraph>().firstOrNull() ?: return emptyList()
@@ -502,6 +523,9 @@ class BlockFlattener(
 
     private companion object {
         val BR = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
+
+        /** `[c] ` at the very start: one character that is not a bracket or a space. */
+        val CUSTOM_STATUS = Regex("""^\[([^\]\s])] """)
         val HTML_TAG = Regex("""<[^>]+>""")
         val RENDERABLE_IMAGES = setOf("jpg", "jpeg", "png", "gif", "svg", "webp")
 

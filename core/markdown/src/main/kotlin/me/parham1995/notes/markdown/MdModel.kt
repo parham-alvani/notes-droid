@@ -163,6 +163,12 @@ data class MdListItem(
      * be ticked. Everything else about a list item is content.
      */
     val line: Int = -1,
+    /**
+     * The character between the brackets, as written: `' '`, `'x'`, `'>'`,
+     * `'!'`. [task] says what it means; this says which glyph draws it, since
+     * a forwarded task and a question are both open and look nothing alike.
+     */
+    val status: Char = ' ',
 )
 
 /** Text direction, detected per block from its first strong character. */
