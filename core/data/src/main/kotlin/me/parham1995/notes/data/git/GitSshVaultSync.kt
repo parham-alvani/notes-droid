@@ -65,7 +65,7 @@ class GitSshVaultSync(
     configDir: File,
     private val filter: VaultFilter = VaultFilter(),
     /** Names this repository's own key, since a deploy key serves only one. */
-    private val keyMount: String = "",
+    private val vaultId: Long,
     private val shallowDepth: Int = DEFAULT_DEPTH,
     /** Narrates each stage, so a long clone is visibly working. */
     private val log: suspend (String) -> Unit = {},
@@ -187,7 +187,7 @@ class GitSshVaultSync(
     }
 
     /** The public line to register with the host as a deploy key. */
-    suspend fun publicKey(): String = keys.publicKeyLine(keyMount) ?: keys.generate(keyMount)
+    suspend fun publicKey(): String = keys.publicKeyLine(vaultId) ?: keys.generate(vaultId)
 
     /**
      * Whether this key may push, asked by starting a push and stopping at the
@@ -503,11 +503,11 @@ class GitSshVaultSync(
         // the natural response is to go and replace a deploy key that was
         // never the problem. A key the device cannot read is a local fault and
         // has to say so.
-        val fingerprint = keys.fingerprint(keyMount)
+        val fingerprint = keys.fingerprint(vaultId)
         if (NO_KEY_OFFERED in failure.describeChain() || fingerprint in UNUSABLE_KEY) {
             throw IOException(
                 "this device could not use its own SSH key, so nothing was sent to the server " +
-                    "and nothing was refused. The key is at ${keys.identity(keyMount).name} and reads as " +
+                    "and nothing was refused. The key is at ${keys.identity(vaultId).name} and reads as " +
                     "\"$fingerprint\". Generating a new one in Settings will not help if the old " +
                     "one was readable before: " + failure.describeChain(),
                 failure,
@@ -619,7 +619,7 @@ class GitSshVaultSync(
             .setHomeDirectory(keys.directory.parentFile)
             .setSshDirectory(keys.directory)
             .setPreferredAuthentications("publickey")
-            .setDefaultIdentities { listOf(keys.identity(keyMount).toPath()) }
+            .setDefaultIdentities { listOf(keys.identity(vaultId).toPath()) }
             .setConfigFile { keys.configFile() }
             // GitHub's published host keys and nothing else. This once said
             // the key was "accepted on first use and pinned by sshd's own

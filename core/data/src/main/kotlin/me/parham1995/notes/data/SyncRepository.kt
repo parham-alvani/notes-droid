@@ -1,9 +1,12 @@
 package me.parham1995.notes.data
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.PendingEditDao
@@ -66,8 +69,18 @@ class SyncRepository
 
         val noteCount: Flow<Int> = blobs.countOfKind(BlobKind.MARKDOWN)
 
-        /** Every repository this app reads, in the order they are shown. */
-        fun vaults(): Flow<List<VaultEntity>> = vaults.observe()
+        /**
+         * Every repository this app reads, in the order they are shown.
+         *
+         * Keys are moved to their id-based names on the way past, because
+         * this is what every screen that shows a key is built from -- and it
+         * has to have happened before one asks whether a vault has a key.
+         */
+        fun vaults(): Flow<List<VaultEntity>> =
+            vaults
+                .observe()
+                .onEach { sshKeys.adoptLegacyNames(it) }
+                .flowOn(Dispatchers.IO)
 
         /**
          * Moves the single repository from settings into the table, once.
@@ -158,7 +171,7 @@ class SyncRepository
             // queue looking like work still to do.
             pending.clearVault(id)
             files.deleteVault(id)
-            sshKeys.delete(vault.name)
+            sshKeys.delete(vault.id)
             vaults.delete(id)
             log.warn("removed ${vault.owner}/${vault.repo}")
         }
@@ -175,7 +188,8 @@ class SyncRepository
          */
         suspend fun testSshKey(vault: VaultEntity): Result<String> =
             runCatching {
-                if (!sshKeys.exists(vault.name)) {
+                transports.adoptLegacyKeys()
+                if (!sshKeys.exists(vault.id)) {
                     error("no key for ${vault.label} yet")
                 }
                 val transport = transports.ssh(vault)
@@ -539,7 +553,8 @@ class SyncRepository
                 }
 
                 SyncTransport.SSH -> {
-                    if (!sshKeys.exists(vault.name)) {
+                    transports.adoptLegacyKeys()
+                    if (!sshKeys.exists(vault.id)) {
                         throw NotConfiguredException(
                             "no SSH key for ${vault.label} yet - generate one in Settings and add it " +
                                 "as a deploy key on that repository",

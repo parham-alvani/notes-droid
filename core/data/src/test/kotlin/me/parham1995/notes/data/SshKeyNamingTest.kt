@@ -3,6 +3,7 @@ package me.parham1995.notes.data
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
 import org.junit.Before
 import org.junit.Test
@@ -11,47 +12,91 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
- * A key per repository, and the root one keeping the name it has always had.
+ * A key per repository, named by the vault's id -- and the keys an existing
+ * install already has moved over to those names without being replaced.
  *
  * The second part is what stops an upgrade silently invalidating a deploy key
- * that is already registered on GitHub: the file must still be the one the
+ * that is already registered on GitHub: the bytes must still be the ones the
  * existing install wrote.
  */
 @RunWith(RobolectricTestRunner::class)
 class SshKeyNamingTest {
     private val store = SshKeyStore(ApplicationProvider.getApplicationContext())
 
+    private fun ssh(
+        id: Long,
+        name: String,
+    ) = VaultEntity(id = id, owner = "o", repo = "r$id", name = name, transport = "SSH")
+
     @Test
-    fun `the root-mounted repository keeps the original file name`() {
-        assertThat(store.identity("").name).isEqualTo("id_notes")
+    fun `every repository gets a file of its own, by id`() {
+        assertThat(store.identity(1).name).isEqualTo("id_vault_1")
+        assertThat(store.identity(2).name).isEqualTo("id_vault_2")
     }
 
     @Test
-    fun `every other repository gets a file of its own`() {
-        assertThat(store.identity("documents").name).isEqualTo("id_documents")
-        assertThat(store.identity("Work").name).isEqualTo("id_work")
-    }
-
-    @Test
-    fun `two repositories never share a key file`() {
-        val names = listOf("", "documents", "Work", "archive").map { store.identity(it).name }
+    fun `names that used to collide no longer share a key file`() {
+        // By name, both Persian vaults were `id_____` and `Work`/`work` were
+        // one file. By id they cannot be.
+        val names = listOf(1L, 2L, 3L, 4L).map { store.identity(it).name }
 
         assertThat(names).containsNoDuplicates()
     }
 
     @Test
-    fun `a folder name that is awkward on a filesystem still yields a usable one`() {
-        // Mounts are folder names, so they can carry spaces and non-Latin
-        // script -- the vault this was built for has plenty of both.
-        assertThat(store.identity("Code Chorus").name).isEqualTo("id_code_chorus")
-        assertThat(store.identity("دفتر").name).isEqualTo("id_____")
+    fun `no key exists until one is generated`() {
+        assertThat(store.exists(99)).isFalse()
+        assertThat(store.publicKeyLine(99)).isNull()
+        assertThat(store.fingerprint(99)).isEqualTo("no key")
     }
 
     @Test
-    fun `no key exists until one is generated`() {
-        assertThat(store.exists("never-made")).isFalse()
-        assertThat(store.publicKeyLine("never-made")).isNull()
-        assertThat(store.fingerprint("never-made")).isEqualTo("no key")
+    fun `an existing key moves to its vault's id and keeps its bytes`() {
+        // What an install before this change has on disk for a vault named
+        // "Documents": the key registered on GitHub.
+        write("id_documents", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample registered")
+
+        store.adoptLegacyNames(listOf(ssh(2, "Documents")))
+
+        assertThat(store.exists(2)).isTrue()
+        assertThat(store.publicKeyLine(2)).endsWith("registered")
+        assertThat(File(sshDir, "id_documents").exists()).isFalse()
+    }
+
+    @Test
+    fun `two vaults that shared one file leave it with the first`() {
+        // Both Persian names collapsed to the same file; only one repository
+        // can have that key registered, and the older vault is the bet.
+        write("id_____", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample shared")
+        val vaults = listOf(ssh(4, "کتاب"), ssh(3, "دفتر"))
+
+        store.adoptLegacyNames(vaults)
+        store.adoptLegacyNames(vaults)
+
+        assertThat(store.publicKeyLine(3)).endsWith("shared")
+        // The second generates its own, which it needed all along.
+        assertThat(store.exists(4)).isFalse()
+    }
+
+    @Test
+    fun `a vault that does not sync over SSH never takes a key`() {
+        write("id_work", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample work")
+        val rest = VaultEntity(id = 1, owner = "o", repo = "r", name = "Work", transport = "REST")
+
+        store.adoptLegacyNames(listOf(rest, ssh(2, "work")))
+
+        assertThat(store.exists(1)).isFalse()
+        assertThat(store.publicKeyLine(2)).endsWith("work")
+    }
+
+    @Test
+    fun `a vault that already has its own key keeps it`() {
+        write("id_vault_2", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample current")
+        write("id_documents", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample stale")
+
+        store.adoptLegacyNames(listOf(ssh(2, "Documents")))
+
+        assertThat(store.publicKeyLine(2)).endsWith("current")
     }
 
     @Test
@@ -71,7 +116,7 @@ class SshKeyNamingTest {
         write("id_notes", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample a")
         write("id_gone", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample b")
 
-        val claimed = setOf(store.identity("").name)
+        val claimed = setOf("id_notes")
         val orphans = store.stored().filterNot { it.fileName in claimed }
 
         assertThat(orphans.map { it.fileName }).containsExactly("id_gone")
@@ -116,11 +161,11 @@ class SshKeyNamingTest {
             // no key for a repository that has just been given one.
             val before = store.revision.value
 
-            store.generate("announced")
+            store.generate(7)
             val afterGenerate = store.revision.value
             assertThat(afterGenerate).isGreaterThan(before)
 
-            store.deleteByFileName(store.identity("announced").name)
+            store.deleteByFileName(store.identity(7).name)
             assertThat(store.revision.value).isGreaterThan(afterGenerate)
         }
 }

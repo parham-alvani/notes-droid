@@ -2,6 +2,9 @@ package me.parham1995.notes.data
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.GitSshVaultSync
 import me.parham1995.notes.data.git.SshKeyStore
@@ -37,6 +40,7 @@ open class VaultTransports
         private val log: SyncLog,
         @param:ApplicationContext private val context: Context,
         private val http: OkHttpClient,
+        private val vaults: VaultDao,
     ) {
         suspend fun client(vault: VaultEntity): GitHubClient {
             val token = tokens.token() ?: throw NotConfiguredException("no access token stored")
@@ -62,18 +66,30 @@ open class VaultTransports
                 "git@github.com:" + vault.owner + "/" + vault.repo + ".git"
             }
 
-        suspend fun ssh(vault: VaultEntity): GitSshVaultSync =
-            GitSshVaultSync(
+        /**
+         * Moves keys named after the old scheme to the one keyed by vault id.
+         * Given every vault, because which one was added first decides who
+         * keeps a file two names shared. See [SshKeyStore.adoptLegacyNames].
+         */
+        suspend fun adoptLegacyKeys() {
+            val all = vaults.all()
+            withContext(Dispatchers.IO) { sshKeys.adoptLegacyNames(all) }
+        }
+
+        suspend fun ssh(vault: VaultEntity): GitSshVaultSync {
+            adoptLegacyKeys()
+            return GitSshVaultSync(
                 // Each repository gets its own working tree, which is what lets
                 // one key serve all of them without their histories colliding.
                 workTree = files.rootOf(vault.id),
                 remoteUrl = sshUrl(vault),
                 branch = vault.branch ?: DEFAULT_BRANCH,
                 keys = sshKeys,
-                keyMount = vault.name,
+                vaultId = vault.id,
                 configDir = File(context.filesDir, "git"),
                 log = log::info,
             )
+        }
 
         /**
          * The write half of whichever transport this vault syncs over.
@@ -98,7 +114,8 @@ open class VaultTransports
                 }
 
                 SyncTransport.SSH -> {
-                    if (!sshKeys.exists(vault.name)) {
+                    adoptLegacyKeys()
+                    if (!sshKeys.exists(vault.id)) {
                         throw NotConfiguredException("no SSH key for ${vault.label} yet")
                     }
                     ssh(vault)

@@ -69,6 +69,7 @@ class GitSshWriteTest {
             remoteUrl = origin.toURI().toString(),
             branch = BRANCH,
             keys = SshKeyStore(ApplicationProvider.getApplicationContext()),
+            vaultId = 1,
             configDir = File(root, "config"),
             // A local transport cannot serve a shallow fetch, and depth is
             // about the size of a clone over the network, not about this.

@@ -80,13 +80,13 @@ class SshViewModel
                 val vaults = repository.vaults().first()
                 val ssh = vaults.filter { SyncTransport.parse(it.transport) == SyncTransport.SSH }
                 val stored = keys.stored()
-                val claimed = vaults.map { keys.identity(it.name).name }.toSet()
+                val claimed = vaults.map { keys.identity(it.id).name }.toSet()
 
                 _state.value =
                     _state.value.copy(
                         repositories =
                             ssh.map { vault ->
-                                val name = keys.identity(vault.name).name
+                                val name = keys.identity(vault.id).name
                                 SshKeyRow(
                                     vault = vault,
                                     key = stored.firstOrNull { it.fileName == name },
@@ -104,10 +104,10 @@ class SshViewModel
                     )
             }
 
-        fun generate(mount: String) =
+        fun generate(vaultId: Long) =
             viewModelScope.launch {
                 _state.value = _state.value.copy(busy = true)
-                runCatching { keys.generate(mount) }
+                runCatching { keys.generate(vaultId) }
                 // No refresh here: generating bumps the store's revision, and
                 // the collector above rebuilds from that.
                 _state.value = _state.value.copy(busy = false)
