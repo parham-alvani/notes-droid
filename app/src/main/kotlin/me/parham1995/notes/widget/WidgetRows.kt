@@ -1,5 +1,32 @@
 package me.parham1995.notes.widget
 
+import android.content.BroadcastReceiver
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+/**
+ * Runs [draw] off the main thread, keeping the broadcast alive until it ends.
+ *
+ * A widget provider is a broadcast receiver, and once `onReceive` returns the
+ * system is free to kill a process with nothing else running -- which, for a
+ * widget updated by a sync in the background, is the usual case. A coroutine
+ * merely launched from `onUpdate` could die half way through reading the
+ * database, and the widget kept whatever it last drew. `goAsync` holds the
+ * broadcast open until `finish`, which is what makes the work count.
+ */
+internal fun BroadcastReceiver.drawAsync(draw: suspend () -> Unit) {
+    val pending = goAsync()
+    CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+        try {
+            draw()
+        } finally {
+            pending.finish()
+        }
+    }
+}
+
 /**
  * How many rows fit in a widget of a given height.
  *

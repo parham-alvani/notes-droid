@@ -12,11 +12,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskBuckets
@@ -59,9 +55,10 @@ class TasksWidget : AppWidgetProvider() {
         ids: IntArray,
     ) {
         // A provider is not a lifecycle owner and onUpdate is synchronous, so
-        // the work is launched and the result pushed when it arrives. The
-        // widget keeps its previous content until then rather than blanking.
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+        // the work runs in the background and the result is pushed when it
+        // arrives. The widget keeps its previous content until then rather
+        // than blanking.
+        drawAsync {
             val repository =
                 EntryPointAccessors
                     .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
