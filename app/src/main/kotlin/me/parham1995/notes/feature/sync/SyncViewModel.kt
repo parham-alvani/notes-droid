@@ -49,7 +49,6 @@ data class SyncUiState(
     val vaults: List<VaultEntity> = emptyList(),
     val hasToken: Boolean = false,
     val noteCount: Int = 0,
-    val headCommit: String? = null,
     val lastSyncAt: Long? = null,
     val lastError: String? = null,
     /** Actually working right now. */
@@ -145,7 +144,6 @@ class SyncViewModel
                         settings = settings,
                         hasToken = extra.hasToken,
                         noteCount = notes,
-                        headCommit = status.headCommit,
                         lastSyncAt = status.lastSyncAt,
                         lastError = failed?.outputData?.getString(SyncWorker.KEY_ERROR) ?: status.lastError,
                         running = running != null,

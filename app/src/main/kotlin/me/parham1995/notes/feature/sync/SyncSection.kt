@@ -29,9 +29,24 @@ import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.VaultSettings
+import me.parham1995.notes.data.database.VaultEntity
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
+
+/**
+ * Which commit each vault is at, labelled by vault when there is more than one.
+ *
+ * Each repository is at a commit of its own. The card used to show the sync
+ * journal's single commit, which was whichever vault happened to finish first
+ * -- so with two vaults it described one of them, and not always the same one.
+ */
+internal fun vaultCommits(vaults: List<VaultEntity>): List<Pair<String?, String?>> =
+    if (vaults.size <= 1) {
+        listOf(null to vaults.firstOrNull()?.headCommit)
+    } else {
+        vaults.map { it.label to it.headCommit }
+    }
 
 @Composable
 internal fun StatusCard(
@@ -44,7 +59,9 @@ internal fun StatusCard(
         // screen opens.
         LaunchedEffect(Unit) { viewModel.measureDisk() }
         LabelledValue("On disk", state.diskBytes?.let(::formatBytes) ?: "-")
-        LabelledValue("Commit", state.headCommit?.take(SHORT_SHA_LENGTH) ?: "never synced")
+        vaultCommits(state.vaults).forEach { (vault, commit) ->
+            LabelledValue(vault ?: "Commit", commit?.take(SHORT_SHA_LENGTH) ?: "never synced")
+        }
         LabelledValue(
             "Last sync",
             state.lastSyncAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "-",
