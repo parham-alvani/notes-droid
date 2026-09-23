@@ -19,13 +19,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import me.parham1995.notes.data.SettingsStore
-import me.parham1995.notes.data.TaskDigestWorker
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.navigation.NotesNavHost
+import me.parham1995.notes.navigation.consumeLaunchRequest
+import me.parham1995.notes.navigation.launchRequest
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.icon.ProvideLucide
 import me.parham1995.notes.ui.theme.NotesTheme
-import me.parham1995.notes.widget.RecentNotesWidget
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -53,30 +53,33 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        openScreen.value = requestedScreen(intent)
-        openNote.value = requestedNote(intent)
+        answer(intent, restoring = false)
     }
 
-    private fun requestedNote(intent: Intent?): Long? =
-        intent?.getLongExtra(RecentNotesWidget.EXTRA_NOTE, 0L)?.takeIf { it > 0 }
-
-    /** The shortcut's string form, or the notification's older boolean. */
-    private fun requestedScreen(intent: Intent?): String? =
-        when {
-            intent == null -> null
-            intent.getStringExtra(EXTRA_OPEN) != null -> intent.getStringExtra(EXTRA_OPEN)
-            intent.getBooleanExtra(TaskDigestWorker.EXTRA_OPEN_TASKS, false) -> SCREEN_TASKS
-            else -> null
-        }
+    /**
+     * Acts on what [intent] asks for, once.
+     *
+     * The request is taken off the intent as it is read: the activity keeps
+     * that intent across every recreation, and one that still carried it would
+     * ask again.
+     */
+    private fun answer(
+        intent: Intent?,
+        restoring: Boolean,
+    ) {
+        val request = launchRequest(intent, restoring)
+        intent?.consumeLaunchRequest()
+        openScreen.value = request?.screen
+        openNote.value = request?.note
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super, which is where the library hooks the window.
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        openScreen.value = requestedScreen(intent)
-        // A widget row on a cold start arrives here, not in onNewIntent, and
-        // reading only the screen dropped the note it was tapped to open.
-        openNote.value = requestedNote(intent)
+        // A widget row on a cold start arrives here, not in onNewIntent. Only
+        // a first creation acts on it; see launchRequest.
+        answer(intent, restoring = savedInstanceState != null)
         // naz is a dark colorscheme, so the system bars take light icons
         // regardless of what the device is set to.
         enableEdgeToEdge(
@@ -119,11 +122,5 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
         if (!granted) requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-    }
-
-    private companion object {
-        /** Matches `me.parham1995.notes.OPEN` in `res/xml/shortcuts.xml`. */
-        const val EXTRA_OPEN = "me.parham1995.notes.OPEN"
-        const val SCREEN_TASKS = "tasks"
     }
 }
