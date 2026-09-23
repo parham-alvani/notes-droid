@@ -190,12 +190,27 @@ interface TaskDao {
      * The list is per vault because that is where you go to act on it; the
      * count is what a widget and a notification show, and being late on
      * something in another vault is still being late.
+     *
+     * Joined to `notes` although nothing here needs a column from it: a task
+     * belongs to a note, and one whose note has gone is not anyone's to do.
+     * There are no foreign keys to take such rows with the note, and a full
+     * reindex once left a copy of every task behind, so counting the table
+     * bare inflated the morning's digest by the whole vault's worth.
      */
-
-    @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn IS NOT NULL AND actionableOn < :today")
+    @Query(
+        """
+        SELECT COUNT(*) FROM tasks t JOIN notes n ON n.id = t.noteId
+        WHERE t.open = 1 AND t.actionableOn IS NOT NULL AND t.actionableOn < :today
+        """,
+    )
     suspend fun overdueCount(today: String): Int
 
-    @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn = :today")
+    @Query(
+        """
+        SELECT COUNT(*) FROM tasks t JOIN notes n ON n.id = t.noteId
+        WHERE t.open = 1 AND t.actionableOn = :today
+        """,
+    )
     suspend fun dueTodayCount(today: String): Int
 
     /**

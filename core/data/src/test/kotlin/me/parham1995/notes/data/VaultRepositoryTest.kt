@@ -295,6 +295,37 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `the digest counts only tasks that belong to a note`() =
+        runTest {
+            index(
+                "Work/Apollo.md" to "- [ ] late ⏳ 2026-01-01\n- [ ] today ⏳ 2026-09-23\n- [ ] later ⏳ 2026-12-01",
+            )
+            // What an older reindex left behind: rows for a note id that no
+            // longer exists, which nothing cascades away.
+            database.indexDao().insertTasks(
+                listOf("2026-01-01", "2026-09-23").mapIndexed { ordinal, date ->
+                    me.parham1995.notes.data.database.TaskEntity(
+                        noteId = 999_999,
+                        text = "orphan",
+                        state = "OPEN",
+                        section = "",
+                        blockIndex = 0,
+                        ordinal = ordinal,
+                        open = true,
+                        actionableOn = date,
+                        scheduled = null,
+                        due = null,
+                        done = null,
+                        recurring = null,
+                    )
+                },
+            )
+
+            assertThat(repository.overdueCount("2026-09-23")).isEqualTo(1)
+            assertThat(repository.dueTodayCount("2026-09-23")).isEqualTo(1)
+        }
+
+    @Test
     fun `a note that goes away takes its tasks with it`() =
         runTest {
             index("Work/Apollo.md" to "- [ ] one ⏳ 2026-09-18")
