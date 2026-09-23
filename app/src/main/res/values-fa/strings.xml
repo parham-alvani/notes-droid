@@ -264,6 +264,7 @@
     <string name="browse_recent">اخیرا باز شده</string>
     <string name="browse_all_notes">همهٔ یادداشت‌ها - %1$d</string>
     <string name="search_full_text">متن کامل</string>
+    <string name="search_syntax">عبارت دقیق: \"برداشت سرخ\" · کنار گذاشتن: ‎-واژه · فقط یک پوشه: ‎path:پوشه/زیرپوشه</string>
     <string name="ssh_no_key">هنوز کلیدی نیست.</string>
     <string name="ssh_created">%1$s · ساخته‌شده در %2$s</string>
     <string name="ssh_created_unknown">نامعلوم</string>

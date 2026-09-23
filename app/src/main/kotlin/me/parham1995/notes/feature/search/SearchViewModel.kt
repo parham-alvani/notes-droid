@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.FtsQuery
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SearchHit
 import me.parham1995.notes.data.VaultIcons
@@ -70,10 +71,16 @@ class SearchViewModel
                         vault = repository.activeVaultId,
                         debounceMs = DEBOUNCE_MS,
                         quick = { query, _ ->
-                            repository
-                                .quickSwitch(
-                                    query,
-                                ).map { QuickRow(it, iconConfig.value.forFile(it.vaultId, it.path)) }
+                            // `path:Garden -red` is not anybody's note name,
+                            // and matching it as one offers nonsense above
+                            // the results the operators were typed for.
+                            if (FtsQuery.usesOperators(query)) {
+                                emptyList()
+                            } else {
+                                repository
+                                    .quickSwitch(query)
+                                    .map { QuickRow(it, iconConfig.value.forFile(it.vaultId, it.path)) }
+                            }
                         },
                         full = { query, vaultId ->
                             repository.search(query).map { HitRow(it, iconConfig.value.forFile(vaultId, it.path)) }

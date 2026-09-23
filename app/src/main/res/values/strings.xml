@@ -264,6 +264,7 @@
     <string name="browse_recent">Recently opened</string>
     <string name="browse_all_notes">All notes - %1$d</string>
     <string name="search_full_text">Full text</string>
+    <string name="search_syntax">Exact phrase: \"red harvest\" · leave out: -word · one folder: path:Folder/Sub</string>
     <string name="ssh_no_key">No key yet.</string>
     <string name="ssh_created">%1$s · created %2$s</string>
     <string name="ssh_created_unknown">unknown</string>
