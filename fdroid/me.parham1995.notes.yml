@@ -27,10 +27,22 @@ AntiFeatures:
 RepoType: git
 Repo: https://github.com/parham-alvani/notes-droid.git
 
+# F-Droid builds from source and then checks its APK against the one published
+# on the GitHub release. When they match it ships the published APK, signature
+# and all, so an install from F-Droid and one from a GitHub release can update
+# each other. Without this F-Droid would sign with its own key, and the two
+# channels could never cross -- the uninstall that costs the synced vault, the
+# token and the on-device SSH key.
+#
+# The fingerprint is the one every GitHub release carries, unchanged since
+# v0.1.0.
+Binaries: https://github.com/parham-alvani/notes-droid/releases/download/v%v/daftar-%v.apk
+AllowedAPKSigningKeys: 84d957e4637c765d7d4245fe2009d21234c74cced46befab737e074aba1bed1c
+
 Builds:
-  - versionName: 0.1.0
-    versionCode: 100
-    commit: v0.1.0
+  - versionName: 0.27.1
+    versionCode: 2701
+    commit: v0.27.1
     subdir: app
     gradle:
       - yes
@@ -48,5 +60,5 @@ Builds:
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.1.0
-CurrentVersionCode: 100
+CurrentVersion: 0.27.1
+CurrentVersionCode: 2701
