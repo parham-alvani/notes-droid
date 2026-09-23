@@ -22,6 +22,17 @@ import me.parham1995.notes.ui.theme.Markup
 data class InlineActions(
     val onWikiLink: (target: String, heading: String?) -> Unit = { _, _ -> },
     val onExternalLink: (url: String) -> Unit = {},
+    /**
+     * A link already resolved to the note it names.
+     *
+     * Separate from [onWikiLink] because a link inside an embedded note is
+     * resolved against *that* note's links, not the one on screen: the two
+     * rarely link to the same things, and looking a target up in the wrong
+     * note's table reports a working link as broken.
+     */
+    val onNoteLink: (noteId: Long, heading: String?) -> Unit = { _, _ -> },
+    /** A link that resolves to nothing, said plainly rather than ignored. */
+    val onBrokenLink: (target: String) -> Unit = {},
 )
 
 /**

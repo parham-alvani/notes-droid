@@ -52,9 +52,15 @@ class CommentTest {
 
     @Test
     fun `percent signs in code are not a comment`() {
-        val note = parse("Use `%%` to escape, and %%this is hidden%%.\n\n```mermaid\n%% a mermaid comment\ngraph TD\n```")
+        val note =
+            parse("Use `%%` to escape, and %%this is hidden%%.\n\n```mermaid\n%% a mermaid comment\ngraph TD\n```")
         assertThat(note.paragraphs()).containsExactly("Use %% to escape, and .")
-        assertThat(note.blocks.filterIsInstance<MdBlock.Mermaid>().single().code).contains("%% a mermaid comment")
+        assertThat(
+            note.blocks
+                .filterIsInstance<MdBlock.Mermaid>()
+                .single()
+                .code,
+        ).contains("%% a mermaid comment")
     }
 
     @Test

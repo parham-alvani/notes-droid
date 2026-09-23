@@ -83,6 +83,13 @@ data class RenderActions(
      * checkbox inert rather than offering something that fails at the push.
      */
     val onCompleteTask: ((line: Int) -> Unit)? = null,
+    /**
+     * Another note's blocks for an `![[embed]]`, the section its heading names
+     * when it names one, or null when there is no such note or heading.
+     *
+     * Null as a whole means embeds are drawn as links only.
+     */
+    val transclude: (suspend (target: String, heading: String?) -> Transcluded?)? = null,
 )
 
 @Composable
@@ -132,10 +139,13 @@ fun MdBlockView(
                     vaultId = actions.vaultId,
                     path = block.path,
                     alt = block.alt,
+                    width = block.width,
+                    height = block.height,
                     modifier = modifier,
                     onClick = { actions.onImage(block.path, block.alt) },
                 )
             is MdBlock.Attachment -> AttachmentView(block, actions, modifier)
+            is MdBlock.NoteEmbed -> NoteEmbedView(block, actions, modifier)
             is MdBlock.ThematicBreak -> HorizontalDivider(modifier.padding(vertical = 8.dp))
             is MdBlock.Unsupported -> UnsupportedView(block.label, modifier)
             // Front matter is metadata; only `direction` and `cssclasses` ever

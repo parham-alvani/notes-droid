@@ -2,9 +2,11 @@ package me.parham1995.notes.ui.render
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -36,8 +38,23 @@ fun VaultImage(
     path: String,
     alt: String?,
     modifier: Modifier = Modifier,
+    /** The size asked for after the pipe, `![[x.png|300x200]]`, in dp. */
+    width: Int? = null,
+    height: Int? = null,
     onClick: () -> Unit = {},
 ) {
+    // Never wider than the page, whatever was asked for: the size was chosen
+    // on a desktop window, and the order matters -- capping first and filling
+    // after gives the smaller of the two.
+    val sized =
+        if (width != null) {
+            Modifier.widthIn(max = width.dp).fillMaxWidth().let { base ->
+                if (height != null && height > 0) base.aspectRatio(width.toFloat() / height) else base
+            }
+        } else {
+            Modifier.fillMaxWidth()
+        }
+
     val context = LocalContext.current
     val image by rememberVaultImageBytes(vaultId, path)
     val bytes = image.bytes
@@ -53,10 +70,9 @@ fun VaultImage(
                             .data(bytes)
                             .build(),
                     contentDescription = alt,
-                    contentScale = ContentScale.FillWidth,
+                    contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,
                     modifier =
-                        Modifier
-                            .fillMaxWidth()
+                        sized
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onClick),
                 )

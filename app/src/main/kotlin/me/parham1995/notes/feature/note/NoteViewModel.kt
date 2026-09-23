@@ -23,8 +23,10 @@ import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteMatch
 import me.parham1995.notes.markdown.NoteSearch
+import me.parham1995.notes.markdown.Transclusion
 import me.parham1995.notes.markdown.plainText
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.render.Transcluded
 import java.io.File
 import javax.inject.Inject
 
@@ -265,6 +267,31 @@ class NoteViewModel
          * path the manifest has never heard of.
          */
         suspend fun attachment(path: String): File? = _state.value.note?.let { files.localFile(it.vaultId, path) }
+
+        /**
+         * What an `![[embed]]` of another note shows: that note, or the section
+         * of it the heading names, with the links it holds resolved from where
+         * it was written.
+         *
+         * Null when the embed names no note, or a heading that is not there.
+         * Front matter is left out; it is the other note's metadata, and it is
+         * not drawn in that note either.
+         */
+        suspend fun transclusion(
+            target: String,
+            heading: String?,
+        ): Transcluded? {
+            val id = targetOf(target) ?: return null
+            val note = repository.note(id) ?: return null
+            val section = Transclusion.section(note.blocks, heading) ?: return null
+            return Transcluded(
+                noteId = id,
+                title = note.title,
+                blocks = section.filterNot { it is MdBlock.FrontMatter },
+                linkTargets = note.linkTargets,
+                brokenLinks = note.brokenTargets,
+            )
+        }
 
         /** The note a wikilink points at, or null when it is broken. */
         fun targetOf(target: String): Long? =

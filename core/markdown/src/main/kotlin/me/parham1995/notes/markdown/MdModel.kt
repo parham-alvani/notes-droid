@@ -236,17 +236,39 @@ sealed interface MdBlock {
         override val direction: MdDirection = MdDirection.LTR,
     ) : MdBlock
 
-    /** `![[uploads/x.jpg]]` or `![alt](../uploads/x.jpg)`, already resolved. */
+    /**
+     * `![[uploads/x.jpg]]` or `![alt](../uploads/x.jpg)`, already resolved.
+     *
+     * [width] and [height] are the size Obsidian reads from after the pipe --
+     * `![[x.jpg|300]]`, `![[x.jpg|300x200]]` -- in its own CSS pixels, which is
+     * to say density-independent ones.
+     */
     data class Image(
         override val id: Int,
         val path: String,
         val alt: String? = null,
+        val width: Int? = null,
+        val height: Int? = null,
     ) : MdBlock
 
     /** An embed pointing at something that cannot be shown inline. */
     data class Attachment(
         override val id: Int,
         val path: String,
+        val label: String,
+    ) : MdBlock
+
+    /**
+     * `![[Another note]]` or `![[Another note#Heading]]`: another note, or one
+     * section of it, drawn in place.
+     *
+     * [target] is the raw link target, resolved the way a wikilink is -- it is
+     * a note name, not a file path.
+     */
+    data class NoteEmbed(
+        override val id: Int,
+        val target: String,
+        val heading: String?,
         val label: String,
     ) : MdBlock
 

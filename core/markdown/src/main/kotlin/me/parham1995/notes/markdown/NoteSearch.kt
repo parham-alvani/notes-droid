@@ -79,6 +79,7 @@ object NoteSearch {
             is MdBlock.Table ->
                 (header + rows.flatten()).joinToString(" ") { it.plainText() }
             is MdBlock.Attachment -> label
+            is MdBlock.NoteEmbed -> label
             is MdBlock.Image -> alt.orEmpty()
             else -> ""
         }

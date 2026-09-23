@@ -41,6 +41,8 @@ object LinkExtraction {
 
             is MdBlock.Image -> out += ParsedLink(LinkKind.IMAGE, block.path, block.alt, context = block.alt.orEmpty())
             is MdBlock.Attachment -> out += ParsedLink(LinkKind.WIKI_EMBED, block.path, block.label)
+            is MdBlock.NoteEmbed ->
+                out += ParsedLink(LinkKind.WIKI_EMBED, block.target, block.label, heading = block.heading)
             else -> Unit
         }
     }

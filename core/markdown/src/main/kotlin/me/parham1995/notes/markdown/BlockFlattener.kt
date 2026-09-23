@@ -196,9 +196,9 @@ class BlockFlattener(
             is WikiLinkNode -> embed(node)
 
             is Image -> {
-                val alt = plainTextOf(node).takeIf { it.isNotBlank() }
-                links += ParsedLink(LinkKind.IMAGE, node.destination, alt)
-                MdBlock.Image(id(), imageResolver(node.destination), alt)
+                val sized = Sized.of(plainTextOf(node))
+                links += ParsedLink(LinkKind.IMAGE, node.destination, sized.alt)
+                MdBlock.Image(id(), imageResolver(node.destination), sized.alt, sized.width, sized.height)
             }
 
             else -> error("not a breakout: $node")
@@ -207,12 +207,54 @@ class BlockFlattener(
     private fun embed(node: WikiLinkNode): MdBlock {
         links += ParsedLink(LinkKind.WIKI_EMBED, node.target, node.alias)
         val extension = node.target.substringAfterLast('.', "").lowercase()
-        return if (extension in RENDERABLE_IMAGES) {
-            MdBlock.Image(id(), imageResolver(node.target), node.alias)
-        } else {
+        return when {
+            extension in RENDERABLE_IMAGES -> {
+                val sized = Sized.of(node.alias.orEmpty())
+                MdBlock.Image(id(), imageResolver(node.target), sized.alt, sized.width, sized.height)
+            }
+
+            // No extension, or `.md`: another note, which Obsidian draws in
+            // place. Offered as an attachment it went to "another app" that
+            // had nothing to open. A name like "Release v1.2 notes" has a dot
+            // in it and is still a note, which is why a file extension has to
+            // look like one.
+            extension == "md" || !FILE_EXTENSION.matches(extension) ->
+                MdBlock.NoteEmbed(
+                    id = id(),
+                    target = node.target,
+                    heading = node.heading,
+                    label = node.alias ?: node.target.substringAfterLast('/').removeSuffix(".md"),
+                )
+
             // Video and audio are handed to another app rather than shown, so
             // the block is a card, not a broken image.
-            MdBlock.Attachment(id(), node.target, node.alias ?: node.target.substringAfterLast('/'))
+            else -> MdBlock.Attachment(id(), node.target, node.alias ?: node.target.substringAfterLast('/'))
+        }
+    }
+
+    /**
+     * An image's alias, which Obsidian overloads: a trailing `300` or
+     * `300x200` is a size, and whatever is left before it is the caption.
+     * Read as a caption, the size ended up printed under the picture.
+     */
+    private class Sized(
+        val alt: String?,
+        val width: Int?,
+        val height: Int?,
+    ) {
+        companion object {
+            private val SIZE = Regex("""^(\d{1,5})(?:x(\d{1,5}))?$""")
+
+            fun of(alias: String): Sized {
+                val parts = alias.split('|')
+                val size = SIZE.matchEntire(parts.last().trim())
+                val caption = (if (size != null) parts.dropLast(1) else parts).joinToString("|").trim()
+                return Sized(
+                    alt = caption.takeIf { it.isNotEmpty() },
+                    width = size?.groupValues?.get(1)?.toIntOrNull(),
+                    height = size?.groupValues?.get(2)?.toIntOrNull(),
+                )
+            }
         }
     }
 
@@ -453,6 +495,9 @@ class BlockFlattener(
         val BR = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
         val HTML_TAG = Regex("""<[^>]+>""")
         val RENDERABLE_IMAGES = setOf("jpg", "jpeg", "png", "gif", "svg", "webp")
+
+        /** Short and alphanumeric: `pdf`, `mp4`, `drawio`, `7z` -- not `2 notes`. */
+        val FILE_EXTENSION = Regex("""[a-z0-9]{1,6}""")
     }
 }
 

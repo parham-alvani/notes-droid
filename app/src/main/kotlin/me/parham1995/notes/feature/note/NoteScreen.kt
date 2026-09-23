@@ -468,6 +468,17 @@ fun NoteScreen(
                                                                         }
                                                                 }
                                                             },
+                                                            onNoteLink = { id, heading ->
+                                                                if (id == state.note?.id) {
+                                                                    pendingHeading = heading
+                                                                } else {
+                                                                    scope.launch {
+                                                                        peeking =
+                                                                            viewModel.peek(id)?.copy(heading = heading)
+                                                                    }
+                                                                }
+                                                            },
+                                                            onBrokenLink = { target -> peekBroken = target },
                                                             onExternalLink = { url ->
                                                                 runCatching {
                                                                     context.startActivity(
@@ -490,6 +501,10 @@ fun NoteScreen(
                                                     // drawn, took a tap, and did
                                                     // nothing with it.
                                                     onImage = { path, alt -> zoomed = path to alt },
+                                                    // Another note drawn in place, rather
+                                                    // than offered to an app that had
+                                                    // nothing to open.
+                                                    transclude = viewModel::transclusion,
                                                     onAttachment = { path ->
                                                         scope.launch {
                                                             val file = viewModel.attachment(path)
