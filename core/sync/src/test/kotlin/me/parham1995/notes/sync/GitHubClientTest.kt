@@ -134,6 +134,54 @@ class GitHubClientTest {
         }
 
     @Test
+    fun `an unchanged head answers from the etag and costs nothing`() =
+        runTest {
+            respond("""{"ref":"refs/heads/main","object":{"sha":"head1","type":"commit"}}""", 200, "etag" to "\"e1\"")
+            server.enqueue(MockResponse.Builder().code(304).build())
+
+            val first = client.head("main")
+            val second = client.head("main", etag = (first as Conditional.Fresh).etag)
+
+            assertThat(first.value).isEqualTo("head1")
+            assertThat(first.etag).isEqualTo("\"e1\"")
+            assertThat(second).isEqualTo(Conditional.NotModified)
+            server.takeRequest()
+            assertThat(server.takeRequest().headers["If-None-Match"]).isEqualTo("\"e1\"")
+        }
+
+    @Test
+    fun `a stale sha answered with 422 is re-read and the edit applied again`() =
+        runTest {
+            // Read at one sha; the desk commits in between; the write quoting
+            // the old sha is refused with 422, which GitHub uses as often as
+            // 409 for this.
+            respond("""{"path":"a.md","sha":"sha-1","size":6,"content":"${base64("- one\n")}"}""")
+            respond("""{"message":"a.md does not match sha-1"}""", code = 422)
+            respond("""{"path":"a.md","sha":"sha-2","size":12,"content":"${base64("- one\n- two\n")}"}""")
+            respond("""{"commit":{"sha":"c2"}}""", code = 200)
+
+            val outcome =
+                RestVaultWriter(client, branch = "main")
+                    .write("a.md", "msg", Author("A", "a@example.com")) { current -> current.orEmpty() + "- three\n" }
+
+            // Applied to what the file says now, not forced over it.
+            assertThat((outcome as WriteOutcome.Written).text).isEqualTo("- one\n- two\n- three\n")
+            assertThat(server.requestCount).isEqualTo(4)
+        }
+
+    @Test
+    fun `a 422 that is not about the sha is not taken for a conflict`() =
+        runTest {
+            respond("""{"message":"Invalid request. content is not valid Base64"}""", code = 422)
+
+            val failure =
+                runCatching { client.putFile("a.md", "x", "sha-1", "main", "msg", Author("A", "a@example.com")) }
+                    .exceptionOrNull()
+
+            assertThat(failure).isInstanceOf(GitHubException.Unexpected::class.java)
+        }
+
+    @Test
     fun `a secondary limit without retry-after is a reason to wait, not a refusal`() =
         runTest {
             respond(
