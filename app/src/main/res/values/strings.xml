@@ -248,4 +248,16 @@
     <string name="ssh_summary_one">One key, for %1$s.</string>
     <string name="ssh_summary_many">One key per repository, %1$d in all.</string>
     <string name="ssh_no_key_yet">no key yet</string>
+    <string name="connection_ok_private">%1$s - private, updated %2$s</string>
+    <string name="connection_ok_public">%1$s - public, updated %2$s</string>
+    <string name="connection_failed">Connection failed</string>
+    <string name="write_checking">Checking…</string>
+    <string name="write_check_failed">Could not check</string>
+    <string name="write_nothing_sent">Nothing could be sent yet</string>
+    <string name="write_queued">Saved here - %1$s</string>
+    <string name="write_already_done">Already done</string>
+    <plurals name="write_sent">
+        <item quantity="one">Sent %1$d edit</item>
+        <item quantity="other">Sent %1$d edits</item>
+    </plurals>
 </resources>

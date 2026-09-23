@@ -248,4 +248,16 @@
     <string name="ssh_summary_one">یک کلید، برای %1$s.</string>
     <string name="ssh_summary_many">یک کلید برای هر مخزن، روی هم %1$d.</string>
     <string name="ssh_no_key_yet">هنوز کلیدی نیست</string>
+    <string name="connection_ok_private">%1$s - خصوصی، آخرین تغییر %2$s</string>
+    <string name="connection_ok_public">%1$s - عمومی، آخرین تغییر %2$s</string>
+    <string name="connection_failed">اتصال برقرار نشد</string>
+    <string name="write_checking">در حال بررسی…</string>
+    <string name="write_check_failed">بررسی نشد</string>
+    <string name="write_nothing_sent">هنوز چیزی فرستاده نشد</string>
+    <string name="write_queued">اینجا ذخیره شد - %1$s</string>
+    <string name="write_already_done">از قبل انجام شده</string>
+    <plurals name="write_sent">
+        <item quantity="one">%1$d ویرایش فرستاده شد</item>
+        <item quantity="other">%1$d ویرایش فرستاده شد</item>
+    </plurals>
 </resources>

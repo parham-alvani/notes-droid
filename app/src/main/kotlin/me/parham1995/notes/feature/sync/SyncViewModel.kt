@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.parham1995.notes.R
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.ImagePolicy
@@ -34,6 +35,7 @@ import me.parham1995.notes.data.database.PendingEditEntity
 import me.parham1995.notes.data.database.SyncLogEntity
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
+import me.parham1995.notes.ui.UiText
 import javax.inject.Inject
 
 /** One repository's SSH key, since a deploy key serves exactly one. */
@@ -61,7 +63,7 @@ data class SyncUiState(
     /** Null until measured, which is only when the sync section asks. */
     val diskBytes: Long? = null,
     /** Result of the last "test connection", for immediate feedback. */
-    val connectionMessage: String? = null,
+    val connectionMessage: UiText? = null,
     val tokenRejected: Boolean = false,
     val sshKeys: List<VaultKey> = emptyList(),
     val generatingKey: Boolean = false,
@@ -71,7 +73,7 @@ data class SyncUiState(
     /** Edits made on the device that have not reached the repository yet. */
     val queuedEdits: List<PendingEditEntity> = emptyList(),
     /** Result of the last write-access check, for immediate feedback. */
-    val writeMessage: String? = null,
+    val writeMessage: UiText? = null,
 )
 
 @HiltViewModel
@@ -93,11 +95,11 @@ class SyncViewModel
         private data class LocalState(
             val hasToken: Boolean = false,
             val diskBytes: Long? = null,
-            val connectionMessage: String? = null,
+            val connectionMessage: UiText? = null,
             val generatingKey: Boolean = false,
             val reindexing: Boolean = false,
             val lastCrash: String? = null,
-            val writeMessage: String? = null,
+            val writeMessage: UiText? = null,
         )
 
         /**
@@ -227,9 +229,14 @@ class SyncViewModel
                     runCatching { repository.testConnection() }
                         .fold(
                             onSuccess = {
-                                "${it.fullName} - ${if (it.private) "private" else "public"}, updated ${it.pushedAt}"
+                                UiText.Resource(
+                                    if (it.private) R.string.connection_ok_private else R.string.connection_ok_public,
+                                    listOf(it.fullName, it.pushedAt.orEmpty()),
+                                )
                             },
-                            onFailure = { it.message ?: "connection failed" },
+                            onFailure = { failure ->
+                                failure.message?.let(UiText::Raw) ?: UiText.Resource(R.string.connection_failed)
+                            },
                         )
                 local.value = local.value.copy(connectionMessage = message)
             }
@@ -261,10 +268,12 @@ class SyncViewModel
          */
         fun checkWriteAccess() =
             viewModelScope.launch {
-                local.value = local.value.copy(writeMessage = "checking...")
+                local.value = local.value.copy(writeMessage = UiText.Resource(R.string.write_checking))
                 val message =
-                    runCatching { repository.refreshWriteAccess() }
-                        .getOrElse { it.message ?: "could not check" }
+                    runCatching { UiText.Raw(repository.refreshWriteAccess()) }
+                        .getOrElse { failure ->
+                            failure.message?.let(UiText::Raw) ?: UiText.Resource(R.string.write_check_failed)
+                        }
                 local.value = local.value.copy(writeMessage = message)
             }
 
@@ -274,7 +283,12 @@ class SyncViewModel
                 val sent = runCatching { writes.flush() }.getOrDefault(0)
                 local.value =
                     local.value.copy(
-                        writeMessage = if (sent > 0) "sent $sent edit(s)" else "nothing could be sent yet",
+                        writeMessage =
+                            if (sent > 0) {
+                                UiText.Plural(R.plurals.write_sent, sent)
+                            } else {
+                                UiText.Resource(R.string.write_nothing_sent)
+                            },
                     )
             }
 

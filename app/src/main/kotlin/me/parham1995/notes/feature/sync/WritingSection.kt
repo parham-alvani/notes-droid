@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
+import me.parham1995.notes.ui.text
 
 /**
  * Who the app commits as, and whether it may commit at all.
@@ -94,7 +95,7 @@ internal fun WritingCard(
             )
         }
         state.writeMessage?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            Text(it.text(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         }
     }
 }

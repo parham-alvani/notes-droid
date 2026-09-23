@@ -11,12 +11,14 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.parham1995.notes.R
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskBuckets
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.TaskRow
+import me.parham1995.notes.ui.UiText
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -56,7 +58,7 @@ data class TasksUiState(
     /** The headings each file already uses, so a new task can join one. */
     val sectionsByPath: Map<String, List<String>> = emptyMap(),
     /** The last thing a write had to say, shown once and dismissed. */
-    val message: String? = null,
+    val message: UiText? = null,
     /**
      * Edits made here that have not reached the repository.
      *
@@ -78,7 +80,7 @@ class TasksViewModel
         private val writes: VaultWriteRepository,
         private val savedState: SavedStateHandle,
     ) : ViewModel() {
-        private val message = MutableStateFlow<String?>(null)
+        private val message = MutableStateFlow<UiText?>(null)
 
         fun dismissMessage() {
             message.value = null
@@ -213,11 +215,14 @@ internal fun taskSources(countsByPath: Map<String, Int>): List<TaskSource> {
         }.sortedBy { it.name.lowercase() }
 }
 
-/** What to say about a write, in one line. */
-private fun WriteResult.describe(): String =
+/**
+ * What to say about a write, in one line. The reasons are the write path's own
+ * words and are passed through; the rest is ours, and translated.
+ */
+private fun WriteResult.describe(): UiText =
     when (this) {
-        WriteResult.Pushed -> "Saved"
-        is WriteResult.Queued -> "Saved here - $why"
-        WriteResult.Unchanged -> "Already done"
-        is WriteResult.Refused -> why
+        WriteResult.Pushed -> UiText.Resource(R.string.capture_saved)
+        is WriteResult.Queued -> UiText.Resource(R.string.write_queued, listOf(why))
+        WriteResult.Unchanged -> UiText.Resource(R.string.write_already_done)
+        is WriteResult.Refused -> UiText.Raw(why)
     }

@@ -34,6 +34,7 @@ import me.parham1995.notes.R
 import me.parham1995.notes.data.SyncTransport
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.ui.icon.LucideGlyph
+import me.parham1995.notes.ui.text
 
 @Composable
 internal fun RepositoryCard(
@@ -215,7 +216,7 @@ internal fun TokenCard(
             )
         }
         state.connectionMessage?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            Text(it.text(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         }
     }
 }
