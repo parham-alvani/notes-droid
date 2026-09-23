@@ -148,6 +148,34 @@ class SyncRepository
         suspend fun updateVault(vault: VaultEntity) = vaults.update(vault)
 
         /**
+         * Moves a vault to another transport.
+         *
+         * The commit and ETag go with the change. Each transport's idea of
+         * "where the device is up to" is its own: an SSH clone is shallow and
+         * does not hold the commit a REST sync recorded, and a REST sync
+         * replaying an SSH-era ETag can be told nothing moved when the files
+         * on disk were never its own. Planning the next sync from the full
+         * tree still diffs against the manifest, so nothing already here is
+         * fetched again. Whether the credential can write is a question for
+         * the new credential, so that goes too until it is asked.
+         *
+         * Under the gate, and read fresh: a sync that is running holds the
+         * row it started with and writes it back at the end, which would put
+         * the old transport back.
+         */
+        suspend fun setTransport(
+            vaultId: Long,
+            transport: SyncTransport,
+        ) = gate.withVault {
+            val vault = vaults.byId(vaultId) ?: return@withVault
+            if (SyncTransport.parse(vault.transport) == transport) return@withVault
+            vaults.update(
+                vault.copy(transport = transport.name, headCommit = null, etagRef = null, canWrite = false),
+            )
+            log.info("${vault.label} now syncs over ${transport.name} - the next sync reads the whole tree once")
+        }
+
+        /**
          * Forgets a repository and everything it brought with it.
          *
          * The notes are removed through the indexer rather than by deleting

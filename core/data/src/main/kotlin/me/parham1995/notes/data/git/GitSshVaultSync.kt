@@ -19,6 +19,7 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.api.TransportConfigCallback
 import org.eclipse.jgit.diff.DiffEntry
+import org.eclipse.jgit.errors.MissingObjectException
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.PersonIdent
@@ -81,8 +82,13 @@ class GitSshVaultSync(
 
     override suspend fun plan(base: SyncBase): SyncPlan =
         withContext(Dispatchers.IO) {
-            checkReachable()
-            checkAuthentication()
+            // Only a remote over SSH has a port to reach and a key to offer. A
+            // repository on disk has neither, and is how the planning is
+            // tested without a network.
+            if (overSsh) {
+                checkReachable()
+                checkAuthentication()
+            }
 
             val fresh = !File(workTree, Constants.DOT_GIT).isDirectory
             if (fresh) {
@@ -537,6 +543,8 @@ class GitSshVaultSync(
 
     private fun openGit(): Git = Git.open(workTree)
 
+    private val overSsh: Boolean get() = !remoteUrl.startsWith("file:")
+
     private fun filesAt(
         repository: Repository,
         commit: ObjectId,
@@ -575,14 +583,26 @@ class GitSshVaultSync(
         toSha: String,
     ): List<Pair<VaultEntry, ChangeKind>> {
         val repository = git.repository
-        val from =
-            repository.resolve(fromSha) ?: return filesAt(repository, repository.resolve(toSha)!!)
-                .map { it to ChangeKind.ADDED }
         val to = repository.resolve(toSha) ?: return emptyList()
+        // `resolve` answers a full sha without looking for the object, so it
+        // is no evidence the commit is here. A vault switched from REST
+        // arrives with a base commit this shallow clone never fetched, and a
+        // force-push leaves one that is no longer in the history; either way
+        // parseCommit threw MissingObjectException on every sync after. The
+        // whole tree, diffed against the manifest, is the honest answer.
+        val from =
+            repository.resolve(fromSha)?.takeIf { repository.getObjectDatabase().has(it) }
+                ?: return filesAt(repository, to).map { it to ChangeKind.ADDED }
 
         repository.newObjectReader().use { reader ->
             RevWalk(repository).use { walk ->
-                val oldTree = CanonicalTreeParser().apply { reset(reader, walk.parseCommit(from).tree) }
+                val base =
+                    try {
+                        walk.parseCommit(from)
+                    } catch (_: MissingObjectException) {
+                        return filesAt(repository, to).map { it to ChangeKind.ADDED }
+                    }
+                val oldTree = CanonicalTreeParser().apply { reset(reader, base.tree) }
                 val newTree = CanonicalTreeParser().apply { reset(reader, walk.parseCommit(to).tree) }
                 return git
                     .diff()

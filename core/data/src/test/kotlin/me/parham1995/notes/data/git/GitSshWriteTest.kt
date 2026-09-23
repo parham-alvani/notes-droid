@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.markdown.VaultEdits
 import me.parham1995.notes.sync.Author
+import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.WriteOutcome
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.revwalk.RevWalk
@@ -125,6 +126,26 @@ class GitSshWriteTest {
 
             assertThat(outcome).isInstanceOf(WriteOutcome.Written::class.java)
             assertThat(originText(NOTE)).isEqualTo("## Alpha\n\n- [x] first ✅ 2026-09-20\n")
+        }
+
+    @Test
+    fun `a base commit this clone never had plans from the whole tree`() =
+        runTest {
+            // A vault switched from REST: the commit it recorded was never
+            // fetched into this shallow clone. `resolve` hands back an id for
+            // any full sha, so this used to reach parseCommit and throw
+            // MissingObjectException on every sync.
+            val base =
+                SyncBase(
+                    commit = "0123456789abcdef0123456789abcdef01234567",
+                    manifest = mapOf(NOTE to "sha-from-the-rest-era"),
+                )
+
+            val plan = writer().plan(base)
+
+            assertThat(plan.modifies.map { it.path }).containsExactly(NOTE)
+            assertThat(plan.adds).isEmpty()
+            assertThat(plan.deletes).isEmpty()
         }
 
     private companion object {

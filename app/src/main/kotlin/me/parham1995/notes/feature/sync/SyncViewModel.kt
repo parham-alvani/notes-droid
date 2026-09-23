@@ -200,7 +200,7 @@ class SyncViewModel
             vault: VaultEntity,
             transport: SyncTransport,
         ) = viewModelScope.launch {
-            repository.updateVault(vault.copy(transport = transport.name))
+            repository.setTransport(vault.id, transport)
         }
 
         fun saveToken(token: String) =

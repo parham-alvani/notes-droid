@@ -1,0 +1,143 @@
+package me.parham1995.notes.data
+
+import androidx.test.core.app.ApplicationProvider
+import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.runTest
+import me.parham1995.notes.data.database.NotesDatabase
+import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.data.git.SshKeyStore
+import me.parham1995.notes.sync.Author
+import me.parham1995.notes.sync.TextEdit
+import me.parham1995.notes.sync.VaultWriter
+import me.parham1995.notes.sync.WriteOutcome
+import okhttp3.OkHttpClient
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+/**
+ * The sync as a whole, with the network stood in for.
+ *
+ * The transports have their own tests. What is tested here is what happens
+ * around them: which vault a step is about, what is left behind when a sync
+ * stops part way, and what the gate keeps apart.
+ */
+@RunWith(RobolectricTestRunner::class)
+class SyncRepositoryTest {
+    private lateinit var database: NotesDatabase
+    private lateinit var files: VaultFileStore
+    private lateinit var settings: SettingsStore
+    private lateinit var indexer: VaultIndexer
+    private lateinit var gate: VaultGate
+    private lateinit var repository: SyncRepository
+
+    private object ReadOnly : VaultWriter {
+        override suspend fun canPush(): Boolean = false
+
+        override suspend fun write(
+            path: String,
+            message: String,
+            author: Author,
+            edit: TextEdit,
+        ): WriteOutcome = WriteOutcome.NotApplicable
+    }
+
+    @Before
+    fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        database = testDatabase()
+        files = VaultFileStore(context)
+        settings = SettingsStore(context)
+        gate = VaultGate()
+        val log = SyncLog(database.syncLogDao())
+        val keys = SshKeyStore(context)
+        indexer =
+            VaultIndexer(
+                files = files,
+                notes = database.noteDao(),
+                links = database.linkDao(),
+                headings = database.headingDao(),
+                tasks = database.taskDao(),
+                index = database.indexDao(),
+                search = SearchIndex(database),
+            )
+        val transports =
+            object : VaultTransports(
+                settings = settings,
+                tokens = TokenStore(context),
+                files = files,
+                sshKeys = keys,
+                log = log,
+                context = context,
+                http = OkHttpClient(),
+                vaults = database.vaultDao(),
+            ) {
+                override suspend fun writer(vault: VaultEntity): VaultWriter = ReadOnly
+            }
+        val writes =
+            VaultWriteRepository(
+                settings = settings,
+                vaults = database.vaultDao(),
+                pending = database.pendingEditDao(),
+                blobs = database.blobDao(),
+                files = files,
+                indexer = indexer,
+                transports = transports,
+                log = log,
+                gate = gate,
+            )
+        repository =
+            SyncRepository(
+                settings = settings,
+                tokens = TokenStore(context),
+                blobs = database.blobDao(),
+                syncState = database.syncStateDao(),
+                vaults = database.vaultDao(),
+                sinkProvider = { RoomVaultSink(files, database.blobDao()) },
+                indexer = indexer,
+                log = log,
+                files = files,
+                sshKeys = keys,
+                pending = database.pendingEditDao(),
+                transports = transports,
+                writes = writes,
+                gate = gate,
+            )
+    }
+
+    @After
+    fun tearDown() =
+        runTest {
+            database.close()
+            files.clear()
+        }
+
+    @Test
+    fun `switching transport forgets where the old one was up to`() =
+        runTest {
+            val id =
+                database.vaultDao().insert(
+                    VaultEntity(
+                        owner = "o",
+                        repo = "r",
+                        name = "notes",
+                        transport = "REST",
+                        headCommit = "rest-era-commit",
+                        etagRef = "\"etag\"",
+                        canWrite = true,
+                    ),
+                )
+
+            repository.setTransport(id, SyncTransport.SSH)
+
+            // The shallow clone never holds the commit REST recorded, and the
+            // key is not the token: both have to be found out again.
+            val vault = database.vaultDao().byId(id)!!
+            assertThat(vault.transport).isEqualTo("SSH")
+            assertThat(vault.headCommit).isNull()
+            assertThat(vault.etagRef).isNull()
+            assertThat(vault.canWrite).isFalse()
+        }
+}
