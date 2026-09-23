@@ -133,18 +133,18 @@ class BlockFlattener(
     }
 
     /**
-     * A paragraph holding nothing but a display formula or a single embed is
-     * promoted to a block of its own, so it can be centred, zoomed and cached
-     * rather than squeezed into a line of text.
+     * A paragraph, split around anything in it that has to be a block.
+     *
+     * A display formula or a single embed on its own is promoted to a block of
+     * its own, so it can be centred, zoomed and cached rather than squeezed
+     * into a line of text. Written straight under a line of prose -- which is
+     * how they are usually written -- they are part of that paragraph as far
+     * as Markdown is concerned, so the paragraph is cut around them: the text
+     * before, the block, the text after. Promoting only a lone one dropped a
+     * formula with a sentence above it without trace.
      */
     private fun paragraph(node: Paragraph): List<MdBlock> {
-        val children = node.children()
-        val meaningful = children.filterNot { it is SoftLineBreak }
-
-        (meaningful.singleOrNull() as? DisplayMathNode)?.let {
-            hasMath = true
-            return listOf(MdBlock.MathBlock(id(), it.latex))
-        }
+        val meaningful = node.children().filterNot { it is SoftLineBreak }
         (meaningful.singleOrNull() as? WikiLinkNode)?.takeIf { it.embed }?.let { return listOf(embed(it)) }
         (meaningful.singleOrNull() as? Image)?.let { image ->
             val alt = plainTextOf(image).takeIf { it.isNotBlank() }
@@ -152,10 +152,44 @@ class BlockFlattener(
             return listOf(MdBlock.Image(id(), imageResolver(image.destination), alt))
         }
 
-        val text = plainTextOf(node)
-        plain.append(text).append('\n')
-        return listOf(MdBlock.Paragraph(id(), inlines(node), TextDirection.of(text)))
+        val out = mutableListOf<MdBlock>()
+        val run = mutableListOf<Node>()
+
+        fun flush() {
+            val trimmed = run.dropWhile { it.isBreak() }.dropLastWhile { it.isBreak() }
+            run.clear()
+            if (trimmed.isEmpty() || trimmed.all { it.isBreak() || (it is Text && it.literal.isBlank()) }) return
+            val text = plainTextOf(trimmed)
+            plain.append(text).append('\n')
+            out += MdBlock.Paragraph(id(), inlinesOf(trimmed), TextDirection.of(text))
+        }
+
+        node.children().forEach { child ->
+            if (isBreakout(child)) {
+                flush()
+                out += breakout(child)
+            } else {
+                run += child
+            }
+        }
+        flush()
+        return out
     }
+
+    private fun Node.isBreak(): Boolean = this is SoftLineBreak || this is HardLineBreak
+
+    /** Whether [node] is a block that happens to have been written inside a paragraph. */
+    private fun isBreakout(node: Node): Boolean = node is DisplayMathNode
+
+    private fun breakout(node: Node): MdBlock =
+        when (node) {
+            is DisplayMathNode -> {
+                hasMath = true
+                MdBlock.MathBlock(id(), node.latex)
+            }
+
+            else -> error("not a breakout: $node")
+        }
 
     private fun embed(node: WikiLinkNode): MdBlock {
         links += ParsedLink(LinkKind.WIKI_EMBED, node.target, node.alias)
@@ -332,15 +366,9 @@ class BlockFlattener(
 
     // -- inline conversion ------------------------------------------------
 
-    private fun inlines(parent: Node): List<MdInline> {
-        val out = mutableListOf<MdInline>()
-        var child = parent.firstChild
-        while (child != null) {
-            inline(child)?.let { out += it }
-            child = child.next
-        }
-        return out
-    }
+    private fun inlines(parent: Node): List<MdInline> = inlinesOf(parent.children())
+
+    private fun inlinesOf(nodes: List<Node>): List<MdInline> = nodes.mapNotNull { inline(it) }
 
     private fun inline(node: Node): MdInline? =
         when (node) {
@@ -386,7 +414,9 @@ class BlockFlattener(
             else -> null
         }
 
-    private fun plainTextOf(node: Node): String =
+    private fun plainTextOf(node: Node): String = plainTextOf(node.children())
+
+    private fun plainTextOf(nodes: List<Node>): String =
         buildString {
             fun walk(current: Node) {
                 when (current) {
@@ -403,11 +433,7 @@ class BlockFlattener(
                     child = child.next
                 }
             }
-            var child = node.firstChild
-            while (child != null) {
-                walk(child)
-                child = child.next
-            }
+            nodes.forEach { walk(it) }
         }.trim()
 
     private companion object {
