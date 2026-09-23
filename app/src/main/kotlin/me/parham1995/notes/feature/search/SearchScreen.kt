@@ -76,7 +76,7 @@ fun SearchScreen(
             // Jumping straight to a note by name is what most searches want,
             // so it sits above the full-text results rather than below them.
             if (state.quick.isNotEmpty()) {
-                item { Label("Notes") }
+                item { Label(stringResource(R.string.label_notes)) }
                 items(state.quick, key = { "q-${it.note.id}" }) { row ->
                     ResultRow(
                         icon = row.icon,
@@ -98,7 +98,7 @@ fun SearchScreen(
             }
 
             if (state.hits.isNotEmpty()) {
-                item { Label("Full text") }
+                item { Label(stringResource(R.string.search_full_text)) }
                 items(state.hits, key = { "h-${it.hit.noteId}" }) { row ->
                     ResultRow(
                         icon = row.icon,

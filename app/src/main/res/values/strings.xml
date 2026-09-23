@@ -260,4 +260,20 @@
         <item quantity="one">Sent %1$d edit</item>
         <item quantity="other">Sent %1$d edits</item>
     </plurals>
+    <string name="browse_up">Up one folder</string>
+    <string name="browse_recent">Recently opened</string>
+    <string name="browse_all_notes">All notes - %1$d</string>
+    <string name="search_full_text">Full text</string>
+    <string name="ssh_no_key">No key yet.</string>
+    <string name="ssh_created">%1$s · created %2$s</string>
+    <string name="ssh_created_unknown">unknown</string>
+    <string name="ssh_test">Test</string>
+    <string name="ssh_testing">Testing…</string>
+    <string name="widget_recent_empty">Nothing read yet</string>
+    <string name="widget_recent_title">Recently read</string>
+    <string name="widget_tasks_none">Nothing open</string>
+    <string name="widget_tasks_none_due">Open: %1$d, none due</string>
+    <string name="widget_tasks_today">Due today: %1$d</string>
+    <string name="widget_tasks_overdue">Overdue: %1$d</string>
+    <string name="widget_tasks_both">Overdue: %1$d · today: %2$d</string>
 </resources>

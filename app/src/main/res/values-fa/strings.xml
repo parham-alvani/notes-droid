@@ -173,8 +173,8 @@
         <item quantity="other">%1$d تای دیگر نشان داده نشده</item>
     </plurals>
     <string name="capture_needs_author">اول در تنظیمات یک نام و ایمیل برای کامیت کردن بگذارید.</string>
-    <string name="capture_no_vault">والتی برای یادداشت سریع انتخاب نشده. در تنظیمات یکی را انتخاب کنید.</string>
-    <string name="capture_read_only">%1$s اینجا فقط خواندنی است و نمی‌شود در یادداشت سریع نوشت. دسترسی را در تنظیمات بررسی کنید.</string>
+    <string name="capture_no_vault">دفتری برای چرک‌نویس انتخاب نشده. در تنظیمات یکی را انتخاب کنید.</string>
+    <string name="capture_read_only">%1$s اینجا فقط خواندنی است و نمی‌شود در چرک‌نویس نوشت. دسترسی را در تنظیمات بررسی کنید.</string>
     <string name="capture_saved">ذخیره شد</string>
     <string name="capture_queued">اینجا ذخیره شد و با همگام‌سازی بعدی فرستاده می‌شود.</string>
     <string name="capture_nothing">چیزی برای ذخیره نیست</string>
@@ -260,4 +260,20 @@
         <item quantity="one">%1$d ویرایش فرستاده شد</item>
         <item quantity="other">%1$d ویرایش فرستاده شد</item>
     </plurals>
+    <string name="browse_up">یک پوشه بالاتر</string>
+    <string name="browse_recent">اخیرا باز شده</string>
+    <string name="browse_all_notes">همهٔ یادداشت‌ها - %1$d</string>
+    <string name="search_full_text">متن کامل</string>
+    <string name="ssh_no_key">هنوز کلیدی نیست.</string>
+    <string name="ssh_created">%1$s · ساخته‌شده در %2$s</string>
+    <string name="ssh_created_unknown">نامعلوم</string>
+    <string name="ssh_test">آزمایش</string>
+    <string name="ssh_testing">در حال آزمایش…</string>
+    <string name="widget_recent_empty">هنوز چیزی نخوانده‌اید</string>
+    <string name="widget_recent_title">اخیرا خوانده‌شده</string>
+    <string name="widget_tasks_none">کار بازی نیست</string>
+    <string name="widget_tasks_none_due">باز: %1$d، هیچ‌کدام سررسید نشده</string>
+    <string name="widget_tasks_today">برای امروز: %1$d</string>
+    <string name="widget_tasks_overdue">عقب‌افتاده: %1$d</string>
+    <string name="widget_tasks_both">عقب‌افتاده: %1$d · امروز: %2$d</string>
 </resources>

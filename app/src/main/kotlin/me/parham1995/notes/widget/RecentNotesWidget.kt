@@ -66,7 +66,7 @@ class RecentNotesWidget : AppWidgetProvider() {
         val views = RemoteViews(context.packageName, R.layout.widget_tasks)
         views.setTextViewText(
             R.id.widget_headline,
-            if (recent.isEmpty()) "Nothing read yet" else "Recently read",
+            context.getString(if (recent.isEmpty()) R.string.widget_recent_empty else R.string.widget_recent_title),
         )
         views.setTextColor(R.id.widget_headline, HEADLINE_COLOUR)
 

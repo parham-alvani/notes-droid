@@ -102,11 +102,11 @@ class TasksWidget : AppWidgetProvider() {
         views.setTextViewText(
             R.id.widget_headline,
             when {
-                openCount == 0 -> "Nothing open"
-                due.isEmpty() -> "$openCount open, none due"
-                overdue == 0 -> "$todayCount due today"
-                todayCount == 0 -> "$overdue overdue"
-                else -> "$overdue overdue · $todayCount today"
+                openCount == 0 -> context.getString(R.string.widget_tasks_none)
+                due.isEmpty() -> context.getString(R.string.widget_tasks_none_due, openCount)
+                overdue == 0 -> context.getString(R.string.widget_tasks_today, todayCount)
+                todayCount == 0 -> context.getString(R.string.widget_tasks_overdue, overdue)
+                else -> context.getString(R.string.widget_tasks_both, overdue, todayCount)
             },
         )
         views.setTextColor(
