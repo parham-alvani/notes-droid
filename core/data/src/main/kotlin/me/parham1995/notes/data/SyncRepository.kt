@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.database.BlobDao
+import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.PendingEditDao
 import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.data.database.SyncStateEntity
@@ -49,6 +50,7 @@ class SyncRepository
         private val settings: SettingsStore,
         private val tokens: TokenStore,
         private val blobs: BlobDao,
+        private val notes: NoteDao,
         private val syncState: SyncStateDao,
         private val vaults: VaultDao,
         private val sinkProvider: Provider<RoomVaultSink>,
@@ -182,15 +184,27 @@ class SyncRepository
          * a note deleted from `notes` alone leaves an FTS row that still
          * matches and a backlink that still resolves.
          */
-        suspend fun removeVault(id: Long) {
+        suspend fun removeVault(id: Long) =
+            gate.withVault {
+                removeVaultLocked(id)
+            }
+
+        /**
+         * Under the gate, like everything else here that touches a vault's
+         * files or rows. Deleting a working tree while a sync checks it out,
+         * or while a write commits from it, is the race the gate exists for.
+         */
+        private suspend fun removeVaultLocked(id: Long) {
             val vault = vaults.byId(id) ?: return
             // Through the indexer rather than by deleting rows: a note removed
             // from `notes` alone leaves a search entry that still matches and a
             // backlink that still resolves.
-            val owned =
-                blobs
-                    .byVaultKindAndState(id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
-                    .map { it.path }
+            // Every note the vault has in the index, not every markdown file
+            // its manifest calls downloaded: a note indexed from a row that
+            // has since changed state -- or from no row at all -- was left
+            // behind with its tasks, links and search entry, showing up in
+            // task lists for a vault that no longer existed.
+            val owned = notes.allIds(id).map { it.path }
             indexer.indexChanged(vaultId = id, changed = emptyList(), removed = owned)
             blobs.clearVault(id)
             // Its queued edits go too. A flush would eventually notice the
@@ -214,6 +228,11 @@ class SyncRepository
          * seconds and a handshake answers it outright.
          */
         suspend fun testSshKey(vault: VaultEntity): Result<String> =
+            // Gated: it opens the same working tree a sync drives, and records
+            // what it learned on the vault row a sync writes back at the end.
+            gate.withVault { testSshKeyLocked(vault) }
+
+        private suspend fun testSshKeyLocked(vault: VaultEntity): Result<String> =
             runCatching {
                 transports.adoptLegacyKeys()
                 if (!sshKeys.exists(vault.id)) {
@@ -235,7 +254,12 @@ class SyncRepository
          * the next background sync to notice is a long time to stare at a
          * checkbox that is not there.
          */
-        suspend fun refreshWriteAccess(): String {
+        suspend fun refreshWriteAccess(): String =
+            // A sync writes back the row it started with; an answer recorded
+            // underneath it would be overwritten with the old one.
+            gate.withVault { refreshWriteAccessLocked() }
+
+        private suspend fun refreshWriteAccessLocked(): String {
             val targets = vaults.all().filter { it.enabled }
             if (targets.isEmpty()) throw NotConfiguredException("no repository configured")
             return targets
@@ -561,7 +585,12 @@ class SyncRepository
          * rebuild it, and it spans every repository because links and search
          * do.
          */
-        suspend fun reindex() {
+        suspend fun reindex() =
+            // Clearing a vault's notes while a sync is adding to them leaves
+            // whichever finished second holding half the answer.
+            gate.withVault { reindexLocked() }
+
+        private suspend fun reindexLocked() {
             log.info("reindexing everything on disk")
             val started = System.currentTimeMillis()
             var total = 0
@@ -583,7 +612,12 @@ class SyncRepository
         }
 
         /** Forgets everything so the next sync starts from nothing. */
-        suspend fun reset() {
+        suspend fun reset() =
+            // A sync in flight would write rows back into the manifest this
+            // just emptied, and the next one would trust them.
+            gate.withVault { resetLocked() }
+
+        private suspend fun resetLocked() {
             blobs.clear()
             syncState.clear()
             vaults.all().forEach {

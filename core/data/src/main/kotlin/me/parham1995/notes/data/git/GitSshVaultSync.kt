@@ -77,8 +77,19 @@ class GitSshVaultSync(
     init {
         // Must happen before any other JGit call touches configuration.
         AndroidGitEnvironment.install(configDir)
-        SshSessionFactory.setInstance(sessionFactory())
     }
+
+    /**
+     * This vault's own SSH sessions, offering this vault's own key.
+     *
+     * Never installed as JGit's process-wide instance, which is what this
+     * used to do: every transport built replaced the global factory, so
+     * testing vault B's key in Settings while vault A was syncing had A's
+     * next connection authenticate with B's key -- refused by A's repository
+     * and reported as A's key being wrong. Each transport now hands its own
+     * factory to each connection it opens.
+     */
+    internal val sessions: SshSessionFactory by lazy { sessionFactory() }
 
     override suspend fun plan(base: SyncBase): SyncPlan =
         withContext(Dispatchers.IO) {
@@ -211,9 +222,7 @@ class GitSshVaultSync(
             runCatching {
                 openGit().use { git ->
                     Transport.open(git.repository, URIish(remoteUrl)).use { transport ->
-                        if (transport is SshTransport) {
-                            transport.sshSessionFactory = SshSessionFactory.getInstance()
-                        }
+                        if (transport is SshTransport) transport.sshSessionFactory = sessions
                         transport.timeout = AUTH_TIMEOUT_MS / MILLIS_PER_SECOND
                         transport.openPush().close()
                     }
@@ -468,8 +477,7 @@ class GitSshVaultSync(
         val failure =
             withContext(Dispatchers.IO) {
                 runCatching {
-                    SshSessionFactory
-                        .getInstance()
+                    sessions
                         .getSession(URIish(remoteUrl), null, FS.DETECTED, AUTH_TIMEOUT_MS)
                         .disconnect()
                 }.exceptionOrNull()
@@ -629,9 +637,9 @@ class GitSshVaultSync(
             }
     }
 
-    private val sshConfig =
+    internal val sshConfig =
         TransportConfigCallback { transport ->
-            if (transport is SshTransport) transport.sshSessionFactory = SshSessionFactory.getInstance()
+            if (transport is SshTransport) transport.sshSessionFactory = sessions
         }
 
     private fun sessionFactory() =

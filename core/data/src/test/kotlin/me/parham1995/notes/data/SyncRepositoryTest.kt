@@ -2,7 +2,13 @@ package me.parham1995.notes.data
 
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.BlobEntity
 import me.parham1995.notes.data.database.NotesDatabase
@@ -125,6 +131,7 @@ class SyncRepositoryTest {
                 settings = settings,
                 tokens = TokenStore(context),
                 blobs = database.blobDao(),
+                notes = database.noteDao(),
                 syncState = database.syncStateDao(),
                 vaults = database.vaultDao(),
                 sinkProvider = { RoomVaultSink(files, database.blobDao()) },
@@ -137,6 +144,10 @@ class SyncRepositoryTest {
                 writes = writes,
                 gate = gate,
             )
+    }
+
+    private companion object {
+        const val GRACE_MS = 300L
     }
 
     @After
@@ -218,6 +229,81 @@ class SyncRepositoryTest {
             // new id. The current vault's must not have been touched.
             assertThat(database.noteDao().byPath(current, "Note.md")!!.id).isEqualTo(before)
             assertThat(database.noteDao().byPath(stale, "Other.md")).isNotNull()
+        }
+
+    /**
+     * Runs [operation] while something else holds the gate, and says whether
+     * it waited for it. Real time, because the database runs on real threads:
+     * an operation that ignores the gate finishes long before the release.
+     */
+    private suspend fun waitsForTheGate(
+        operation: suspend () -> Unit,
+        done: suspend () -> Boolean,
+    ): Boolean =
+        coroutineScope {
+            val held = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val holder =
+                launch(Dispatchers.Default) {
+                    gate.withVault {
+                        held.complete(Unit)
+                        release.await()
+                    }
+                }
+            held.await()
+            val work = launch(Dispatchers.Default) { operation() }
+            withContext(Dispatchers.Default) { delay(GRACE_MS) }
+            val waited = !done()
+            release.complete(Unit)
+            work.join()
+            holder.join()
+            waited && done()
+        }
+
+    @Test
+    fun `removing a vault waits for a sync that has the files`() =
+        runTest {
+            val id = syncedVault("going")
+            onDisk(id, "Note.md", "# Note\n")
+
+            val waited =
+                waitsForTheGate(
+                    operation = { repository.removeVault(id) },
+                    done = { database.vaultDao().byId(id) == null },
+                )
+
+            assertThat(waited).isTrue()
+        }
+
+    @Test
+    fun `removing a vault takes every note it had, whatever its manifest says`() =
+        runTest {
+            val id = syncedVault("going")
+            val sha = onDisk(id, "Tasks.md", "# Tasks\n\n- [ ] still here\n")
+            indexer.indexAll(id, listOf(PathAndSha("Tasks.md", sha)))
+            // Indexed, then its manifest row moved on: not a downloaded
+            // markdown row any more, but still a note with a task.
+            database.blobDao().deleteByPath(id, "Tasks.md")
+
+            repository.removeVault(id)
+
+            assertThat(database.noteDao().allIds(id)).isEmpty()
+            assertThat(database.taskDao().open(id).first()).isEmpty()
+        }
+
+    @Test
+    fun `a reset waits for a sync that has the files`() =
+        runTest {
+            val id = syncedVault("kept")
+            onDisk(id, "Note.md", "# Note\n")
+
+            val waited =
+                waitsForTheGate(
+                    operation = { repository.reset() },
+                    done = { database.blobDao().manifestRows(id).isEmpty() },
+                )
+
+            assertThat(waited).isTrue()
         }
 
     @Test
