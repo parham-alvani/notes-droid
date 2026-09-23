@@ -139,6 +139,9 @@ enum class CalloutKind {
 
 enum class MdAlign { START, CENTER, END }
 
+/** What an [MdBlock.Unsupported] block would have been. */
+enum class UnsupportedKind { DATAVIEW, TASKS_QUERY, EXCALIDRAW, OTHER }
+
 /** Obsidian Tasks adds two states GFM does not have. */
 enum class TaskState { UNCHECKED, CHECKED, CANCELLED, IN_PROGRESS, NONE }
 
@@ -298,6 +301,8 @@ sealed interface MdBlock {
     data class Unsupported(
         override val id: Int,
         val label: String,
+        /** Which kind, so the reader can be told in their own language. */
+        val kind: UnsupportedKind = UnsupportedKind.OTHER,
     ) : MdBlock
 
     data class FrontMatter(

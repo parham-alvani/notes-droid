@@ -345,7 +345,10 @@ fun NoteScreen(
                             LucideGlyph(
                                 if (finding) "x" else "text-search",
                                 size = 20.dp,
-                                contentDescription = if (finding) "Close find" else stringResource(R.string.note_find),
+                                contentDescription =
+                                    stringResource(
+                                        if (finding) R.string.action_close else R.string.note_find,
+                                    ),
                             )
                         }
                         IconButton(

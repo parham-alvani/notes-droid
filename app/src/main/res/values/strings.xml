@@ -173,4 +173,11 @@
         <item quantity="other">%1$d more not shown</item>
     </plurals>
     <string name="link_not_found">Nothing in the vault is called %1$s</string>
+    <string name="state_expanded">Expanded</string>
+    <string name="state_collapsed">Collapsed</string>
+    <string name="unsupported_block">%1$s - not supported here</string>
+    <string name="unsupported_dataview">Dataview query</string>
+    <string name="unsupported_tasks_query">Tasks query</string>
+    <string name="unsupported_excalidraw">Excalidraw drawing</string>
+    <string name="diagram_rendering">Rendering diagram&#8230;</string>
 </resources>

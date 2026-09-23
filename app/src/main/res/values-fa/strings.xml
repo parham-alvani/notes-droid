@@ -173,4 +173,11 @@
         <item quantity="other">%1$d تای دیگر نشان داده نشده</item>
     </plurals>
     <string name="link_not_found">چیزی در این دفتر به نام %1$s نیست</string>
+    <string name="state_expanded">باز</string>
+    <string name="state_collapsed">بسته</string>
+    <string name="unsupported_block">%1$s - اینجا پشتیبانی نمی‌شود</string>
+    <string name="unsupported_dataview">پرس‌وجوی Dataview</string>
+    <string name="unsupported_tasks_query">پرس‌وجوی Tasks</string>
+    <string name="unsupported_excalidraw">نقاشی Excalidraw</string>
+    <string name="diagram_rendering">در حال کشیدن نمودار&#8230;</string>
 </resources>

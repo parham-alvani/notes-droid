@@ -123,7 +123,7 @@ fun MermaidBlockView(
 
                 else ->
                     Text(
-                        "Rendering diagram...",
+                        stringResource(R.string.diagram_rendering),
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
