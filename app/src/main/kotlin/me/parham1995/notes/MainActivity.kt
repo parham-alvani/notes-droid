@@ -16,8 +16,13 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.stateIn
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.navigation.NotesNavHost
@@ -50,6 +55,21 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settingsStore: Provider<SettingsStore>
 
+    /**
+     * The settings, or null until they have first been read.
+     *
+     * Null rather than defaults on purpose: a default is indistinguishable from
+     * a real answer, and everything drawn from one is drawn twice.
+     */
+    private val settings: StateFlow<VaultSettings?> by lazy {
+        settingsStore
+            .get()
+            .settings
+            // A store that cannot be read still has to let the app start.
+            .catch { emit(VaultSettings()) }
+            .stateIn(lifecycleScope, SharingStarted.Eagerly, null)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -75,8 +95,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super, which is where the library hooks the window.
-        installSplashScreen()
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // The splash stays up until the settings have been read once. Drawing
+        // before then drew with the defaults -- the dark theme for a moment on
+        // a phone set to light, and a nav graph built for the default start
+        // screen that the real one then replaced.
+        splash.setKeepOnScreenCondition { settings.value == null }
         // A widget row on a cold start arrives here, not in onNewIntent. Only
         // a first creation acts on it; see launchRequest.
         answer(intent, restoring = savedInstanceState != null)
@@ -91,18 +116,16 @@ class MainActivity : ComponentActivity() {
             // Read here rather than in each screen: the theme and the reading
             // settings apply to everything below, and a screen that had to ask
             // for them would be a screen that could forget to.
-            val settings by settingsStore
-                .get()
-                .settings
-                .collectAsStateWithLifecycle(initialValue = VaultSettings())
+            val loaded by settings.collectAsStateWithLifecycle()
+            val current = loaded ?: return@setContent
 
-            NotesTheme(theme = settings.reading.theme) {
-                CompositionLocalProvider(LocalReading provides settings.reading) {
+            NotesTheme(theme = current.reading.theme) {
+                CompositionLocalProvider(LocalReading provides current.reading) {
                     ProvideLucide {
                         NotesNavHost(
                             openScreen = openScreen,
                             openNote = openNote,
-                            startScreen = settings.reading.startScreen,
+                            startScreen = current.reading.startScreen,
                         )
                     }
                 }

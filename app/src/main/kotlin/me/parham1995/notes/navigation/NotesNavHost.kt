@@ -139,6 +139,12 @@ fun NotesNavHost(
 ) {
     val navController = rememberNavController()
 
+    // Read once. A NavHost given a different start destination builds a new
+    // graph, which resets the back stack: changing the setting in Settings
+    // threw the person out of the screen they changed it in. The new choice
+    // applies from the next launch, which is what a start screen is.
+    val start = rememberSaveable { startScreen }
+
     // Whether launch has already decided where to be: either the note that was
     // being read has been reopened, or something outside the app asked for a
     // screen or a note of its own. Declared first because the requests below
@@ -244,7 +250,7 @@ fun NotesNavHost(
         NavHost(
             navController = navController,
             startDestination =
-                when (startScreen) {
+                when (start) {
                     StartScreen.BROWSE -> BrowseRoute()
                     StartScreen.TASKS -> TasksRoute
                     StartScreen.SEARCH -> SearchRoute
