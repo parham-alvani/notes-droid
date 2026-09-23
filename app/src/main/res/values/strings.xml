@@ -172,4 +172,10 @@
         <item quantity="one">%1$d more not shown</item>
         <item quantity="other">%1$d more not shown</item>
     </plurals>
+    <string name="capture_needs_author">Set a name and email to commit as, in Settings.</string>
+    <string name="capture_no_vault">There is no vault for the scratchpad. Choose one in Settings.</string>
+    <string name="capture_read_only">%1$s is read-only here, so the scratchpad cannot be written. Check access in Settings.</string>
+    <string name="capture_saved">Saved</string>
+    <string name="capture_queued">Saved here. It goes up with the next sync.</string>
+    <string name="capture_nothing">Nothing to save</string>
 </resources>

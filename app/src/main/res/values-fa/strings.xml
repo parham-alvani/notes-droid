@@ -172,4 +172,10 @@
         <item quantity="one">%1$d تای دیگر نشان داده نشده</item>
         <item quantity="other">%1$d تای دیگر نشان داده نشده</item>
     </plurals>
+    <string name="capture_needs_author">اول در تنظیمات یک نام و ایمیل برای کامیت کردن بگذارید.</string>
+    <string name="capture_no_vault">والتی برای یادداشت سریع انتخاب نشده. در تنظیمات یکی را انتخاب کنید.</string>
+    <string name="capture_read_only">%1$s اینجا فقط خواندنی است و نمی‌شود در یادداشت سریع نوشت. دسترسی را در تنظیمات بررسی کنید.</string>
+    <string name="capture_saved">ذخیره شد</string>
+    <string name="capture_queued">اینجا ذخیره شد و با همگام‌سازی بعدی فرستاده می‌شود.</string>
+    <string name="capture_nothing">چیزی برای ذخیره نیست</string>
 </resources>
