@@ -238,19 +238,34 @@ class GitHubClient(
      * Read through the contents endpoint rather than as a blob because a write
      * has to quote the file's current sha back, and only this call hands both
      * the text and that sha over together.
+     *
+     * Except past a megabyte, where the endpoint still answers with the sha
+     * but says `"encoding": "none"` and leaves the content empty. Decoding
+     * that as base64 reads as an empty file, the edit is applied to nothing,
+     * and the write replaces a whole note with one line -- quoting the right
+     * sha, so GitHub accepts it. The bytes come from the blob instead.
      */
     suspend fun file(
         path: String,
         ref: String,
-    ): RemoteFile? =
-        try {
-            call(request(url("/contents/${encodePath(path)}?ref=$ref")), path) { response ->
-                val dto = json.decodeFromString<ContentsDto>(response.body.string())
-                RemoteFile(dto.path, dto.sha, decodeContent(dto))
+    ): RemoteFile? {
+        val dto =
+            try {
+                call(request(url("/contents/${encodePath(path)}?ref=$ref")), path) { response ->
+                    json.decodeFromString<ContentsDto>(response.body.string())
+                }
+            } catch (_: GitHubException.NotFound) {
+                return null
             }
-        } catch (_: GitHubException.NotFound) {
-            null
-        }
+        val text =
+            when {
+                dto.encoding == "base64" && (dto.content.isNotBlank() || dto.size == 0L) -> decodeContent(dto)
+                // Too large to be inlined: the same bytes, by their sha.
+                dto.encoding == "none" || dto.content.isBlank() -> String(blob(dto.sha))
+                else -> throw GitHubException.Unexpected(0, "$path came back as ${dto.encoding}")
+            }
+        return RemoteFile(dto.path, dto.sha, text)
+    }
 
     /**
      * Replaces [path] with [text] in one commit.

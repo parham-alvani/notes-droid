@@ -77,7 +77,9 @@ internal data class ContentsDto(
     val path: String,
     val sha: String,
     val content: String = "",
+    /** `base64`, or `none` when the file is over a megabyte and was not inlined. */
     val encoding: String = "base64",
+    val size: Long = 0,
 )
 
 @Serializable
