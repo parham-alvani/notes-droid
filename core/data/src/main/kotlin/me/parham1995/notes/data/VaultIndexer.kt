@@ -56,7 +56,18 @@ class VaultIndexer
             val total: Int,
         )
 
-        /** Reindexes every markdown file currently on disk, bar the guides. */
+        /**
+         * Reindexes every markdown file currently on disk, bar the guides.
+         *
+         * A diff against what is indexed, not a wipe and a rebuild. Wiping
+         * first cleared the notes and then asked the search index to drop
+         * "this vault's notes" -- by which point there were none, so every
+         * full reindex left a whole second copy of the vault in `note_fts`,
+         * and the tasks, links and headings of the old rows behind with it.
+         * It also handed every note a new id and forgot which had been opened
+         * and where each was left. Updating in place keeps all of that, and
+         * only what is no longer on disk is removed.
+         */
         suspend fun indexAll(
             vaultId: Long,
             paths: List<PathAndSha>,
@@ -64,11 +75,8 @@ class VaultIndexer
         ) {
             @Suppress("NAME_SHADOWING")
             val paths = paths.filterNot { isGuide(it.path) }
-            notes.clearVault(vaultId)
-            // Only this vault's rows: the others are still current, and
-            // clearing everything would silently empty a vault that was not
-            // being reindexed.
-            search.clearVault(vaultId)
+            val present = paths.mapTo(HashSet()) { it.path }
+            remove(vaultId, notes.allIds(vaultId).map { it.path }.filterNot { it in present })
 
             var done = 0
             paths.chunked(BATCH).forEach { batch ->
@@ -97,15 +105,7 @@ class VaultIndexer
             @Suppress("NAME_SHADOWING")
             val changed = changed.filterNot { isGuide(it.path) }
 
-            removed.forEach { path ->
-                notes.byPath(vaultId, path)?.let { note ->
-                    links.deleteBySource(note.id)
-                    headings.deleteByNote(note.id)
-                    tasks.deleteByNote(note.id)
-                    search.delete(note.id)
-                }
-                notes.deleteByPath(vaultId, path)
-            }
+            remove(vaultId, removed)
 
             changed.chunked(BATCH).forEach { batch -> writeBatch(vaultId, parseBatch(vaultId, batch)) }
 
@@ -113,6 +113,18 @@ class VaultIndexer
             // target may have appeared or vanished need revisiting, and the
             // unresolved set is exactly those.
             resolveLinks(vaultId)
+        }
+
+        /** Drops notes with everything derived from them, search included. */
+        private suspend fun remove(
+            vaultId: Long,
+            paths: List<String>,
+        ) {
+            paths.chunked(BATCH).forEach { batch ->
+                // Outside the transaction, for the same reason as the writes:
+                // the FTS table is not one of Room's.
+                search.deleteAll(index.removeNotes(vaultId, batch))
+            }
         }
 
         private data class Indexed(

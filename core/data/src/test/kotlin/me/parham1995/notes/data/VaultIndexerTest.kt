@@ -1,5 +1,6 @@
 package me.parham1995.notes.data
 
+import androidx.room.useReaderConnection
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -54,6 +55,15 @@ class VaultIndexerTest {
         files.write(1L, path, text.toByteArray())
         return PathAndSha(path, "sha-" + path.hashCode())
     }
+
+    /** Rows in the search index, which no query of Room's can see. */
+    private suspend fun ftsRows(): Long =
+        database.useReaderConnection { connection ->
+            connection.usePrepared("SELECT COUNT(*) FROM note_fts") { statement ->
+                statement.step()
+                statement.getLong(0)
+            }
+        }
 
     @Test
     fun `a note is titled by its file name, not its first heading`() =
@@ -205,5 +215,62 @@ class VaultIndexerTest {
             assertThat(database.noteDao().byPath(1L, "Alpha.md")).isNull()
             assertThat(database.headingDao().byNote(alphaId)).isEmpty()
             assertThat(search.search(1L, "Alpha").map { it.path }).doesNotContain("Alpha.md")
+        }
+
+    @Test
+    fun `a full reindex leaves one search row per note`() =
+        runTest {
+            // It cleared the notes first and then asked the search index to
+            // drop this vault's notes -- by which point there were none, so
+            // every full reindex added a whole second copy of the vault.
+            val entries = listOf(write("Alpha.md", "one"), write("Beta.md", "two"))
+            indexer.indexAll(1L, entries)
+            indexer.indexAll(1L, entries)
+
+            assertThat(ftsRows()).isEqualTo(2L)
+            assertThat(search.search(1L, "Alpha")).hasSize(1)
+        }
+
+    @Test
+    fun `a full reindex drops what is no longer on disk, and only that`() =
+        runTest {
+            indexer.indexAll(
+                1L,
+                listOf(write("Keep.md", "- [ ] stays"), write("Gone.md", "- [ ] goes\n\n# Heading")),
+            )
+            val gone = database.noteDao().idOf(1L, "Gone.md")!!
+
+            indexer.indexAll(1L, listOf(write("Keep.md", "- [ ] stays")))
+
+            assertThat(database.noteDao().byPath(1L, "Gone.md")).isNull()
+            assertThat(database.taskDao().byNote(gone)).isEmpty()
+            assertThat(database.headingDao().byNote(gone)).isEmpty()
+            assertThat(ftsRows()).isEqualTo(1L)
+        }
+
+    @Test
+    fun `reindexing keeps what the reader did with a note`() =
+        runTest {
+            // The entity the indexer builds knows nothing about the reader, and
+            // upserting it as it stood reset Recents and every scroll position
+            // on each change -- and a full reindex renumbered every note too.
+            indexer.indexAll(1L, listOf(write("Note.md", "before")))
+            val id = database.noteDao().idOf(1L, "Note.md")!!
+            database.noteDao().markOpened(id, 1234L)
+            database.noteDao().rememberScroll(id, 7)
+
+            indexer.indexChanged(1L, changed = listOf(write("Note.md", "after")), removed = emptyList())
+
+            database.noteDao().byId(id)!!.let {
+                assertThat(it.openedAt).isEqualTo(1234L)
+                assertThat(it.scrollIndex).isEqualTo(7)
+            }
+
+            indexer.indexAll(1L, listOf(write("Note.md", "after again")))
+
+            val note = database.noteDao().byPath(1L, "Note.md")!!
+            assertThat(note.id).isEqualTo(id)
+            assertThat(note.openedAt).isEqualTo(1234L)
+            assertThat(note.scrollIndex).isEqualTo(7)
         }
 }

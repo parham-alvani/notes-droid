@@ -43,6 +43,19 @@ abstract class IndexDao {
         path: String,
     ): Long?
 
+    /**
+     * What a person has done with a note, which a reindex has no business
+     * forgetting -- see [writeBatch].
+     */
+    @Query("SELECT id, openedAt, scrollIndex FROM notes WHERE vaultId = :vaultId AND path = :path")
+    abstract suspend fun stateOf(
+        vaultId: Long,
+        path: String,
+    ): NoteState?
+
+    @Query("DELETE FROM notes WHERE id = :id")
+    abstract suspend fun deleteNote(id: Long)
+
     @Query("DELETE FROM headings WHERE noteId = :noteId")
     abstract suspend fun deleteHeadings(noteId: Long)
 
@@ -79,12 +92,25 @@ abstract class IndexDao {
      * put it right. That was invisible because a full reindex runs whenever
      * [me.parham1995.notes.data.VaultIndexer.VERSION] moves, which is most
      * releases.
+     *
+     * The row is updated in place, keeping its id, when it was last opened and
+     * where it was left. The entity the indexer builds knows none of those --
+     * it has just parsed a file -- and upserting it as it stands reset them on
+     * every change: Recents emptied and every note reopened at the top after
+     * each sync, and a full reindex reissued every id as well.
      */
     @Transaction
     open suspend fun writeBatch(batch: List<NoteWrite>): List<Long> =
         batch.map { write ->
-            val existing = idOf(write.note.vaultId, write.note.path) ?: 0
-            val id = upsertNote(write.note.copy(id = existing)).takeIf { it > 0 } ?: existing
+            val state = stateOf(write.note.vaultId, write.note.path)
+            val note =
+                if (state == null) {
+                    write.note.copy(id = 0)
+                } else {
+                    write.note.copy(id = state.id, openedAt = state.openedAt, scrollIndex = state.scrollIndex)
+                }
+            val existing = state?.id ?: 0
+            val id = upsertNote(note).takeIf { it > 0 } ?: existing
 
             deleteHeadings(id)
             if (write.headings.isNotEmpty()) insertHeadings(write.headings.map { it.copy(noteId = id) })
@@ -98,9 +124,38 @@ abstract class IndexDao {
             id
         }
 
+    /**
+     * Drops notes by path, with every row derived from them, and answers the
+     * ids that went so the search index -- which is not one of Room's tables
+     * -- can drop them too.
+     *
+     * There are no foreign keys to cascade, so each derived table is cleared
+     * by hand; one left out is rows that nothing will ever delete.
+     */
+    @Transaction
+    open suspend fun removeNotes(
+        vaultId: Long,
+        paths: Collection<String>,
+    ): List<Long> =
+        paths.mapNotNull { path ->
+            idOf(vaultId, path)?.also { id ->
+                deleteLinks(id)
+                deleteHeadings(id)
+                deleteTasks(id)
+                deleteNote(id)
+            }
+        }
+
     /** Attaches resolved links to their targets, nulls included. */
     @Transaction
     open suspend fun applyTargets(targets: List<Pair<Long, Long?>>) {
         targets.forEach { (linkId, targetId) -> setTarget(linkId, targetId) }
     }
 }
+
+/** The part of a note that belongs to the reader rather than the file. */
+data class NoteState(
+    val id: Long,
+    val openedAt: Long?,
+    val scrollIndex: Int,
+)

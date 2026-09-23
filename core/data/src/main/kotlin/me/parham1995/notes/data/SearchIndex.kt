@@ -1,5 +1,6 @@
 package me.parham1995.notes.data
 
+import androidx.room.immediateTransaction
 import androidx.room.useReaderConnection
 import androidx.room.useWriterConnection
 import me.parham1995.notes.data.database.NotesDatabase
@@ -52,6 +53,22 @@ class SearchIndex
                 connection.usePrepared("DELETE FROM $FTS WHERE rowid = ?") { statement ->
                     statement.bindLong(1, noteId)
                     statement.step()
+                }
+            }
+        }
+
+        /** Drops many notes in one transaction, rather than a commit each. */
+        suspend fun deleteAll(noteIds: Collection<Long>) {
+            if (noteIds.isEmpty()) return
+            database.useWriterConnection { transactor ->
+                transactor.immediateTransaction {
+                    usePrepared("DELETE FROM $FTS WHERE rowid = ?") { statement ->
+                        noteIds.forEach { id ->
+                            statement.bindLong(1, id)
+                            statement.step()
+                            statement.reset()
+                        }
+                    }
                 }
             }
         }
