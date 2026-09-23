@@ -27,7 +27,7 @@ internal fun TaskDigestCard(
     state: SyncUiState,
     viewModel: SyncViewModel,
 ) {
-    SectionCard("Daily task summary") {
+    SectionCard(stringResource(R.string.card_digest)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -38,7 +38,7 @@ internal fun TaskDigestCard(
         }
 
         if (state.settings.taskDigest) {
-            Text("At", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.digest_at), style = MaterialTheme.typography.labelMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 VaultSettings.DIGEST_HOUR_CHOICES.forEach { hour ->
                     FilterChip(

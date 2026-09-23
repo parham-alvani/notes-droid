@@ -43,7 +43,7 @@ internal fun WritingCard(
     var email by remember(stored.authorEmail) { mutableStateOf(stored.authorEmail) }
     val changed = name.trim() != stored.authorName || email.trim() != stored.authorEmail
 
-    SectionCard("Commit as") {
+    SectionCard(stringResource(R.string.card_commit_as)) {
         Text(
             stringResource(R.string.help_author),
             style = MaterialTheme.typography.bodySmall,
@@ -112,7 +112,7 @@ internal fun ScratchpadCard(
             ?: state.vaults.firstOrNull()?.id
             ?: 0L
 
-    SectionCard("Scratchpad") {
+    SectionCard(stringResource(R.string.card_scratchpad)) {
         Text(
             stringResource(R.string.help_scratchpad),
             style = MaterialTheme.typography.bodySmall,
@@ -158,7 +158,7 @@ internal fun QueuedEditsCard(
     state: SyncUiState,
     viewModel: SyncViewModel,
 ) {
-    SectionCard("Waiting to go up") {
+    SectionCard(stringResource(R.string.card_queued)) {
         state.queuedEdits.forEach { edit ->
             Row(
                 modifier = Modifier.fillMaxWidth(),

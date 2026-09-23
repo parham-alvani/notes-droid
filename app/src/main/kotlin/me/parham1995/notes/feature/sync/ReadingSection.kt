@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.sync
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,7 +40,7 @@ internal fun ReadingCard(
 ) {
     val reading = state.settings.reading
 
-    SectionCard("Text") {
+    SectionCard(stringResource(R.string.card_text)) {
         Text(stringResource(R.string.settings_size), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReadingSettings.TEXT_SCALES.forEach { scale ->
@@ -57,7 +58,15 @@ internal fun ReadingCard(
                 FilterChip(
                     selected = reading.lineSpacing == spacing,
                     onClick = { viewModel.setLineSpacing(spacing) },
-                    label = { Text(if (spacing == 1f) "normal" else "${(spacing * PERCENT).toInt()}%") },
+                    label = {
+                        Text(
+                            if (spacing == 1f) {
+                                stringResource(R.string.spacing_normal)
+                            } else {
+                                stringResource(R.string.settings_percent, (spacing * PERCENT).toInt())
+                            },
+                        )
+                    },
                 )
             }
         }
@@ -77,14 +86,14 @@ internal fun ReadingCard(
         }
     }
 
-    SectionCard("Appearance") {
+    SectionCard(stringResource(R.string.card_appearance)) {
         Text(stringResource(R.string.settings_theme), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ThemeChoice.entries.forEach { choice ->
                 FilterChip(
                     selected = reading.theme == choice,
                     onClick = { viewModel.setTheme(choice) },
-                    label = { Text(choice.name.lowercase()) },
+                    label = { Text(stringResource(choice.label)) },
                 )
             }
         }
@@ -138,14 +147,14 @@ internal fun ReadingCard(
         }
     }
 
-    SectionCard("Behaviour") {
+    SectionCard(stringResource(R.string.card_behaviour)) {
         Text(stringResource(R.string.settings_open_on), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StartScreen.entries.forEach { screen ->
                 FilterChip(
                     selected = reading.startScreen == screen,
                     onClick = { viewModel.setStartScreen(screen) },
-                    label = { Text(screen.name.lowercase()) },
+                    label = { Text(stringResource(screen.label)) },
                 )
             }
         }
@@ -156,9 +165,41 @@ internal fun ReadingCard(
                 FilterChip(
                     selected = reading.browserSort == sort,
                     onClick = { viewModel.setBrowserSort(sort) },
-                    label = { Text(sort.name.lowercase().replace('_', ' ')) },
+                    label = { Text(stringResource(sort.label)) },
                 )
             }
         }
     }
 }
+
+/**
+ * What each choice is called on screen. Named here rather than from the enum
+ * constant, which showed "recently_opened" lower-cased in whatever language
+ * the phone was set to.
+ */
+@get:StringRes
+private val ThemeChoice.label: Int
+    get() =
+        when (this) {
+            ThemeChoice.DARK -> R.string.theme_dark
+            ThemeChoice.LIGHT -> R.string.theme_light
+            ThemeChoice.SYSTEM -> R.string.theme_system
+        }
+
+@get:StringRes
+private val StartScreen.label: Int
+    get() =
+        when (this) {
+            StartScreen.BROWSE -> R.string.nav_browse
+            StartScreen.TASKS -> R.string.tasks_title
+            StartScreen.SEARCH -> R.string.nav_search
+        }
+
+@get:StringRes
+private val BrowserSort.label: Int
+    get() =
+        when (this) {
+            BrowserSort.NAME -> R.string.sort_name
+            BrowserSort.RECENTLY_OPENED -> R.string.sort_recently_opened
+            BrowserSort.RECENTLY_CHANGED -> R.string.sort_recently_changed
+        }

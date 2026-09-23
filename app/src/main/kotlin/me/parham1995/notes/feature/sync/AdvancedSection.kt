@@ -41,7 +41,7 @@ internal fun CrashCard(
     val context = LocalContext.current
     val crashSubject = stringResource(R.string.settings_crash_subject)
     val shareTitle = stringResource(R.string.crash_share_title)
-    SectionCard("The app crashed") {
+    SectionCard(stringResource(R.string.card_crash)) {
         Text(
             crash.lineSequence().take(CRASH_PREVIEW_LINES).joinToString("\n"),
             style = MaterialTheme.typography.bodySmall,
@@ -82,15 +82,18 @@ internal fun CrashCard(
 @Composable
 internal fun AboutCard() {
     val context = LocalContext.current
-    SectionCard("About") {
-        LabelledValue("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-        LabelledValue("Released", BuildConfig.BUILD_DATE)
-        LabelledValue("Commit", BuildConfig.GIT_SHA)
-        LabelledValue("Author", BuildConfig.AUTHOR)
-        LabelledValue("License", BuildConfig.LICENSE)
+    SectionCard(stringResource(R.string.card_about)) {
+        LabelledValue(
+            stringResource(R.string.about_version),
+            "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+        )
+        LabelledValue(stringResource(R.string.about_released), BuildConfig.BUILD_DATE)
+        LabelledValue(stringResource(R.string.status_commit), BuildConfig.GIT_SHA)
+        LabelledValue(stringResource(R.string.about_author), BuildConfig.AUTHOR)
+        LabelledValue(stringResource(R.string.about_license), BuildConfig.LICENSE)
         // The bundled font is separately licensed and the OFL asks that it be
         // acknowledged wherever the software is.
-        LabelledValue("Persian type", "Vazirmatn, OFL 1.1")
+        LabelledValue(stringResource(R.string.about_persian_type), "Vazirmatn, OFL 1.1")
         TextButton(
             onClick = {
                 runCatching {
@@ -120,8 +123,9 @@ internal fun LogCard(viewModel: SyncViewModel) {
     val stamp = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US) }
     val context = LocalContext.current
     val logSubject = stringResource(R.string.settings_log_subject)
+    val shareTitle = stringResource(R.string.log_share_title)
 
-    SectionCard("Sync log") {
+    SectionCard(stringResource(R.string.card_log)) {
         if (entries.isEmpty()) {
             Text(
                 stringResource(R.string.journal_empty),
@@ -156,7 +160,13 @@ internal fun LogCard(viewModel: SyncViewModel) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (entries.size > COLLAPSED_LOG_LINES) {
                 TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "Show less" else "Show all ${entries.size}")
+                    Text(
+                        if (expanded) {
+                            stringResource(R.string.log_show_less)
+                        } else {
+                            stringResource(R.string.log_show_all, entries.size)
+                        },
+                    )
                 }
             }
             // Reading a log off a phone screen and retyping it is the reason a
@@ -172,7 +182,7 @@ internal fun LogCard(viewModel: SyncViewModel) {
                         putExtra(Intent.EXTRA_SUBJECT, logSubject)
                         putExtra(Intent.EXTRA_TEXT, text)
                     }
-                context.startActivity(Intent.createChooser(send, "Share sync log"))
+                context.startActivity(Intent.createChooser(send, shareTitle))
             }) {
                 Text(stringResource(R.string.action_share))
             }

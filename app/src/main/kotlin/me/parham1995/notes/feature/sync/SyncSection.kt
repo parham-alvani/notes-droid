@@ -53,17 +53,20 @@ internal fun StatusCard(
     state: SyncUiState,
     viewModel: SyncViewModel,
 ) {
-    SectionCard("Status") {
-        LabelledValue("Notes", state.noteCount.toString())
+    SectionCard(stringResource(R.string.card_status)) {
+        LabelledValue(stringResource(R.string.label_notes), state.noteCount.toString())
         // Measured here, where it is shown, rather than every time any settings
         // screen opens.
         LaunchedEffect(Unit) { viewModel.measureDisk() }
-        LabelledValue("On disk", state.diskBytes?.let(::formatBytes) ?: "-")
+        LabelledValue(stringResource(R.string.status_on_disk), state.diskBytes?.let(::formatBytes) ?: "-")
         vaultCommits(state.vaults).forEach { (vault, commit) ->
-            LabelledValue(vault ?: "Commit", commit?.take(SHORT_SHA_LENGTH) ?: "never synced")
+            LabelledValue(
+                vault ?: stringResource(R.string.status_commit),
+                commit?.take(SHORT_SHA_LENGTH) ?: stringResource(R.string.status_never_synced),
+            )
         }
         LabelledValue(
-            "Last sync",
+            stringResource(R.string.status_last_sync),
             state.lastSyncAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "-",
         )
 
@@ -128,7 +131,7 @@ internal fun StatusCard(
                 onClick = viewModel::reindex,
                 enabled = !state.running && !state.reindexing && state.noteCount > 0,
             ) {
-                Text(if (state.reindexing) "Reindexing..." else "Reindex")
+                Text(stringResource(if (state.reindexing) R.string.status_reindexing else R.string.action_reindex))
             }
             TextButton(
                 onClick = viewModel::reset,
@@ -156,7 +159,7 @@ internal fun BackgroundSyncCard(
     viewModel: SyncViewModel,
 ) {
     val context = LocalContext.current
-    SectionCard("Background sync") {
+    SectionCard(stringResource(R.string.card_background_sync)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -176,7 +179,15 @@ internal fun BackgroundSyncCard(
                     FilterChip(
                         selected = state.settings.syncIntervalHours == hours,
                         onClick = { viewModel.setSyncIntervalHours(hours) },
-                        label = { Text(if (hours == HOURS_IN_DAY) "daily" else "${hours}h") },
+                        label = {
+                            Text(
+                                if (hours == HOURS_IN_DAY) {
+                                    stringResource(R.string.sync_daily)
+                                } else {
+                                    stringResource(R.string.sync_every_hours, hours)
+                                },
+                            )
+                        },
                     )
                 }
             }
@@ -243,7 +254,7 @@ internal fun ImagesCard(
     state: SyncUiState,
     viewModel: SyncViewModel,
 ) {
-    SectionCard("Images") {
+    SectionCard(stringResource(R.string.card_images)) {
         ImagePolicy.entries.forEach { option ->
             Row(
                 modifier =
@@ -260,9 +271,9 @@ internal fun ImagesCard(
                 Text(
                     text =
                         when (option) {
-                            ImagePolicy.ON_DEMAND -> "On demand"
-                            ImagePolicy.PREFETCH_ON_WIFI -> "Prefetch on Wi-Fi"
-                            ImagePolicy.NEVER -> "Never"
+                            ImagePolicy.ON_DEMAND -> stringResource(R.string.images_on_demand)
+                            ImagePolicy.PREFETCH_ON_WIFI -> stringResource(R.string.images_prefetch)
+                            ImagePolicy.NEVER -> stringResource(R.string.images_never)
                         },
                     style = MaterialTheme.typography.bodyMedium,
                 )

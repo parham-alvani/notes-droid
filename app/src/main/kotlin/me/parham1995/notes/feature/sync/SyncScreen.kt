@@ -51,7 +51,7 @@ fun SyncScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(section.title) },
+                title = { Text(stringResource(section.title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         LucideGlyph(

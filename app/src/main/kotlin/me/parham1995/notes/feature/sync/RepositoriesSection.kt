@@ -46,14 +46,14 @@ internal fun RepositoryCard(
     var vaultName by remember { mutableStateOf("") }
     val first = state.vaults.isEmpty()
 
-    SectionCard("Vaults") {
+    SectionCard(stringResource(R.string.settings_section_vaults)) {
         state.vaults.forEach { vault ->
             VaultRow(vault, viewModel)
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
         }
 
         Text(
-            if (first) "Add the repository your vault lives in." else "Add another vault",
+            stringResource(if (first) R.string.vaults_add_first else R.string.vaults_add_another),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -85,7 +85,7 @@ internal fun RepositoryCard(
             label = { Text(stringResource(R.string.settings_name)) },
             // For reading only. It does not decide where anything is stored, so
             // it can be changed later without moving the files.
-            placeholder = { Text(repo.ifBlank { "what to call it" }) },
+            placeholder = { Text(repo.ifBlank { stringResource(R.string.vaults_name_placeholder) }) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -117,6 +117,7 @@ private fun VaultRow(
     vault: VaultEntity,
     viewModel: SyncViewModel,
 ) {
+    val failed = vault.lastError?.let { stringResource(R.string.vault_failed, it.take(ERROR_PREVIEW)) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -129,7 +130,7 @@ private fun VaultRow(
                     listOfNotNull(
                         "${vault.owner}/${vault.repo}".takeIf { it != vault.label },
                         vault.branch,
-                        vault.lastError?.let { "failed: " + it.take(ERROR_PREVIEW) },
+                        failed,
                     ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color =
@@ -174,7 +175,7 @@ internal fun TokenCard(
 ) {
     var token by remember { mutableStateOf("") }
 
-    SectionCard("Access token") {
+    SectionCard(stringResource(R.string.card_token)) {
         Text(
             stringResource(R.string.help_token),
             style = MaterialTheme.typography.bodySmall,
@@ -182,7 +183,7 @@ internal fun TokenCard(
         OutlinedTextField(
             value = token,
             onValueChange = { token = it },
-            label = { Text(if (state.hasToken) "Replace token" else "Token") },
+            label = { Text(stringResource(if (state.hasToken) R.string.token_replace else R.string.token_label)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions =
@@ -226,7 +227,7 @@ internal fun TransportCard(
     state: SyncUiState,
     viewModel: SyncViewModel,
 ) {
-    SectionCard("Sync method") {
+    SectionCard(stringResource(R.string.card_transport)) {
         SyncTransport.entries.forEach { option ->
             Row(
                 modifier =
@@ -242,7 +243,10 @@ internal fun TransportCard(
                 RadioButton(selected = state.settings.transport == option, onClick = null)
                 Column {
                     Text(
-                        text = if (option == SyncTransport.REST) "REST (token)" else "git over SSH (key)",
+                        text =
+                            stringResource(
+                                if (option == SyncTransport.REST) R.string.transport_rest else R.string.transport_ssh,
+                            ),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
@@ -269,21 +273,22 @@ internal fun SshKeyCard(
     // A summary and a way through, rather than the keys themselves. The panel
     // owns the detail; two screens showing the same thing is two screens to
     // keep in step.
-    SectionCard("SSH keys") {
+    SectionCard(stringResource(R.string.ssh_title)) {
         val missing = state.sshKeys.count { it.publicKey == null }
         Text(
             text =
                 when {
-                    state.sshKeys.isEmpty() -> "No repository syncs over SSH."
-                    missing > 0 -> "$missing of ${state.sshKeys.size} still need a key."
-                    state.sshKeys.size == 1 -> "One key, for ${state.sshKeys.first().label}."
-                    else -> "${state.sshKeys.size} keys, one per repository."
+                    state.sshKeys.isEmpty() -> stringResource(R.string.ssh_summary_none)
+                    missing > 0 -> stringResource(R.string.ssh_summary_missing, missing, state.sshKeys.size)
+                    state.sshKeys.size == 1 -> stringResource(R.string.ssh_summary_one, state.sshKeys.first().label)
+                    else -> stringResource(R.string.ssh_summary_many, state.sshKeys.size)
                 },
             style = MaterialTheme.typography.bodyMedium,
         )
+        val noKey = stringResource(R.string.ssh_no_key_yet)
         state.sshKeys.forEach { key ->
             Text(
-                text = key.label + " · " + (key.fingerprint ?: "no key yet"),
+                text = key.label + " · " + (key.fingerprint ?: noKey),
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
                 color =

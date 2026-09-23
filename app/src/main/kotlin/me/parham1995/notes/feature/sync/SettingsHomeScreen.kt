@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.sync
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,16 +37,20 @@ import me.parham1995.notes.ui.icon.LucideGlyph
  * makes you scroll past the ones you never touch to reach the ones you do.
  */
 enum class SettingsSection(
-    val title: String,
-    val summary: String,
+    @param:StringRes val title: Int,
+    @param:StringRes val summary: Int,
     val icon: String,
 ) {
-    REPOSITORIES("Vaults", "The repositories you read, and how", "library"),
-    READING("Reading", "Text size, theme, where the app opens", "book-open-text"),
-    WRITING("Writing", "Who commits, and where a captured note lands", "pencil"),
-    SYNC("Sync", "When it refreshes, and what it fetches", "refresh-cw"),
-    NOTIFICATIONS("Notifications", "The daily task summary", "bell"),
-    ADVANCED("Advanced", "The journal, storage, and what this build is", "wrench"),
+    REPOSITORIES(R.string.settings_section_vaults, R.string.settings_section_vaults_summary, "library"),
+    READING(R.string.settings_section_reading, R.string.settings_section_reading_summary, "book-open-text"),
+    WRITING(R.string.settings_section_writing, R.string.settings_section_writing_summary, "pencil"),
+    SYNC(R.string.settings_section_sync, R.string.settings_section_sync_summary, "refresh-cw"),
+    NOTIFICATIONS(
+        R.string.settings_section_notifications,
+        R.string.settings_section_notifications_summary,
+        "bell",
+    ),
+    ADVANCED(R.string.settings_section_advanced, R.string.settings_section_advanced_summary, "wrench"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,9 +89,9 @@ fun SettingsHomeScreen(
                 ) {
                     LucideGlyph(section.icon, size = 22.dp, tint = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) {
-                        Text(section.title, style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(section.title), style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            section.summary,
+                            stringResource(section.summary),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
