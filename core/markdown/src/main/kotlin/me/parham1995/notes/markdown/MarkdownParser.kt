@@ -27,6 +27,10 @@ object MarkdownParser {
     private fun build(): Parser =
         Parser
             .builder()
+            // Before the extensions, whose post-processors are registered as
+            // they are added: a comment is gone before anything turns its
+            // contents into links, callouts or tasks.
+            .postProcessor(CommentPostProcessor())
             .extensions(
                 listOf(
                     TablesExtension.create(),
