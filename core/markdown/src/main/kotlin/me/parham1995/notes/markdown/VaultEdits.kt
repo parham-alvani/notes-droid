@@ -110,6 +110,12 @@ object VaultEdits {
      * This is the scratchpad's whole write path: a capture that has to work
      * before the note exists, because the first thing anyone does with a
      * scratchpad is write in it, not create it.
+     *
+     * Null when the file already ends with [block]. A push whose response was
+     * lost has landed, but the edit is still queued, and the next flush runs
+     * it again against the file that already holds it -- without this check
+     * that is the same capture written twice. A capture carries its time to
+     * the minute, so two genuinely separate ones do not look alike.
      */
     fun append(
         block: String,
@@ -118,6 +124,8 @@ object VaultEdits {
         val body = block.trim()
         return { current ->
             if (body.isEmpty()) {
+                null
+            } else if (current != null && current.trimEnd().endsWith(body)) {
                 null
             } else if (current.isNullOrBlank()) {
                 listOfNotNull(heading?.takeIf { it.isNotBlank() }?.let { "# $it" }, "", body, "")
