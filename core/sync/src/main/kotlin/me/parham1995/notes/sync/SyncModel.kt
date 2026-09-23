@@ -106,6 +106,10 @@ interface VaultSink {
      * get into the manifest under the on-demand policy: the path and sha are
      * known, so a note that embeds one can fetch it later, but a default
      * install carries only the markdown.
+     *
+     * Recording [LocalState.ABSENT] for a path that is already on disk means
+     * that copy is out of date, and it has to go: whatever opens the file
+     * reads the disk first and would never know to fetch the new one.
      */
     suspend fun record(
         entry: VaultEntry,

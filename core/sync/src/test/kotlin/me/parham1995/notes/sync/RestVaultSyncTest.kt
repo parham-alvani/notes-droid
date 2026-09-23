@@ -115,6 +115,38 @@ class RestVaultSyncTest {
         }
 
     @Test
+    fun `attachments are recorded, not downloaded, and the icon config is fetched`() =
+        runTest {
+            server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head1","type":"commit"}}"""))
+            server.enqueue(
+                json(
+                    """
+                    {"sha":"tree1","truncated":false,"tree":[
+                      {"path":"a.md","mode":"100644","type":"blob","sha":"sha-a","size":10},
+                      {"path":"uploads/contract.pdf","mode":"100644","type":"blob","sha":"sha-pdf","size":4000000},
+                      {"path":"uploads/talk.mp4","mode":"100644","type":"blob","sha":"sha-mp4","size":40000000},
+                      {"path":".obsidian/plugins/iconic/data.json","mode":"100644","type":"blob","sha":"sha-i","size":20}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+
+            val plan = sync.plan(SyncBase(commit = null, manifest = emptyMap()))
+            server.enqueue(json("note body"))
+            server.enqueue(json("{}"))
+            sync.apply(plan, recorded)
+
+            assertThat(recorded.written.keys)
+                .containsExactly("a.md", ".obsidian/plugins/iconic/data.json")
+            assertThat(recorded.recorded).containsExactly(
+                "uploads/contract.pdf" to LocalState.ABSENT,
+                "uploads/talk.mp4" to LocalState.ABSENT,
+            )
+            // ref + tree + two blobs: neither attachment crossed the network.
+            assertThat(server.requestCount).isEqualTo(4)
+        }
+
+    @Test
     fun `a moved note is applied without downloading it again`() =
         runTest {
             server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head2","type":"commit"}}"""))

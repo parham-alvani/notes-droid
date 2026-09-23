@@ -121,12 +121,15 @@ class RestVaultSync(
                 .map { entry ->
                     async {
                         gate.withPermit {
-                            // Images are known but deliberately not fetched;
-                            // they arrive when a note that embeds one is opened.
-                            if (entry.kind == BlobKind.IMAGE) {
-                                sink.record(entry, LocalState.ABSENT)
-                            } else {
+                            // Only what the reader parses is fetched up front.
+                            // Images and attachments are known but not
+                            // fetched; they arrive when something opens them,
+                            // which is what keeps a 40MB video off a device
+                            // that only ever reads the notes around it.
+                            if (entry.kind in FETCHED_UP_FRONT) {
                                 sink.write(entry.path, client.blob(entry.sha), entry.sha)
+                            } else {
+                                sink.record(entry, LocalState.ABSENT)
                             }
                             step()
                         }
@@ -137,6 +140,9 @@ class RestVaultSync(
 
     private companion object {
         const val DEFAULT_CONCURRENCY = 6
+
+        /** Kinds the app reads itself; everything else is fetched on open. */
+        val FETCHED_UP_FRONT = setOf(BlobKind.MARKDOWN, BlobKind.CONFIG)
 
         /** GitHub caps the compare endpoint's `files` array at 300. */
         const val COMPARE_FILE_LIMIT = 300
