@@ -3,6 +3,7 @@ package me.parham1995.notes.data
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
@@ -198,6 +199,42 @@ class VaultRepositoryTest {
 
             assertThat(repository.childrenFlow("").first().map { it.name }).containsExactly("Alpha")
         }
+
+    @Test
+    fun `opening a note elsewhere does not redraw this folder`() =
+        runTest {
+            // Room re-runs a query on any write to its table, and opening or
+            // scrolling a note writes to `notes`. A folder that did not change
+            // should not be rebuilt -- and used to be, with a lookup per
+            // subfolder each time.
+            index("Alpha/One.md" to "a", "Alpha/Sub/Sub.md" to "landing", "Beta/Two.md" to "b")
+            val elsewhere = database.noteDao().idOf(first, "Beta/Two.md")!!
+            val emissions = java.util.concurrent.CopyOnWriteArrayList<List<VaultItem>>()
+            backgroundScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                repository.childrenFlow("Alpha").collect { emissions += it }
+            }
+            awaitUntil { emissions.size == 1 }
+
+            repository.markOpened(elsewhere)
+            repository.rememberScroll(elsewhere, 4)
+            // Something that does change this folder, so there is a point at
+            // which every earlier write has certainly been seen.
+            index("Alpha/One.md" to "a", "Alpha/Sub/Sub.md" to "landing", "Beta/Two.md" to "b", "Alpha/New.md" to "c")
+            awaitUntil { emissions.last().any { it.name == "New" } }
+
+            assertThat(emissions).hasSize(2)
+            assertThat(emissions.last().single { it.name == "Sub" }.noteId).isNotNull()
+        }
+
+    private fun awaitUntil(condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + AWAIT_MILLIS
+        while (!condition()) {
+            check(System.currentTimeMillis() < deadline) { "timed out" }
+            Thread.sleep(POLL_MILLIS)
+        }
+        // Long enough for a stray emission behind this one to arrive.
+        Thread.sleep(SETTLE_MILLIS)
+    }
 
     @Test
     fun `opening a note renders it and resolves its links`() =
@@ -605,4 +642,10 @@ class VaultRepositoryTest {
 
             assertThat(database.noteDao().count(second).first()).isEqualTo(1)
         }
+
+    private companion object {
+        const val AWAIT_MILLIS = 5_000L
+        const val POLL_MILLIS = 10L
+        const val SETTLE_MILLIS = 300L
+    }
 }

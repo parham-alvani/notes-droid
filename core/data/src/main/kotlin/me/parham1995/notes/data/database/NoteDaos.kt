@@ -60,6 +60,18 @@ interface NoteDao {
     @Query("SELECT DISTINCT parent FROM notes WHERE vaultId = :vaultId AND parent != ''")
     fun allParentsFlow(vaultId: Long): Flow<List<String>>
 
+    /**
+     * Every folder's landing page, `X/X.md`, in one query. The browser used
+     * to look each one up by path as it drew the folder, which was a query per
+     * folder on every emission -- and the tree re-emits whenever any note is
+     * opened or scrolled.
+     */
+    @Query("SELECT id, path, isRtl FROM notes WHERE vaultId = :vaultId AND isFolderNote = 1")
+    suspend fun folderNotes(vaultId: Long): List<FolderNoteRow>
+
+    @Query("SELECT id, path, isRtl FROM notes WHERE vaultId = :vaultId AND isFolderNote = 1")
+    fun folderNotesFlow(vaultId: Long): Flow<List<FolderNoteRow>>
+
     @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND openedAt IS NOT NULL ORDER BY openedAt DESC LIMIT :limit")
     fun recentlyOpened(
         vaultId: Long,
@@ -139,6 +151,12 @@ fun escapeLike(text: String): String =
         .replace("\\", "\\\\")
         .replace("%", "\\%")
         .replace("_", "\\_")
+
+data class FolderNoteRow(
+    val id: Long,
+    val path: String,
+    val isRtl: Boolean,
+)
 
 data class NoteRef(
     val id: Long,
