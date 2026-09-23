@@ -31,7 +31,6 @@ import org.eclipse.jgit.transport.SshSessionFactory
 import org.eclipse.jgit.transport.SshTransport
 import org.eclipse.jgit.transport.Transport
 import org.eclipse.jgit.transport.URIish
-import org.eclipse.jgit.transport.sshd.ServerKeyDatabase
 import org.eclipse.jgit.transport.sshd.SshdSessionFactoryBuilder
 import org.eclipse.jgit.treewalk.CanonicalTreeParser
 import org.eclipse.jgit.treewalk.TreeWalk
@@ -40,7 +39,6 @@ import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.security.PublicKey
 
 /**
  * Syncs over git-over-SSH, as an alternative to the REST transport.
@@ -72,6 +70,7 @@ class GitSshVaultSync(
     /** Narrates each stage, so a long clone is visibly working. */
     private val log: suspend (String) -> Unit = {},
     val progress: GitProgress = GitProgress(),
+    private val hostKeys: PinnedHostKeys = PinnedHostKeys(),
 ) : VaultSync,
     VaultWriter {
     init {
@@ -476,6 +475,17 @@ class GitSshVaultSync(
         // Say exactly what the handshake did before interpreting it.
         log("authentication failed: " + failure.describeChain())
 
+        // Before anything about keys of ours: the other end was not GitHub,
+        // or not a GitHub this app recognises, and nothing was sent to it.
+        hostKeys.lastRefused?.let { refused ->
+            throw IOException(
+                "the server did not prove it is GitHub: $refused, which is not one of GitHub's " +
+                    "published host keys. Nothing was sent. On a public or captive network this is " +
+                    "what interception looks like; if GitHub has rotated its keys, the app needs an update.",
+                failure,
+            )
+        }
+
         // An environment failure is not a rejected key, and saying so sent this
         // hunt in the wrong direction for hours. Only claim rejection when the
         // server actually rejected something.
@@ -611,27 +621,14 @@ class GitSshVaultSync(
             .setPreferredAuthentications("publickey")
             .setDefaultIdentities { listOf(keys.identity(keyMount).toPath()) }
             .setConfigFile { keys.configFile() }
-            // There is no interactive prompt on a phone and no known_hosts to
-            // seed, so the host key is accepted on first use and pinned by
-            // sshd's own store from then on.
-            .setServerKeyDatabase { _, _ -> AcceptFirstConnection() }
+            // GitHub's published host keys and nothing else. This once said
+            // the key was "accepted on first use and pinned by sshd's own
+            // store from then on", and it was not: the database it installed
+            // returned no known keys and accepted every key it was shown, on
+            // every connection, so anything that could answer for github.com
+            // was github.com.
+            .setServerKeyDatabase { _, _ -> hostKeys }
             .build(null)
-
-    private class AcceptFirstConnection : ServerKeyDatabase {
-        override fun lookup(
-            connectAddress: String?,
-            remoteAddress: InetSocketAddress?,
-            config: ServerKeyDatabase.Configuration?,
-        ): List<PublicKey> = emptyList()
-
-        override fun accept(
-            connectAddress: String?,
-            remoteAddress: InetSocketAddress?,
-            serverKey: PublicKey?,
-            config: ServerKeyDatabase.Configuration?,
-            provider: org.eclipse.jgit.transport.CredentialsProvider?,
-        ): Boolean = true
-    }
 
     private companion object {
         const val DEFAULT_DEPTH = 1

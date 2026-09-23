@@ -121,8 +121,10 @@ class SshKeyStore
                     appendLine("    ServerAliveInterval 20")
                     appendLine("    ServerAliveCountMax 12")
                     appendLine("    TCPKeepAlive yes")
-                    // There is no prompt on a phone and no known_hosts to seed.
-                    appendLine("    StrictHostKeyChecking no")
+                    // Host keys are checked against GitHub's published ones
+                    // (PinnedHostKeys); an unknown key is refused, never
+                    // accepted, because there is nobody on a phone to ask.
+                    appendLine("    StrictHostKeyChecking yes")
                 }
             val file = File(sshDir, "config")
             if (!file.isFile || file.readText() != desired) file.writeText(desired)

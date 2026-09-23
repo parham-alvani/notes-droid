@@ -171,6 +171,7 @@ Do not solve this in `VaultFilter` instead. That decides what reaches the device
 
 ## Assorted traps, each paid for once
 
+- **SSH host keys are pinned to GitHub's published ones** in `PinnedHostKeys`, for `github.com` and `[ssh.github.com]:443`. For a long time a comment claimed the key was "accepted on first use and pinned", while the code accepted every key on every connection. If GitHub rotates its keys, SSH sync fails with the fingerprint it was shown; update the list from `api.github.com/meta` and check it against the fingerprints on GitHub's docs page (`PinnedHostKeysTest` asserts them).
 - **A deploy key belongs to exactly one repository.** GitHub returns 422 "key is already in use" on the second. Hence one key per vault, generated on the device.
 - **A global gitignore can hide a whole directory.** A bare `Icon` pattern matched `ui/icon/` on a case-insensitive filesystem, so an entire package was never committed and CI had never run its tests. `!icon/` in `.gitignore` is the fix, and the symptom is a tree that builds locally and not in CI.
 - **Compose `Text(style = …)` replaces `LocalTextStyle`, it does not merge with it.** Hence the `inScript()` helper.
