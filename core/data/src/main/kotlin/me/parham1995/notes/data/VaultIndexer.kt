@@ -253,13 +253,16 @@ class VaultIndexer
                 val resolver = LinkResolver(byPath.keys)
                 val sources = refs.associate { it.id to it.path }
 
+                // Only what found a target is written. Every candidate here is
+                // already null, and one that still matches nothing is left as
+                // it is -- shown as broken rather than dropped. Writing the
+                // nulls back rewrote every broken link in the vault on every
+                // pass, and a pass follows each ticked task.
                 val targets =
                     links.unresolved(vaultId).mapNotNull { link ->
                         val source = sources[link.srcId] ?: return@mapNotNull null
-                        val path = resolver.resolve(link.rawTarget, source)
-                        // Deliberately left null when nothing matches: a broken
-                        // link is shown as broken rather than silently dropped.
-                        link.id to path?.let(byPath::get)
+                        val target = resolver.resolve(link.rawTarget, source)?.let(byPath::get)
+                        target?.let { link.id to it }
                     }
                 targets.chunked(BATCH).forEach { index.applyTargets(it) }
             }

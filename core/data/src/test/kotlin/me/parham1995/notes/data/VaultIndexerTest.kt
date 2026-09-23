@@ -1,6 +1,7 @@
 package me.parham1995.notes.data
 
 import androidx.room.useReaderConnection
+import androidx.room.useWriterConnection
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -286,5 +287,28 @@ class VaultIndexerTest {
 
             val moved = database.noteDao().idOf(1L, "Y/B.md")!!
             assertThat(database.linkDao().backlinks(moved).map { it.title }).containsExactly("A")
+        }
+
+    @Test
+    fun `resolving leaves a link that is still broken alone`() =
+        runTest {
+            // Every pass used to write every unresolved link back as null --
+            // the whole vault's broken links rewritten after each ticked task.
+            indexer.indexAll(1L, listOf(write("A.md", "[[Nowhere]] and [[Nothing]] and [[B]]"), write("B.md", "b")))
+            val before = writerChanges()
+
+            indexer.indexChanged(1L, changed = emptyList(), removed = emptyList())
+
+            assertThat(writerChanges() - before).isEqualTo(0L)
+            assertThat(database.linkDao().unresolved(1L).map { it.rawTarget }).containsExactly("Nowhere", "Nothing")
+        }
+
+    /** Rows written through the writer connection so far. */
+    private suspend fun writerChanges(): Long =
+        database.useWriterConnection { connection ->
+            connection.usePrepared("SELECT total_changes()") { statement ->
+                statement.step()
+                statement.getLong(0)
+            }
         }
 }
