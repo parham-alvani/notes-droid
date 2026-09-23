@@ -49,6 +49,7 @@ import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
+import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Naz
 
 /**
@@ -71,8 +72,9 @@ fun TasksScreen(
 
     // Said once and cleared: the same message arriving again on a
     // recomposition would stack a second snackbar on top of the first.
-    LaunchedEffect(state.message) {
-        state.message?.let {
+    val message = state.message?.text()
+    LaunchedEffect(message) {
+        message?.let {
             snackbar.showSnackbar(it)
             viewModel.dismissMessage()
         }

@@ -10,11 +10,7 @@ import android.os.Bundle
 import android.widget.RemoteViews
 import androidx.core.graphics.toColorInt
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.database.NoteEntity
 
@@ -34,7 +30,7 @@ class RecentNotesWidget : AppWidgetProvider() {
         manager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+        drawAsync {
             val repository =
                 EntryPointAccessors
                     .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
@@ -70,7 +66,7 @@ class RecentNotesWidget : AppWidgetProvider() {
         val views = RemoteViews(context.packageName, R.layout.widget_tasks)
         views.setTextViewText(
             R.id.widget_headline,
-            if (recent.isEmpty()) "Nothing read yet" else "Recently read",
+            context.getString(if (recent.isEmpty()) R.string.widget_recent_empty else R.string.widget_recent_title),
         )
         views.setTextColor(R.id.widget_headline, HEADLINE_COLOUR)
 

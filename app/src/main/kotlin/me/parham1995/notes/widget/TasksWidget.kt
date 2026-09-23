@@ -12,11 +12,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskBuckets
@@ -59,9 +55,10 @@ class TasksWidget : AppWidgetProvider() {
         ids: IntArray,
     ) {
         // A provider is not a lifecycle owner and onUpdate is synchronous, so
-        // the work is launched and the result pushed when it arrives. The
-        // widget keeps its previous content until then rather than blanking.
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+        // the work runs in the background and the result is pushed when it
+        // arrives. The widget keeps its previous content until then rather
+        // than blanking.
+        drawAsync {
             val repository =
                 EntryPointAccessors
                     .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
@@ -105,11 +102,11 @@ class TasksWidget : AppWidgetProvider() {
         views.setTextViewText(
             R.id.widget_headline,
             when {
-                openCount == 0 -> "Nothing open"
-                due.isEmpty() -> "$openCount open, none due"
-                overdue == 0 -> "$todayCount due today"
-                todayCount == 0 -> "$overdue overdue"
-                else -> "$overdue overdue · $todayCount today"
+                openCount == 0 -> context.getString(R.string.widget_tasks_none)
+                due.isEmpty() -> context.getString(R.string.widget_tasks_none_due, openCount)
+                overdue == 0 -> context.getString(R.string.widget_tasks_today, todayCount)
+                todayCount == 0 -> context.getString(R.string.widget_tasks_overdue, overdue)
+                else -> context.getString(R.string.widget_tasks_both, overdue, todayCount)
             },
         )
         views.setTextColor(

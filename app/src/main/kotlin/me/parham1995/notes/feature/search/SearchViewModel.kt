@@ -1,14 +1,15 @@
 package me.parham1995.notes.feature.search
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.SearchHit
@@ -37,63 +38,67 @@ data class SearchUiState(
     val searching: Boolean = false,
 )
 
-@OptIn(FlowPreview::class)
 @HiltViewModel
 class SearchViewModel
     @Inject
     constructor(
         private val repository: VaultRepository,
         icons: IconStore,
+        private val savedState: SavedStateHandle,
     ) : ViewModel() {
-        private val _state = MutableStateFlow(SearchUiState())
-        val state: StateFlow<SearchUiState> = _state.asStateFlow()
+        /**
+         * What was typed, in saved state so a search survives the process
+         * being killed while the app was in the background.
+         */
+        private val queries: StateFlow<String> = savedState.getStateFlow(KEY_QUERY, "")
 
-        private val queries = MutableStateFlow("")
+        private val _state = MutableStateFlow(SearchUiState(query = queries.value))
+        val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
         /**
          * Held rather than collected per query. Search runs on every keystroke
          * and the assignments only change when the vault does, so waiting on
          * the flow inside the debounce would put a file read on the typing path.
          */
-        private var iconConfig: VaultIcons = VaultIcons.EMPTY
-        private var activeVault: Long = 0
+        private val iconConfig: StateFlow<VaultIcons> =
+            icons.config.stateIn(viewModelScope, SharingStarted.Eagerly, VaultIcons.EMPTY)
 
         init {
-            viewModelScope.launch { icons.config.collect { iconConfig = it } }
-            viewModelScope.launch { repository.activeVaultId.collect { activeVault = it } }
-
             viewModelScope.launch {
                 queries
-                    .debounce(DEBOUNCE_MS)
-                    .distinctUntilChanged()
-                    .collect { query ->
-                        if (query.isBlank()) {
-                            _state.value = _state.value.copy(quick = emptyList(), hits = emptyList(), searching = false)
-                            return@collect
-                        }
-                        _state.value = _state.value.copy(searching = true)
-                        // The quick switcher is what answers most searches, so
-                        // it runs first and the full-text pass fills in under it.
-                        val quick =
+                    .searchSteps(
+                        vault = repository.activeVaultId,
+                        debounceMs = DEBOUNCE_MS,
+                        quick = { query, _ ->
                             repository
                                 .quickSwitch(
                                     query,
-                                ).map { QuickRow(it, iconConfig.forFile(it.vaultId, it.path)) }
-                        _state.value = _state.value.copy(quick = quick)
-                        val hits = repository.search(query).map { HitRow(it, iconConfig.forFile(activeVault, it.path)) }
-                        _state.value = _state.value.copy(hits = hits, searching = false)
+                                ).map { QuickRow(it, iconConfig.value.forFile(it.vaultId, it.path)) }
+                        },
+                        full = { query, vaultId ->
+                            repository.search(query).map { HitRow(it, iconConfig.value.forFile(vaultId, it.path)) }
+                        },
+                    ).collect { step ->
+                        _state.update { current ->
+                            current.copy(
+                                quick = step.quick ?: current.quick,
+                                hits = step.hits ?: current.hits,
+                                searching = step.searching,
+                            )
+                        }
                     }
             }
         }
 
         fun onQueryChange(query: String) {
-            _state.value = _state.value.copy(query = query)
-            queries.value = query
+            _state.update { it.copy(query = query) }
+            savedState[KEY_QUERY] = query
         }
 
         fun clear() = onQueryChange("")
 
         private companion object {
             const val DEBOUNCE_MS = 200L
+            const val KEY_QUERY = "search_query"
         }
     }

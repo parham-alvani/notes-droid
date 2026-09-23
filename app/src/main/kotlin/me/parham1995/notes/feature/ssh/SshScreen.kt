@@ -203,7 +203,7 @@ private fun KeyCard(
             val key = row.key
             if (key == null) {
                 Text(
-                    "No key yet.",
+                    stringResource(R.string.ssh_no_key),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -212,7 +212,7 @@ private fun KeyCard(
             }
 
             Text(
-                text = "${key.algorithm} · created ${key.createdAt.asDate()}",
+                text = stringResource(R.string.ssh_created, key.algorithm, key.createdAt.asDate()),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -235,7 +235,9 @@ private fun KeyCard(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onTest, enabled = row.check != KeyCheck.Running) {
-                    Text(if (row.check == KeyCheck.Running) "Testing..." else "Test")
+                    Text(
+                        stringResource(if (row.check == KeyCheck.Running) R.string.ssh_testing else R.string.ssh_test),
+                    )
                 }
                 OutlinedButton(onClick = { onCopy(key.publicKey) }) { Text(stringResource(R.string.action_copy)) }
                 TextButton(onClick = onReplace, enabled = !busy) { Text(stringResource(R.string.action_replace)) }
@@ -306,5 +308,7 @@ private fun OrphanCard(
     }
 }
 
+@Composable
 private fun Long?.asDate(): String =
-    this?.let { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it)) } ?: "unknown"
+    this?.let { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it)) }
+        ?: stringResource(R.string.ssh_created_unknown)

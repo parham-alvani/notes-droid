@@ -74,7 +74,7 @@ fun GraphScreen(
             TopAppBar(
                 title = {
                     Text(
-                        state.centre.ifEmpty { "Connections" },
+                        state.centre.ifEmpty { stringResource(R.string.note_connections) },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

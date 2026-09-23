@@ -71,7 +71,7 @@ fun BrowserScreen(
     // Only on arrival. Keying on the argument rather than running every
     // composition means walking up the tree afterwards is not undone on the
     // next recomposition.
-    LaunchedEffect(initialPath) { if (initialPath.isNotEmpty()) viewModel.open(initialPath) }
+    LaunchedEffect(initialPath) { viewModel.start(initialPath) }
 
     val context = LocalContext.current
     val nothingOpens = stringResource(R.string.error_nothing_opens)
@@ -119,7 +119,7 @@ fun BrowserScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = state.path.substringAfterLast('/').ifEmpty { "Vault" },
+                        text = state.path.substringAfterLast('/').ifEmpty { stringResource(R.string.browse_root) },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -127,7 +127,10 @@ fun BrowserScreen(
                 navigationIcon = {
                     if (state.path.isNotEmpty()) {
                         IconButton(onClick = { viewModel.up() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Up")
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.browse_up),
+                            )
                         }
                     }
                 },
@@ -237,7 +240,7 @@ fun BrowserScreen(
                 LazyColumn(Modifier.fillMaxSize()) {
                     if (state.path.isEmpty() && state.recent.isNotEmpty()) {
                         item {
-                            SectionLabel("Recently opened")
+                            SectionLabel(stringResource(R.string.browse_recent))
                         }
                         items(state.recent, key = { "recent-${it.note.id}" }) { row ->
                             ItemRow(
@@ -251,7 +254,7 @@ fun BrowserScreen(
                             )
                         }
                         item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-                        item { SectionLabel("All notes - ${state.noteCount}") }
+                        item { SectionLabel(stringResource(R.string.browse_all_notes, state.noteCount)) }
                     }
 
                     items(state.items, key = { it.item.path }) { row ->

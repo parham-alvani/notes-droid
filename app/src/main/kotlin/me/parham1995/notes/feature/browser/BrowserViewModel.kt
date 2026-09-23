@@ -1,17 +1,16 @@
 package me.parham1995.notes.feature.browser
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.BrowserSort
@@ -27,6 +26,7 @@ import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.folderListing
 import java.io.File
 import javax.inject.Inject
 
@@ -64,7 +64,6 @@ data class BrowserUiState(
         }
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class BrowserViewModel
     @Inject
@@ -75,30 +74,25 @@ class BrowserViewModel
         private val icons: IconStore,
         private val scheduler: SyncScheduler,
         private val settings: SettingsStore,
+        private val savedState: SavedStateHandle,
     ) : ViewModel() {
-        private val path = MutableStateFlow("")
+        /**
+         * The folder being shown. Kept in saved state so a process killed in
+         * the background comes back to the folder it was in, not the root.
+         */
+        private val path: StateFlow<String> = savedState.getStateFlow(KEY_FOLDER, "")
 
         // Follows the database rather than sampling it once. The previous
         // version queried in init, which before the first sync is an empty
         // vault, and nothing asked again -- so the tree stayed empty while
         // search, which queries per keystroke, worked fine.
-        private val items: Flow<List<VaultItem>> =
-            path.flatMapLatest { current -> repository.childrenFlow(current) }
-
-        // Resolving here rather than in the row composable keeps the rule
-        // regexes off the composition: a rule is tested against every visible
-        // item, and the browser recomposes on every scroll.
         private val rows: Flow<List<VaultRowItem>> =
-            combine(
-                items,
-                icons.config,
-                settings.settings,
-                repository.activeVaultId,
-            ) { current, config, preferences, vaultId ->
-                current
-                    .sortedWith(preferences.reading.browserSort.comparator())
-                    .map { VaultRowItem(it, config.forPath(vaultId, it.path, it.isFolder)) }
-            }
+            repository
+                .folderListing(
+                    folder = path,
+                    icons = icons.config,
+                    order = settings.settings.map { it.reading.browserSort.comparator() },
+                ).map { it.rows }
 
         /**
          * Folders stay above files whatever the order, because a folder is
@@ -122,7 +116,7 @@ class BrowserViewModel
         fun switchVault(id: Long) =
             viewModelScope.launch {
                 repository.setActiveVault(id)
-                path.value = ""
+                open("")
             }
 
         /**
@@ -145,6 +139,11 @@ class BrowserViewModel
          * open. The card in Settings holds the trace; this only says to go and
          * look, because for three days it crashed on launch and nothing
          * anywhere said so.
+         *
+         * An input to the state like everything else, not a value sampled
+         * while building it: sampled, the banner appeared only if the database
+         * happened to change after the read, and Dismiss did nothing until it
+         * changed again.
          */
         private val crashed = MutableStateFlow(false)
 
@@ -158,24 +157,14 @@ class BrowserViewModel
         init {
             viewModelScope.launch { crashed.value = crashLog.read() != null }
             viewModelScope.launch {
-                combine(
-                    path,
-                    rows,
-                    recent,
-                    repository.noteCount,
-                    combine(vaults, repository.activeVaultId) { all, active -> all to active },
-                ) { currentPath, currentItems, recentRows, count, (repositories, active) ->
-                    BrowserUiState(
-                        path = currentPath,
-                        items = currentItems,
-                        recent = recentRows,
-                        noteCount = count,
-                        vaults = repositories,
-                        activeVaultId = active,
-                        loading = false,
-                        crashed = crashed.value,
-                    )
-                }.collect { next ->
+                browserStates(
+                    path = path,
+                    rows = rows,
+                    recent = recent,
+                    noteCount = repository.noteCount,
+                    vaults = combine(vaults, repository.activeVaultId) { all, active -> all to active },
+                    crashed = crashed,
+                ).collect { next ->
                     _state.value = next.copy(syncing = _state.value.syncing, syncProgress = _state.value.syncProgress)
                 }
             }
@@ -207,7 +196,20 @@ class BrowserViewModel
         suspend fun attachment(path: String): File? = files.localFile(repository.activeVaultId.first(), path)
 
         fun open(next: String) {
-            path.value = next
+            savedState[KEY_FOLDER] = next
+        }
+
+        /**
+         * Opens [initial], once for the life of this screen.
+         *
+         * Once, because the screen asks again every time it is composed --
+         * coming back from a note, or after the process was killed -- and each
+         * time it would have thrown away the folder the person had moved to.
+         */
+        fun start(initial: String) {
+            if (savedState.get<Boolean>(KEY_STARTED) == true) return
+            savedState[KEY_STARTED] = true
+            if (initial.isNotEmpty()) open(initial)
         }
 
         /** Up one level; returns false at the root so the caller can exit. */
@@ -229,6 +231,42 @@ class BrowserViewModel
                 scheduler.syncNow(settings.current().syncOnWifiOnly)
             }
     }
+
+/**
+ * The browser's state from its inputs.
+ *
+ * Nested because `combine` is typed up to five flows and the vararg form loses
+ * every type in the lambda.
+ */
+internal fun browserStates(
+    path: Flow<String>,
+    rows: Flow<List<VaultRowItem>>,
+    recent: Flow<List<RecentRow>>,
+    noteCount: Flow<Int>,
+    vaults: Flow<Pair<List<VaultEntity>, Long>>,
+    crashed: Flow<Boolean>,
+): Flow<BrowserUiState> =
+    combine(
+        path,
+        rows,
+        recent,
+        noteCount,
+        combine(vaults, crashed) { pair, died -> pair to died },
+    ) { currentPath, currentItems, recentRows, count, (repositories, died) ->
+        BrowserUiState(
+            path = currentPath,
+            items = currentItems,
+            recent = recentRows,
+            noteCount = count,
+            vaults = repositories.first,
+            activeVaultId = repositories.second,
+            loading = false,
+            crashed = died,
+        )
+    }
+
+private const val KEY_FOLDER = "browser_folder"
+private const val KEY_STARTED = "browser_started"
 
 /** Kept short on purpose; see [BrowserViewModel.recent]. */
 private const val RECENT_ON_ROOT = 3

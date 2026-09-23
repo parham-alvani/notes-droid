@@ -168,6 +168,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+    testImplementation(libs.kotlinx.coroutines.test)
     // Compose, tested on the JVM. There is no emulator in CI and no wish for
     // one; Robolectric runs the composition, and the layer these tests cover is
     // where every bug this app has shipped was found by hand.

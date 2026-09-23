@@ -1,5 +1,6 @@
 package me.parham1995.notes.navigation
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,6 +31,7 @@ import androidx.navigation.toRoute
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
+import me.parham1995.notes.R
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.feature.browser.BrowserScreen
 import me.parham1995.notes.feature.graph.GraphScreen
@@ -126,7 +129,7 @@ data class NoteRoute(
 
 private data class Tab(
     val route: Any,
-    val label: String,
+    @param:StringRes val label: Int,
     /** A Lucide name, so the bar matches the glyphs used everywhere else. */
     val icon: String,
 )
@@ -139,6 +142,18 @@ fun NotesNavHost(
 ) {
     val navController = rememberNavController()
 
+    // Read once. A NavHost given a different start destination builds a new
+    // graph, which resets the back stack: changing the setting in Settings
+    // threw the person out of the screen they changed it in. The new choice
+    // applies from the next launch, which is what a start screen is.
+    val start = rememberSaveable { startScreen }
+
+    // Whether launch has already decided where to be: either the note that was
+    // being read has been reopened, or something outside the app asked for a
+    // screen or a note of its own. Declared first because the requests below
+    // settle it too.
+    var resumed by rememberSaveable { mutableStateOf(false) }
+
     // A one-shot: consumed so that rotating the phone afterwards does not yank
     // the person back to wherever they were sent half an hour ago.
     val requested by openScreen.collectAsStateWithLifecycle()
@@ -150,6 +165,9 @@ fun NotesNavHost(
                 else -> null
             }
         if (destination != null) {
+            // Asked for by name, so reopening the last note on top of it would
+            // bury exactly what was asked for.
+            resumed = true
             navController.navigate(destination) { launchSingleTop = true }
             (openScreen as? MutableStateFlow)?.value = null
         }
@@ -160,6 +178,9 @@ fun NotesNavHost(
         requestedNote?.let { id ->
             // A launcher shortcut or a widget: outside the reader, so it starts
             // its own thread rather than landing on the end of the last one.
+            // The resume below steps aside: the tabs finish restoring after
+            // this, and reopening the last note then replaced the one tapped.
+            resumed = true
             navController.openNote(id, fresh = true)
             (openNote as? MutableStateFlow)?.value = null
         }
@@ -172,7 +193,6 @@ fun NotesNavHost(
     // the start screen setting decides, as before.
     val resume: ResumeViewModel = hiltViewModel()
     val restored by resume.restored.collectAsStateWithLifecycle()
-    var resumed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(restored) {
         if (!restored || resumed) return@LaunchedEffect
         resumed = true
@@ -181,10 +201,10 @@ fun NotesNavHost(
 
     val tabs =
         listOf(
-            Tab(BrowseRoute(), "Browse", "folder-tree"),
-            Tab(TasksRoute, "Tasks", "list-todo"),
-            Tab(SearchRoute, "Search", "search"),
-            Tab(SettingsRoute, "Settings", "settings"),
+            Tab(BrowseRoute(), R.string.nav_browse, "folder-tree"),
+            Tab(TasksRoute, R.string.tasks_title, "list-todo"),
+            Tab(SearchRoute, R.string.nav_search, "search"),
+            Tab(SettingsRoute, R.string.settings_title, "settings"),
         )
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -220,10 +240,10 @@ fun NotesNavHost(
                                     // Follows the bar's own selected/unselected
                                     // colours instead of picking its own.
                                     tint = LocalContentColor.current,
-                                    contentDescription = tab.label,
+                                    contentDescription = stringResource(tab.label),
                                 )
                             },
-                            label = { Text(tab.label) },
+                            label = { Text(stringResource(tab.label)) },
                         )
                     }
                 }
@@ -233,7 +253,7 @@ fun NotesNavHost(
         NavHost(
             navController = navController,
             startDestination =
-                when (startScreen) {
+                when (start) {
                     StartScreen.BROWSE -> BrowseRoute()
                     StartScreen.TASKS -> TasksRoute
                     StartScreen.SEARCH -> SearchRoute
