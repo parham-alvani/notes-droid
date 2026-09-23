@@ -74,6 +74,9 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         openScreen.value = requestedScreen(intent)
+        // A widget row on a cold start arrives here, not in onNewIntent, and
+        // reading only the screen dropped the note it was tapped to open.
+        openNote.value = requestedNote(intent)
         // naz is a dark colorscheme, so the system bars take light icons
         // regardless of what the device is set to.
         enableEdgeToEdge(

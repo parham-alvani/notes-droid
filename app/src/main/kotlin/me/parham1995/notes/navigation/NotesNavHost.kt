@@ -139,6 +139,12 @@ fun NotesNavHost(
 ) {
     val navController = rememberNavController()
 
+    // Whether launch has already decided where to be: either the note that was
+    // being read has been reopened, or something outside the app asked for a
+    // screen or a note of its own. Declared first because the requests below
+    // settle it too.
+    var resumed by rememberSaveable { mutableStateOf(false) }
+
     // A one-shot: consumed so that rotating the phone afterwards does not yank
     // the person back to wherever they were sent half an hour ago.
     val requested by openScreen.collectAsStateWithLifecycle()
@@ -150,6 +156,9 @@ fun NotesNavHost(
                 else -> null
             }
         if (destination != null) {
+            // Asked for by name, so reopening the last note on top of it would
+            // bury exactly what was asked for.
+            resumed = true
             navController.navigate(destination) { launchSingleTop = true }
             (openScreen as? MutableStateFlow)?.value = null
         }
@@ -160,6 +169,9 @@ fun NotesNavHost(
         requestedNote?.let { id ->
             // A launcher shortcut or a widget: outside the reader, so it starts
             // its own thread rather than landing on the end of the last one.
+            // The resume below steps aside: the tabs finish restoring after
+            // this, and reopening the last note then replaced the one tapped.
+            resumed = true
             navController.openNote(id, fresh = true)
             (openNote as? MutableStateFlow)?.value = null
         }
@@ -172,7 +184,6 @@ fun NotesNavHost(
     // the start screen setting decides, as before.
     val resume: ResumeViewModel = hiltViewModel()
     val restored by resume.restored.collectAsStateWithLifecycle()
-    var resumed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(restored) {
         if (!restored || resumed) return@LaunchedEffect
         resumed = true
