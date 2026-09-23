@@ -134,6 +134,44 @@ class GitHubClientTest {
         }
 
     @Test
+    fun `a secondary limit without retry-after is a reason to wait, not a refusal`() =
+        runTest {
+            respond(
+                """{"message":"You have exceeded a secondary rate limit. Please wait a few minutes."}""",
+                code = 403,
+            )
+
+            val failure = runCatching { client.blob("sha-a") }.exceptionOrNull()
+
+            assertThat(failure).isInstanceOf(GitHubException.SlowDown::class.java)
+        }
+
+    @Test
+    fun `a 403 that is about permission stays a refusal`() =
+        runTest {
+            respond("""{"message":"Resource not accessible by personal access token"}""", code = 403)
+
+            val failure = runCatching { client.blob("sha-a") }.exceptionOrNull()
+
+            assertThat(failure).isInstanceOf(GitHubException.Forbidden::class.java)
+        }
+
+    @Test
+    fun `an exhausted primary limit says when it lifts`() =
+        runTest {
+            respond(
+                """{"message":"API rate limit exceeded"}""",
+                403,
+                "x-ratelimit-remaining" to "0",
+                "x-ratelimit-reset" to "1900000000",
+            )
+
+            val failure = runCatching { client.blob("sha-a") }.exceptionOrNull()
+
+            assertThat((failure as GitHubException.RateLimited).resetEpochSeconds).isEqualTo(1_900_000_000L)
+        }
+
+    @Test
     fun `an ordinary file decodes from the wrapped base64`() =
         runTest {
             val encoded = base64("hello\nworld\n").chunked(4).joinToString("\n")

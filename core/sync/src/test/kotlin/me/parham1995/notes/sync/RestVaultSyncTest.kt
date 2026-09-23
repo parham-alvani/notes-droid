@@ -239,9 +239,46 @@ class RestVaultSyncTest {
         }
 
     @Test
-    fun `a truncated tree is refused rather than treated as complete`() =
+    fun `a tree too large to list at once is walked a directory at a time`() =
         runTest {
             server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head1","type":"commit"}}"""))
+            // The recursive listing is cut off...
+            server.enqueue(json("""{"sha":"root","truncated":true,"tree":[]}"""))
+            // ...so the top level is listed alone. node_modules can hold no
+            // vault content and is never asked for.
+            server.enqueue(
+                json(
+                    """
+                    {"sha":"root","truncated":false,"tree":[
+                      {"path":"a.md","mode":"100644","type":"blob","sha":"sha-a","size":10},
+                      {"path":"node_modules","mode":"040000","type":"tree","sha":"sha-nm"},
+                      {"path":"notes","mode":"040000","type":"tree","sha":"sha-notes"}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+            server.enqueue(
+                json(
+                    """
+                    {"sha":"sha-notes","truncated":false,"tree":[
+                      {"path":"deep/b.md","mode":"100644","type":"blob","sha":"sha-b","size":10}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+
+            val plan = sync.plan(SyncBase(null, emptyMap()))
+
+            // Paths come back whole, not relative to the directory listed.
+            assertThat(plan.adds.map { it.path }).containsExactly("a.md", "notes/deep/b.md")
+            assertThat(server.requestCount).isEqualTo(4)
+        }
+
+    @Test
+    fun `a single directory too large to list is refused rather than treated as complete`() =
+        runTest {
+            server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head1","type":"commit"}}"""))
+            server.enqueue(json("""{"sha":"t","truncated":true,"tree":[]}"""))
             server.enqueue(json("""{"sha":"t","truncated":true,"tree":[]}"""))
 
             val failure =

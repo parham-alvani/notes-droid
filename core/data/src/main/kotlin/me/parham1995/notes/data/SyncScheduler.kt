@@ -52,8 +52,32 @@ class SyncScheduler
             )
         }
 
+        /**
+         * One sync, [delay] from now, for when GitHub has said when it will
+         * take requests again.
+         *
+         * Its own unique name: enqueuing the sync's own unique work with
+         * REPLACE from inside that work cancels the job doing the enqueuing.
+         */
+        fun syncAfter(
+            delay: Duration,
+            wifiOnly: Boolean = false,
+        ) {
+            workManager.enqueueUniqueWork(
+                RESUME_WORK,
+                ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<SyncWorker>()
+                    .setConstraints(constraints(wifiOnly))
+                    .setInitialDelay(delay)
+                    .build(),
+            )
+        }
+
         /** Stops a sync that is running or waiting to retry. */
-        fun cancel() = workManager.cancelUniqueWork(SyncWorker.UNIQUE_WORK)
+        fun cancel() {
+            workManager.cancelUniqueWork(SyncWorker.UNIQUE_WORK)
+            workManager.cancelUniqueWork(RESUME_WORK)
+        }
 
         /**
          * The background refresh.
@@ -130,6 +154,7 @@ class SyncScheduler
 
         private companion object {
             const val PERIODIC_WORK = "vault-sync-periodic"
+            const val RESUME_WORK = "vault-sync-after-limit"
             const val PERIOD_HOURS = 6L
             const val LAST_HOUR = 23
         }

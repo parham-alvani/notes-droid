@@ -88,7 +88,10 @@ sealed class GitHubException(
         path: String,
     ) : GitHubException("$path changed upstream while it was being edited")
 
-    /** The tree was truncated, so it cannot be treated as a full listing. */
+    /**
+     * A tree too large to list even one directory at a time, so it cannot be
+     * treated as a full listing.
+     */
     class TreeTruncated : GitHubException("the repository tree was truncated and cannot be used as a manifest")
 }
 
@@ -182,11 +185,17 @@ class GitHubClient(
             val reset = header("x-ratelimit-reset")?.toLongOrNull() ?: 0L
             return GitHubException.RateLimited(reset)
         }
+        // GitHub's secondary limit does not always send retry-after, and then
+        // the body is the only thing that says so. Read as a permission
+        // failure, it gave up on a sync that a minute's wait would have let
+        // through.
+        val body = peekBody(BODY_PEEK).string()
+        if (SECONDARY_LIMIT in body.lowercase()) return GitHubException.SlowDown(DEFAULT_BACKOFF_SECONDS)
         // A 403 carrying none of the rate-limit headers is a permission
         // answer, not a pacing one -- which is what a read-only token returns
         // to a write. Treating it as a secondary limit would have the app back
         // off and try again forever over something no amount of waiting fixes.
-        if (code == 403) return GitHubException.Forbidden(peekBody(BODY_PEEK).string())
+        if (code == 403) return GitHubException.Forbidden(body)
         return GitHubException.SlowDown(DEFAULT_BACKOFF_SECONDS)
     }
 
@@ -222,21 +231,63 @@ class GitHubClient(
         }
     }
 
-    /** The full recursive tree at [commit], filtered down to vault content. */
+    /**
+     * The full tree at [commit], filtered down to vault content.
+     *
+     * One recursive listing when it fits. GitHub cuts a recursive listing off
+     * at 100,000 entries or 7MB and says `truncated`, and a repository past
+     * that -- a vault that checked in a dependency tree, say -- could not be
+     * synced at all. Then this level is listed on its own and each directory
+     * is walked the same way, skipping those that can hold no vault content,
+     * so only the parts too big to list in one go cost more than one request.
+     */
     suspend fun tree(
         commit: String,
         filter: VaultFilter,
-    ): List<VaultEntry> =
-        call(request(url("/git/trees/$commit?recursive=1")), "tree/$commit") { response ->
-            val dto = json.decodeFromString<TreeDto>(response.body.string())
-            if (dto.truncated) throw GitHubException.TreeTruncated()
-            dto.tree.mapNotNull { entry ->
-                if (entry.type != "blob") return@mapNotNull null
-                val sha = entry.sha ?: return@mapNotNull null
-                val kind = filter.kindOf(entry.path) ?: return@mapNotNull null
-                VaultEntry(entry.path, sha, entry.size ?: 0L, kind)
+    ): List<VaultEntry> = walk(commit, prefix = "", filter)
+
+    private suspend fun walk(
+        sha: String,
+        prefix: String,
+        filter: VaultFilter,
+    ): List<VaultEntry> {
+        val whole = listTree(sha, recursive = true)
+        if (!whole.truncated) return whole.tree.mapNotNull { it.toVaultEntry(prefix, filter) }
+
+        // A single level past the limit cannot be walked any further down.
+        val level = listTree(sha, recursive = false)
+        if (level.truncated) throw GitHubException.TreeTruncated()
+        return level.tree.flatMap { entry ->
+            val path = prefix + entry.path
+            val child = entry.sha
+            when {
+                entry.type == "blob" -> listOfNotNull(entry.toVaultEntry(prefix, filter))
+                entry.type == "tree" && child != null && filter.mayContain(path) -> walk(child, "$path/", filter)
+                else -> emptyList()
             }
         }
+    }
+
+    private suspend fun listTree(
+        sha: String,
+        recursive: Boolean,
+    ): TreeDto {
+        val query = if (recursive) "?recursive=1" else ""
+        return call(request(url("/git/trees/$sha$query")), "tree/$sha") { response ->
+            json.decodeFromString<TreeDto>(response.body.string())
+        }
+    }
+
+    private fun TreeEntryDto.toVaultEntry(
+        prefix: String,
+        filter: VaultFilter,
+    ): VaultEntry? {
+        if (type != "blob") return null
+        val blobSha = sha ?: return null
+        val fullPath = prefix + path
+        val kind = filter.kindOf(fullPath) ?: return null
+        return VaultEntry(fullPath, blobSha, size ?: 0L, kind)
+    }
 
     /**
      * What changed between two commits, renames included. Capped by GitHub at
@@ -357,6 +408,9 @@ class GitHubClient(
         const val BODY_PEEK = 512L
         const val DEFAULT_BACKOFF_SECONDS = 60L
         const val STALE_SHA = "does not match"
+
+        /** How GitHub words a secondary limit, lowercased. */
+        const val SECONDARY_LIMIT = "secondary rate limit"
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
