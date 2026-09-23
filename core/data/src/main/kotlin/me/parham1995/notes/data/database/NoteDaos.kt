@@ -60,6 +60,18 @@ interface NoteDao {
     @Query("SELECT DISTINCT parent FROM notes WHERE vaultId = :vaultId AND parent != ''")
     fun allParentsFlow(vaultId: Long): Flow<List<String>>
 
+    /**
+     * Every folder's landing page, `X/X.md`, in one query. The browser used
+     * to look each one up by path as it drew the folder, which was a query per
+     * folder on every emission -- and the tree re-emits whenever any note is
+     * opened or scrolled.
+     */
+    @Query("SELECT id, path, isRtl FROM notes WHERE vaultId = :vaultId AND isFolderNote = 1")
+    suspend fun folderNotes(vaultId: Long): List<FolderNoteRow>
+
+    @Query("SELECT id, path, isRtl FROM notes WHERE vaultId = :vaultId AND isFolderNote = 1")
+    fun folderNotesFlow(vaultId: Long): Flow<List<FolderNoteRow>>
+
     @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND openedAt IS NOT NULL ORDER BY openedAt DESC LIMIT :limit")
     fun recentlyOpened(
         vaultId: Long,
@@ -79,12 +91,18 @@ interface NoteDao {
      * app that was not, so typing a name reached across every repository --
      * which is the exact mixing the vaults were separated to stop, still
      * happening in the one place that answers on every keystroke.
+     *
+     * [prefix] must come through [escapeLike]. `%` and `_` are wildcards to
+     * LIKE and ordinary characters in a file name, so typing "100%" offered
+     * every note starting "100".
      */
     @Query(
         """
         SELECT * FROM notes
-        WHERE vaultId = :vaultId AND (slug LIKE :prefix || '%' OR slug LIKE '%' || :prefix || '%')
-        ORDER BY (CASE WHEN slug LIKE :prefix || '%' THEN 0 ELSE 1 END), length(name), name COLLATE NOCASE
+        WHERE vaultId = :vaultId
+          AND (slug LIKE :prefix || '%' ESCAPE '\' OR slug LIKE '%' || :prefix || '%' ESCAPE '\')
+        ORDER BY (CASE WHEN slug LIKE :prefix || '%' ESCAPE '\' THEN 0 ELSE 1 END), length(name),
+                 name COLLATE NOCASE
         LIMIT :limit
         """,
     )
@@ -126,6 +144,19 @@ interface NoteDao {
     @Query("DELETE FROM notes WHERE vaultId = :vaultId")
     suspend fun clearVault(vaultId: Long)
 }
+
+/** Makes text match itself under `LIKE ... ESCAPE '\'`, wildcards included. */
+fun escapeLike(text: String): String =
+    text
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+
+data class FolderNoteRow(
+    val id: Long,
+    val path: String,
+    val isRtl: Boolean,
+)
 
 data class NoteRef(
     val id: Long,

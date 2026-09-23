@@ -1,8 +1,13 @@
 package me.parham1995.notes.data
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.database.BlobDao
@@ -64,7 +69,16 @@ class SyncRepository
                 SyncStatus(it?.headCommit, it?.lastSyncAt, it?.lastError)
             }
 
-        val noteCount: Flow<Int> = blobs.countOfKind(BlobKind.MARKDOWN)
+        /**
+         * Markdown files in the vault being read -- the same one the browser
+         * and search answer for, chosen the same way.
+         */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        val noteCount: Flow<Int> =
+            combine(settings.settings, vaults.observe()) { current, all ->
+                all.firstOrNull { it.id == current.activeVaultId }?.id ?: all.firstOrNull()?.id
+            }.distinctUntilChanged()
+                .flatMapLatest { id -> if (id == null) flowOf(0) else blobs.countOfKind(id, BlobKind.MARKDOWN) }
 
         /** Every repository this app reads, in the order they are shown. */
         fun vaults(): Flow<List<VaultEntity>> = vaults.observe()

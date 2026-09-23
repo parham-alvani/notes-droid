@@ -19,7 +19,7 @@ import androidx.sqlite.execSQL
         VaultEntity::class,
         PendingEditEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -349,6 +349,38 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL(
                         "CREATE INDEX IF NOT EXISTS `index_pending_edits_vaultId` ON `pending_edits` (`vaultId`)",
                     )
+                }
+            }
+
+        /**
+         * Clears out what earlier indexers left behind.
+         *
+         * Nothing cascades from `notes`, and a full reindex used to delete the
+         * notes before asking the search index to drop theirs -- so each one
+         * left a copy of the vault in `note_fts` and every task, heading and
+         * link of the old rows alongside. Invisible to anything that joins
+         * `notes`, and counted by anything that did not. The indexer no longer
+         * does it; this removes what it already did, once.
+         *
+         * A link whose target is gone is detached rather than deleted: its
+         * source still exists and still names something, and a null target is
+         * what the next resolve looks at again.
+         */
+        val MIGRATION_11_12 =
+            object : Migration(11, 12) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("DELETE FROM `tasks` WHERE `noteId` NOT IN (SELECT `id` FROM `notes`)")
+                    connection.execSQL("DELETE FROM `headings` WHERE `noteId` NOT IN (SELECT `id` FROM `notes`)")
+                    connection.execSQL("DELETE FROM `links` WHERE `srcId` NOT IN (SELECT `id` FROM `notes`)")
+                    connection.execSQL(
+                        "UPDATE `links` SET `targetId` = NULL " +
+                            "WHERE `targetId` IS NOT NULL AND `targetId` NOT IN (SELECT `id` FROM `notes`)",
+                    )
+                    // Asserted first because it is not one of Room's tables;
+                    // every real install has it, and this must not be the
+                    // statement that finds one that does not.
+                    createSearchIndex(connection)
+                    connection.execSQL("DELETE FROM $FTS_TABLE WHERE rowid NOT IN (SELECT `id` FROM `notes`)")
                 }
             }
 

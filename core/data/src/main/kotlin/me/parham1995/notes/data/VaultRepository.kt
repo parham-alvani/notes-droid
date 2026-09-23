@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.BlobDao
+import me.parham1995.notes.data.database.FolderNoteRow
 import me.parham1995.notes.data.database.HeadingDao
 import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.data.database.LinkDao
@@ -20,6 +21,7 @@ import me.parham1995.notes.data.database.TaskDao
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.data.database.escapeLike
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
@@ -158,28 +160,35 @@ class VaultRepository
          * first sync that is an empty vault, and nothing ever asked again --
          * so the tree stayed empty while search, which queries per keystroke,
          * worked perfectly.
+         *
+         * Room re-runs every query here whenever its table changes at all,
+         * and opening a note or scrolling one writes to `notes` -- so each
+         * source is de-duplicated, and so is the level itself, rather than
+         * redrawing the tree for a note opened in some other folder.
          */
         fun childrenFlow(parent: String): Flow<List<VaultItem>> =
             activeVaultId
                 .flatMapLatest { vaultId ->
                     combine(
-                        notes.allParentsFlow(vaultId),
-                        notes.childrenOfFlow(vaultId, parent),
-                        blobs.attachmentPaths(vaultId),
-                    ) { parents, childNotes, attachments ->
-                        buildChildren(vaultId, parent, parents, childNotes, attachments)
+                        notes.allParentsFlow(vaultId).distinctUntilChanged(),
+                        notes.childrenOfFlow(vaultId, parent).distinctUntilChanged(),
+                        blobs.attachmentPaths(vaultId).distinctUntilChanged(),
+                        notes.folderNotesFlow(vaultId).distinctUntilChanged(),
+                    ) { parents, childNotes, attachments, folderNotes ->
+                        buildChildren(parent, parents, childNotes, attachments, folderNotes)
                     }
-                }.flowOn(Dispatchers.Default)
+                }.distinctUntilChanged()
+                .flowOn(Dispatchers.Default)
 
         suspend fun children(parent: String): List<VaultItem> =
             withContext(Dispatchers.Default) {
                 val vaultId = active()
                 buildChildren(
-                    vaultId = vaultId,
                     parent = parent,
                     parents = notes.allParents(vaultId),
                     childNotes = notes.childrenOf(vaultId, parent),
                     attachmentPaths = blobs.attachmentPaths(vaultId).first(),
+                    folderNotes = notes.folderNotes(vaultId),
                 )
             }
 
@@ -187,14 +196,15 @@ class VaultRepository
          * Folders are derived from the notes' parents rather than stored, so
          * there is no second structure to keep in step with the manifest.
          */
-        private suspend fun buildChildren(
-            vaultId: Long,
+        private fun buildChildren(
             parent: String,
             parents: List<String>,
             childNotes: List<NoteEntity>,
             attachmentPaths: List<String>,
+            folderNotes: List<FolderNoteRow>,
         ): List<VaultItem> {
             val prefix = if (parent.isEmpty()) "" else "$parent/"
+            val landingPages = folderNotes.associateBy { it.path }
             val under = attachmentPaths.filter { it.startsWith(prefix) }
             // Folders come from the attachments as well as the notes: a
             // repository of scanned documents has directories full of PDFs and
@@ -212,7 +222,7 @@ class VaultRepository
                 folders.map { name ->
                     // A folder's own note is `Folder/Folder.md`; it opens when
                     // the label is tapped and is hidden from the list inside.
-                    val own = notes.byPath(vaultId, "$prefix$name/$name.md")
+                    val own = landingPages["$prefix$name/$name.md"]
                     VaultItem(
                         path = "$prefix$name",
                         name = name,
@@ -256,12 +266,13 @@ class VaultRepository
             withContext(Dispatchers.Default) {
                 val entity = notes.byId(id) ?: return@withContext null
                 val text = files.readText(entity.vaultId, entity.path) ?: return@withContext null
+                // This vault's files only: an embed resolves inside the vault
+                // that wrote it, like a link.
+                val attachments = blobs.attachmentPaths(entity.vaultId).first().toHashSet()
 
                 val parsed =
                     MarkdownParser.parseNote(text) { target ->
-                        // Embeds are written vault-relative or note-relative;
-                        // both have to land on a real path.
-                        resolveAttachment(target, entity.path)
+                        AttachmentResolver.resolve(target, entity.path, attachments)
                     }
 
                 val refs = notes.allIds(entity.vaultId)
@@ -296,28 +307,6 @@ class VaultRepository
                     brokenTargets = allTargets - targets.keys,
                 )
             }
-
-        /** Where an embed's file actually lives, vault-relative. */
-        private fun resolveAttachment(
-            target: String,
-            source: String,
-        ): String {
-            if (!target.contains("..")) return target
-            val base =
-                source
-                    .substringBeforeLast('/', "")
-                    .split('/')
-                    .filter { it.isNotEmpty() }
-                    .toMutableList()
-            target.split('/').forEach { segment ->
-                when (segment) {
-                    "." -> Unit
-                    ".." -> if (base.isNotEmpty()) base.removeAt(base.lastIndex)
-                    else -> base += segment
-                }
-            }
-            return base.joinToString("/")
-        }
 
         suspend fun markOpened(id: Long) = notes.markOpened(id, System.currentTimeMillis())
 
@@ -385,8 +374,10 @@ class VaultRepository
             } else {
                 notes.searchByName(
                     active(),
-                    me.parham1995.notes.markdown.Slugs
-                        .fold(query.trim()),
+                    escapeLike(
+                        me.parham1995.notes.markdown.Slugs
+                            .fold(query.trim()),
+                    ),
                     QUICK_LIMIT,
                 )
             }

@@ -34,12 +34,6 @@ interface BlobDao {
         path: String,
     ): BlobEntity?
 
-    @Query("SELECT * FROM blobs WHERE kind = :kind AND localState = :state")
-    suspend fun byKindAndState(
-        kind: BlobKind,
-        state: LocalState,
-    ): List<BlobEntity>
-
     @Query("DELETE FROM blobs WHERE vaultId = :vaultId AND path = :path")
     suspend fun deleteByPath(
         vaultId: Long,
@@ -60,8 +54,15 @@ interface BlobDao {
         to: String,
     )
 
-    @Query("SELECT COUNT(*) FROM blobs WHERE kind = :kind")
-    fun countOfKind(kind: BlobKind): Flow<Int>
+    /**
+     * One vault's files of a kind. Unscoped, the "Notes" figure on the sync
+     * screen added up every repository while the screen around it showed one.
+     */
+    @Query("SELECT COUNT(*) FROM blobs WHERE vaultId = :vaultId AND kind = :kind")
+    fun countOfKind(
+        vaultId: Long,
+        kind: BlobKind,
+    ): Flow<Int>
 
     /**
      * Files the reader does not parse but can still open -- images, PDFs,
@@ -87,9 +88,6 @@ interface BlobDao {
         vaultId: Long,
         kinds: List<BlobKind> = BROWSABLE_KINDS,
     ): Flow<List<String>>
-
-    @Query("SELECT COALESCE(SUM(size), 0) FROM blobs WHERE localState = :state")
-    suspend fun bytesInState(state: LocalState): Long
 
     @Query("DELETE FROM blobs")
     suspend fun clear()
@@ -190,12 +188,27 @@ interface TaskDao {
      * The list is per vault because that is where you go to act on it; the
      * count is what a widget and a notification show, and being late on
      * something in another vault is still being late.
+     *
+     * Joined to `notes` although nothing here needs a column from it: a task
+     * belongs to a note, and one whose note has gone is not anyone's to do.
+     * There are no foreign keys to take such rows with the note, and a full
+     * reindex once left a copy of every task behind, so counting the table
+     * bare inflated the morning's digest by the whole vault's worth.
      */
-
-    @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn IS NOT NULL AND actionableOn < :today")
+    @Query(
+        """
+        SELECT COUNT(*) FROM tasks t JOIN notes n ON n.id = t.noteId
+        WHERE t.open = 1 AND t.actionableOn IS NOT NULL AND t.actionableOn < :today
+        """,
+    )
     suspend fun overdueCount(today: String): Int
 
-    @Query("SELECT COUNT(*) FROM tasks WHERE open = 1 AND actionableOn = :today")
+    @Query(
+        """
+        SELECT COUNT(*) FROM tasks t JOIN notes n ON n.id = t.noteId
+        WHERE t.open = 1 AND t.actionableOn = :today
+        """,
+    )
     suspend fun dueTodayCount(today: String): Int
 
     /**

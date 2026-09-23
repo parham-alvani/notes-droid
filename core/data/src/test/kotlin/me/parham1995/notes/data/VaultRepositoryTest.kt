@@ -3,6 +3,7 @@ package me.parham1995.notes.data
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
@@ -200,6 +201,42 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `opening a note elsewhere does not redraw this folder`() =
+        runTest {
+            // Room re-runs a query on any write to its table, and opening or
+            // scrolling a note writes to `notes`. A folder that did not change
+            // should not be rebuilt -- and used to be, with a lookup per
+            // subfolder each time.
+            index("Alpha/One.md" to "a", "Alpha/Sub/Sub.md" to "landing", "Beta/Two.md" to "b")
+            val elsewhere = database.noteDao().idOf(first, "Beta/Two.md")!!
+            val emissions = java.util.concurrent.CopyOnWriteArrayList<List<VaultItem>>()
+            backgroundScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                repository.childrenFlow("Alpha").collect { emissions += it }
+            }
+            awaitUntil { emissions.size == 1 }
+
+            repository.markOpened(elsewhere)
+            repository.rememberScroll(elsewhere, 4)
+            // Something that does change this folder, so there is a point at
+            // which every earlier write has certainly been seen.
+            index("Alpha/One.md" to "a", "Alpha/Sub/Sub.md" to "landing", "Beta/Two.md" to "b", "Alpha/New.md" to "c")
+            awaitUntil { emissions.last().any { it.name == "New" } }
+
+            assertThat(emissions).hasSize(2)
+            assertThat(emissions.last().single { it.name == "Sub" }.noteId).isNotNull()
+        }
+
+    private fun awaitUntil(condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + AWAIT_MILLIS
+        while (!condition()) {
+            check(System.currentTimeMillis() < deadline) { "timed out" }
+            Thread.sleep(POLL_MILLIS)
+        }
+        // Long enough for a stray emission behind this one to arrive.
+        Thread.sleep(SETTLE_MILLIS)
+    }
+
+    @Test
     fun `opening a note renders it and resolves its links`() =
         runTest {
             index(
@@ -215,6 +252,33 @@ class VaultRepositoryTest {
             assertThat(note.linkTargets).containsKey("Target")
             // A link with no destination is kept and marked, not dropped.
             assertThat(note.brokenTargets).contains("Nowhere")
+        }
+
+    @Test
+    fun `an image embedded by its bare name is found in its own vault`() =
+        runTest {
+            // `![[photo.png]]` is what Obsidian writes for a file anywhere in
+            // the vault. It used to be looked up at the root, and the other
+            // vault holding a file of the same name must not answer for it.
+            index("Journal/Day.md" to "![[photo.png]]\n\n![scan](Scans/first%20page.png)")
+            attachment("Assets/2024/photo.png")
+            attachment("Scans/first page.png")
+            ensureVault(second)
+            database.blobDao().upsert(
+                me.parham1995.notes.data.database.BlobEntity(
+                    path = "photo.png",
+                    vaultId = second,
+                    sha = "other",
+                    size = 1,
+                    kind = me.parham1995.notes.sync.BlobKind.IMAGE,
+                    localState = me.parham1995.notes.sync.LocalState.DOWNLOADED,
+                ),
+            )
+
+            val note = repository.note(database.noteDao().idOf(first, "Journal/Day.md")!!)!!
+
+            val images = note.blocks.filterIsInstance<me.parham1995.notes.markdown.MdBlock.Image>()
+            assertThat(images.map { it.path }).containsExactly("Assets/2024/photo.png", "Scans/first page.png")
         }
 
     @Test
@@ -241,6 +305,23 @@ class VaultRepositoryTest {
             val hits = repository.quickSwitch("kubernetes")
 
             assertThat(hits.map { it.name }).containsExactly("Kubernetes Networking")
+        }
+
+    @Test
+    fun `the quick switcher reads a wildcard as the character it is`() =
+        runTest {
+            // `%` and `_` mean "anything" to LIKE and are ordinary in a name.
+            index(
+                "100% Done.md" to "a",
+                "1000 Things.md" to "b",
+                "snake_case.md" to "c",
+                "snakescase.md" to "d",
+                "back\\slash.md" to "e",
+            )
+
+            assertThat(repository.quickSwitch("100%").map { it.name }).containsExactly("100% Done")
+            assertThat(repository.quickSwitch("snake_").map { it.name }).containsExactly("snake_case")
+            assertThat(repository.quickSwitch("back\\").map { it.name }).containsExactly("back\\slash")
         }
 
     @Test
@@ -292,6 +373,37 @@ class VaultRepositoryTest {
             index("Work/Apollo.md" to "- [ ] one ⏳ 2026-09-18\n- [ ] two")
 
             assertThat(repository.openTasks().first()).hasSize(2)
+        }
+
+    @Test
+    fun `the digest counts only tasks that belong to a note`() =
+        runTest {
+            index(
+                "Work/Apollo.md" to "- [ ] late ⏳ 2026-01-01\n- [ ] today ⏳ 2026-09-23\n- [ ] later ⏳ 2026-12-01",
+            )
+            // What an older reindex left behind: rows for a note id that no
+            // longer exists, which nothing cascades away.
+            database.indexDao().insertTasks(
+                listOf("2026-01-01", "2026-09-23").mapIndexed { ordinal, date ->
+                    me.parham1995.notes.data.database.TaskEntity(
+                        noteId = 999_999,
+                        text = "orphan",
+                        state = "OPEN",
+                        section = "",
+                        blockIndex = 0,
+                        ordinal = ordinal,
+                        open = true,
+                        actionableOn = date,
+                        scheduled = null,
+                        due = null,
+                        done = null,
+                        recurring = null,
+                    )
+                },
+            )
+
+            assertThat(repository.overdueCount("2026-09-23")).isEqualTo(1)
+            assertThat(repository.dueTodayCount("2026-09-23")).isEqualTo(1)
         }
 
     @Test
@@ -557,4 +669,10 @@ class VaultRepositoryTest {
 
             assertThat(database.noteDao().count(second).first()).isEqualTo(1)
         }
+
+    private companion object {
+        const val AWAIT_MILLIS = 5_000L
+        const val POLL_MILLIS = 10L
+        const val SETTLE_MILLIS = 300L
+    }
 }

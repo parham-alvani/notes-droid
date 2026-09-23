@@ -1,6 +1,7 @@
 package me.parham1995.notes.data
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import me.parham1995.notes.data.database.SyncLogDao
 import me.parham1995.notes.data.database.SyncLogEntity
@@ -50,10 +51,22 @@ class SyncLog
                 LogLevel.WARN -> Log.w(TAG, message)
                 LogLevel.ERROR -> Log.e(TAG, message)
             }
-            dao.insert(SyncLogEntity(at = System.currentTimeMillis(), level = level.name, message = message))
-            // Bounded on write rather than on a schedule: it is a diagnostic,
-            // and an unbounded one would grow for the life of the install.
-            if (++writes % TRIM_EVERY == 0) dao.trim(MAX_ENTRIES)
+            // Never allowed to throw. The journal is written from inside catch
+            // blocks, about failures that are often the database's own -- a
+            // full disk above all -- and an insert failing there replaced the
+            // error being reported with one about the journal. The logcat
+            // line above has already gone out either way.
+            try {
+                dao.insert(SyncLogEntity(at = System.currentTimeMillis(), level = level.name, message = message))
+                // Bounded on write rather than on a schedule: it is a
+                // diagnostic, and an unbounded one would grow for the life of
+                // the install.
+                if (++writes % TRIM_EVERY == 0) dao.trim(MAX_ENTRIES)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Log.w(TAG, "could not write the journal: $failure")
+            }
         }
 
         private var writes = 0

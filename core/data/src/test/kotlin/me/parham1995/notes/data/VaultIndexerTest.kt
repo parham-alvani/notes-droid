@@ -1,5 +1,7 @@
 package me.parham1995.notes.data
 
+import androidx.room.useReaderConnection
+import androidx.room.useWriterConnection
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -54,6 +56,15 @@ class VaultIndexerTest {
         files.write(1L, path, text.toByteArray())
         return PathAndSha(path, "sha-" + path.hashCode())
     }
+
+    /** Rows in the search index, which no query of Room's can see. */
+    private suspend fun ftsRows(): Long =
+        database.useReaderConnection { connection ->
+            connection.usePrepared("SELECT COUNT(*) FROM note_fts") { statement ->
+                statement.step()
+                statement.getLong(0)
+            }
+        }
 
     @Test
     fun `a note is titled by its file name, not its first heading`() =
@@ -205,5 +216,112 @@ class VaultIndexerTest {
             assertThat(database.noteDao().byPath(1L, "Alpha.md")).isNull()
             assertThat(database.headingDao().byNote(alphaId)).isEmpty()
             assertThat(search.search(1L, "Alpha").map { it.path }).doesNotContain("Alpha.md")
+        }
+
+    @Test
+    fun `a full reindex leaves one search row per note`() =
+        runTest {
+            // It cleared the notes first and then asked the search index to
+            // drop this vault's notes -- by which point there were none, so
+            // every full reindex added a whole second copy of the vault.
+            val entries = listOf(write("Alpha.md", "one"), write("Beta.md", "two"))
+            indexer.indexAll(1L, entries)
+            indexer.indexAll(1L, entries)
+
+            assertThat(ftsRows()).isEqualTo(2L)
+            assertThat(search.search(1L, "Alpha")).hasSize(1)
+        }
+
+    @Test
+    fun `a full reindex drops what is no longer on disk, and only that`() =
+        runTest {
+            indexer.indexAll(
+                1L,
+                listOf(write("Keep.md", "- [ ] stays"), write("Gone.md", "- [ ] goes\n\n# Heading")),
+            )
+            val gone = database.noteDao().idOf(1L, "Gone.md")!!
+
+            indexer.indexAll(1L, listOf(write("Keep.md", "- [ ] stays")))
+
+            assertThat(database.noteDao().byPath(1L, "Gone.md")).isNull()
+            assertThat(database.taskDao().byNote(gone)).isEmpty()
+            assertThat(database.headingDao().byNote(gone)).isEmpty()
+            assertThat(ftsRows()).isEqualTo(1L)
+        }
+
+    @Test
+    fun `reindexing keeps what the reader did with a note`() =
+        runTest {
+            // The entity the indexer builds knows nothing about the reader, and
+            // upserting it as it stood reset Recents and every scroll position
+            // on each change -- and a full reindex renumbered every note too.
+            indexer.indexAll(1L, listOf(write("Note.md", "before")))
+            val id = database.noteDao().idOf(1L, "Note.md")!!
+            database.noteDao().markOpened(id, 1234L)
+            database.noteDao().rememberScroll(id, 7)
+
+            indexer.indexChanged(1L, changed = listOf(write("Note.md", "after")), removed = emptyList())
+
+            database.noteDao().byId(id)!!.let {
+                assertThat(it.openedAt).isEqualTo(1234L)
+                assertThat(it.scrollIndex).isEqualTo(7)
+            }
+
+            indexer.indexAll(1L, listOf(write("Note.md", "after again")))
+
+            val note = database.noteDao().byPath(1L, "Note.md")!!
+            assertThat(note.id).isEqualTo(id)
+            assertThat(note.openedAt).isEqualTo(1234L)
+            assertThat(note.scrollIndex).isEqualTo(7)
+        }
+
+    @Test
+    fun `a note that moves keeps its backlinks`() =
+        runTest {
+            // The link from A still names B, but it pointed at the id B had
+            // before the move, and resolving only revisits links with no
+            // target -- so it stayed attached to a note that no longer existed.
+            indexer.indexAll(1L, listOf(write("A.md", "see [[B]]"), write("X/B.md", "the target")))
+
+            indexer.indexChanged(1L, changed = listOf(write("Y/B.md", "the target")), removed = listOf("X/B.md"))
+
+            val moved = database.noteDao().idOf(1L, "Y/B.md")!!
+            assertThat(database.linkDao().backlinks(moved).map { it.title }).containsExactly("A")
+        }
+
+    @Test
+    fun `resolving leaves a link that is still broken alone`() =
+        runTest {
+            // Every pass used to write every unresolved link back as null --
+            // the whole vault's broken links rewritten after each ticked task.
+            indexer.indexAll(1L, listOf(write("A.md", "[[Nowhere]] and [[Nothing]] and [[B]]"), write("B.md", "b")))
+            val before = writerChanges()
+
+            indexer.indexChanged(1L, changed = emptyList(), removed = emptyList())
+
+            assertThat(writerChanges() - before).isEqualTo(0L)
+            assertThat(database.linkDao().unresolved(1L).map { it.rawTarget }).containsExactly("Nowhere", "Nothing")
+        }
+
+    /** Rows written through the writer connection so far. */
+    private suspend fun writerChanges(): Long =
+        database.useWriterConnection { connection ->
+            connection.usePrepared("SELECT total_changes()") { statement ->
+                statement.step()
+                statement.getLong(0)
+            }
+        }
+
+    @Test
+    fun `a batch of notes is searchable, once each, after reindexing`() =
+        runTest {
+            // Written as one transaction per batch now rather than a commit per
+            // note, and every note in it still has to come out the other side.
+            val entries = (1..250).map { write("Batch/Note $it.md", "shared word plus unique$it") }
+            indexer.indexAll(1L, entries)
+            indexer.indexChanged(1L, changed = entries.take(3), removed = emptyList())
+
+            assertThat(ftsRows()).isEqualTo(250L)
+            assertThat(search.search(1L, "unique137").map { it.title }).containsExactly("Note 137")
         }
 }

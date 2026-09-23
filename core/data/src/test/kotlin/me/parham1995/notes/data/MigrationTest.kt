@@ -140,10 +140,14 @@ class MigrationTest {
         if (scoped) {
             // The folder a vault was mounted at became simply its name in 9.
             val named = if (version >= NAMED_FROM) "name" else "mount"
+            // And a vault says whether it may be written to from 11, with no
+            // default in the table Room creates.
+            val writable = if (version >= CAN_WRITE_FROM) ", canWrite" else ""
+            val writableValue = if (version >= CAN_WRITE_FROM) ", 0" else ""
             connection.execSQL(
                 "INSERT INTO vaults " +
-                    "(id, owner, repo, $named, transport, ordinal, enabled, filterVersion, indexVersion) " +
-                    "VALUES (1, 'o', 'notes', '', 'REST', 0, 1, 0, 0)",
+                    "(id, owner, repo, $named, transport, ordinal, enabled, filterVersion, indexVersion$writable) " +
+                    "VALUES (1, 'o', 'notes', '', 'REST', 0, 1, 0, 0$writableValue)",
             )
         }
         val columns =
@@ -202,6 +206,145 @@ class MigrationTest {
             file.delete()
         }
     }
+
+    /** Builds [version], seeds it, runs [migration] alone, and checks the result. */
+    private fun withData(
+        version: Int,
+        migration: Migration,
+        seed: (SQLiteConnection) -> Unit,
+        check: (SQLiteConnection) -> Unit,
+    ) {
+        val file = File.createTempFile("seeded-$version-", ".db").also { it.delete() }
+        try {
+            BundledSQLiteDriver().open(file.path).use { connection ->
+                build(connection, schema(version))
+                NotesDatabase.createSearchIndex(connection)
+                seed(connection)
+                migration.migrate(connection)
+                check(connection)
+            }
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `notes are retitled after their file names, in the search index too`() =
+        withData(
+            version = 3,
+            migration = NotesDatabase.MIGRATION_3_4,
+            seed = { connection ->
+                // Titled by their first heading, as the indexer used to. The
+                // SQL finds the file name with rtrim rather than a
+                // lastIndexOf, which is exactly the kind of thing that is
+                // right for `a.md` and wrong two folders down.
+                connection.execSQL(
+                    "INSERT INTO notes (id, path, parent, name, slug, title, blobSha, size, isFolderNote, " +
+                        "isRtl, hasMermaid, hasMath, indexedAt) VALUES " +
+                        "(1, 'a.md', '', 'a', 'a', 'A Heading', 's', 1, 0, 0, 0, 0, 0), " +
+                        "(2, 'dir/sub/b.md', 'dir/sub', 'b', 'b', 'Another', 's', 1, 0, 0, 0, 0, 0), " +
+                        "(3, 'dir/README', 'dir', 'README', 'readme', 'Readme Heading', 's', 1, 0, 0, 0, 0, 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO note_fts (rowid, title, body) VALUES " +
+                        "(1, 'A Heading', 'x'), (2, 'Another', 'y'), (3, 'Readme Heading', 'z')",
+                )
+            },
+            check = { connection ->
+                assertThat(texts(connection, "SELECT id || ':' || title FROM notes ORDER BY id"))
+                    .containsExactly("1:a", "2:b", "3:README")
+                    .inOrder()
+                assertThat(texts(connection, "SELECT rowid || ':' || title FROM note_fts ORDER BY rowid"))
+                    .containsExactly("1:a", "2:b", "3:README")
+                    .inOrder()
+            },
+        )
+
+    @Test
+    fun `existing tasks and vaults start out unable to write`() =
+        withData(
+            version = 10,
+            migration = NotesDatabase.MIGRATION_10_11,
+            seed = { connection ->
+                connection.execSQL(
+                    "INSERT INTO vaults (id, owner, repo, name, transport, ordinal, enabled, filterVersion, " +
+                        "indexVersion) VALUES (1, 'o', 'notes', 'notes', 'REST', 0, 1, 0, 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO tasks (noteId, text, state, section, blockIndex, ordinal, open) VALUES " +
+                        "(1, 'a task', 'OPEN', '', 0, 0, 1)",
+                )
+            },
+            check = { connection ->
+                // -1, not 0: line 0 is a real line, and a task claiming it
+                // would be ticked by editing whatever is actually there.
+                assertThat(texts(connection, "SELECT text || ':' || line FROM tasks")).containsExactly("a task:-1")
+                // Nothing may write until a sync has asked the host.
+                assertThat(texts(connection, "SELECT name || ':' || canWrite FROM vaults")).containsExactly("notes:0")
+                assertThat(texts(connection, "SELECT COUNT(*) FROM pending_edits")).containsExactly("0")
+            },
+        )
+
+    @Test
+    fun `what an old reindex left behind is cleared, and nothing else`() {
+        // Every full reindex used to leave the vault's previous rows behind:
+        // tasks, headings and links of notes that no longer exist, and a
+        // second copy of each note in the search index. Seeded here the way
+        // an install that has been through a few releases holds them.
+        val file = File.createTempFile("orphans-", ".db").also { it.delete() }
+        try {
+            BundledSQLiteDriver().open(file.path).use { connection ->
+                build(connection, schema(11))
+                NotesDatabase.createSearchIndex(connection)
+                connection.execSQL(
+                    "INSERT INTO notes (id, vaultId, path, parent, name, slug, title, blobSha, size, " +
+                        "isFolderNote, isRtl, hasMermaid, hasMath, indexedAt, openedAt, scrollIndex) VALUES " +
+                        "(10, 1, 'Live.md', '', 'Live', 'live', 'Live', 's', 1, 0, 0, 0, 0, 0, 5, 3), " +
+                        "(11, 1, 'Other.md', '', 'Other', 'other', 'Other', 's', 1, 0, 0, 0, 0, 0, NULL, 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO tasks (noteId, text, state, section, blockIndex, line, ordinal, open) VALUES " +
+                        "(10, 'kept', 'OPEN', '', 0, 0, 0, 1), (1, 'orphan', 'OPEN', '', 0, 0, 0, 1), " +
+                        "(-1, 'written against -1', 'OPEN', '', 0, 0, 0, 1)",
+                )
+                connection.execSQL(
+                    "INSERT INTO headings (noteId, level, text, slug, ordinal, blockIndex) VALUES " +
+                        "(10, 1, 'kept', 'kept', 0, 0), (2, 1, 'orphan', 'orphan', 0, 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO links (id, srcId, kind, rawTarget, targetId, context, ordinal) VALUES " +
+                        "(1, 10, 'WIKILINK', 'Other', 11, '', 0), " +
+                        "(2, 10, 'WIKILINK', 'Gone', 3, '', 1), " +
+                        "(3, 4, 'WIKILINK', 'Live', 10, '', 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO note_fts (rowid, title, body) VALUES " +
+                        "(10, 'Live', 'body'), (11, 'Other', 'body'), (1, 'Live', 'old copy'), (2, 'Other', 'old copy')",
+                )
+
+                NotesDatabase.MIGRATION_11_12.migrate(connection)
+
+                assertThat(texts(connection, "SELECT text FROM tasks")).containsExactly("kept")
+                assertThat(texts(connection, "SELECT text FROM headings")).containsExactly("kept")
+                assertThat(texts(connection, "SELECT id || ':' || IFNULL(targetId, 'null') FROM links"))
+                    .containsExactly("1:11", "2:null")
+                assertThat(texts(connection, "SELECT rowid FROM note_fts")).containsExactly("10", "11")
+                // The notes themselves, and what the reader did with them, untouched.
+                assertThat(texts(connection, "SELECT path || ':' || IFNULL(openedAt, '') FROM notes"))
+                    .containsExactly("Live.md:5", "Other.md:")
+            }
+        } finally {
+            file.delete()
+        }
+    }
+
+    private fun texts(
+        connection: SQLiteConnection,
+        sql: String,
+    ): List<String> =
+        buildList {
+            connection.prepare(sql).use { while (it.step()) add(it.getText(0)) }
+        }
 
     /** Every table, column and index the current entities declare must be there. */
     private fun assertMatches(
@@ -288,6 +431,7 @@ class MigrationTest {
                 8..9 to NotesDatabase.MIGRATION_8_9,
                 9..10 to NotesDatabase.MIGRATION_9_10,
                 10..11 to NotesDatabase.MIGRATION_10_11,
+                11..12 to NotesDatabase.MIGRATION_11_12,
             )
 
         val CURRENT = MIGRATIONS.maxOf { (range, _) -> range.last }
@@ -298,6 +442,9 @@ class MigrationTest {
 
         /** `vaults.mount` became `vaults.name` at this version. */
         const val NAMED_FROM = 9
+
+        /** `vaults.canWrite` exists from this version onward. */
+        const val CAN_WRITE_FROM = 11
 
         /** Column positions in `PRAGMA table_info`. */
         const val NAME_COLUMN = 1
