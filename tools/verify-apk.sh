@@ -19,6 +19,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 unzip -oq "$apk" 'classes*.dex' -d "$work"
+unzip -oq "$apk" 'META-INF/services/*' -d "$work" 2>/dev/null || true
 
 # Descriptors, not package prefixes: R8 renaming a class is the failure being
 # looked for, and a renamed class leaves the prefix behind in other strings.
@@ -28,6 +29,18 @@ required=(
     "Lorg/apache/sshd/client/ClientBuilder;"
     "Lorg/eclipse/jgit/api/Git;"
 )
+
+# Every implementation JGit or sshd registers through ServiceLoader is named in
+# a text file R8 does not rewrite, so the list is read out of the APK rather
+# than kept here: a dependency bump that adds a service is checked without
+# anybody remembering to add it.
+for services in "$work"/META-INF/services/org.eclipse.jgit.* "$work"/META-INF/services/org.apache.sshd.*; do
+    [ -f "$services" ] || continue
+    while read -r impl; do
+        impl="${impl%%#*}"
+        [ -n "$impl" ] && required+=("L${impl//./\/};")
+    done <"$services"
+done
 
 symbols=$(cat "$work"/classes*.dex | strings)
 missing=()
