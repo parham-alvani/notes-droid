@@ -20,6 +20,7 @@ import me.parham1995.notes.data.database.TaskDao
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.data.database.escapeLike
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
@@ -385,8 +386,10 @@ class VaultRepository
             } else {
                 notes.searchByName(
                     active(),
-                    me.parham1995.notes.markdown.Slugs
-                        .fold(query.trim()),
+                    escapeLike(
+                        me.parham1995.notes.markdown.Slugs
+                            .fold(query.trim()),
+                    ),
                     QUICK_LIMIT,
                 )
             }

@@ -244,6 +244,23 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `the quick switcher reads a wildcard as the character it is`() =
+        runTest {
+            // `%` and `_` mean "anything" to LIKE and are ordinary in a name.
+            index(
+                "100% Done.md" to "a",
+                "1000 Things.md" to "b",
+                "snake_case.md" to "c",
+                "snakescase.md" to "d",
+                "back\\slash.md" to "e",
+            )
+
+            assertThat(repository.quickSwitch("100%").map { it.name }).containsExactly("100% Done")
+            assertThat(repository.quickSwitch("snake_").map { it.name }).containsExactly("snake_case")
+            assertThat(repository.quickSwitch("back\\").map { it.name }).containsExactly("back\\slash")
+        }
+
+    @Test
     fun `the quick switcher only offers notes from the vault being read`() =
         runTest {
             // The one query in the app that was never scoped, and the one that
