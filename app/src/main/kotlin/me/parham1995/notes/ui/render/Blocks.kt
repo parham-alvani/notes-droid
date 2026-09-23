@@ -277,7 +277,10 @@ private fun CalloutView(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().clickable(enabled = block.collapsed) { expanded = !expanded },
+                // `+` and `-` both fold; `+` just starts open. Only `-` used to
+                // be tappable, so a callout written to start open could never
+                // be shut.
+                modifier = Modifier.fillMaxWidth().clickable(enabled = block.foldable) { expanded = !expanded },
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -285,14 +288,40 @@ private fun CalloutView(
                     name = block.kind.icon(),
                     size = CALLOUT_ICON,
                     tint = accent,
-                    contentDescription = block.kind.label(),
+                    contentDescription = block.label(),
                 )
-                Text(
-                    text = block.title.plainText().ifBlank { block.kind.label() },
-                    style = MaterialTheme.typography.titleSmall.inScript(),
-                    color = accent,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                // A title is inline content like any other: a link in it is a
+                // link, and code is code. Flattened to plain text, both were
+                // just words.
+                if (block.title.isEmpty()) {
+                    Text(
+                        text = block.label(),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall.inScript(),
+                        color = accent,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                } else {
+                    RichText(
+                        inlines = block.title,
+                        modifier = Modifier.weight(1f),
+                        style =
+                            MaterialTheme.typography.titleSmall
+                                .copy(color = accent, fontWeight = FontWeight.SemiBold)
+                                .inScript(),
+                        actions = actions.inline,
+                        brokenLinks = brokenLinks,
+                    )
+                }
+                // Says it folds, and which way it is: a header that collapses
+                // the body when tapped looked exactly like one that does not.
+                if (block.foldable) {
+                    LucideGlyph(
+                        name = if (expanded) "chevron-down" else "chevron-right",
+                        size = CALLOUT_ICON,
+                        tint = accent,
+                    )
+                }
             }
             if (expanded) {
                 block.children.forEach { child ->
@@ -623,8 +652,6 @@ private fun UnsupportedView(
     }
 }
 
-private fun List<MdInline>.plainText(): String = joinToString("") { if (it is MdInline.Text) it.text else "" }
-
 @Composable
 private fun MdListItem.markerColor(): Color =
     when (task) {
@@ -675,7 +702,13 @@ private fun CalloutKind.icon(): String =
         CalloutKind.INFO, CalloutKind.NOTE -> "info"
     }
 
-private fun CalloutKind.label(): String = name.lowercase().replaceFirstChar { it.uppercase() }
+/**
+ * What an untitled callout is called: its type as written, capitalised, which
+ * is what Obsidian shows. `[!recipe]` falls back to a note's colours and icon,
+ * but it is still called "Recipe" -- labelling it "Note" lost the one thing
+ * the author said about it.
+ */
+private fun MdBlock.Callout.label(): String = type.replaceFirstChar { it.uppercase() }
 
 private const val CONTAINER_ALPHA = 0.10f
 private const val CHIP_ALPHA = 0.16f

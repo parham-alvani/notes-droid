@@ -218,6 +218,14 @@ sealed interface MdBlock {
         val children: List<MdBlock>,
         val collapsed: Boolean = false,
         override val direction: MdDirection = MdDirection.LTR,
+        /** `[!type]+` or `[!type]-`: it can be folded, and [collapsed] says how it starts. */
+        val foldable: Boolean = collapsed,
+        /**
+         * The type as written, lowercased. Obsidian titles an untitled callout
+         * with it, so `[!recipe]` reads "Recipe" even though [kind] fell back
+         * to a note.
+         */
+        val type: String = kind.name.lowercase(),
     ) : MdBlock
 
     data class ListBlock(

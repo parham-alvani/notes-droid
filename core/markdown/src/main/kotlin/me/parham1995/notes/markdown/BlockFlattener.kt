@@ -288,11 +288,20 @@ class BlockFlattener(
         return MdBlock.Callout(
             id = self,
             kind = node.kind,
-            title = if (node.titleText.isEmpty()) emptyList() else listOf(MdInline.Text(node.titleText)),
+            title = if (node.titleText.isEmpty()) emptyList() else trimmedTitle(inlines(node.title)),
             children = children,
             collapsed = node.collapsed,
             direction = TextDirection.of(node.titleText),
+            foldable = node.foldable,
+            type = node.type,
         )
+    }
+
+    /** The space after `[!type]` is not part of the title. */
+    private fun trimmedTitle(title: List<MdInline>): List<MdInline> {
+        val first = title.firstOrNull() as? MdInline.Text ?: return title
+        val trimmed = first.text.trimStart()
+        return if (trimmed.isEmpty()) title.drop(1) else listOf(MdInline.Text(trimmed)) + title.drop(1)
     }
 
     private fun quote(node: BlockQuote): MdBlock {
