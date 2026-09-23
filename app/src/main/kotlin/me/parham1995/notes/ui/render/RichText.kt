@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import me.parham1995.notes.markdown.MdInline
+import me.parham1995.notes.ui.inScript
 
 /**
  * Text with inline formatting, links, and formulas.
@@ -79,7 +80,7 @@ fun RichText(
                                 Text(
                                     latex,
                                     fontFamily = FontFamily.Monospace,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodySmall.inScript(),
                                 )
                             }
                         }

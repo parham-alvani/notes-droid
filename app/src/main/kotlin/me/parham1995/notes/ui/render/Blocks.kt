@@ -231,7 +231,13 @@ private fun CodeBlockView(
                     text = highlighted ?: AnnotatedString(block.code),
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = CODE_LINE_HEIGHT),
+                    // Code is text too: the reader's size reaches it, and
+                    // the fixed line height is scaled with it, or the
+                    // lines of a bigger font overlap.
+                    style =
+                        MaterialTheme.typography.bodySmall
+                            .copy(lineHeight = CODE_LINE_HEIGHT)
+                            .inScript(),
                 )
             }
         }
@@ -286,6 +292,7 @@ private fun CalloutView(
 ) {
     var expanded by remember(block.id) { mutableStateOf(!block.collapsed) }
     val accent = block.kind.accent()
+    val scale = LocalReading.current.textScale
     val expandedLabel = stringResource(R.string.state_expanded)
     val collapsedLabel = stringResource(R.string.state_collapsed)
 
@@ -330,7 +337,7 @@ private fun CalloutView(
             ) {
                 LucideGlyph(
                     name = block.kind.icon(),
-                    size = CALLOUT_ICON,
+                    size = CALLOUT_ICON * scale,
                     tint = accent,
                     contentDescription = block.label(),
                 )
@@ -362,7 +369,7 @@ private fun CalloutView(
                 if (block.foldable) {
                     LucideGlyph(
                         name = if (expanded) "chevron-down" else "chevron-right",
-                        size = CALLOUT_ICON,
+                        size = CALLOUT_ICON * scale,
                         tint = accent,
                     )
                 }
@@ -464,6 +471,10 @@ private fun ItemMarker(
     number: Int,
     onComplete: ((line: Int) -> Unit)? = null,
 ) {
+    // The marker is set beside the text, so it follows the reader's size
+    // with it -- a bullet the size of a full stop beside a line twice as tall
+    // reads as a mistake.
+    val scale = LocalReading.current.textScale
     val custom = item.customStatus()
     val icon =
         when (item.task) {
@@ -476,9 +487,9 @@ private fun ItemMarker(
     if (icon == null) {
         Text(
             text = if (ordered) "$number." else "\u2022",
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.inScript(),
             color = Markup.ListMarker,
-            modifier = Modifier.widthIn(min = MARKER_WIDTH),
+            modifier = Modifier.widthIn(min = MARKER_WIDTH * scale),
         )
         return
     }
@@ -496,8 +507,8 @@ private fun ItemMarker(
         // above it; an icon has no baseline of its own.
         modifier =
             Modifier
-                .padding(top = MARKER_NUDGE)
-                .widthIn(min = MARKER_WIDTH)
+                .padding(top = MARKER_NUDGE * scale)
+                .widthIn(min = MARKER_WIDTH * scale)
                 .triStateToggleable(
                     state =
                         when (item.task) {
@@ -513,7 +524,7 @@ private fun ItemMarker(
     ) {
         LucideGlyph(
             name = icon,
-            size = MARKER_ICON,
+            size = MARKER_ICON * scale,
             tint = custom?.tint ?: item.markerColor(),
             contentDescription =
                 custom?.description ?: item.task.name
@@ -532,6 +543,7 @@ private fun ItemMarker(
  */
 @Composable
 private fun TaskChips(item: MdListItem) {
+    val scale = LocalReading.current.textScale
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         item.taskMeta.forEach { meta ->
             val (icon, tint, label) = meta.chip()
@@ -544,10 +556,10 @@ private fun TaskChips(item: MdListItem) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    LucideGlyph(name = icon, size = CHIP_ICON, tint = tint, contentDescription = label)
+                    LucideGlyph(name = icon, size = CHIP_ICON * scale, tint = tint, contentDescription = label)
                     Text(
                         text = meta.value,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.inScript(),
                         color = tint,
                     )
                 }
@@ -689,14 +701,14 @@ private fun AttachmentView(
         ) {
             LucideGlyph(
                 name = Attachments.iconOf(block.path),
-                size = ATTACHMENT_ICON,
+                size = ATTACHMENT_ICON * LocalReading.current.textScale,
                 tint = MaterialTheme.colorScheme.primary,
             )
             Column {
-                Text(block.label, style = MaterialTheme.typography.bodyMedium)
+                Text(block.label, style = MaterialTheme.typography.bodyMedium.inScript())
                 Text(
                     stringResource(R.string.attachment_open_with),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.inScript(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -725,7 +737,7 @@ private fun UnsupportedView(
             // Saying so plainly beats showing the reader the query source.
             text = stringResource(R.string.unsupported_block, what),
             modifier = Modifier.padding(12.dp),
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.inScript(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

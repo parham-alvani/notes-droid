@@ -24,6 +24,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import me.parham1995.notes.R
 import me.parham1995.notes.ui.image.rememberVaultImageBytes
+import me.parham1995.notes.ui.inScript
 
 /**
  * An embedded image.
@@ -91,7 +92,7 @@ fun VaultImage(
                                 stringResource(R.string.image_loading)
                             },
                         modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelMedium.inScript(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -100,7 +101,7 @@ fun VaultImage(
     alt?.takeIf { it.isNotBlank() }?.let {
         Text(
             text = it,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.inScript(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         )

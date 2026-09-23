@@ -31,6 +31,7 @@ import dagger.hilt.android.EntryPointAccessors
 import me.parham1995.notes.R
 import me.parham1995.notes.di.RendererEntryPoint
 import me.parham1995.notes.ui.image.ZoomableViewer
+import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.mermaid.MermaidRenderer
 import me.parham1995.notes.ui.mermaid.MermaidTheme
 import java.io.File
@@ -117,7 +118,7 @@ fun MermaidBlockView(
                             text = code,
                             modifier = Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()),
                             fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.inScript(),
                         )
                     }
 
@@ -125,7 +126,7 @@ fun MermaidBlockView(
                     Text(
                         stringResource(R.string.diagram_rendering),
                         modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelMedium.inScript(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
             }

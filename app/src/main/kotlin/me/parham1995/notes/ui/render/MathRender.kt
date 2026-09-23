@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.parham1995.notes.ui.LocalReading
+import me.parham1995.notes.ui.inScript
 import ru.noties.jlatexmath.JLatexMathDrawable
 
 /**
@@ -85,11 +87,13 @@ fun MathBlockView(
 ) {
     val color = MaterialTheme.colorScheme.onSurface
     val density = LocalDensity.current
+    // The reader's size, like the prose around it: a formula that stayed put
+    // while the sentence introducing it doubled read as a footnote.
     val sizePx =
         with(density) {
             MaterialTheme.typography.bodyLarge.fontSize
                 .toPx()
-        } * DISPLAY_SCALE
+        } * DISPLAY_SCALE * LocalReading.current.textScale
     var bitmap by remember(latex, color, sizePx) { mutableStateOf<ImageBitmap?>(null) }
     var failed by remember(latex) { mutableStateOf(false) }
 
@@ -107,7 +111,7 @@ fun MathBlockView(
                 Text(
                     text = latex,
                     fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.inScript(),
                     modifier =
                         Modifier
                             .background(MaterialTheme.colorScheme.surfaceVariant)
