@@ -284,8 +284,12 @@ class VaultIndexer
              * 2: vaults are separate, so every note records which it is in.
              * 3: the guides are synced but no longer indexed as notes.
              * 4: a heading records where it is, not what its id is.
+             * 5: tasks record the source line they were written on.
+             * 6: paragraphs split around embeds and display maths, comments
+             *    dropped and any one-character status a task -- so the
+             *    stored block positions and tasks moved.
              */
-            const val VERSION = 5
+            const val VERSION = 6
 
             /**
              * Files that are kept on the device but are not notes.
