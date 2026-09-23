@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -339,10 +340,19 @@ private fun QuoteView(
     brokenLinks: Set<String>,
     modifier: Modifier,
 ) {
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    // The row is as tall as its tallest child and the rule fills it, which is
+    // how the callout draws its bar. A box with a width and no height in a row
+    // that never asked its children how tall they were came out zero tall, so
+    // no quote in the vault ever had its rule.
+    Row(
+        modifier = modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Box(
             Modifier
+                .testTag(QUOTE_BAR_TAG)
                 .width(3.dp)
+                .fillMaxHeight()
                 .background(Markup.Quote, RoundedCornerShape(2.dp)),
         )
         // @markup.quote paints the quoted text itself, not just the rule.
@@ -748,6 +758,9 @@ private fun CalloutKind.icon(): String =
  * the author said about it.
  */
 private fun MdBlock.Callout.label(): String = type.replaceFirstChar { it.uppercase() }
+
+/** The rule down a quote's side, so a test can find it and measure it. */
+internal const val QUOTE_BAR_TAG = "quote-bar"
 
 private const val CONTAINER_ALPHA = 0.10f
 private const val CHIP_ALPHA = 0.16f
