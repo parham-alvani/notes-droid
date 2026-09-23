@@ -74,7 +74,9 @@ class RestVaultSync(
         // "diverged", and its file list is from a merge base the device
         // never had.
         if (!SyncPlanner.compareIsUsable(comparison.status)) {
-            log("head is ${comparison.status ?: "of unknown relation"} to the base - falling back to a full tree listing")
+            log(
+                "head is ${comparison.status ?: "of unknown relation"} to the base - falling back to a full tree listing",
+            )
             return null
         }
         val changes = comparison.files

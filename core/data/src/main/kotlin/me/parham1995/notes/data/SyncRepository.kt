@@ -1,5 +1,6 @@
 package me.parham1995.notes.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -233,7 +234,7 @@ class SyncRepository
             gate.withVault { testSshKeyLocked(vault) }
 
         private suspend fun testSshKeyLocked(vault: VaultEntity): Result<String> =
-            runCatching {
+            runCatchingUnlessCancelled {
                 transports.adoptLegacyKeys()
                 if (!sshKeys.exists(vault.id)) {
                     error("no key for ${vault.label} yet")
@@ -372,7 +373,7 @@ class SyncRepository
                 // reset during a sync, which would take an edit's local copy
                 // with it and make a queued change look like a lost one. The
                 // unlocked form, because the gate is already held here.
-                runCatching { writes.drain() }
+                runCatchingUnlessCancelled { writes.drain() }
                     .onFailure { log.warn("could not send queued edits: " + it.describeChain()) }
                 val targets = vaults.all().filter { it.enabled }
                 if (targets.isEmpty()) throw NotConfiguredException("no repository configured")
@@ -394,6 +395,10 @@ class SyncRepository
                         plans += plan
                         done += plan.downloads.size
                         total += plan.downloads.size
+                    } catch (cancelled: CancellationException) {
+                        // Not a failure of this vault: the whole sync was
+                        // stopped, and the next vault must not start.
+                        throw cancelled
                     } catch (thrown: Exception) {
                         log.error("${vault.owner}/${vault.repo}: " + thrown.describeChain())
                         vaults.update(
@@ -417,7 +422,7 @@ class SyncRepository
                 // Again at the end: an edit made *during* this sync could not
                 // take the gate and queued instead, and the flush at the start
                 // is long past. Without this it would wait for the next one.
-                runCatching { writes.drain() }
+                runCatchingUnlessCancelled { writes.drain() }
                     .onFailure { log.warn("could not send queued edits: " + it.describeChain()) }
 
                 failure?.let { throw it }
@@ -645,7 +650,7 @@ class SyncRepository
          */
         private suspend fun refreshWritability(vault: VaultEntity) {
             val can =
-                runCatching { transports.writer(vault).canPush() }
+                runCatchingUnlessCancelled { transports.writer(vault).canPush() }
                     .onFailure { log.warn("could not check write access for ${vault.label}: ${it.describeChain()}") }
                     .getOrDefault(false)
             if (can != vault.canWrite) {

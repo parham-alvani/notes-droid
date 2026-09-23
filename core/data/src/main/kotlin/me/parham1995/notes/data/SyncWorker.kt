@@ -14,6 +14,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import me.parham1995.notes.sync.GitHubException
 
 /**
@@ -65,7 +66,7 @@ class SyncWorker
             val userInitiated = inputData.getBoolean(KEY_USER_INITIATED, false)
             val foreground =
                 userInitiated &&
-                    runCatching { setForeground(foregroundInfo(0, 0)) }
+                    runCatchingUnlessCancelled { setForeground(foregroundInfo(0, 0)) }
                         .onFailure {
                             log.warn(
                                 "cannot run in the foreground (${it::class.simpleName}): " +
@@ -92,6 +93,13 @@ class SyncWorker
                         KEY_DELETED to plan.deletes.size,
                     ),
                 )
+            } catch (cancelled: CancellationException) {
+                // WorkManager stopped this -- Cancel was pressed, a newer
+                // sync replaced it, or the constraints no longer hold. Not a
+                // failure to retry: returning one here would count an
+                // attempt and schedule another run of the work just stopped.
+                log.info("sync cancelled")
+                throw cancelled
             } catch (failure: NotConfiguredException) {
                 // Nothing to retry: the app has not been set up yet.
                 log.error("not configured: ${failure.message}")

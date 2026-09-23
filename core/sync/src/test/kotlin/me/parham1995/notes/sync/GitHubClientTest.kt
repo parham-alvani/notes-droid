@@ -1,7 +1,12 @@
 package me.parham1995.notes.sync
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
@@ -9,6 +14,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.util.Base64
+import java.util.concurrent.TimeUnit
 
 /**
  * The client against a server that answers the way GitHub does, including the
@@ -54,6 +60,11 @@ class GitHubClientTest {
             .build(),
     )
 
+    private companion object {
+        const val SLOW_SECONDS = 10L
+        const val REQUEST_STARTS_MS = 300L
+    }
+
     private fun base64(text: String) = Base64.getEncoder().encodeToString(text.toByteArray())
 
     @Test
@@ -93,6 +104,33 @@ class GitHubClientTest {
 
             assertThat(outcome).isInstanceOf(WriteOutcome.Written::class.java)
             assertThat((outcome as WriteOutcome.Written).text).isEqualTo(big + "- two\n")
+        }
+
+    @Test
+    fun `a cancelled request stops rather than running to the end`() =
+        runTest {
+            // A server that takes its time, the way a forty-megabyte blob
+            // does on a phone.
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .headersDelay(SLOW_SECONDS, TimeUnit.SECONDS)
+                    .body("late")
+                    .build(),
+            )
+
+            val elapsed =
+                withContext(Dispatchers.Default) {
+                    val started = System.nanoTime()
+                    val request = launch { client.blob("sha-slow") }
+                    delay(REQUEST_STARTS_MS)
+                    request.cancelAndJoin()
+                    TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started)
+                }
+
+            // A blocking execute() cannot be interrupted, and held the
+            // coroutine until the server answered.
+            assertThat(elapsed).isLessThan(SLOW_SECONDS / 2)
         }
 
     @Test

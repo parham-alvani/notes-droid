@@ -2,14 +2,15 @@ package me.parham1995.notes.data
 
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.BlobEntity
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
@@ -19,10 +20,10 @@ import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.SyncPlan
+import me.parham1995.notes.sync.TextEdit
 import me.parham1995.notes.sync.VaultFilter
 import me.parham1995.notes.sync.VaultSink
 import me.parham1995.notes.sync.VaultSync
-import me.parham1995.notes.sync.TextEdit
 import me.parham1995.notes.sync.VaultWriter
 import me.parham1995.notes.sync.WriteOutcome
 import me.parham1995.notes.sync.gitBlobSha
@@ -52,9 +53,11 @@ class SyncRepositoryTest {
     /** A transport that has nothing new to say, unless told otherwise. */
     private inner class FakeSync : VaultSync {
         var plans = 0
+        var onPlan: suspend () -> Unit = {}
 
         override suspend fun plan(base: SyncBase): SyncPlan {
             plans++
+            onPlan()
             return SyncPlan(base.commit, base.commit ?: "head")
         }
 
@@ -207,7 +210,13 @@ class SyncRepositoryTest {
             repository.sync()
 
             assertThat(database.noteDao().byPath(id, "Plan.md")!!.blobSha).isEqualTo(new)
-            assertThat(database.taskDao().open(id).first().map { it.text }).containsExactly("the new task")
+            assertThat(
+                database
+                    .taskDao()
+                    .open(id)
+                    .first()
+                    .map { it.text },
+            ).containsExactly("the new task")
         }
 
     @Test
@@ -304,6 +313,23 @@ class SyncRepositoryTest {
                 )
 
             assertThat(waited).isTrue()
+        }
+
+    @Test
+    fun `a cancelled sync stops, and is not recorded as a vault failing`() =
+        runTest {
+            val first = syncedVault("first")
+            val second = syncedVault("second")
+            database.vaultDao().update(database.vaultDao().byId(second)!!.copy(ordinal = 1))
+            readerFor(first).onPlan = { throw CancellationException("stopped") }
+
+            val thrown = runCatching { repository.sync() }.exceptionOrNull()
+
+            assertThat(thrown).isInstanceOf(CancellationException::class.java)
+            // It used to be caught as this vault's failure, written to its
+            // row, and the next vault synced as though nothing had happened.
+            assertThat(database.vaultDao().byId(first)!!.lastError).isNull()
+            assertThat(readerFor(second).plans).isEqualTo(0)
         }
 
     @Test

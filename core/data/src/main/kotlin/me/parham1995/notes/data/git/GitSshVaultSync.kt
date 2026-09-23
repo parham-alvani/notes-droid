@@ -1,6 +1,8 @@
 package me.parham1995.notes.data.git
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.describeChain
 import me.parham1995.notes.sync.Author
@@ -93,6 +95,7 @@ class GitSshVaultSync(
 
     override suspend fun plan(base: SyncBase): SyncPlan =
         withContext(Dispatchers.IO) {
+            progress.bindTo(coroutineContext[Job])
             // Only a remote over SSH has a port to reach and a key to offer. A
             // repository on disk has neither, and is how the planning is
             // tested without a network.
@@ -109,6 +112,9 @@ class GitSshVaultSync(
                 try {
                     cloneRepository()
                 } catch (failure: Exception) {
+                    // Cancelled rather than failed: JGit stops when asked and
+                    // says so as a transport error, which is not one.
+                    ensureActive()
                     log("clone threw: " + failure.describeChain())
                     // Name the stage it died at. "Remote hung up" says nothing
                     // about whether it failed immediately or three quarters of
@@ -152,6 +158,7 @@ class GitSshVaultSync(
         sink: VaultSink,
         onProgress: (done: Int, total: Int) -> Unit,
     ) = withContext(Dispatchers.IO) {
+        progress.bindTo(coroutineContext[Job])
         openGit().use { git ->
             // Git writes the working tree itself, so "applying" is a checkout
             // plus recording what is now on disk. Nothing is downloaded twice.
@@ -262,6 +269,7 @@ class GitSshVaultSync(
         edit: TextEdit,
     ): WriteOutcome =
         withContext(Dispatchers.IO) {
+            progress.bindTo(coroutineContext[Job])
             openGit().use { git ->
                 repeat(PUSH_ATTEMPTS) {
                     fetch(git)

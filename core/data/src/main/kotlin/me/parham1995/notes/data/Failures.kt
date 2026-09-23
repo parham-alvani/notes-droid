@@ -1,5 +1,25 @@
 package me.parham1995.notes.data
 
+import kotlinx.coroutines.CancellationException
+
+/**
+ * [runCatching] that lets cancellation through.
+ *
+ * The standard one catches everything, `CancellationException` included, so a
+ * sync that was cancelled -- the worker stopped, the app backgrounded, a newer
+ * sync replacing it -- was caught, logged as a failure, and carried on to the
+ * next vault or retried. A coroutine that swallows its own cancellation is not
+ * cancelled at all.
+ */
+inline fun <T> runCatchingUnlessCancelled(block: () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Throwable) {
+        Result.failure(failure)
+    }
+
 /**
  * Renders an exception with everything underneath it.
  *

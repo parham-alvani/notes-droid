@@ -1,8 +1,9 @@
 package me.parham1995.notes.sync
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -11,6 +12,7 @@ import okhttp3.Response
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.Base64
+import kotlin.coroutines.resumeWithException
 
 /** Which repository to read, and with what credential. */
 data class GitHubConfig(
@@ -117,31 +119,62 @@ class GitHubClient(
             .apply { etag?.let { header("If-None-Match", it) } }
             .build()
 
+    /**
+     * Sends [request] and hands a successful response to [onSuccess].
+     *
+     * Enqueued rather than executed, with the call cancelled when the
+     * coroutine is. `execute()` blocks a thread that cancellation cannot
+     * reach, so a cancelled sync went on downloading -- a blob of forty
+     * megabytes, a tree of thousands of entries -- until the transfer ended
+     * of its own accord. [onSuccess] runs on OkHttp's thread while the body
+     * streams, so cancelling part way through a body stops that too.
+     */
     private suspend fun <T> call(
         request: Request,
         resource: String,
         onSuccess: (Response) -> T,
-    ): T =
-        withContext(Dispatchers.IO) {
-            limiter.acquire()
-            http.newCall(request).execute().use { response ->
-                limiter.observe(response)
-                when {
-                    // 304 is not "successful" to OkHttp, but it is exactly what a
-                    // conditional request wants back.
-                    response.isSuccessful || response.code == 304 -> onSuccess(response)
-                    response.code == 401 -> throw GitHubException.Unauthorized()
-                    response.code == 404 -> throw GitHubException.NotFound(resource)
-                    response.code == 409 -> throw GitHubException.Conflict(resource)
-                    // GitHub answers a stale blob sha with 422 as often as
-                    // with 409, and the two mean the same thing to a write.
-                    response.code == 422 && STALE_SHA in response.peekBody(BODY_PEEK).string() ->
-                        throw GitHubException.Conflict(resource)
-                    response.code == 403 || response.code == 429 -> throw response.toLimitException()
-                    else -> throw GitHubException.Unexpected(response.code, response.peekBody(BODY_PEEK).string())
-                }
-            }
+    ): T {
+        limiter.acquire()
+        val call = http.newCall(request)
+        return suspendCancellableCoroutine { continuation ->
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(
+                object : Callback {
+                    override fun onFailure(
+                        call: Call,
+                        e: IOException,
+                    ) = continuation.resumeWithException(e)
+
+                    override fun onResponse(
+                        call: Call,
+                        response: Response,
+                    ) = continuation.resumeWith(runCatching { response.use { handle(it, resource, onSuccess) } })
+                },
+            )
         }
+    }
+
+    private fun <T> handle(
+        response: Response,
+        resource: String,
+        onSuccess: (Response) -> T,
+    ): T {
+        limiter.observe(response)
+        return when {
+            // 304 is not "successful" to OkHttp, but it is exactly what a
+            // conditional request wants back.
+            response.isSuccessful || response.code == 304 -> onSuccess(response)
+            response.code == 401 -> throw GitHubException.Unauthorized()
+            response.code == 404 -> throw GitHubException.NotFound(resource)
+            response.code == 409 -> throw GitHubException.Conflict(resource)
+            // GitHub answers a stale blob sha with 422 as often as
+            // with 409, and the two mean the same thing to a write.
+            response.code == 422 && STALE_SHA in response.peekBody(BODY_PEEK).string() ->
+                throw GitHubException.Conflict(resource)
+            response.code == 403 || response.code == 429 -> throw response.toLimitException()
+            else -> throw GitHubException.Unexpected(response.code, response.peekBody(BODY_PEEK).string())
+        }
+    }
 
     private fun Response.toLimitException(): GitHubException {
         header("retry-after")?.toLongOrNull()?.let { return GitHubException.SlowDown(it) }

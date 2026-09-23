@@ -83,7 +83,7 @@ class VaultFileSource
                 )
 
             return withContext(Dispatchers.IO) {
-                runCatching {
+                runCatchingUnlessCancelled {
                     val data = client.blob(blob.sha)
                     files.write(vaultId, path, data)
                     blobs.upsert(blob.copy(localState = LocalState.DOWNLOADED))
