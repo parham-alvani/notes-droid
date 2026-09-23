@@ -121,7 +121,7 @@ class RestVaultSyncTest {
             server.enqueue(
                 json(
                     """
-                    {"files":[
+                    {"status":"ahead","files":[
                       {"filename":"beta/note.md","status":"renamed",
                        "sha":"sha-x","previous_filename":"alpha/note.md"}
                     ]}
@@ -158,6 +158,40 @@ class RestVaultSyncTest {
             val plan = sync.plan(SyncBase("gone-commit", mapOf("a.md" to "sha-a1")))
 
             assertThat(plan.modifies.map { it.path }).containsExactly("a.md")
+            assertThat(server.requestCount).isEqualTo(3)
+        }
+
+    @Test
+    fun `a force-pushed branch is re-read from the tree, not diffed from the merge base`() =
+        runTest {
+            server.enqueue(json("""{"ref":"refs/heads/main","object":{"sha":"head9","type":"commit"}}"""))
+            // The old commit is still reachable, so compare answers -- but the
+            // branch was rewritten under it, and the files listed are from a
+            // merge base. `gone.md` is only in the old history and is not
+            // mentioned at all.
+            server.enqueue(
+                json(
+                    """
+                    {"status":"diverged","files":[
+                      {"filename":"a.md","status":"modified","sha":"sha-a2"}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+            server.enqueue(
+                json(
+                    """
+                    {"sha":"tree9","truncated":false,"tree":[
+                      {"path":"a.md","mode":"100644","type":"blob","sha":"sha-a2","size":10}
+                    ]}
+                    """.trimIndent(),
+                ),
+            )
+
+            val plan = sync.plan(SyncBase("old-head", mapOf("a.md" to "sha-a1", "gone.md" to "sha-g")))
+
+            assertThat(plan.modifies.map { it.path }).containsExactly("a.md")
+            assertThat(plan.deletes).containsExactly("gone.md")
             assertThat(server.requestCount).isEqualTo(3)
         }
 

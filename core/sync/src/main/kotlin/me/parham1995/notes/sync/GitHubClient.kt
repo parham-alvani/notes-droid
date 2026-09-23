@@ -212,17 +212,21 @@ class GitHubClient(
     suspend fun compare(
         base: String,
         head: String,
-    ): List<CompareChange> =
+    ): Comparison =
         call(request(url("/compare/$base...$head")), "compare/$base...$head") { response ->
             val dto = json.decodeFromString<CompareDto>(response.body.string())
-            dto.files.map {
-                CompareChange(
-                    path = it.filename,
-                    status = ChangeStatus.parse(it.status),
-                    sha = it.sha,
-                    previousPath = it.previousFilename,
-                )
-            }
+            Comparison(
+                status = dto.status,
+                files =
+                    dto.files.map {
+                        CompareChange(
+                            path = it.filename,
+                            status = ChangeStatus.parse(it.status),
+                            sha = it.sha,
+                            previousPath = it.previousFilename,
+                        )
+                    },
+            )
         }
 
     /** The raw bytes of one blob. */

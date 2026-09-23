@@ -25,6 +25,18 @@ enum class ChangeStatus {
     }
 }
 
+/**
+ * A compare between two commits: how they relate, and the files that differ.
+ *
+ * [status] matters as much as [files]. The endpoint is a three-dot compare, so
+ * the files are the diff from the *merge base* to head -- which is what the
+ * device holds only when head is a descendant of it.
+ */
+data class Comparison(
+    val status: String?,
+    val files: List<CompareChange>,
+)
+
 /** One entry from a compare between two commits. */
 data class CompareChange(
     val path: String,
@@ -41,6 +53,19 @@ data class CompareChange(
  * milliseconds.
  */
 object SyncPlanner {
+    /**
+     * Whether a compare's file list describes the step from the device's
+     * commit to head, and so can be applied to the manifest as a diff.
+     *
+     * Only when head descends from the base. After a force-push, a branch
+     * reset or a branch switch the two have `diverged` (or head is `behind`),
+     * and the three-dot compare lists changes from a merge base the device
+     * never held: files the device has but head does not are simply not
+     * mentioned, and nothing ever deletes them. A missing status is treated
+     * the same way, because trusting it is the failure that cannot be seen.
+     */
+    fun compareIsUsable(status: String?): Boolean = status == "ahead" || status == "identical"
+
     /**
      * Full diff against a complete listing of the remote tree. Used for the
      * first sync, and as the fallback whenever an incremental compare cannot

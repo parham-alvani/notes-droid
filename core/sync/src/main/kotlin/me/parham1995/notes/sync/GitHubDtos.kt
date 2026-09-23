@@ -60,6 +60,8 @@ internal data class TreeEntryDto(
 
 @Serializable
 internal data class CompareDto(
+    /** `ahead`, `behind`, `identical` or `diverged`: how head relates to base. */
+    val status: String? = null,
     @SerialName("total_commits") val totalCommits: Int = 0,
     val files: List<CompareFileDto> = emptyList(),
 )

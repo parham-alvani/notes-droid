@@ -61,7 +61,7 @@ class RestVaultSync(
         head: String,
     ): SyncPlan? {
         val from = base.commit ?: return null
-        val changes =
+        val comparison =
             try {
                 client.compare(from, head)
             } catch (_: GitHubException.NotFound) {
@@ -69,6 +69,15 @@ class RestVaultSync(
                 log("base commit unreachable - falling back to a full tree listing")
                 return null
             }
+        // Still reachable is not the same as still an ancestor: a force-push
+        // that GitHub has not collected yet compares fine and says
+        // "diverged", and its file list is from a merge base the device
+        // never had.
+        if (!SyncPlanner.compareIsUsable(comparison.status)) {
+            log("head is ${comparison.status ?: "of unknown relation"} to the base - falling back to a full tree listing")
+            return null
+        }
+        val changes = comparison.files
         // At the cap the response is truncated and would silently miss files.
         if (changes.size >= COMPARE_FILE_LIMIT) {
             log("compare hit its ${COMPARE_FILE_LIMIT}-file cap - falling back to a full tree listing")

@@ -12,6 +12,18 @@ class SyncPlannerTest {
         size: Long = 100,
     ) = VaultEntry(path, sha, size, BlobKind.MARKDOWN)
 
+    // -- compareIsUsable --------------------------------------------------
+
+    @Test
+    fun `only a compare from an ancestor is a diff the device can apply`() {
+        assertThat(SyncPlanner.compareIsUsable("ahead")).isTrue()
+        assertThat(SyncPlanner.compareIsUsable("identical")).isTrue()
+        // Force-push, reset, branch switch: listed from a merge base.
+        assertThat(SyncPlanner.compareIsUsable("diverged")).isFalse()
+        assertThat(SyncPlanner.compareIsUsable("behind")).isFalse()
+        assertThat(SyncPlanner.compareIsUsable(null)).isFalse()
+    }
+
     // -- fromTree ---------------------------------------------------------
 
     @Test
