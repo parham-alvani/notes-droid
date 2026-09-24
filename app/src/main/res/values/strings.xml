@@ -293,8 +293,8 @@
     <string name="bookmarks_title">Bookmarks</string>
     <string name="today_action">Today\'s note</string>
     <string name="today_missing">No note for today yet - it would be %1$s</string>
-    <string name="shortcut_today_short">Today</string>
-    <string name="shortcut_today_long">Today\'s daily note</string>
+    <string name="shortcut_today_short">Journal</string>
+    <string name="shortcut_today_long">This day\'s or week\'s note</string>
     <string name="link_unknown_vault">No vault here is called %1$s</string>
     <string name="link_unknown_note">No note called %1$s in this vault</string>
     <string name="link_not_followed">That link cannot be opened here</string>
@@ -303,4 +303,13 @@
     <string name="width_comfortable">comfortable</string>
     <string name="width_full">full</string>
     <string name="help_line_width">How wide a note\'s text may run on a tablet or in landscape. A phone held upright is narrower than all three.</string>
+    <!-- Periodic notes: a daily-notes format that names a week, a month, a quarter or a year. -->
+    <string name="this_week_action">This week\'s note</string>
+    <string name="this_month_action">This month\'s note</string>
+    <string name="this_quarter_action">This quarter\'s note</string>
+    <string name="this_year_action">This year\'s note</string>
+    <string name="week_missing">No note for this week yet - it would be %1$s</string>
+    <string name="month_missing">No note for this month yet - it would be %1$s</string>
+    <string name="quarter_missing">No note for this quarter yet - it would be %1$s</string>
+    <string name="year_missing">No note for this year yet - it would be %1$s</string>
 </resources>
