@@ -80,6 +80,7 @@ class VaultWriteRepositoryTest {
                     tasks = database.taskDao(),
                     index = database.indexDao(),
                     search = SearchIndex(database),
+                    aliases = database.aliasDao(),
                 )
             val transports =
                 object : VaultTransports(

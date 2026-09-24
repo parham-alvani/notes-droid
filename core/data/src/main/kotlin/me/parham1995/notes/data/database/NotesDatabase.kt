@@ -18,8 +18,10 @@ import androidx.sqlite.execSQL
         TaskEntity::class,
         VaultEntity::class,
         PendingEditEntity::class,
+        TagEntity::class,
+        AliasEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -45,6 +47,10 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun vaultDao(): VaultDao
 
     abstract fun pendingEditDao(): PendingEditDao
+
+    abstract fun tagDao(): TagDao
+
+    abstract fun aliasDao(): AliasDao
 
     companion object {
         const val NAME = "notes.db"
@@ -381,6 +387,34 @@ abstract class NotesDatabase : RoomDatabase() {
                     // statement that finds one that does not.
                     createSearchIndex(connection)
                     connection.execSQL("DELETE FROM $FTS_TABLE WHERE rowid NOT IN (SELECT `id` FROM `notes`)")
+                }
+            }
+
+        /**
+         * Adds a note's tags and aliases.
+         *
+         * Both start empty -- they come from parsing markdown, which a
+         * migration cannot do -- and the indexer's version moves with this,
+         * so the next sync reparses every note and fills them. Nothing that
+         * is already there is touched.
+         */
+        val MIGRATION_12_13 =
+            object : Migration(12, 13) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `tags` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`noteId` INTEGER NOT NULL, `name` TEXT NOT NULL, `folded` TEXT NOT NULL)",
+                    )
+                    connection.execSQL("CREATE INDEX IF NOT EXISTS `index_tags_noteId` ON `tags` (`noteId`)")
+                    connection.execSQL("CREATE INDEX IF NOT EXISTS `index_tags_folded` ON `tags` (`folded`)")
+                    connection.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `aliases` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`noteId` INTEGER NOT NULL, `alias` TEXT NOT NULL, `folded` TEXT NOT NULL)",
+                    )
+                    connection.execSQL("CREATE INDEX IF NOT EXISTS `index_aliases_noteId` ON `aliases` (`noteId`)")
+                    connection.execSQL("CREATE INDEX IF NOT EXISTS `index_aliases_folded` ON `aliases` (`folded`)")
                 }
             }
 

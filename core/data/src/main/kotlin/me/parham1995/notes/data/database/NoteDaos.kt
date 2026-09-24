@@ -95,14 +95,23 @@ interface NoteDao {
      * [prefix] must come through [escapeLike]. `%` and `_` are wildcards to
      * LIKE and ordinary characters in a file name, so typing "100%" offered
      * every note starting "100".
+     *
+     * A note's aliases answer too, as they do in Obsidian's switcher: a name
+     * that starts with what was typed first, then an alias that does, then
+     * anything containing it. The alias subquery needs no vault of its own --
+     * it only narrows the notes the outer `vaultId` already chose.
      */
     @Query(
         """
         SELECT * FROM notes
         WHERE vaultId = :vaultId
-          AND (slug LIKE :prefix || '%' ESCAPE '\' OR slug LIKE '%' || :prefix || '%' ESCAPE '\')
-        ORDER BY (CASE WHEN slug LIKE :prefix || '%' ESCAPE '\' THEN 0 ELSE 1 END), length(name),
-                 name COLLATE NOCASE
+          AND (slug LIKE '%' || :prefix || '%' ESCAPE '\'
+               OR id IN (SELECT noteId FROM aliases WHERE folded LIKE '%' || :prefix || '%' ESCAPE '\'))
+        ORDER BY (CASE WHEN slug LIKE :prefix || '%' ESCAPE '\' THEN 0
+                       WHEN id IN (SELECT noteId FROM aliases WHERE folded LIKE :prefix || '%' ESCAPE '\') THEN 1
+                       WHEN slug LIKE '%' || :prefix || '%' ESCAPE '\' THEN 2
+                       ELSE 3 END),
+                 length(name), name COLLATE NOCASE
         LIMIT :limit
         """,
     )

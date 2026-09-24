@@ -40,6 +40,8 @@ data class InlineActions(
     val onNoteLink: (noteId: Long, heading: String?) -> Unit = { _, _ -> },
     /** A link that resolves to nothing, said plainly rather than ignored. */
     val onBrokenLink: (target: String) -> Unit = {},
+    /** A `#tag`, by its name without the `#`: list the notes carrying it. */
+    val onTag: (tag: String) -> Unit = {},
 )
 
 /**
@@ -169,6 +171,20 @@ private fun appendInlines(
                 builder.withLink(link) { builder.append(node.display) }
             }
 
+            // Drawn as a tag, and a way to every other note carrying it --
+            // which is what a tag is for, and all plain text could not do.
+            is MdInline.Tag -> {
+                val link =
+                    LinkAnnotation.Clickable(
+                        tag = TAG_PREFIX + node.name,
+                        styles =
+                            TextLinkStyles(
+                                SpanStyle(color = colors.onSecondaryContainer, background = colors.secondaryContainer),
+                            ),
+                    ) { actions.onTag(node.name) }
+                builder.withLink(link) { builder.append('#').append(node.name) }
+            }
+
             is MdInline.InlineMath -> {
                 val index = formulas.size
                 formulas += node.latex
@@ -184,3 +200,4 @@ private fun appendInlines(
 }
 
 internal const val MATH_TAG_PREFIX = "math:"
+private const val TAG_PREFIX = "tag:"

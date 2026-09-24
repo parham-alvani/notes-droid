@@ -338,6 +338,54 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun `tags and aliases arrive empty, and two vaults' notes keep everything they had`() =
+        withData(
+            version = 12,
+            migration = NotesDatabase.MIGRATION_12_13,
+            seed = { connection ->
+                // Two vaults, each holding a README -- the shape that has
+                // broken a migration before -- with the rows derived from them.
+                connection.execSQL(
+                    "INSERT INTO notes (id, vaultId, path, parent, name, slug, title, blobSha, size, " +
+                        "isFolderNote, isRtl, hasMermaid, hasMath, indexedAt, openedAt, scrollIndex) VALUES " +
+                        "(1, 1, 'README.md', '', 'README', 'readme', 'README', 'a', 1, 0, 0, 0, 0, 0, 7, 4), " +
+                        "(2, 2, 'README.md', '', 'README', 'readme', 'README', 'b', 1, 0, 0, 0, 0, 0, NULL, 0)",
+                )
+                connection.execSQL(
+                    "INSERT INTO tasks (noteId, text, state, section, blockIndex, line, ordinal, open) VALUES " +
+                        "(1, 'first', 'OPEN', '', 0, 3, 0, 1), (2, 'second', 'OPEN', '', 0, 5, 0, 1)",
+                )
+                connection.execSQL(
+                    "INSERT INTO links (id, srcId, kind, rawTarget, targetId, context, ordinal) VALUES " +
+                        "(1, 1, 'WIKILINK', 'README', 1, '', 0)",
+                )
+            },
+            check = { connection ->
+                assertThat(texts(connection, "SELECT COUNT(*) FROM tags")).containsExactly("0")
+                assertThat(texts(connection, "SELECT COUNT(*) FROM aliases")).containsExactly("0")
+                // Both new tables take a row for either vault's note at once.
+                connection.execSQL(
+                    "INSERT INTO tags (noteId, name, folded) VALUES (1, 'Idea', 'idea'), (2, 'idea', 'idea')",
+                )
+                connection.execSQL(
+                    "INSERT INTO aliases (noteId, alias, folded) VALUES (1, 'Start', 'start'), (2, 'Start', 'start')",
+                )
+                assertThat(
+                    texts(
+                        connection,
+                        "SELECT notes.vaultId || ':' || tags.name FROM tags JOIN notes ON notes.id = tags.noteId " +
+                            "ORDER BY notes.vaultId",
+                    ),
+                ).containsExactly("1:Idea", "2:idea").inOrder()
+                assertThat(texts(connection, "SELECT vaultId || ':' || path || ':' || scrollIndex FROM notes"))
+                    .containsExactly("1:README.md:4", "2:README.md:0")
+                assertThat(texts(connection, "SELECT text || ':' || line FROM tasks"))
+                    .containsExactly("first:3", "second:5")
+                assertThat(texts(connection, "SELECT id || ':' || targetId FROM links")).containsExactly("1:1")
+            },
+        )
+
     private fun texts(
         connection: SQLiteConnection,
         sql: String,
@@ -432,6 +480,7 @@ class MigrationTest {
                 9..10 to NotesDatabase.MIGRATION_9_10,
                 10..11 to NotesDatabase.MIGRATION_10_11,
                 11..12 to NotesDatabase.MIGRATION_11_12,
+                12..13 to NotesDatabase.MIGRATION_12_13,
             )
 
         val CURRENT = MIGRATIONS.maxOf { (range, _) -> range.last }

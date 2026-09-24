@@ -95,6 +95,7 @@ object NoteSearch {
                 is MdInline.Strong -> node.children.plainText()
                 is MdInline.Highlight -> node.children.plainText()
                 is MdInline.Strikethrough -> node.children.plainText()
+                is MdInline.Tag -> "#" + node.name
                 else -> ""
             }
         }

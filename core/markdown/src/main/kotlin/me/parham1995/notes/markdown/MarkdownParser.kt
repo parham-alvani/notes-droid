@@ -39,6 +39,9 @@ object MarkdownParser {
                     YamlFrontMatterExtension.create(),
                     AutolinkExtension.create(),
                     WikiLinkExtension.create(),
+                    // After the wikilinks, so the `#` of `[[Note#Heading]]`
+                    // is already part of a link.
+                    TagExtension.create(),
                     HighlightExtension.create(),
                     MathExtension.create(),
                 ),
@@ -75,5 +78,5 @@ object MarkdownParser {
     fun parseNote(
         markdown: String,
         imageResolver: (String) -> String = { it },
-    ): ParsedNote = BlockFlattener(imageResolver).flatten(instance.parse(markdown))
+    ): ParsedNote = BlockFlattener(imageResolver).flatten(instance.parse(markdown), markdown)
 }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import me.parham1995.notes.data.database.AliasDao
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.FolderNoteRow
@@ -17,15 +18,20 @@ import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.data.database.LinkDao
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NoteEntity
+import me.parham1995.notes.data.database.TagDao
 import me.parham1995.notes.data.database.TaskDao
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.data.database.byPath
 import me.parham1995.notes.data.database.escapeLike
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
 import me.parham1995.notes.markdown.MdBlock
+import me.parham1995.notes.markdown.Slugs
+import me.parham1995.notes.markdown.TagTree
+import me.parham1995.notes.markdown.TagTreeNode
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -113,6 +119,8 @@ class VaultRepository
         private val blobs: BlobDao,
         private val vaults: VaultDao,
         private val settings: SettingsStore,
+        private val tags: TagDao,
+        private val aliases: AliasDao,
     ) {
         /**
          * The vault being read.
@@ -276,7 +284,7 @@ class VaultRepository
                     }
 
                 val refs = notes.allIds(entity.vaultId)
-                val resolver = LinkResolver(refs.map { it.path })
+                val resolver = LinkResolver(refs.map { it.path }, aliases.inVault(entity.vaultId).byPath())
                 val byPath = refs.associate { it.path to it.id }
                 val targets =
                     parsed.links
@@ -331,6 +339,29 @@ class VaultRepository
                 outgoing = links.outgoing(id),
                 incoming = links.backlinks(id).distinctBy { it.noteId },
             )
+        }
+
+        /**
+         * Every tag in [vaultId] as a tree, each counting the notes under it.
+         *
+         * The vault is asked for rather than taken from the active one: a tag
+         * tapped in a note means that note's vault, whichever is showing.
+         */
+        fun tagTree(vaultId: Long): Flow<List<TagTreeNode>> =
+            tags
+                .uses(vaultId)
+                .distinctUntilChanged()
+                .map { uses -> TagTree.build(uses.map { it.name to it.noteId }) }
+                .flowOn(Dispatchers.Default)
+
+        /** The notes in [vaultId] tagged [tag] or anything nested under it. */
+        suspend fun notesTagged(
+            vaultId: Long,
+            tag: String,
+        ): List<NoteEntity> {
+            val folded = Slugs.fold(tag.trim().removePrefix("#").trimEnd('/'))
+            if (folded.isEmpty()) return emptyList()
+            return tags.notesTagged(vaultId, folded, escapeLike(folded))
         }
 
         /** One note at random, for a vault large enough to have forgotten some. */

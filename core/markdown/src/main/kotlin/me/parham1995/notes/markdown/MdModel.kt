@@ -69,6 +69,14 @@ sealed interface MdInline {
         val latex: String,
     ) : MdInline
 
+    /**
+     * `#tag` or `#parent/child` in running text, without its `#`. Drawn as a
+     * tag rather than as the word, and tapping it lists every note carrying it.
+     */
+    data class Tag(
+        val name: String,
+    ) : MdInline
+
     /** A hard break: two trailing spaces, a backslash, or a prose `<br>`. */
     data object LineBreak : MdInline
 
@@ -305,9 +313,15 @@ sealed interface MdBlock {
         val kind: UnsupportedKind = UnsupportedKind.OTHER,
     ) : MdBlock
 
+    /**
+     * The YAML at the top of a note. [values] is every key with its value run
+     * together; [properties] is the same read properly, lists as lists, which
+     * is what the Properties block draws.
+     */
     data class FrontMatter(
         override val id: Int,
         val values: Map<String, String>,
+        val properties: List<FrontMatterProperty> = emptyList(),
     ) : MdBlock
 }
 
@@ -322,6 +336,13 @@ data class ParsedNote(
     val isRtl: Boolean,
     val hasMermaid: Boolean,
     val hasMath: Boolean,
+    /**
+     * Every tag the note carries, front matter first, then inline in reading
+     * order -- case-insensitively distinct, each spelled as it was first met.
+     */
+    val tags: List<String> = emptyList(),
+    /** Other names the note answers to in a `[[link]]`, from `aliases`. */
+    val aliases: List<String> = emptyList(),
 )
 
 data class ParsedHeading(

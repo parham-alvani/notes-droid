@@ -5,6 +5,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import me.parham1995.notes.data.database.AliasDao
+import me.parham1995.notes.data.database.AliasEntity
 import me.parham1995.notes.data.database.HeadingDao
 import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.data.database.IndexDao
@@ -13,8 +15,10 @@ import me.parham1995.notes.data.database.LinkEntity
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.NoteWrite
+import me.parham1995.notes.data.database.TagEntity
 import me.parham1995.notes.data.database.TaskDao
 import me.parham1995.notes.data.database.TaskEntity
+import me.parham1995.notes.data.database.byPath
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
@@ -50,6 +54,7 @@ class VaultIndexer
         private val tasks: TaskDao,
         private val index: IndexDao,
         private val search: SearchIndex,
+        private val aliases: AliasDao,
     ) {
         data class Progress(
             val done: Int,
@@ -225,6 +230,14 @@ class VaultIndexer
                                     recurring = task.recurring,
                                 )
                             },
+                        tags =
+                            indexed.note.tags.map { tag ->
+                                TagEntity(noteId = 0, name = tag, folded = Slugs.fold(tag))
+                            },
+                        aliases =
+                            indexed.note.aliases.map { alias ->
+                                AliasEntity(noteId = 0, alias = alias, folded = Slugs.fold(alias))
+                            },
                     )
                 }
 
@@ -253,7 +266,9 @@ class VaultIndexer
                 // them being separate.
                 val refs = notes.allIds(vaultId)
                 val byPath = refs.associate { it.path to it.id }
-                val resolver = LinkResolver(byPath.keys)
+                // Aliases from the same vault, and consulted only after every
+                // real name has missed -- the resolver's order, not this one's.
+                val resolver = LinkResolver(byPath.keys, aliases.inVault(vaultId).byPath())
                 val sources = refs.associate { it.id to it.path }
 
                 // Only what found a target is written. Every candidate here is
@@ -288,8 +303,9 @@ class VaultIndexer
              * 6: paragraphs split around embeds and display maths, comments
              *    dropped and any one-character status a task -- so the
              *    stored block positions and tasks moved.
+             * 7: tags and aliases, and links that find a note by its alias.
              */
-            const val VERSION = 6
+            const val VERSION = 7
 
             /**
              * Files that are kept on the device but are not notes.

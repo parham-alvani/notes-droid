@@ -45,3 +45,8 @@ class CalloutNode(
 
 /** A detached container for a callout title's inline nodes. */
 class CalloutTitleNode : CustomNode()
+
+/** An inline `#tag` or `#parent/child`, without its `#`. */
+class TagNode(
+    val name: String,
+) : CustomNode()

@@ -46,8 +46,17 @@ class BlockFlattener(
     private var hasMermaid = false
     private var hasMath = false
     private val frontMatter = linkedMapOf<String, String>()
+    private var properties = emptyList<FrontMatterProperty>()
+    private val inlineTags = mutableListOf<String>()
 
-    fun flatten(document: Node): ParsedNote {
+    /** The source, when it is to hand, is what front matter is read from. */
+    private var source: String? = null
+
+    fun flatten(
+        document: Node,
+        source: String? = null,
+    ): ParsedNote {
+        this.source = source
         val blocks = mutableListOf<MdBlock>()
         var child = document.firstChild
         while (child != null) {
@@ -68,6 +77,8 @@ class BlockFlattener(
             isRtl = TextDirection.containsRtl(plainText),
             hasMermaid = hasMermaid,
             hasMath = hasMath,
+            tags = Tags.distinct(Tags.fromFrontMatter(properties) + inlineTags),
+            aliases = FrontMatter.aliases(properties),
         )
     }
 
@@ -443,10 +454,15 @@ class BlockFlattener(
         }
 
     private fun frontMatter(node: YamlFrontMatterBlock): MdBlock {
-        node.children().filterIsInstance<YamlFrontMatterNode>().forEach {
-            frontMatter[it.key] = it.values.joinToString(", ")
-        }
-        return MdBlock.FrontMatter(id(), frontMatter.toMap())
+        // Read from the source when there is one: the extension's own reading
+        // drops a key with a space in it and cannot tell a list from a string.
+        properties =
+            source?.let { FrontMatter.parse(it) }
+                ?: node.children().filterIsInstance<YamlFrontMatterNode>().map {
+                    FrontMatterProperty(it.key, it.values, isList = it.values.size > 1)
+                }
+        properties.forEach { frontMatter[it.key] = it.values.joinToString(", ") }
+        return MdBlock.FrontMatter(id(), frontMatter.toMap(), properties)
     }
 
     private fun htmlBlock(node: HtmlBlock): List<MdBlock> {
@@ -470,6 +486,10 @@ class BlockFlattener(
             is StrongEmphasis -> MdInline.Strong(inlines(node))
             is Strikethrough -> MdInline.Strikethrough(inlines(node))
             is HighlightNode -> MdInline.Highlight(inlines(node))
+            is TagNode -> {
+                inlineTags += node.name
+                MdInline.Tag(node.name)
+            }
             is SoftLineBreak -> MdInline.SoftBreak
             is HardLineBreak -> MdInline.LineBreak
             is InlineMathNode -> {
@@ -517,6 +537,7 @@ class BlockFlattener(
                     is SoftLineBreak, is HardLineBreak -> append(' ')
                     is WikiLinkNode -> append(current.alias ?: current.target)
                     is InlineMathNode -> append(current.latex)
+                    is TagNode -> append('#').append(current.name)
                     else -> Unit
                 }
                 var child = current.firstChild

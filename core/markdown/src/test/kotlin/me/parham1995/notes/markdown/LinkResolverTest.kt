@@ -96,4 +96,32 @@ class LinkResolverTest {
         assertThat(unicode.resolve("Iskender kebap", "Root.md")).isEqualTo("Food/Iskender kebap.md")
         assertThat(unicode.resolve("iskender kebap", "Root.md")).isEqualTo("Food/Iskender kebap.md")
     }
+
+    @Test
+    fun `an alias answers to a link, ignoring case`() {
+        val aliased = LinkResolver(paths, mapOf("Delta/Standalone.md" to listOf("The Lone One", "SA")))
+        assertThat(aliased.resolve("The Lone One", "Root.md")).isEqualTo("Delta/Standalone.md")
+        assertThat(aliased.resolve("sa", "Root.md")).isEqualTo("Delta/Standalone.md")
+        // Without the alias there is nothing by that name.
+        assertThat(resolver.resolve("The Lone One", "Root.md")).isNull()
+    }
+
+    @Test
+    fun `a real name wins over an alias`() {
+        // Obsidian's order: a file called Root beats a note that calls itself Root.
+        val aliased = LinkResolver(paths, mapOf("Delta/Standalone.md" to listOf("Root")))
+        assertThat(aliased.resolve("Root", "Alpha/Alpha.md")).isEqualTo("Root.md")
+        assertThat(aliased.resolve("root", "Alpha/Alpha.md")).isEqualTo("Root.md")
+    }
+
+    @Test
+    fun `two notes sharing an alias are told apart like two sharing a name`() {
+        val aliased =
+            LinkResolver(
+                paths,
+                mapOf("Alpha/Beta/Beta.md" to listOf("Shared"), "Delta/Standalone.md" to listOf("Shared")),
+            )
+        assertThat(aliased.resolve("Shared", "Delta/Notes/Topic.md")).isEqualTo("Delta/Standalone.md")
+        assertThat(aliased.resolve("Shared", "Alpha/Beta/Topic.md")).isEqualTo("Alpha/Beta/Beta.md")
+    }
 }

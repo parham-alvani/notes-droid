@@ -211,6 +211,44 @@ data class HeadingEntity(
 )
 
 /**
+ * One tag one note carries, from its front matter or its text.
+ *
+ * There is no vault column: a tag belongs to its note, and the note to its
+ * vault, so every query reaches the vault through `notes`. [folded] is the
+ * name case-folded, because `#Idea` and `#idea` are one tag -- Obsidian
+ * groups them, and so does the tag list.
+ */
+@Entity(
+    tableName = "tags",
+    indices = [Index("noteId"), Index("folded")],
+)
+data class TagEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val noteId: Long,
+    /** As it was written, without the `#`: `project/alpha`. */
+    val name: String,
+    val folded: String,
+)
+
+/**
+ * Another name a note answers to in a `[[link]]`, from its `aliases`.
+ *
+ * Scoped like a tag, through its note. Stored so the resolver -- which runs
+ * over every note of a vault at once -- does not have to reparse every file
+ * to learn what each is also called.
+ */
+@Entity(
+    tableName = "aliases",
+    indices = [Index("noteId"), Index("folded")],
+)
+data class AliasEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val noteId: Long,
+    val alias: String,
+    val folded: String,
+)
+
+/**
  * One task, lifted out of a note at index time.
  *
  * Stored rather than parsed on demand because the question a task list asks --
