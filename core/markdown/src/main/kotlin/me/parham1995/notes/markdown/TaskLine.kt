@@ -106,6 +106,131 @@ object TaskLine {
         return listOf(next, done)
     }
 
+    /**
+     * Finds the line a stored task came from, or null when it is not there.
+     *
+     * By recorded line number first, and only then by searching, because two
+     * tasks in one file can read identically -- "- [ ] follow up" is in this
+     * vault more than once -- and the number is what tells them apart. The
+     * number is still checked against what the index made of the line, because
+     * a note can grow a paragraph above a task between one sync and the next.
+     */
+    fun locate(
+        lines: List<String>,
+        line: Int,
+        text: String,
+    ): Int? {
+        val at = lines.getOrNull(line)
+        if (at != null && indexedText(at) == text) return line
+        return lines.indexOfFirst { isOpen(it) && indexedText(it) == text }.takeIf { it >= 0 }
+    }
+
+    /** A task moved to another day, and what it said before. */
+    data class Rescheduled(
+        val line: String,
+        /** Which date moved: `⏳` or `📅`. */
+        val emoji: String,
+        /**
+         * The date it carried before, or null when it had none and a scheduled
+         * date was added -- which is what tells an undo whether to move the
+         * date back or take it off again.
+         */
+        val previous: String?,
+    )
+
+    /**
+     * Moves the date this task is next looked at to [date].
+     *
+     * Scheduled if the line has one, else due, else a scheduled date is added.
+     * Scheduled first because it is the date that means "not before" -- this
+     * vault schedules work rather than promising it -- and moving a due date is
+     * moving a promise, done only when there is nothing else to move.
+     *
+     * The date is changed where it stands. Nothing else on the line moves: not
+     * the created date, not a repeat rule, not a block id, whose place at the
+     * very end is what makes it a block id. An added date goes after the other
+     * metadata and before any block id, for the same reason.
+     *
+     * Null when the line already carries [date] there, or is not a task.
+     */
+    fun reschedule(
+        raw: String,
+        date: String,
+    ): Rescheduled? {
+        val parts = parts(raw) ?: return null
+        val target = listOf(SCHEDULED, DUE).firstNotNullOfOrNull { emoji -> parts.find(emoji) }
+        if (target == null) {
+            return Rescheduled(parts.head + parts.rest + " " + SCHEDULED + " " + date + parts.tail, SCHEDULED, null)
+        }
+        val (emoji, range) = target
+        val previous = parts.rest.substring(range.first, range.last + 1)
+        if (previous == date) return null
+        val rest = parts.rest.replaceRange(range.first, range.last + 1, if (range.isEmpty()) " $date" else date)
+        return Rescheduled(parts.head + rest + parts.tail, emoji, previous.takeIf { it.toDateOrNull() != null })
+    }
+
+    /**
+     * Takes the scheduled date off the line, or null when it has none.
+     *
+     * The inverse of the one case of [reschedule] that adds rather than moves:
+     * the added date went in as ` ⏳ date` at the end of the metadata, and this
+     * takes exactly that back out.
+     */
+    fun unschedule(raw: String): String? {
+        val parts = parts(raw) ?: return null
+        val (_, range) = parts.find(SCHEDULED) ?: return null
+        val symbol = parts.rest.lastIndexOf(SCHEDULED, range.first)
+        var start = symbol
+        while (start > 0 && parts.rest[start - 1].isWhitespace()) start--
+        val rest = parts.rest.removeRange(start, range.last + 1)
+        return parts.head + rest + parts.tail
+    }
+
+    /**
+     * A task line cut in three: everything up to the text, the text and its
+     * metadata, and whatever follows the metadata -- a block id, trailing
+     * space -- which no edit to a date should ever touch.
+     */
+    private class Parts(
+        val head: String,
+        val rest: String,
+        val tail: String,
+    ) {
+        private val metadata = TaskMetadata.split(rest)
+
+        /**
+         * Where the value of the [emoji] field sits in [rest], or null when the
+         * line has no such field. The metadata is a suffix, so the search
+         * starts where the sentence ends: an emoji in the prose is prose.
+         */
+        fun find(emoji: String): Pair<String, IntRange>? {
+            if (metadata.meta.none { it.emoji == emoji }) return null
+            var cursor = metadata.text.length
+            metadata.meta.forEach { meta ->
+                val at = rest.indexOf(meta.emoji, cursor)
+                if (at < 0) return null
+                cursor = at + meta.emoji.length
+                if (meta.emoji == emoji) {
+                    // The value is what follows the symbol, trimmed; an empty
+                    // one is an empty range just after the symbol.
+                    var begin = cursor
+                    while (meta.value.isNotEmpty() && begin < rest.length && rest[begin].isWhitespace()) begin++
+                    return emoji to (begin until begin + meta.value.length)
+                }
+            }
+            return null
+        }
+    }
+
+    private fun parts(raw: String): Parts? {
+        val match = LINE.find(raw) ?: return null
+        val body = match.groups[3] ?: return null
+        val start = body.range.first
+        val tail = BLOCK_TAIL.find(body.value)?.value.orEmpty()
+        val rest = body.value.substring(0, body.value.length - tail.length)
+        return Parts(raw.substring(0, start), rest, tail)
+    }
+
     private fun rebuild(
         text: String,
         meta: List<TaskMeta>,
@@ -137,6 +262,11 @@ object TaskLine {
 
     private const val DONE = "✅"
     private const val RECUR = "🔁"
+    private const val SCHEDULED = "⏳"
+    private const val DUE = "📅"
+
+    /** A trailing block id and whatever space surrounds it. */
+    private val BLOCK_TAIL = Regex("""(\s+\^[A-Za-z0-9-]+)?\s*$""")
 
     /** The dates that describe when a task happens, and so travel with it. */
     private val MOVED = listOf("📅", "⏳", "🛫")
