@@ -28,28 +28,36 @@ object NoteSearch {
         blocks: List<MdBlock>,
         query: String,
     ): List<NoteMatch> {
-        val term = query.trim()
+        // Folded the way search across the vault folds it, so a word typed on
+        // a Persian keyboard is found where the note wrote it with Arabic
+        // letters, or with a zero-width joiner the query left out. The match
+        // is made on the folded text and carried back, so the preview and its
+        // highlight are in the note's own letters.
+        val term = SearchText.normalize(query.trim())
         if (term.isEmpty()) return emptyList()
 
         val matches = mutableListOf<NoteMatch>()
         blocks.forEachIndexed { index, block ->
             val text = block.searchableText()
             if (text.isEmpty()) return@forEachIndexed
+            val folded = SearchText.mapped(text)
 
             var from = 0
             while (true) {
-                val at = text.indexOf(term, from, ignoreCase = true)
-                if (at < 0) break
+                val found = folded.text.indexOf(term, from, ignoreCase = true)
+                if (found < 0) break
+                val at = folded.originOf(found)
+                val until = folded.originOf(found + term.length)
                 val start = (at - CONTEXT).coerceAtLeast(0)
-                val end = (at + term.length + CONTEXT).coerceAtMost(text.length)
+                val end = (until + CONTEXT).coerceAtMost(text.length)
                 matches +=
                     NoteMatch(
                         blockIndex = index,
                         preview = text.substring(start, end),
                         previewStart = at - start,
-                        previewEnd = at - start + term.length,
+                        previewEnd = until - start,
                     )
-                from = at + term.length
+                from = found + term.length
             }
         }
         return matches

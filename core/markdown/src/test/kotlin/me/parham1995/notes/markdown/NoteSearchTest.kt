@@ -91,4 +91,29 @@ class NoteSearchTest {
         assertThat(found.previewEnd).isAtMost(found.preview.length)
         assertThat(found.previewStart).isAtMost(found.previewEnd)
     }
+
+    @Test
+    fun `a word is found whichever keyboard wrote it, and marked in the note's own letters`() {
+        // Arabic kaf (U+0643) in the note, Persian kaf (U+06A9) in the query:
+        // search across the vault folds the two, and the page itself did not.
+        val note = "\u0627\u06CC\u0646 \u0643\u0627\u0631 \u0627\u0633\u062A\n"
+        val found = find(note, "\u06A9\u0627\u0631")
+
+        assertThat(found).hasSize(1)
+        val hit = found.single()
+        assertThat(hit.preview.substring(hit.previewStart, hit.previewEnd)).isEqualTo("\u0643\u0627\u0631")
+    }
+
+    @Test
+    fun `a zero-width joiner in the note does not hide the word`() {
+        // "mi-khaham" written with a ZWNJ (U+200C), searched without one.
+        val note = "\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645\n"
+        val found = find(note, "\u0645\u06CC\u062E\u0648\u0627\u0647\u0645")
+
+        assertThat(found).hasSize(1)
+        val hit = found.single()
+        // The highlight covers the whole word as written, joiner included.
+        assertThat(hit.preview.substring(hit.previewStart, hit.previewEnd))
+            .isEqualTo("\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645")
+    }
 }
