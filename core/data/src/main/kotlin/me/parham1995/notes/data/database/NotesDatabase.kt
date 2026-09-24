@@ -65,20 +65,101 @@ abstract class NotesDatabase : RoomDatabase() {
          * `remove_diacritics 2` is the Unicode-aware setting, which matters for
          * a vault mixing scripts. `columnsize = 0` drops per-row size data the
          * ranking does not need.
+         *
+         * `title` and `body` hold text as `SearchText.normalize` leaves it, so
+         * a Persian word matches whichever keyboard wrote it. The rest are
+         * never matched against:
+         *
+         * - `original` is the body as written, kept only for a note whose body
+         *   normalizing changed, so an excerpt can be shown in the note's own
+         *   characters. Null for every note without Arabic script in it.
+         * - `path` is the note's path, normalized, for `path:`.
+         * - `name` and `aliases` are the name and each alias as
+         *   `SearchText.foldName` leaves them, for the quick switcher; the
+         *   aliases one to a line, with a newline either side.
          */
         private const val CREATE_FTS =
             """
             CREATE VIRTUAL TABLE IF NOT EXISTS note_fts USING fts5(
                 title,
                 body,
+                original UNINDEXED,
+                path UNINDEXED,
+                name UNINDEXED,
+                aliases UNINDEXED,
                 tokenize = 'unicode61 remove_diacritics 2',
                 prefix = '2 3',
                 columnsize = 0
             )
             """
 
+        private val FTS_COLUMNS = listOf("title", "body", "original", "path", "name", "aliases")
+
+        /** What every install from before letter forms were folded has. */
+        private val FTS_COLUMNS_UNFOLDED = listOf("title", "body")
+
+        /**
+         * Creates the search index if it is missing, whatever shape an
+         * existing one has. This is what the migrations call: they run against
+         * the index of their own time and only touch `rowid`, `title` and
+         * `body`, which every shape has.
+         */
         fun createSearchIndex(connection: SQLiteConnection) {
             connection.execSQL(CREATE_FTS.trimIndent())
+        }
+
+        /**
+         * Creates the search index, or brings an existing one to the current
+         * shape. Called whenever the database opens, after every migration.
+         *
+         * `note_fts` is not one of Room's tables, so no Room migration
+         * reshapes it -- this does. An index from before letter forms were
+         * folded is carried over rather than emptied: its text is copied as
+         * it was, and the path, name and aliases the new columns want are all
+         * in Room's tables already. It answers exactly as it used to until
+         * the indexer's version bump rebuilds it on the next sync, instead of
+         * answering nothing until then -- which on a phone that is offline
+         * could be a while.
+         *
+         * Any other shape is dropped and recreated empty, for the reindex to
+         * fill. All of it is one savepoint, so a failure halfway leaves the
+         * old table in place rather than no table at all.
+         */
+        fun ensureSearchIndex(connection: SQLiteConnection) {
+            val columns =
+                connection.prepare("SELECT name FROM pragma_table_info('$FTS_TABLE')").use { statement ->
+                    buildList { while (statement.step()) add(statement.getText(0)) }
+                }
+            if (columns.isEmpty() || columns == FTS_COLUMNS) {
+                createSearchIndex(connection)
+                return
+            }
+            connection.execSQL("SAVEPOINT reshape_fts")
+            try {
+                if (columns == FTS_COLUMNS_UNFOLDED) {
+                    connection.execSQL("DROP TABLE IF EXISTS note_fts_unfolded")
+                    connection.execSQL("ALTER TABLE $FTS_TABLE RENAME TO note_fts_unfolded")
+                    createSearchIndex(connection)
+                    // Joined on `notes`, so a row an older indexer orphaned
+                    // is left behind rather than carried forward.
+                    connection.execSQL(
+                        "INSERT INTO $FTS_TABLE(rowid, title, body, path, name, aliases) " +
+                            "SELECT o.rowid, o.title, o.body, n.path, n.slug, " +
+                            "COALESCE(char(10) || (SELECT group_concat(a.folded, char(10)) " +
+                            "FROM aliases a WHERE a.noteId = n.id) || char(10), '') " +
+                            "FROM note_fts_unfolded o JOIN notes n ON n.id = o.rowid",
+                    )
+                    connection.execSQL("DROP TABLE note_fts_unfolded")
+                } else {
+                    connection.execSQL("DROP TABLE $FTS_TABLE")
+                    createSearchIndex(connection)
+                }
+                connection.execSQL("RELEASE reshape_fts")
+            } catch (failure: Exception) {
+                connection.execSQL("ROLLBACK TO reshape_fts")
+                connection.execSQL("RELEASE reshape_fts")
+                throw failure
+            }
         }
 
         /**

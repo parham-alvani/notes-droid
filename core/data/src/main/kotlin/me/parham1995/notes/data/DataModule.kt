@@ -61,11 +61,12 @@ object DataModule {
                 NotesDatabase.MIGRATION_13_14,
             ).addCallback(
                 object : RoomDatabase.Callback() {
-                    override fun onCreate(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
+                    override fun onCreate(connection: SQLiteConnection) = NotesDatabase.ensureSearchIndex(connection)
 
                     // Re-asserted on open: the FTS table is not part of Room's
-                    // schema, so nothing else would recreate it if it were lost.
-                    override fun onOpen(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
+                    // schema, so nothing else would recreate it if it were
+                    // lost, or reshape it when its columns change.
+                    override fun onOpen(connection: SQLiteConnection) = NotesDatabase.ensureSearchIndex(connection)
                 },
             ).build()
 

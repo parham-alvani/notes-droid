@@ -16,6 +16,14 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun byId(id: Long): NoteEntity?
 
+    /**
+     * Several notes by id, in no particular order. The quick switcher asks
+     * the search index which notes match and in what order -- the folded
+     * names it compares are kept there -- and reads the notes from here.
+     */
+    @Query("SELECT * FROM notes WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<Long>): List<NoteEntity>
+
     @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND path = :path")
     suspend fun byPath(
         vaultId: Long,
@@ -87,43 +95,6 @@ interface NoteDao {
         id: Long,
         at: Long,
     )
-
-    /**
-     * Fast prefix match on the name, for the quick switcher.
-     *
-     * Scoped to one vault like everything else. It was the last query in the
-     * app that was not, so typing a name reached across every repository --
-     * which is the exact mixing the vaults were separated to stop, still
-     * happening in the one place that answers on every keystroke.
-     *
-     * [prefix] must come through [escapeLike]. `%` and `_` are wildcards to
-     * LIKE and ordinary characters in a file name, so typing "100%" offered
-     * every note starting "100".
-     *
-     * A note's aliases answer too, as they do in Obsidian's switcher: a name
-     * that starts with what was typed first, then an alias that does, then
-     * anything containing it. The alias subquery needs no vault of its own --
-     * it only narrows the notes the outer `vaultId` already chose.
-     */
-    @Query(
-        """
-        SELECT * FROM notes
-        WHERE vaultId = :vaultId
-          AND (slug LIKE '%' || :prefix || '%' ESCAPE '\'
-               OR id IN (SELECT noteId FROM aliases WHERE folded LIKE '%' || :prefix || '%' ESCAPE '\'))
-        ORDER BY (CASE WHEN slug LIKE :prefix || '%' ESCAPE '\' THEN 0
-                       WHEN id IN (SELECT noteId FROM aliases WHERE folded LIKE :prefix || '%' ESCAPE '\') THEN 1
-                       WHEN slug LIKE '%' || :prefix || '%' ESCAPE '\' THEN 2
-                       ELSE 3 END),
-                 length(name), name COLLATE NOCASE
-        LIMIT :limit
-        """,
-    )
-    suspend fun searchByName(
-        vaultId: Long,
-        prefix: String,
-        limit: Int,
-    ): List<NoteEntity>
 
     /**
      * Notes that changed since they were last opened, most recent change

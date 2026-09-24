@@ -262,7 +262,7 @@ class VaultIndexer
                 ids.mapIndexed { position, id ->
                     val indexed = batch[position]
                     val name = indexed.path.substringAfterLast('/').removeSuffix(MD)
-                    SearchDocument(id, name, indexed.note.plainText)
+                    SearchDocument(id, name, indexed.note.plainText, indexed.path, indexed.note.aliases)
                 },
             )
         }
@@ -321,8 +321,12 @@ class VaultIndexer
              *    block positions after one moved.
              * 9: a `^block-id` on a line of its own is an address for the
              *    block above it, not a paragraph -- positions moved again.
+             * 10: search holds text with Arabic and Persian letter forms,
+             *    digits and half-spaces folded, plus each note's path, name
+             *    and aliases. The index carried over from 9 still answers as
+             *    it did; this rebuilds it so it answers the new way.
              */
-            const val VERSION = 9
+            const val VERSION = 10
 
             /**
              * Files that are kept on the device but are not notes.
