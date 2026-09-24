@@ -312,4 +312,8 @@
     <string name="month_missing">هنوز یادداشتی برای این ماه نیست؛ جایش %1$s است</string>
     <string name="quarter_missing">هنوز یادداشتی برای این فصل نیست؛ جایش %1$s است</string>
     <string name="year_missing">هنوز یادداشتی برای امسال نیست؛ جایش %1$s است</string>
+    <string name="period_previous">قبلی: %1$s</string>
+    <string name="period_next">بعدی: %1$s</string>
+    <string name="period_no_previous">یادداشت قبلی‌ای نیست</string>
+    <string name="period_no_next">یادداشت بعدی‌ای نیست</string>
 </resources>

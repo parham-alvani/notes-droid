@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.Destinations
 import me.parham1995.notes.data.IconStore
+import me.parham1995.notes.data.PeriodNeighbours
 import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.SearchHit
@@ -53,6 +55,8 @@ data class NoteUiState(
     val writable: Boolean = false,
     /** The last thing a write had to say, shown once and dismissed. */
     val message: String? = null,
+    /** The journal either side, when this note is one of its vault's daily notes. */
+    val periodic: PeriodNeighbours? = null,
 ) {
     val isFolderNote: Boolean get() = note?.isFolderNote == true
 
@@ -70,6 +74,7 @@ class NoteViewModel
         private val settings: SettingsStore,
         private val openTabs: NoteTabs,
         private val writes: VaultWriteRepository,
+        private val destinations: Destinations,
     ) : ViewModel() {
         val tabs: StateFlow<TabsState> = openTabs.state
 
@@ -173,7 +178,9 @@ class NoteViewModel
 
         fun load(id: Long) {
             if (_state.value.note?.id == id) return
-            _state.value = NoteUiState(loading = true)
+            // The journal strip is kept while the next note loads, so stepping
+            // along a journal does not pull the page up and down under the finger.
+            _state.value = NoteUiState(loading = true, periodic = _state.value.periodic)
             viewModelScope.launch {
                 val note = repository.note(id)
                 if (note == null) {
@@ -190,6 +197,7 @@ class NoteViewModel
                         backlinks = repository.backlinks(id),
                         icon = assignments.forFile(note.vaultId, note.path),
                         writable = writable,
+                        periodic = destinations.neighbours(note.vaultId, note.path),
                         contents =
                             if (!note.isFolderNote) {
                                 emptyList()

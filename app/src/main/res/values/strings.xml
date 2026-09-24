@@ -312,4 +312,8 @@
     <string name="month_missing">No note for this month yet - it would be %1$s</string>
     <string name="quarter_missing">No note for this quarter yet - it would be %1$s</string>
     <string name="year_missing">No note for this year yet - it would be %1$s</string>
+    <string name="period_previous">Previous: %1$s</string>
+    <string name="period_next">Next: %1$s</string>
+    <string name="period_no_previous">No earlier note</string>
+    <string name="period_no_next">No later note</string>
 </resources>

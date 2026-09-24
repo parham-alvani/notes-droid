@@ -565,6 +565,12 @@ fun NoteScreen(
                     )
                     HorizontalDivider()
                 }
+                // Stepping along a journal lands in this tab, so back steps
+                // back along it too.
+                state.periodic?.let { periodic ->
+                    PeriodBar(periodic, onOpen = { id -> viewModel.openTab(id, inNewTab = false) })
+                    HorizontalDivider()
+                }
                 Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
                     // A folder note is only half of what a folder is: the page someone
                     // wrote, and the things actually in it. Obsidian shows both at
