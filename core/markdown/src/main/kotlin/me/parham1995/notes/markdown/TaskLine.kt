@@ -128,44 +128,67 @@ object TaskLine {
     /** A task moved to another day, and what it said before. */
     data class Rescheduled(
         val line: String,
-        /** Which date moved: `⏳` or `📅`. */
+        /** Which date led the move: `📅` or `⏳`. */
         val emoji: String,
         /**
-         * What the field said before, as written, or null when there was no
-         * such field and a scheduled date was added -- which is what tells an
-         * undo whether to move the date back or take it off again.
+         * What the leading field said before, as written, or null when there
+         * was no such field and a scheduled date was added -- which is what
+         * tells an undo whether to move the dates back or take it off again.
+         * Moving the leading date back to this moves the others back by the
+         * same number of days, so that undo is exact.
          */
         val previous: String?,
     )
 
     /**
-     * Moves the date this task is next looked at to [date].
+     * Moves the task to [date], so that the day it is grouped under is [date].
      *
-     * Scheduled if the line has one, else due, else a scheduled date is added.
-     * Scheduled first because it is the date that means "not before" -- this
-     * vault schedules work rather than promising it -- and moving a due date is
-     * moving a promise, done only when there is nothing else to move.
+     * The date that moves to [date] is the one the index files the task by --
+     * due, else scheduled ([ParsedTask.actionableOn]) -- because moving any
+     * other would leave the task in the group it was just taken out of. The
+     * task's other dates (due, scheduled, start) follow by the same number of
+     * days, exactly as a repeat moves them, so a task scheduled three days
+     * before it is due stays three days before it. Created and done dates are
+     * history and stay put. With neither due nor scheduled on the line, a
+     * scheduled date is added.
      *
-     * The date is changed where it stands. Nothing else on the line moves: not
-     * the created date, not a repeat rule, not a block id, whose place at the
-     * very end is what makes it a block id. An added date goes after the other
-     * metadata and before any block id, for the same reason.
+     * Each date is changed where it stands. Nothing else on the line moves:
+     * not a repeat rule, not a block id, whose place at the very end is what
+     * makes it a block id. An added date goes after the other metadata and
+     * before any block id, for the same reason.
      *
-     * Null when the line already carries [date] there, or is not a task.
+     * Null when the line is already filed under [date], or is not a task.
      */
     fun reschedule(
         raw: String,
         date: String,
     ): Rescheduled? {
         val parts = parts(raw) ?: return null
-        val target = listOf(SCHEDULED, DUE).firstNotNullOfOrNull { emoji -> parts.find(emoji) }
-        if (target == null) {
+        val target = date.toDateOrNull() ?: return null
+        val lead = FILED_BY.firstNotNullOfOrNull { emoji -> parts.find(emoji) }
+        if (lead == null) {
             return Rescheduled(parts.head + parts.rest + " " + SCHEDULED + " " + date + parts.tail, SCHEDULED, null)
         }
-        val (emoji, range) = target
+        val (emoji, range) = lead
         val previous = parts.rest.substring(range.first, range.last + 1)
         if (previous == date) return null
-        val rest = parts.rest.replaceRange(range.first, range.last + 1, if (range.isEmpty()) " $date" else date)
+        val from = previous.toDateOrNull()
+        // A leading field that is not a date gives no distance to move the
+        // others by, so it alone is set and they are left where they are.
+        val shift = from?.let { ChronoUnit.DAYS.between(it, target) }
+        val edits =
+            MOVED
+                .mapNotNull { other -> parts.find(other) }
+                .mapNotNull { (other, at) ->
+                    val value = parts.rest.substring(at.first, at.last + 1)
+                    when {
+                        other == emoji -> at to (if (at.isEmpty()) " $date" else date)
+                        shift == null -> null
+                        else -> value.toDateOrNull()?.let { at to it.plusDays(shift).toString() }
+                    }
+                }.sortedByDescending { (at, _) -> at.first }
+        // Right to left, so each replacement leaves the earlier ranges valid.
+        val rest = edits.fold(parts.rest) { text, (at, value) -> text.replaceRange(at.first, at.last + 1, value) }
         return Rescheduled(parts.head + rest + parts.tail, emoji, previous)
     }
 
@@ -264,6 +287,9 @@ object TaskLine {
     private const val RECUR = "🔁"
     private const val SCHEDULED = "⏳"
     private const val DUE = "📅"
+
+    /** The dates the index files a task by, in the order it prefers them. */
+    private val FILED_BY = listOf(DUE, SCHEDULED)
 
     /** A trailing block id and whatever space surrounds it. */
     private val BLOCK_TAIL = Regex("""(\s+\^[A-Za-z0-9-]+)?\s*$""")

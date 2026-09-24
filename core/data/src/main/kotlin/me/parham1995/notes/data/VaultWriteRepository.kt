@@ -73,9 +73,10 @@ sealed interface WriteResult {
 /**
  * What came of moving a task, and the move that would take it back.
  *
- * [undo] is there only when taking it back is exact: the date that moved goes
- * back to the date it was, or the date that was added comes off again. A line
- * whose old value was not a date has no exact way back, so it gets none.
+ * [undo] is there only when taking it back is exact: the dates that moved go
+ * back by the same number of days, or the date that was added comes off
+ * again. A line whose old value was not a date has no exact way back, so it
+ * gets none.
  */
 data class Rescheduling(
     val result: WriteResult,
@@ -196,9 +197,11 @@ class VaultWriteRepository
         }
 
         /**
-         * Moves [task] to [date]: its scheduled date if it has one, else its
-         * due date, else a scheduled date is added. [date] null takes off a
-         * scheduled date, which is only ever asked for as an undo.
+         * Moves [task] to [date]: the date it is filed under (due, else
+         * scheduled) lands on [date] and its other dates keep their distance
+         * from it, or a scheduled date is added when it has neither -- see
+         * [TaskLine.reschedule]. [date] null takes off a scheduled date, which
+         * is only ever asked for as an undo.
          *
          * Found the way a tick finds it, and queued the same way. What is
          * stored is the task and the date rather than the line to write, so a
