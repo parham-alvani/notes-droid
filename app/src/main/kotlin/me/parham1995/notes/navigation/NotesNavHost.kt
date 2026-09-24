@@ -272,7 +272,9 @@ fun NotesNavHost(
     LaunchedEffect(requestedLink) {
         val uri = requestedLink ?: return@LaunchedEffect
         resumed = true
-        (openLink as? MutableStateFlow)?.value = null
+        // Cleared only once the link has been followed. The link is this
+        // effect's key: clearing it first recomposed, cancelled the effect in
+        // the middle of looking the note up, and every link did nothing.
         val message =
             when (val found = jumps.follow(uri)) {
                 is Destination.Note -> {
@@ -295,6 +297,7 @@ fun NotesNavHost(
                 is Destination.NoDailyNote, null -> resources.getString(R.string.link_not_followed)
             }
         message?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+        (openLink as? MutableStateFlow)?.value = null
     }
 
     // Reopen the note that was being read, once and only at launch.
