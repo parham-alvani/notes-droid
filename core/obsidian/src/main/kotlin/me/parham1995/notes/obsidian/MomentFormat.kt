@@ -39,7 +39,10 @@ object MomentFormat {
      * Moment's English week: it starts on Sunday, and the first week of a year
      * is the one holding the 1st of January.
      */
-    private val LOCALE_WEEK = WeekFields.of(DayOfWeek.SUNDAY, 1)
+    internal val LOCALE_WEEK: WeekFields = WeekFields.of(DayOfWeek.SUNDAY, 1)
+
+    /** [pattern] cut into the tokens moment reads it as, literals included. */
+    internal fun tokens(pattern: String): List<String> = TOKENS.findAll(pattern).map { it.value }.toList()
 
     fun format(
         pattern: String,
@@ -47,9 +50,7 @@ object MomentFormat {
         locale: Locale = Locale.ENGLISH,
     ): String =
         buildString {
-            TOKENS.findAll(pattern).forEach { match ->
-                append(token(match.value, date, locale))
-            }
+            tokens(pattern).forEach { append(token(it, date, locale)) }
         }
 
     private fun token(
