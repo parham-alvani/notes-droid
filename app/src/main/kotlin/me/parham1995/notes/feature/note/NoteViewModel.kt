@@ -165,6 +165,36 @@ class NoteViewModel
                 if (said == "Saved" || said.startsWith("Saved here")) reload()
             }
 
+        /**
+         * Moves the task written on [line] to [date], found the way
+         * [completeTask] finds it.
+         *
+         * No undo here: the note is re-read after a move, and a snackbar
+         * action that edits the page underneath the reader is more than a
+         * long press on a box should set off. The task list has one.
+         */
+        fun rescheduleTask(
+            line: Int,
+            date: java.time.LocalDate,
+        ) = viewModelScope.launch {
+            val noteId = _state.value.note?.id ?: return@launch
+            val row = repository.tasksIn(noteId).firstOrNull { it.line == line }
+            if (row == null) {
+                _state.value = _state.value.copy(message = "that task is not in the index yet")
+                return@launch
+            }
+            val result = writes.rescheduleTask(row, date.toString()).result
+            val said =
+                when (result) {
+                    WriteResult.Pushed -> "Moved to $date"
+                    is WriteResult.Queued -> "Moved to $date here - it goes up with the next sync"
+                    WriteResult.Unchanged -> "Already on $date"
+                    is WriteResult.Refused -> result.why
+                }
+            _state.value = _state.value.copy(message = said)
+            if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
+        }
+
         private suspend fun reload() {
             val id = _state.value.note?.id ?: return
             val note = repository.note(id) ?: return

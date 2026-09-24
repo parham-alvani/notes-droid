@@ -305,4 +305,16 @@
     <string name="help_line_width">How wide a note\'s text may run on a tablet or in landscape. A phone held upright is narrower than all three.</string>
     <string name="browse_updated">Updated since you read</string>
     <string name="browse_updated_marker">Changed since you last read it</string>
+
+    <!-- Moving a task to another day -->
+    <string name="reschedule_title">Move to</string>
+    <string name="reschedule_tomorrow">Tomorrow</string>
+    <string name="reschedule_weekend">This weekend</string>
+    <string name="reschedule_next_week">Next week</string>
+    <string name="reschedule_pick">Pick a date</string>
+    <string name="reschedule_move">Move</string>
+    <string name="reschedule_action">Move to another day</string>
+    <string name="reschedule_moved">Moved to %1$s</string>
+    <string name="reschedule_moved_queued">Moved to %1$s here - %2$s</string>
+    <string name="action_undo">Undo</string>
 </resources>

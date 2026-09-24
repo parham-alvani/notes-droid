@@ -12,6 +12,7 @@ import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.TaskLine
+import me.parham1995.notes.markdown.TaskNotFound
 import me.parham1995.notes.markdown.VaultEdits
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
@@ -23,7 +24,7 @@ import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** The shapes of edit the app can make. One each for the two [VaultEdits]. */
+/** The shapes of edit the app can make. One each for the [VaultEdits]. */
 enum class EditKind {
     /** Find a line and replace it -- how a task is ticked. */
     REPLACE_LINE,
@@ -33,6 +34,13 @@ enum class EditKind {
 
     /** Put a block at the end of the file, verbatim. */
     APPEND,
+
+    /**
+     * Move a task to another day. The anchor is the task as the index read
+     * it, and the text is its recorded line and the date -- or the line alone,
+     * which takes off a scheduled date an earlier move added.
+     */
+    RESCHEDULE,
     ;
 
     companion object {
@@ -60,6 +68,24 @@ sealed interface WriteResult {
     data class Refused(
         val why: String,
     ) : WriteResult
+}
+
+/**
+ * What came of moving a task, and the move that would take it back.
+ *
+ * [undo] is there only when taking it back is exact: the date that moved goes
+ * back to the date it was, or the date that was added comes off again. A line
+ * whose old value was not a date has no exact way back, so it gets none.
+ */
+data class Rescheduling(
+    val result: WriteResult,
+    val undo: Undo? = null,
+) {
+    /** Move [task] to [date], or take its scheduled date off when null. */
+    data class Undo(
+        val task: TaskRow,
+        val date: String?,
+    )
 }
 
 /**
@@ -168,6 +194,57 @@ class VaultWriteRepository
                 summary = "docs(tasks): complete \"${task.text.take(SUBJECT)}\"",
             )
         }
+
+        /**
+         * Moves [task] to [date]: its scheduled date if it has one, else its
+         * due date, else a scheduled date is added. [date] null takes off a
+         * scheduled date, which is only ever asked for as an undo.
+         *
+         * Found the way a tick finds it, and queued the same way. What is
+         * stored is the task and the date rather than the line to write, so a
+         * move queued offline still lands on the task if the line around it
+         * changed at the desk in the meantime.
+         */
+        suspend fun rescheduleTask(
+            task: TaskRow,
+            date: String?,
+        ): Rescheduling {
+            val vault = writableVault(task.vaultId) ?: return Rescheduling(refusal(task.vaultId))
+            val text =
+                files.readText(vault.id, task.notePath)
+                    ?: return Rescheduling(WriteResult.Refused("${task.notePath} is not on the device"))
+            val lines = text.lines()
+            val at =
+                TaskLine.locate(lines, task.line, task.text)
+                    ?: return Rescheduling(WriteResult.Refused(TaskNotFound(task.text).message.orEmpty()))
+            val found = task.copy(line = at)
+            val back =
+                date?.let { TaskLine.reschedule(lines[at], it) }?.let { moved ->
+                    when {
+                        moved.previous == null -> Rescheduling.Undo(found, null)
+                        isDate(moved.previous) -> Rescheduling.Undo(found, moved.previous)
+                        else -> null
+                    }
+                }
+            val result =
+                apply(
+                    vault = vault,
+                    path = task.notePath,
+                    kind = EditKind.RESCHEDULE,
+                    anchor = task.text,
+                    replacement = listOfNotNull("$at", date).joinToString(" "),
+                    summary =
+                        if (date == null) {
+                            "docs(tasks): unschedule \"${task.text.take(SUBJECT)}\""
+                        } else {
+                            "docs(tasks): move \"${task.text.take(SUBJECT)}\" to $date"
+                        },
+                )
+            val landed = result == WriteResult.Pushed || result is WriteResult.Queued
+            return Rescheduling(result, back.takeIf { landed })
+        }
+
+        private fun isDate(value: String?): Boolean = value != null && runCatching { LocalDate.parse(value) }.isSuccess
 
         /**
          * Adds a task under [section] in [path], with this vault's own default
@@ -309,7 +386,14 @@ class VaultWriteRepository
             return gate.tryWithVault {
                 val transform = transformFor(edit)
                 val before = files.readText(vault.id, path)
-                val after = transform(before) ?: return@tryWithVault WriteResult.Unchanged
+                val after =
+                    try {
+                        transform(before)
+                    } catch (gone: TaskNotFound) {
+                        // Said now, while the person is looking, rather than
+                        // queued to fail five times out of sight.
+                        return@tryWithVault WriteResult.Refused(gone.message.orEmpty())
+                    } ?: return@tryWithVault WriteResult.Unchanged
 
                 val id = pending.insert(edit)
                 store(vault.id, path, after)
@@ -398,6 +482,10 @@ class VaultWriteRepository
                 // and the queue stores an edit as one string.
                 EditKind.REPLACE_LINE -> VaultEdits.replaceLineWith(edit.anchor, edit.text.split(LINES))
                 EditKind.ADD_UNDER -> VaultEdits.addUnder(edit.anchor, edit.text)
+                EditKind.RESCHEDULE -> {
+                    val (line, date) = edit.text.split(' ', limit = 2).let { it[0] to it.getOrNull(1) }
+                    VaultEdits.reschedule(line.toInt(), edit.anchor, date?.takeIf { it.isNotBlank() })
+                }
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
 
@@ -435,21 +523,13 @@ class VaultWriteRepository
             )
         }
 
-        /**
-         * Finds the line a stored task came from.
-         *
-         * By recorded line number first, and only then by searching, because
-         * two tasks in one file can read identically -- "- [ ] follow up" is in
-         * this vault more than once -- and the number is what tells them apart.
-         */
+        /** Finds the line a stored task came from; see [TaskLine.locate]. */
         private fun locate(
             text: String,
             task: TaskRow,
         ): String? {
             val lines = text.lines()
-            val at = lines.getOrNull(task.line)
-            if (at != null && TaskLine.indexedText(at) == task.text) return at
-            return lines.firstOrNull { TaskLine.isOpen(it) && TaskLine.indexedText(it) == task.text }
+            return TaskLine.locate(lines, task.line, task.text)?.let { lines[it] }
         }
 
         private suspend fun writableVault(vaultId: Long): VaultEntity? =

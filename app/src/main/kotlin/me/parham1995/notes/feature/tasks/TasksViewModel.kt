@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.data.Rescheduling
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskBuckets
 import me.parham1995.notes.data.VaultRepository
@@ -59,6 +60,8 @@ data class TasksUiState(
     val sectionsByPath: Map<String, List<String>> = emptyMap(),
     /** The last thing a write had to say, shown once and dismissed. */
     val message: UiText? = null,
+    /** How to take back the move [message] is about, when that can be exact. */
+    val undo: Rescheduling.Undo? = null,
     /**
      * Edits made here that have not reached the repository.
      *
@@ -80,7 +83,13 @@ class TasksViewModel
         private val writes: VaultWriteRepository,
         private val savedState: SavedStateHandle,
     ) : ViewModel() {
-        private val message = MutableStateFlow<UiText?>(null)
+        /** A message, and the undo that goes with it when there is one. */
+        private data class Notice(
+            val text: UiText,
+            val undo: Rescheduling.Undo? = null,
+        )
+
+        private val message = MutableStateFlow<Notice?>(null)
 
         fun dismissMessage() {
             message.value = null
@@ -95,7 +104,29 @@ class TasksViewModel
          */
         fun complete(row: TaskRow) =
             viewModelScope.launch {
-                message.value = writes.completeTask(row).describe()
+                message.value = Notice(writes.completeTask(row).describe())
+            }
+
+        /**
+         * Pushes a task to [date], with an undo when it can be taken back
+         * exactly.
+         *
+         * The task changes group as soon as this returns, pushed or not: the
+         * move is written and indexed on the device before it is sent, which
+         * is what makes going through a long overdue list one task after
+         * another bearable.
+         */
+        fun reschedule(
+            row: TaskRow,
+            date: LocalDate,
+        ) = viewModelScope.launch {
+            val moved = writes.rescheduleTask(row, date.toString())
+            message.value = Notice(moved.result.describeMove(date.toString()), moved.undo)
+        }
+
+        fun undo(undo: Rescheduling.Undo) =
+            viewModelScope.launch {
+                message.value = Notice(writes.rescheduleTask(undo.task, undo.date).result.describe())
             }
 
         fun addTask(
@@ -104,7 +135,7 @@ class TasksViewModel
             text: String,
         ) = viewModelScope.launch {
             val vaultId = repository.activeVaultId.first()
-            message.value = writes.addTask(vaultId, path, section, text).describe()
+            message.value = Notice(writes.addTask(vaultId, path, section, text).describe())
         }
 
         fun switchTo(vaultId: Long) {
@@ -179,7 +210,12 @@ class TasksViewModel
                     message,
                     writes.queued,
                 ) { ui, writable, activeId, said, queued ->
-                    ui.copy(canWrite = activeId in writable, message = said, waiting = queued)
+                    ui.copy(
+                        canWrite = activeId in writable,
+                        message = said?.text,
+                        undo = said?.undo,
+                        waiting = queued,
+                    )
                 }
             }.stateIn(
                 scope = viewModelScope,
@@ -225,4 +261,12 @@ private fun WriteResult.describe(): UiText =
         is WriteResult.Queued -> UiText.Resource(R.string.write_queued, listOf(why))
         WriteResult.Unchanged -> UiText.Resource(R.string.write_already_done)
         is WriteResult.Refused -> UiText.Raw(why)
+    }
+
+/** The same, for a move, which names the day it went to. */
+private fun WriteResult.describeMove(date: String): UiText =
+    when (this) {
+        WriteResult.Pushed -> UiText.Resource(R.string.reschedule_moved, listOf(date))
+        is WriteResult.Queued -> UiText.Resource(R.string.reschedule_moved_queued, listOf(date, why))
+        else -> describe()
     }

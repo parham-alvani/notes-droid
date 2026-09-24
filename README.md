@@ -8,7 +8,7 @@
 
 An Android reader for an [Obsidian](https://obsidian.md) vault kept in a Git repository. It syncs the vault's markdown directly from GitHub — no server in between, no Obsidian account — and renders it the way Obsidian does, including the parts plain CommonMark gets wrong.
 
-It is **a reader first**. Editing on a phone means merge conflicts, and the thing worth having on a phone is the reading — so the only writing it does is the small amount that is worse to postpone: ticking a task off, adding one, and writing a thought down before it goes. Everything else is read.
+It is **a reader first**. Editing on a phone means merge conflicts, and the thing worth having on a phone is the reading — so the only writing it does is the small amount that is worse to postpone: ticking a task off, adding one, pushing one to another day, and writing a thought down before it goes. Everything else is read.
 
 ## Status
 
@@ -37,7 +37,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Tablets and landscape** — the note held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar on a wide window
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
-- **A little writing** — tick a task off, add one, capture a thought — each a commit, and offered only where the credential can actually push
+- **A little writing** — tick a task off, add one, move one to another day, capture a thought — each a commit, and offered only where the credential can actually push
 
 ## Requirements
 
@@ -129,11 +129,13 @@ The trade is size. Git cannot fetch a subset of paths — there is no sparse-che
 
 ## Writing
 
-Three edits, and no more: tick an open task, add a task under a project heading, and append a captured line to a scratchpad. There is no editor, and there never will be one — a phone is a poor place to write a note and an excellent place to lose one to a merge.
+Four edits, and no more: tick an open task, add a task under a project heading, move a task to another day, and append a captured line to a scratchpad. There is no editor, and there never will be one — a phone is a poor place to write a note and an excellent place to lose one to a merge.
 
 **Nothing is offered unless the host says it can be done.** A read-only deploy key and a `Contents: read-only` token both behave exactly like working credentials until the moment of the push. So the app asks outright — `permissions.push` on the REST transport, an SSH push opened and abandoned at the advertisement on the other — records the answer per vault, and hides every write affordance where the answer is no. It also asks for a name and an email to commit as: a commit attributed to the app rather than to the person who made it is worse than no commit.
 
 **A repeating task comes back.** Ticking one writes two lines: the next occurrence, then the one just finished. Every date on the line moves by the same number of days — the rule decides how far the leading date travels, due before scheduled before start, and the rest follow — so a task scheduled three days before it is due stays that way. A repeat left for weeks comes back in the future rather than immediately overdue again. Only the plain intervals are acted on (`every day`, `every 2 weeks`, `every month`, `every year`, with or without `when done`); anything needing a weekday or an ordinal is refused out loud, because guessing at a repeat rule writes a wrong date into a file somebody relies on.
+
+**A task can be pushed back.** Holding a task — in the task list, or its box in a note — offers tomorrow, the weekend, next Monday or a date. The date that moves is the scheduled one if the line has one, else the due date, else a scheduled date is added; nothing else on the line moves, a repeat rule and a block id included. The move can be undone from the snackbar, because it can be undone exactly: the date goes back, or the added one comes off.
 
 **An edit is never a patch.** It is stored as an intent — the line to find, the line to write — and re-applied to whatever the file says at the moment it reaches the repository. An edit queued on a train lands in the current file rather than reverting a morning's work at the desk, and a task already ticked at the desk is a quiet no-op rather than a conflict. GitHub's own blob-sha check refuses a stale write, and the answer to that refusal is to read again and re-apply, never to force it through.
 

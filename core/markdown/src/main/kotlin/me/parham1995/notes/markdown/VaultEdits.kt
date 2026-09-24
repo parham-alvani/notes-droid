@@ -1,7 +1,7 @@
 package me.parham1995.notes.markdown
 
 /**
- * The three edits the app is allowed to make to a note, as pure functions of
+ * The four edits the app is allowed to make to a note, as pure functions of
  * the file's current text.
  *
  * Writing from a phone is safe here only because none of these is a patch. Each
@@ -138,6 +138,35 @@ object VaultEdits {
     }
 
     /**
+     * Moves the task written on [line] -- reading [task] to the index -- to
+     * [date], or takes off the scheduled date an earlier move added when
+     * [date] is null.
+     *
+     * Found the way a tick finds it ([TaskLine.locate]): by the recorded line,
+     * checked against what the index made of it, and only then by searching.
+     * The rule for which date moves is [TaskLine.reschedule]'s.
+     *
+     * Unlike the other edits this one can be asked about a line that is simply
+     * not there any more, and "the file already says this" would be a lie
+     * about it -- the task was deleted or rewritten at the desk. So that
+     * throws [TaskNotFound] instead of returning null, and the write path
+     * reports it rather than calling it done.
+     */
+    fun reschedule(
+        line: Int,
+        task: String,
+        date: String?,
+    ): (String?) -> String? {
+        date?.let { require(DATE.matches(it)) { "not a date: $it" } }
+        return { current ->
+            val lines = current?.lines() ?: throw TaskNotFound(task)
+            val at = TaskLine.locate(lines, line, task) ?: throw TaskNotFound(task)
+            val moved = if (date == null) TaskLine.unschedule(lines[at]) else TaskLine.reschedule(lines[at], date)?.line
+            moved?.let { lines.toMutableList().apply { set(at, it) }.joinToString("\n") }
+        }
+    }
+
+    /**
      * Appends [additions] after the file's last non-blank line, separated by
      * exactly one blank line and ending in exactly one newline.
      *
@@ -214,6 +243,15 @@ object VaultEdits {
 
     private fun String.headingText(): String = trimStart().trimStart('#').trim()
 
+    private val DATE = Regex("""\d{4}-\d{2}-\d{2}""")
+
     private const val FENCE_MIN = 3
     private const val MAX_HEADING_LEVEL = 6
 }
+
+/** A task an edit was asked to change is no longer in the file. */
+class TaskNotFound(
+    val task: String,
+) : IllegalStateException("\"${task.take(TASK_IN_MESSAGE)}\" is not in that note any more - refresh and try again")
+
+private const val TASK_IN_MESSAGE = 60

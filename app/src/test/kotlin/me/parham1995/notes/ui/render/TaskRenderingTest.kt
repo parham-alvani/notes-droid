@@ -3,10 +3,12 @@ package me.parham1995.notes.ui.render
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
 import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.markdown.MarkdownParser
@@ -73,6 +75,28 @@ class TaskRenderingTest {
         // Still open, so still something to tick.
         compose.onNodeWithContentDescription("forwarded").performClick()
         assertThat(ticked).containsExactly(0)
+    }
+
+    @Test
+    fun `holding a task's box offers to move the line it was written on`() {
+        val ticked = mutableListOf<Int>()
+        val moving = mutableListOf<Int>()
+        render(
+            markdown = "- [ ] first\n- [ ] second\n- [x] done\n",
+            actions =
+                RenderActions(
+                    onCompleteTask = { line -> ticked += line },
+                    onRescheduleTask = { line -> moving += line },
+                ),
+        )
+
+        compose.onAllNodesWithContentDescription("unchecked")[1].performTouchInput { longClick() }
+        // A done task has nowhere to be moved to.
+        compose.onNodeWithContentDescription("checked").performTouchInput { longClick() }
+
+        assertThat(moving).containsExactly(1)
+        // Holding is not ticking.
+        assertThat(ticked).isEmpty()
     }
 
     @Test
