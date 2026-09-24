@@ -336,4 +336,5 @@
     <string name="widget_pinned_title">Pinned</string>
     <string name="widget_pinned_empty">Pin a note from its menu to see it here</string>
     <string name="widget_pinned_description">Notes you pinned, with their first lines</string>
+    <string name="task_not_indexed">That task is not in the index yet</string>
 </resources>

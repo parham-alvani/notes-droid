@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import me.parham1995.notes.R
 import me.parham1995.notes.data.Destinations
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.PeriodNeighbours
@@ -21,6 +22,8 @@ import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.HeadingEntity
+import me.parham1995.notes.feature.tasks.describe
+import me.parham1995.notes.feature.tasks.describeMove
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.markdown.HeadingPath
 import me.parham1995.notes.markdown.MdBlock
@@ -29,6 +32,7 @@ import me.parham1995.notes.markdown.NoteSearch
 import me.parham1995.notes.markdown.Transclusion
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.markdown.plainText
+import me.parham1995.notes.ui.UiText
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.render.Transcluded
 import java.io.File
@@ -54,7 +58,7 @@ data class NoteUiState(
     /** Whether this note's vault can be written to, and an author is set. */
     val writable: Boolean = false,
     /** The last thing a write had to say, shown once and dismissed. */
-    val message: String? = null,
+    val message: UiText? = null,
     /** The journal either side, when this note is one of its vault's daily notes. */
     val periodic: PeriodNeighbours? = null,
 ) {
@@ -152,22 +156,18 @@ class NoteViewModel
                 val noteId = _state.value.note?.id ?: return@launch
                 val row = repository.tasksIn(noteId).firstOrNull { it.line == line }
                 if (row == null) {
-                    _state.value = _state.value.copy(message = "that task is not in the index yet")
+                    _state.value = _state.value.copy(message = UiText.Resource(R.string.task_not_indexed))
                     return@launch
                 }
-                val said =
-                    when (val result = writes.completeTask(row)) {
-                        WriteResult.Pushed -> "Saved"
-                        is WriteResult.Queued -> "Saved here - it goes up with the next sync"
-                        WriteResult.Unchanged -> "Already done"
-                        is WriteResult.Refused -> result.why
-                    }
-                _state.value = _state.value.copy(message = said)
+                val result = writes.completeTask(row)
+                // The task list's words for the same result, so the two say
+                // it alike and both in the phone's language.
+                _state.value = _state.value.copy(message = result.describe())
                 // The file on disk has changed, so what is on screen is one
                 // edit out of date. `load` refuses to reload the note it is
                 // already showing, which is what makes this necessary rather
                 // than tidy.
-                if (said == "Saved" || said.startsWith("Saved here")) reload()
+                if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
             }
 
         /**
@@ -185,18 +185,11 @@ class NoteViewModel
             val noteId = _state.value.note?.id ?: return@launch
             val row = repository.tasksIn(noteId).firstOrNull { it.line == line }
             if (row == null) {
-                _state.value = _state.value.copy(message = "that task is not in the index yet")
+                _state.value = _state.value.copy(message = UiText.Resource(R.string.task_not_indexed))
                 return@launch
             }
             val result = writes.rescheduleTask(row, date.toString()).result
-            val said =
-                when (result) {
-                    WriteResult.Pushed -> "Moved to $date"
-                    is WriteResult.Queued -> "Moved to $date here - it goes up with the next sync"
-                    WriteResult.Unchanged -> "Already on $date"
-                    is WriteResult.Refused -> result.why
-                }
-            _state.value = _state.value.copy(message = said)
+            _state.value = _state.value.copy(message = result.describeMove(date.toString()))
             if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
         }
 

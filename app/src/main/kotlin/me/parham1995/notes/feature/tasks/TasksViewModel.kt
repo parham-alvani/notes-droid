@@ -255,7 +255,7 @@ internal fun taskSources(countsByPath: Map<String, Int>): List<TaskSource> {
  * What to say about a write, in one line. The reasons are the write path's own
  * words and are passed through; the rest is ours, and translated.
  */
-private fun WriteResult.describe(): UiText =
+internal fun WriteResult.describe(): UiText =
     when (this) {
         WriteResult.Pushed -> UiText.Resource(R.string.capture_saved)
         is WriteResult.Queued -> UiText.Resource(R.string.write_queued, listOf(why))
@@ -264,7 +264,7 @@ private fun WriteResult.describe(): UiText =
     }
 
 /** The same, for a move, which names the day it went to. */
-private fun WriteResult.describeMove(date: String): UiText =
+internal fun WriteResult.describeMove(date: String): UiText =
     when (this) {
         WriteResult.Pushed -> UiText.Resource(R.string.reschedule_moved, listOf(date))
         is WriteResult.Queued -> UiText.Resource(R.string.reschedule_moved_queued, listOf(date, why))

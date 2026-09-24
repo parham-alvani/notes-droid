@@ -336,4 +336,5 @@
     <string name="widget_pinned_title">سنجاق‌شده‌ها</string>
     <string name="widget_pinned_empty">یادداشتی را از منوی خودش سنجاق کنید تا اینجا بیاید</string>
     <string name="widget_pinned_description">یادداشت‌هایی که سنجاق کرده‌اید، با چند خط اولشان</string>
+    <string name="task_not_indexed">این کار هنوز در فهرست نیست</string>
 </resources>

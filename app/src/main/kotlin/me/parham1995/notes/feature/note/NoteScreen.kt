@@ -95,6 +95,7 @@ import me.parham1995.notes.ui.render.FootnoteSheet
 import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
+import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Markup
 import java.io.File
 
@@ -245,8 +246,9 @@ fun NoteScreen(
     }
 
     val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(state.message) {
-        state.message?.let {
+    val message = state.message?.text()
+    LaunchedEffect(message) {
+        message?.let {
             snackbar.showSnackbar(it)
             viewModel.dismissMessage()
         }
