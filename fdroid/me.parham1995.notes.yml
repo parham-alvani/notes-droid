@@ -40,9 +40,9 @@ Binaries: https://github.com/parham-alvani/notes-droid/releases/download/v%v/daf
 AllowedAPKSigningKeys: 84d957e4637c765d7d4245fe2009d21234c74cced46befab737e074aba1bed1c
 
 Builds:
-  - versionName: 0.27.1
-    versionCode: 2701
-    commit: v0.27.1
+  - versionName: 0.28.0
+    versionCode: 2800
+    commit: v0.28.0
     subdir: app
     gradle:
       - yes
@@ -60,5 +60,5 @@ Builds:
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.27.1
-CurrentVersionCode: 2701
+CurrentVersion: 0.28.0
+CurrentVersionCode: 2800

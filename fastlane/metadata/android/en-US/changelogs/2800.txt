@@ -1,0 +1,7 @@
+Tags, footnotes, and a great many things that quietly did not work.
+
+Notes read more the way Obsidian writes them: #tags are tappable and have a screen of their own, front matter shows as properties and its aliases resolve links, footnotes open where they are cited, and [[Note#^block]] lands on the block. Search takes "exact phrases", -exclusions and path:Folder. The vault's bookmarks appear in the browser, a Today button opens the daily note, and obsidian:// links open here.
+
+Embeds and $$ maths written straight under a line of text are no longer dropped, a markdown link to another note opens it, %%comments%% are hidden, and callouts keep the links in their titles.
+
+Sync over SSH now only talks to GitHub's own keys, an edit to a large file keeps the file, a capture sent twice lands once, and a force-pushed branch is re-read rather than left stale. A full reindex no longer piles copies of the vault into search or forgets where you were reading.
