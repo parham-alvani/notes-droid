@@ -2,6 +2,7 @@ package me.parham1995.notes.feature.tasks
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +22,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,10 +50,12 @@ import me.parham1995.notes.R
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.ui.AutoDirection
+import me.parham1995.notes.ui.RescheduleSheet
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Naz
+import java.time.LocalDate
 
 /**
  * Everything open across the whole vault, in the order it is answerable.
@@ -73,9 +78,19 @@ fun TasksScreen(
     // Said once and cleared: the same message arriving again on a
     // recomposition would stack a second snackbar on top of the first.
     val message = state.message?.text()
-    LaunchedEffect(message) {
+    val undo = state.undo
+    val undoLabel = stringResource(R.string.action_undo)
+    LaunchedEffect(message, undo) {
         message?.let {
-            snackbar.showSnackbar(it)
+            val answer =
+                snackbar.showSnackbar(
+                    message = it,
+                    actionLabel = undo?.let { undoLabel },
+                    duration = SnackbarDuration.Short,
+                )
+            // Before the dismissal: clearing the message recomposes, and
+            // that cancels this effect.
+            if (answer == SnackbarResult.ActionPerformed && undo != null) viewModel.undo(undo)
             viewModel.dismissMessage()
         }
     }
@@ -183,26 +198,67 @@ fun TasksScreen(
             return@Scaffold
         }
 
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            state.groups.forEach { group ->
-                stickyHeader(key = "header-${group.bucket.name}") {
-                    BucketHeader(group.bucket, group.rows.size)
-                }
-                items(group.rows, key = { it.id }) { row ->
-                    val complete: (() -> Unit)? =
-                        if (state.canWrite) {
-                            { viewModel.complete(row) }
-                        } else {
-                            null
-                        }
-                    TaskRowView(
-                        row = row,
-                        bucket = group.bucket,
-                        onComplete = complete,
-                        onClick = { onOpenNote(row.noteId) },
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-                }
+        TaskList(
+            groups = state.groups,
+            canWrite = state.canWrite,
+            today = LocalDate.now(),
+            onComplete = { viewModel.complete(it) },
+            onReschedule = { row, date -> viewModel.reschedule(row, date) },
+            onOpen = { onOpenNote(it.noteId) },
+            modifier = Modifier.fillMaxSize().padding(padding),
+        )
+    }
+}
+
+/**
+ * The grouped list itself, and the sheet a held row opens.
+ *
+ * Apart from the screen so it can be driven without a view model: the thing
+ * worth testing is that holding a row and choosing a day hands back that row
+ * and that day, and [today] is a parameter so the day is one the test knows.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun TaskList(
+    groups: List<TaskGroup>,
+    canWrite: Boolean,
+    today: LocalDate,
+    onComplete: (TaskRow) -> Unit,
+    onReschedule: (TaskRow, LocalDate) -> Unit,
+    onOpen: (TaskRow) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var moving by remember { mutableStateOf<TaskRow?>(null) }
+
+    moving?.let { row ->
+        RescheduleSheet(
+            today = today,
+            onChoose = { date ->
+                moving = null
+                onReschedule(row, date)
+            },
+            onDismiss = { moving = null },
+        )
+    }
+
+    LazyColumn(modifier) {
+        groups.forEach { group ->
+            stickyHeader(key = "header-${group.bucket.name}") {
+                BucketHeader(group.bucket, group.rows.size)
+            }
+            items(group.rows, key = { it.id }) { row ->
+                // The same gate as the checkbox: offered only where the
+                // vault can be pushed to and an author is set.
+                val complete: (() -> Unit)? = if (canWrite) ({ onComplete(row) }) else null
+                val reschedule: (() -> Unit)? = if (canWrite) ({ moving = row }) else null
+                TaskRowView(
+                    row = row,
+                    bucket = group.bucket,
+                    onComplete = complete,
+                    onReschedule = reschedule,
+                    onClick = { onOpen(row) },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             }
         }
     }
@@ -241,13 +297,19 @@ private fun TaskRowView(
     row: TaskRow,
     bucket: TaskBucket,
     onComplete: (() -> Unit)?,
+    onReschedule: (() -> Unit)?,
     onClick: () -> Unit,
 ) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            // Held rather than tapped: a tap opens the note, as it always has,
+            // and moving a task is the thing you do to fifty of them in a row.
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onReschedule,
+                onLongClickLabel = onReschedule?.let { stringResource(R.string.reschedule_action) },
+            ).padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         LucideGlyph(

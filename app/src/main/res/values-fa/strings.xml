@@ -303,4 +303,16 @@
     <string name="width_comfortable">راحت</string>
     <string name="width_full">تمام‌عرض</string>
     <string name="help_line_width">پهنای متن یادداشت روی تبلت یا در حالت افقی. گوشیِ ایستاده از هر سه باریک‌تر است.</string>
+
+    <!-- Moving a task to another day -->
+    <string name="reschedule_title">انتقال به</string>
+    <string name="reschedule_tomorrow">فردا</string>
+    <string name="reschedule_weekend">همین آخر هفته</string>
+    <string name="reschedule_next_week">هفته‌ی بعد</string>
+    <string name="reschedule_pick">انتخاب تاریخ</string>
+    <string name="reschedule_move">انتقال</string>
+    <string name="reschedule_action">انتقال به روزی دیگر</string>
+    <string name="reschedule_moved">به %1$s منتقل شد</string>
+    <string name="reschedule_moved_queued">اینجا به %1$s منتقل شد - %2$s</string>
+    <string name="action_undo">واگرد</string>
 </resources>

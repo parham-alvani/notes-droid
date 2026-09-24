@@ -323,7 +323,12 @@ class VaultWriteRepositoryTest {
             assertThat(transport.content).isEqualTo("## Home\n\n- [ ] call the bank ➕ 2026-09-01 ⏳ 2026-10-05 ^bank\n")
             // Indexed as it was written, which is what moves it between groups
             // on the task screen without waiting for a sync.
-            val after = database.taskDao().open(vaultId).first().single()
+            val after =
+                database
+                    .taskDao()
+                    .open(vaultId)
+                    .first()
+                    .single()
             assertThat(after.actionableOn).isEqualTo("2026-10-05")
 
             val undo = moved.undo!!
