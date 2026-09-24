@@ -7,6 +7,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.Dispatchers
 import me.parham1995.notes.data.database.NotesDatabase
+import java.io.File
 
 /**
  * An in-memory database wired exactly as the app wires the real one.
@@ -19,12 +20,21 @@ import me.parham1995.notes.data.database.NotesDatabase
 fun testDatabase(): NotesDatabase =
     Room
         .inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), NotesDatabase::class.java)
-        .setDriver(BundledSQLiteDriver())
+        .wiredAsTheAppWiresIt()
+
+/** The same, kept in [file] so a test can close it, change it underneath, and open it again. */
+fun testDatabase(file: File): NotesDatabase =
+    Room
+        .databaseBuilder(ApplicationProvider.getApplicationContext(), NotesDatabase::class.java, file.absolutePath)
+        .wiredAsTheAppWiresIt()
+
+private fun RoomDatabase.Builder<NotesDatabase>.wiredAsTheAppWiresIt(): NotesDatabase =
+    setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(Dispatchers.IO)
         .addCallback(
             object : RoomDatabase.Callback() {
-                override fun onCreate(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
+                override fun onCreate(connection: SQLiteConnection) = NotesDatabase.ensureSearchIndex(connection)
 
-                override fun onOpen(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
+                override fun onOpen(connection: SQLiteConnection) = NotesDatabase.ensureSearchIndex(connection)
             },
         ).build()

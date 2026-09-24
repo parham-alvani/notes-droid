@@ -250,7 +250,7 @@ class VaultIndexer
                 ids.mapIndexed { position, id ->
                     val indexed = batch[position]
                     val name = indexed.path.substringAfterLast('/').removeSuffix(MD)
-                    SearchDocument(id, name, indexed.note.plainText)
+                    SearchDocument(id, name, indexed.note.plainText, indexed.path, indexed.note.aliases)
                 },
             )
         }

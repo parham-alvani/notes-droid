@@ -3,8 +3,10 @@ package me.parham1995.notes.data
 import androidx.room.immediateTransaction
 import androidx.room.useReaderConnection
 import androidx.room.useWriterConnection
+import androidx.sqlite.SQLiteStatement
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.escapeLike
+import me.parham1995.notes.markdown.SearchText
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,11 +17,14 @@ data class SearchHit(
     val snippet: String,
 )
 
-/** One note as the search index holds it. */
+/** One note as the search index is given it, before normalizing. */
 data class SearchDocument(
     val noteId: Long,
     val title: String,
     val body: String,
+    /** Vault-relative, for `path:`. */
+    val path: String,
+    val aliases: List<String> = emptyList(),
 )
 
 /**
@@ -30,6 +35,12 @@ data class SearchDocument(
  * above the body is what makes a search for a note's own name return that note
  * first, and `snippet()` gives the excerpt for free rather than hand-rolling
  * one from the body text.
+ *
+ * Everything written here and everything asked of it goes through
+ * [SearchText.normalize], so Arabic and Persian letter forms, both families of
+ * digits and words written with or without a half-space all meet. The index
+ * therefore holds normalized text, and an excerpt of it is carried back to the
+ * note's own characters by [SearchText.restoreSnippet] before anyone sees it.
  */
 @Singleton
 class SearchIndex
@@ -37,11 +48,7 @@ class SearchIndex
     constructor(
         private val database: NotesDatabase,
     ) {
-        suspend fun upsert(
-            noteId: Long,
-            title: String,
-            body: String,
-        ) = upsertAll(listOf(SearchDocument(noteId, title, body)))
+        suspend fun upsert(document: SearchDocument) = upsertAll(listOf(document))
 
         /**
          * Replaces many notes' entries in one transaction.
@@ -62,11 +69,21 @@ class SearchIndex
                             statement.reset()
                         }
                     }
-                    usePrepared("INSERT INTO $FTS(rowid, title, body) VALUES (?, ?, ?)") { statement ->
+                    usePrepared(
+                        "INSERT INTO $FTS(rowid, title, body, original, path, name, aliases) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    ) { statement ->
                         documents.forEach { document ->
+                            val body = SearchText.normalize(document.body)
                             statement.bindLong(1, document.noteId)
-                            statement.bindText(2, document.title)
-                            statement.bindText(3, document.body)
+                            statement.bindText(2, SearchText.normalize(document.title))
+                            statement.bindText(3, body)
+                            // Only when it differs: for most notes it would be
+                            // a second copy of the body for nothing.
+                            if (body == document.body) statement.bindNull(4) else statement.bindText(4, document.body)
+                            statement.bindText(5, SearchText.normalize(document.path))
+                            statement.bindText(6, SearchText.foldName(document.title))
+                            statement.bindText(7, aliasLines(document.aliases))
                             statement.step()
                             statement.reset()
                         }
@@ -145,18 +162,42 @@ class SearchIndex
                             else -> statement.bindText(index + 1, argument.toString())
                         }
                     }
-                    buildList {
-                        while (statement.step()) {
-                            add(
-                                SearchHit(
-                                    noteId = statement.getLong(0),
-                                    title = statement.getText(1),
-                                    path = statement.getText(2),
-                                    snippet = statement.getText(3),
-                                ),
-                            )
-                        }
-                    }
+                    buildList { while (statement.step()) add(statement.hit()) }
+                }
+            }
+        }
+
+        /**
+         * Notes whose name or alias contains [typed], for the quick switcher,
+         * as ids in the order to offer them.
+         *
+         * Compared as [SearchText.foldName] leaves both sides, so a name
+         * written with Arabic letters answers to a Persian keyboard. That
+         * needs the folded names somewhere to compare against, and they are
+         * kept in the search index rather than in a new column of `notes`:
+         * that would be a Room migration for what is only ever search's
+         * business.
+         *
+         * A name that starts with it first, then an alias that does, then
+         * anything containing it -- as Obsidian's switcher does. Scoped to
+         * one vault like everything else: this was the last query in the app
+         * that was not, and typing a name reached across every repository.
+         */
+        suspend fun names(
+            vaultId: Long,
+            typed: String,
+            limit: Int,
+        ): List<Long> {
+            // `%` and `_` are wildcards to LIKE and ordinary characters in a
+            // file name, so typing "100%" offered every note starting "100".
+            val folded = escapeLike(SearchText.foldName(typed.trim()))
+            if (folded.isEmpty()) return emptyList()
+            return database.useReaderConnection { connection ->
+                connection.usePrepared(NAMES_SQL) { statement ->
+                    statement.bindLong(1, vaultId)
+                    statement.bindText(2, folded)
+                    statement.bindLong(3, limit.toLong())
+                    buildList { while (statement.step()) add(statement.getLong(0)) }
                 }
             }
         }
@@ -188,18 +229,7 @@ class SearchIndex
                         // applied after ranking rather than in SQL -- the
                         // linked set is small and already in memory.
                         statement.bindLong(3, (limit * OVERSCAN).toLong())
-                        buildList {
-                            while (statement.step()) {
-                                add(
-                                    SearchHit(
-                                        noteId = statement.getLong(0),
-                                        title = statement.getText(1),
-                                        path = statement.getText(2),
-                                        snippet = statement.getText(3),
-                                    ),
-                                )
-                            }
-                        }
+                        buildList { while (statement.step()) add(statement.hit()) }
                     }
                 }.filterNot { it.noteId in exclude }
                 .take(limit)
@@ -213,16 +243,51 @@ class SearchIndex
 
             val SEARCH_SQL =
                 """
-                SELECT notes.id, notes.title, notes.path,
-                       snippet(note_fts, 1, '[', ']', '...', 14)
+                SELECT notes.id, notes.title, notes.path, $SNIPPET, note_fts.original
                 FROM note_fts
                 JOIN notes ON notes.id = note_fts.rowid
                 WHERE note_fts MATCH ? AND notes.vaultId = ?
                 ORDER BY bm25(note_fts, 10.0, 1.0)
                 LIMIT ?
                 """.trimIndent()
+
+            val NAMES_SQL =
+                """
+                SELECT notes.id FROM notes JOIN note_fts ON note_fts.rowid = notes.id
+                WHERE notes.vaultId = ?1
+                  AND (note_fts.name LIKE '%' || ?2 || '%' ESCAPE '\'
+                       OR note_fts.aliases LIKE '%' || ?2 || '%' ESCAPE '\')
+                ORDER BY (CASE WHEN note_fts.name LIKE ?2 || '%' ESCAPE '\' THEN 0
+                               WHEN note_fts.aliases LIKE '%' || char(10) || ?2 || '%' ESCAPE '\' THEN 1
+                               WHEN note_fts.name LIKE '%' || ?2 || '%' ESCAPE '\' THEN 2
+                               ELSE 3 END),
+                         length(notes.name), notes.name COLLATE NOCASE
+                LIMIT ?3
+                """.trimIndent()
+
+            /** One alias to a line, with a newline either side, so "starts with" can be asked of it. */
+            fun aliasLines(aliases: List<String>): String =
+                if (aliases.isEmpty()) "" else aliases.joinToString("\n", "\n", "\n") { SearchText.foldName(it) }
+
+            /** A row of a search, with its excerpt shown in the note's own words. */
+            fun SQLiteStatement.hit() =
+                SearchHit(
+                    noteId = getLong(0),
+                    title = getText(1),
+                    path = getText(2),
+                    snippet = SearchText.restoreSnippet(getText(3), if (isNull(4)) null else getText(4)),
+                )
         }
     }
+
+/**
+ * The excerpt FTS5 makes from the body, marked with private-use characters
+ * that [SearchText.restoreSnippet] turns back into `[`, `]` and `...` once it
+ * has found the note's own characters.
+ */
+internal val SNIPPET =
+    "snippet(note_fts, 1, '${SearchText.SNIPPET_OPEN}', '${SearchText.SNIPPET_CLOSE}', " +
+        "'${SearchText.SNIPPET_ELLIPSIS}', 14)"
 
 /**
  * A search as someone typed it, taken apart.
@@ -231,6 +296,7 @@ class SearchIndex
  * tokens, so nothing typed reaches FTS5 as syntax. [paths] and
  * [excludedPaths] are vault-relative prefixes, applied in SQL beside the
  * vault's own id -- a folder is only ever a folder of the vault being searched.
+ * All of it is already [SearchText.normalize]d, as the index is.
  */
 data class ParsedSearch(
     /** What a note must say, or null when only a folder narrows it. */
@@ -259,21 +325,23 @@ data class ParsedSearch(
         val select =
             if (text != null) {
                 arguments += text
-                "SELECT notes.id, notes.title, notes.path, snippet(note_fts, 1, '[', ']', '...', 14) " +
+                "SELECT notes.id, notes.title, notes.path, $SNIPPET, note_fts.original " +
                     "FROM note_fts JOIN notes ON notes.id = note_fts.rowid " +
                     "WHERE note_fts MATCH ? AND notes.vaultId = ?"
             } else {
                 // Only a folder: nothing to rank by, so it is listed in order.
-                "SELECT notes.id, notes.title, notes.path, '' FROM notes WHERE notes.vaultId = ?"
+                "SELECT notes.id, notes.title, notes.path, '', NULL " +
+                    "FROM notes JOIN note_fts ON note_fts.rowid = notes.id WHERE notes.vaultId = ?"
             }
         arguments += vaultId
         val where = StringBuilder()
         if (paths.isNotEmpty()) {
-            where.append(paths.joinToString(" OR ", " AND (", ")") { "notes.path LIKE ? ESCAPE '\\'" })
+            // The index's own copy of the path, normalized as the query is.
+            where.append(paths.joinToString(" OR ", " AND (", ")") { "note_fts.path LIKE ? ESCAPE '\\'" })
             paths.forEach { arguments += escapeLike(it) + "%" }
         }
         excludedPaths.forEach {
-            where.append(" AND notes.path NOT LIKE ? ESCAPE '\\'")
+            where.append(" AND note_fts.path NOT LIKE ? ESCAPE '\\'")
             arguments += escapeLike(it) + "%"
         }
         if (text == null && exclude != null) {
@@ -308,7 +376,7 @@ object FtsQuery {
      * can contain anything a filename can.
      */
     fun phrase(raw: String): String? {
-        val tokens = TOKEN.findAll(raw).map { it.value }.toList()
+        val tokens = TOKEN.findAll(SearchText.normalize(raw)).map { it.value }.toList()
         if (tokens.isEmpty()) return null
         return tokens.joinToString(" ", prefix = "\"", postfix = "\"")
     }
@@ -332,8 +400,14 @@ object FtsQuery {
      *
      * Exclusions alone ask for nothing: FTS5 has no "everything but", and a
      * whole vault minus one word is not a search anyone means.
+     *
+     * [raw] is normalized first, as the index is, so every one of these --
+     * words, phrases, exclusions and folders -- meets the note whichever
+     * keyboard wrote either side.
      */
     fun parse(raw: String): ParsedSearch? {
+        @Suppress("NAME_SHADOWING")
+        val raw = SearchText.normalize(raw)
         val include = mutableListOf<String>()
         val exclude = mutableListOf<String>()
         val paths = mutableListOf<String>()

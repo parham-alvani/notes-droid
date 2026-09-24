@@ -433,19 +433,14 @@ class VaultRepository
         suspend fun search(query: String): List<SearchHit> = search.search(active(), query)
 
         /** Name-only matches, for jumping straight to a note while typing. */
-        suspend fun quickSwitch(query: String): List<NoteEntity> =
-            if (query.isBlank()) {
-                emptyList()
-            } else {
-                notes.searchByName(
-                    active(),
-                    escapeLike(
-                        me.parham1995.notes.markdown.Slugs
-                            .fold(query.trim()),
-                    ),
-                    QUICK_LIMIT,
-                )
-            }
+        suspend fun quickSwitch(query: String): List<NoteEntity> {
+            if (query.isBlank()) return emptyList()
+            val ids = search.names(active(), query, QUICK_LIMIT)
+            if (ids.isEmpty()) return emptyList()
+            // The index says which and in what order; `notes` says what they are.
+            val byId = notes.byIds(ids).associateBy { it.id }
+            return ids.mapNotNull(byId::get)
+        }
 
         private companion object {
             const val RECENT_LIMIT = 12
