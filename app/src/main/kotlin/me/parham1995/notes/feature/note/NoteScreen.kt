@@ -678,12 +678,12 @@ fun NoteScreen(
                 onDismiss = { peeking = null },
                 onOpenHere = {
                     peeking = null
-                    pendingHeading = target.heading
+                    headingIn = target.heading?.let { target.noteId to it }
                     viewModel.openTab(target.noteId, inNewTab = false)
                 },
                 onOpenInNewTab = {
                     peeking = null
-                    pendingHeading = target.heading
+                    headingIn = target.heading?.let { target.noteId to it }
                     viewModel.openTab(target.noteId, inNewTab = true)
                 },
             )
