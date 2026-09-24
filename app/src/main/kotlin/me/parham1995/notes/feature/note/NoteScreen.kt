@@ -82,6 +82,7 @@ import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.LocalReading
+import me.parham1995.notes.ui.RescheduleSheet
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.icon.VaultIcon
@@ -244,6 +245,19 @@ fun NoteScreen(
         }
     }
 
+    // A task being moved to another day, by its source line.
+    var moving by remember(noteId) { mutableStateOf<Int?>(null) }
+    moving?.let { line ->
+        RescheduleSheet(
+            today = java.time.LocalDate.now(),
+            onChoose = { date ->
+                moving = null
+                viewModel.rescheduleTask(line, date)
+            },
+            onDismiss = { moving = null },
+        )
+    }
+
     // A footnote opened from its number, over the note.
     var footnote by remember(noteId) { mutableStateOf<FootnoteEntry?>(null) }
 
@@ -262,6 +276,12 @@ fun NoteScreen(
                     onCompleteTask =
                         if (state.writable) {
                             { line -> viewModel.completeTask(line) }
+                        } else {
+                            null
+                        },
+                    onRescheduleTask =
+                        if (state.writable) {
+                            { line -> moving = line }
                         } else {
                             null
                         },

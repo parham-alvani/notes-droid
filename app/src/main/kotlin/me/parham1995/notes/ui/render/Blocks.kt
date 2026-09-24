@@ -3,6 +3,7 @@ package me.parham1995.notes.ui.render
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -92,6 +93,12 @@ data class RenderActions(
      * checkbox inert rather than offering something that fails at the push.
      */
     val onCompleteTask: ((line: Int) -> Unit)? = null,
+    /**
+     * Offer to move the open task written on this source line to another day,
+     * from a long press on its box. Null where the vault cannot be written to,
+     * the same as [onCompleteTask].
+     */
+    val onRescheduleTask: ((line: Int) -> Unit)? = null,
     /**
      * Another note's blocks for an `![[embed]]`, the section its heading names
      * when it names one, or null when there is no such note or heading.
@@ -449,7 +456,13 @@ private fun ListBlockView(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         visible.forEach { (index, item) ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ItemMarker(item, block.ordered, block.start + index, actions.onCompleteTask)
+                ItemMarker(
+                    item = item,
+                    ordered = block.ordered,
+                    number = block.start + index,
+                    onComplete = actions.onCompleteTask,
+                    onReschedule = actions.onRescheduleTask,
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     item.blocks.forEach { child ->
                         // A nested list indents; anything else sits flush with
@@ -478,6 +491,7 @@ private fun ItemMarker(
     ordered: Boolean,
     number: Int,
     onComplete: ((line: Int) -> Unit)? = null,
+    onReschedule: ((line: Int) -> Unit)? = null,
 ) {
     // The marker is set beside the text, so it follows the reader's size
     // with it -- a bullet the size of a full stop beside a line twice as tall
@@ -506,6 +520,10 @@ private fun ItemMarker(
     // than one that never does, so the three conditions are checked together.
     val open = item.task == TaskState.UNCHECKED || item.task == TaskState.IN_PROGRESS
     val complete = onComplete?.takeIf { open && item.line >= 0 }
+    // Held on the box rather than on the line: the text is in a selection
+    // container, where holding is how a word is selected.
+    val reschedule = onReschedule?.takeIf { open && item.line >= 0 }
+    val moveLabel = stringResource(R.string.reschedule_action)
     // A checkbox to a screen reader, with its state. No
     // minimumInteractiveComponentSize: Compose already extends a small
     // clickable's touch target to 48dp without growing its layout, and the
@@ -517,15 +535,20 @@ private fun ItemMarker(
             Modifier
                 .padding(top = MARKER_NUDGE * scale)
                 .widthIn(min = MARKER_WIDTH * scale)
-                .triStateToggleable(
-                    state =
+                // A checkbox with a long press, which no toggleable modifier
+                // offers, so the state is said by hand.
+                .semantics {
+                    toggleableState =
                         when (item.task) {
                             TaskState.CHECKED -> ToggleableState.On
                             TaskState.CANCELLED -> ToggleableState.Indeterminate
                             else -> ToggleableState.Off
-                        },
-                    enabled = complete != null,
+                        }
+                }.combinedClickable(
+                    enabled = complete != null || reschedule != null,
                     role = Role.Checkbox,
+                    onLongClickLabel = reschedule?.let { moveLabel },
+                    onLongClick = reschedule?.let { { it(item.line) } },
                     onClick = { complete?.invoke(item.line) },
                 ),
         contentAlignment = Alignment.Center,
