@@ -277,7 +277,11 @@ fun BrowserScreen(
                 }
 
                 LazyColumn(Modifier.fillMaxSize()) {
-                    // First, because they are the places this vault's author
+                    // Above everything, and only when there is something:
+                    // it is news, and gone again once each note is opened.
+                    if (state.path.isEmpty()) updatedSinceRead(state.updated, onOpenNote, onOpenNoteInNewTab)
+
+                    // Then, because they are the places this vault's author
                     // chose to keep within reach.
                     if (state.path.isEmpty() && bookmarks.items.isNotEmpty()) {
                         item { SectionLabel(stringResource(R.string.bookmarks_title)) }
@@ -298,6 +302,7 @@ fun BrowserScreen(
                                 iconDescription = stringResource(R.string.note_kind),
                                 onClick = { onOpenNote(row.note.id) },
                                 onLongClick = { onOpenNoteInNewTab(row.note.id) },
+                                trailing = if (row.updated) ({ UpdatedDot() }) else null,
                             )
                         }
                         item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
@@ -365,7 +370,7 @@ private fun BrowserRow(
         onLongClick = item.noteId?.let { note -> { onOpenNoteInNewTab(note) } },
         trailing =
             if (!item.isFolder) {
-                null
+                if (item.updatedSinceRead) ({ UpdatedDot() }) else null
             } else {
                 {
                     IconButton(onClick = { viewModel.open(item.path) }) {
@@ -380,7 +385,7 @@ private fun BrowserRow(
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(
         text = text,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

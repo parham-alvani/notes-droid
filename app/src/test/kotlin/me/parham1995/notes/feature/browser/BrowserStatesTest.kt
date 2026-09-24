@@ -30,6 +30,7 @@ class BrowserStatesTest {
                     path = flowOf(""),
                     rows = flowOf(emptyList()),
                     recent = flowOf(emptyList()),
+                    updated = flowOf(emptyList()),
                     noteCount = flowOf(3),
                     vaults = flowOf(emptyList<VaultEntity>() to 1L),
                     crashed = crashed,

@@ -28,6 +28,7 @@ import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.data.database.isUpdatedSinceRead
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.folderListing
@@ -38,12 +39,16 @@ import javax.inject.Inject
 data class RecentRow(
     val note: NoteEntity,
     val icon: IconSpec? = null,
+    /** Changed upstream since it was last opened. */
+    val updated: Boolean = false,
 )
 
 data class BrowserUiState(
     val path: String = "",
     val items: List<VaultRowItem> = emptyList(),
     val recent: List<RecentRow> = emptyList(),
+    /** Opened before and changed since, most recent change first. */
+    val updated: List<RecentRow> = emptyList(),
     /** The previous run ended in a crash and nobody has been told. */
     val crashed: Boolean = false,
     val noteCount: Int = 0,
@@ -144,7 +149,16 @@ class BrowserViewModel
          */
         private val recent: Flow<List<RecentRow>> =
             combine(repository.recentlyOpened(limit = RECENT_ON_ROOT), icons.config) { notes, config ->
-                notes.map { RecentRow(it, config.forFile(it.vaultId, it.path)) }
+                notes.map { RecentRow(it, config.forFile(it.vaultId, it.path), updated = it.isUpdatedSinceRead) }
+            }
+
+        /**
+         * Notes read before and changed since -- the laptop commits the vault
+         * every few minutes, and this is where that shows.
+         */
+        private val updated: Flow<List<RecentRow>> =
+            combine(repository.updatedSinceRead(), icons.config) { notes, config ->
+                notes.map { RecentRow(it, config.forFile(it.vaultId, it.path), updated = true) }
             }
 
         /**
@@ -180,6 +194,7 @@ class BrowserViewModel
                     path = path,
                     rows = rows,
                     recent = recent,
+                    updated = updated,
                     noteCount = repository.noteCount,
                     vaults = combine(vaults, repository.activeVaultId) { all, active -> all to active },
                     crashed = crashed,
@@ -261,6 +276,7 @@ internal fun browserStates(
     path: Flow<String>,
     rows: Flow<List<VaultRowItem>>,
     recent: Flow<List<RecentRow>>,
+    updated: Flow<List<RecentRow>>,
     noteCount: Flow<Int>,
     vaults: Flow<Pair<List<VaultEntity>, Long>>,
     crashed: Flow<Boolean>,
@@ -268,14 +284,15 @@ internal fun browserStates(
     combine(
         path,
         rows,
-        recent,
+        combine(recent, updated) { opened, changed -> opened to changed },
         noteCount,
         combine(vaults, crashed) { pair, died -> pair to died },
-    ) { currentPath, currentItems, recentRows, count, (repositories, died) ->
+    ) { currentPath, currentItems, (recentRows, updatedRows), count, (repositories, died) ->
         BrowserUiState(
             path = currentPath,
             items = currentItems,
             recent = recentRows,
+            updated = updatedRows,
             noteCount = count,
             vaults = repositories.first,
             activeVaultId = repositories.second,

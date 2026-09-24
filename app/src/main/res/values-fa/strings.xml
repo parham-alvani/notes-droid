@@ -303,4 +303,6 @@
     <string name="width_comfortable">راحت</string>
     <string name="width_full">تمام‌عرض</string>
     <string name="help_line_width">پهنای متن یادداشت روی تبلت یا در حالت افقی. گوشیِ ایستاده از هر سه باریک‌تر است.</string>
+    <string name="browse_updated">تغییر کرده از آخرین خواندن</string>
+    <string name="browse_updated_marker">از آخرین باری که خواندید تغییر کرده</string>
 </resources>
