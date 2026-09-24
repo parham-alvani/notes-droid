@@ -22,11 +22,37 @@ class RescheduleTest {
     }
 
     @Test
-    fun `a scheduled date is the one that moves`() {
-        val note = "## Home\n\n- [ ] call the bank ➕ 2026-09-01 ⏳ 2026-09-10 📅 2026-09-30\n"
+    fun `with only a scheduled date, the scheduled date moves`() {
+        val note = "## Home\n\n- [ ] call the bank ➕ 2026-09-01 ⏳ 2026-09-10\n"
 
         assertThat(move(note, 2, "2026-09-25"))
-            .isEqualTo("## Home\n\n- [ ] call the bank ➕ 2026-09-01 ⏳ 2026-09-25 📅 2026-09-30\n")
+            .isEqualTo("## Home\n\n- [ ] call the bank ➕ 2026-09-01 ⏳ 2026-09-25\n")
+    }
+
+    @Test
+    fun `with due and scheduled, due goes to the day and scheduled keeps its distance`() {
+        // Filed by due, so due is what has to land on the chosen day or the
+        // task stays in the group it was taken out of. Scheduled was three
+        // days before due and still is; created is history and stays.
+        val note = "- [ ] call the bank ➕ 2026-09-01 ⏳ 2026-09-07 📅 2026-09-10"
+
+        assertThat(move(note, 0, "2026-09-25"))
+            .isEqualTo("- [ ] call the bank ➕ 2026-09-01 ⏳ 2026-09-22 📅 2026-09-25")
+    }
+
+    @Test
+    fun `with due and start, start moves by the same days`() {
+        val note = "- [ ] submit the report 🛫 2026-09-05 📅 2026-09-10 ^rep"
+
+        assertThat(move(note, 0, "2026-09-12"))
+            .isEqualTo("- [ ] submit the report 🛫 2026-09-07 📅 2026-09-12 ^rep")
+    }
+
+    @Test
+    fun `a start date alone files nothing, so a scheduled date is added`() {
+        val note = "- [ ] plan the trip 🛫 2026-09-05"
+
+        assertThat(move(note, 0, "2026-09-25")).isEqualTo("- [ ] plan the trip 🛫 2026-09-05 ⏳ 2026-09-25")
     }
 
     @Test
@@ -127,6 +153,7 @@ class RescheduleTest {
                 "- [ ] a ➕ 2026-09-01 ⏳ 2026-09-10 ^id1",
                 "- [ ] b 📅 2026-09-10",
                 "- [ ] c ➕ 2026-09-01 ^id2",
+                "- [ ] e ➕ 2026-09-01 🛫 2026-09-02 ⏳ 2026-09-07 📅 2026-09-10 ✅ 2026-09-03",
                 "- [ ] د 🔁 every week",
             )
         cases.forEach { original ->
