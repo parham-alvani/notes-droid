@@ -4,6 +4,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
@@ -32,6 +33,10 @@ class PersianSearchTest {
     fun setUp() {
         database = testDatabase()
         wire(database)
+        // The quick switcher answers for the active vault, which lives in
+        // settings that outlast a test: another class left it on vault 2, and
+        // these failed only when the whole suite ran.
+        runBlocking { SettingsStore(ApplicationProvider.getApplicationContext()).setActiveVault(1L) }
     }
 
     private fun wire(database: NotesDatabase) {
