@@ -1,7 +1,14 @@
 package me.parham1995.notes.data
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import me.parham1995.notes.data.database.NoteDao
+import me.parham1995.notes.data.database.NoteRef
 import me.parham1995.notes.obsidian.ObsidianLink
+import me.parham1995.notes.obsidian.Period
+import me.parham1995.notes.obsidian.PeriodicNotes
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -14,10 +21,15 @@ sealed interface Destination {
         val heading: String? = null,
     ) : Destination
 
-    /** A day with no note of its own, and the path Obsidian would give it. */
+    /**
+     * A day with no note of its own, and the path Obsidian would give it --
+     * the note of the day's week or month, when that is what the format
+     * names a note for.
+     */
     data class NoDailyNote(
         val vaultId: Long,
         val path: String,
+        val period: Period = Period.DAY,
     ) : Destination
 
     data class Search(
@@ -43,6 +55,17 @@ sealed interface Destination {
 }
 
 /**
+ * A daily note's place in its vault's series: the notes either side of it
+ * that exist. Either is null at the end of the series.
+ */
+data class PeriodNeighbours(
+    val vaultId: Long,
+    val period: Period,
+    val previous: NoteRef?,
+    val next: NoteRef?,
+)
+
+/**
  * Finds the notes that are asked for by something other than a tap on them:
  * today's, and whatever an `obsidian://` link names.
  *
@@ -56,6 +79,7 @@ class Destinations
     constructor(
         private val repository: VaultRepository,
         private val configs: ObsidianConfigStore,
+        private val notes: NoteDao,
     ) {
         /**
          * [date]'s daily note in the vault being read, where the Daily notes
@@ -65,9 +89,47 @@ class Destinations
          */
         suspend fun dailyNote(date: LocalDate): Destination {
             val vaultId = repository.activeVaultId.first()
-            val path = configs.dailyNotes(vaultId).pathFor(date)
+            val config = configs.dailyNotes(vaultId)
+            val path = config.pathFor(date)
             val found = repository.resolve(vaultId, path)
-            return if (found != null) Destination.Note(vaultId, found.first) else Destination.NoDailyNote(vaultId, path)
+            return if (found != null) {
+                Destination.Note(vaultId, found.first)
+            } else {
+                Destination.NoDailyNote(vaultId, path, PeriodicNotes(config).period)
+            }
+        }
+
+        /**
+         * How long a daily note of the vault being read covers, so the button
+         * that opens one can say "this week" when that is what it opens.
+         */
+        fun dailyPeriod(): Flow<Period> =
+            configs
+                .dailyNotes(repository.activeVaultId)
+                .map { PeriodicNotes(it).period }
+                .distinctUntilChanged()
+
+        /**
+         * The daily notes before and after [path] in [vaultId], or null when
+         * [path] is not one.
+         *
+         * The nearest that exist rather than the adjacent periods: a weekly
+         * journal kept in fits and starts has gaps, and the note on the far
+         * side of one is more use than being told the week before has none.
+         * Only [vaultId]'s notes are looked at -- a daily note in another
+         * vault is another journal.
+         */
+        suspend fun neighbours(
+            vaultId: Long,
+            path: String,
+        ): PeriodNeighbours? {
+            val series = PeriodicNotes(configs.dailyNotes(vaultId))
+            if (series.periodOf(path) == null) return null
+            val refs = notes.allIds(vaultId)
+            val paths = refs.map { it.path }
+
+            fun ref(step: Int) = series.nearest(paths, path, step)?.let { found -> refs.first { it.path == found } }
+            return PeriodNeighbours(vaultId, series.period, previous = ref(-1), next = ref(1))
         }
 
         /**
