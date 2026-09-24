@@ -26,6 +26,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Find in note**, and notes that resume where you left them
 - **A files drawer** in the note screen — filter by name, the tabs already open, the last few notes, and the folder this one sits in
 - **Home screen widgets** — what is overdue and due today, and the notes you were last reading
+- **Pinned notes on the home screen** — pin a note from its menu and it sits in a widget as a card, its first lines as plain text, a tap away; a list, or two columns when the widget is wide
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts, and Obsidian's operators: `"an exact phrase"`, `-word` to leave notes out, `path:Folder` to look in one folder
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
 - **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary

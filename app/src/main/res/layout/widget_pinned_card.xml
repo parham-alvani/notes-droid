@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One pinned note. The gap under a card is inset into its background, since
+    a ListView has no spacing of its own; the bottom padding covers the gap as
+    well as the card's own margin. Both texts take their direction from their
+    first strong character, paragraph by paragraph, so a Persian line reads
+    right to left beside an English one.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/widget_card_spaced"
+    android:orientation="vertical"
+    android:paddingStart="10dp"
+    android:paddingTop="10dp"
+    android:paddingEnd="10dp"
+    android:paddingBottom="16dp">
+
+    <TextView
+        android:id="@+id/card_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/naz_white"
+        android:textDirection="firstStrong"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/card_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.1"
+        android:maxLines="8"
+        android:textColor="@color/naz_card_text"
+        android:textDirection="firstStrong"
+        android:textSize="12sp" />
+</LinearLayout>

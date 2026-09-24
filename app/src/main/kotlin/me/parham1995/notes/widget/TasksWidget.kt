@@ -14,6 +14,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import me.parham1995.notes.R
+import me.parham1995.notes.data.PinnedNotes
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskBuckets
 import me.parham1995.notes.data.TaskDigestWorker
@@ -38,6 +39,8 @@ import java.time.LocalDate
 @InstallIn(SingletonComponent::class)
 interface WidgetEntryPoint {
     fun vaultRepository(): VaultRepository
+
+    fun pinnedNotes(): PinnedNotes
 }
 
 class TasksWidget : AppWidgetProvider() {

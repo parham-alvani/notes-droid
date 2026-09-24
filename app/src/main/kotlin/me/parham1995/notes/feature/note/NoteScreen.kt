@@ -145,6 +145,13 @@ fun NoteScreen(
 
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
 
+    // Pinned to the home screen by vault and path, so the pin outlives the id.
+    val pins: PinViewModel = hiltViewModel()
+    val pinned by pins.pinned.collectAsStateWithLifecycle()
+    LaunchedEffect(state.note?.vaultId, state.note?.path) {
+        state.note?.let { pins.track(it.vaultId, it.path) }
+    }
+
     // Somewhere else to go without leaving this note. The reader had one way to
     // reach another file -- back out to the browser -- which loses the note on
     // screen and the place in it, and following a thought across four notes and
@@ -481,43 +488,6 @@ fun NoteScreen(
                         }
                     },
                     actions = {
-                        // Shares the note as it is written, not as it is rendered:
-                        // what goes out is markdown, which is what the person on
-                        // the other end can do something with.
-                        IconButton(
-                            onClick = {
-                                scope.launch {
-                                    val text = viewModel.markdown()
-                                    if (text == null) {
-                                        Toast
-                                            .makeText(
-                                                context,
-                                                noteMissing,
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                    } else {
-                                        context.startActivity(
-                                            Intent.createChooser(
-                                                Intent(Intent.ACTION_SEND).apply {
-                                                    type = "text/markdown"
-                                                    putExtra(Intent.EXTRA_TITLE, state.note?.title)
-                                                    putExtra(Intent.EXTRA_SUBJECT, state.note?.title)
-                                                    putExtra(Intent.EXTRA_TEXT, text)
-                                                },
-                                                state.note?.title,
-                                            ),
-                                        )
-                                    }
-                                }
-                            },
-                            enabled = state.note != null,
-                        ) {
-                            LucideGlyph(
-                                "share-2",
-                                size = 20.dp,
-                                contentDescription = stringResource(R.string.action_share),
-                            )
-                        }
                         IconButton(
                             onClick = {
                                 finding = !finding
@@ -563,6 +533,39 @@ fun NoteScreen(
                                 )
                             }
                         }
+                        // Shares the note as it is written, not as it is rendered:
+                        // what goes out is markdown, which is what the person on
+                        // the other end can do something with.
+                        NoteMenu(
+                            enabled = state.note != null,
+                            pinned = pinned,
+                            onShare = {
+                                scope.launch {
+                                    val text = viewModel.markdown()
+                                    if (text == null) {
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                noteMissing,
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                    } else {
+                                        context.startActivity(
+                                            Intent.createChooser(
+                                                Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/markdown"
+                                                    putExtra(Intent.EXTRA_TITLE, state.note?.title)
+                                                    putExtra(Intent.EXTRA_SUBJECT, state.note?.title)
+                                                    putExtra(Intent.EXTRA_TEXT, text)
+                                                },
+                                                state.note?.title,
+                                            ),
+                                        )
+                                    }
+                                }
+                            },
+                            onTogglePin = pins::toggle,
+                        )
                     },
                 )
             },

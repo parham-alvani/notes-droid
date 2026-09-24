@@ -330,4 +330,10 @@
     <string name="period_next">Next: %1$s</string>
     <string name="period_no_previous">No earlier note</string>
     <string name="period_no_next">No later note</string>
+    <string name="note_more">More</string>
+    <string name="note_pin">Pin to home screen</string>
+    <string name="note_unpin">Unpin from home screen</string>
+    <string name="widget_pinned_title">Pinned</string>
+    <string name="widget_pinned_empty">Pin a note from its menu to see it here</string>
+    <string name="widget_pinned_description">Notes you pinned, with their first lines</string>
 </resources>

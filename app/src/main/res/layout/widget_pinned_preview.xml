@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    What the picker shows on Android 12 and up: two cards with bars for lines,
+    so the preview reads the same in every language and shows nobody's notes.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="@string/widget_pinned_title"
+        android:textColor="@color/naz_white"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/widget_card_background"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <FrameLayout
+            android:layout_width="72dp"
+            android:layout_height="8dp"
+            android:background="@drawable/widget_preview_line" />
+
+        <FrameLayout
+            android:layout_width="140dp"
+            android:layout_height="6dp"
+            android:layout_marginTop="6dp"
+            android:alpha="0.6"
+            android:background="@drawable/widget_preview_line" />
+
+        <FrameLayout
+            android:layout_width="110dp"
+            android:layout_height="6dp"
+            android:layout_marginTop="6dp"
+            android:alpha="0.6"
+            android:background="@drawable/widget_preview_line" />
+
+        <FrameLayout
+            android:layout_width="150dp"
+            android:layout_height="6dp"
+            android:layout_marginTop="6dp"
+            android:alpha="0.6"
+            android:background="@drawable/widget_preview_line" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/widget_card_background"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <FrameLayout
+            android:layout_width="72dp"
+            android:layout_height="8dp"
+            android:background="@drawable/widget_preview_line" />
+
+        <FrameLayout
+            android:layout_width="120dp"
+            android:layout_height="6dp"
+            android:layout_marginTop="6dp"
+            android:alpha="0.6"
+            android:background="@drawable/widget_preview_line" />
+
+        <FrameLayout
+            android:layout_width="90dp"
+            android:layout_height="6dp"
+            android:layout_marginTop="6dp"
+            android:alpha="0.6"
+            android:background="@drawable/widget_preview_line" />
+    </LinearLayout>
+</LinearLayout>
