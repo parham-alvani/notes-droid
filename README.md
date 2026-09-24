@@ -24,13 +24,14 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Properties and aliases** — front matter shown as a foldable Properties block, and a note's `aliases` answer to `[[links]]` and the quick switcher
 - **Backlinks, unlinked mentions, an outline and a connections graph** for every note
 - **Find in note**, and notes that resume where you left them
+- **Updated since you read** — the notes that changed upstream since you last opened them, at the top of the browser and marked wherever they are listed; the phone's own edits do not count
 - **A files drawer** in the note screen — filter by name, the tabs already open, the last few notes, and the folder this one sits in
 - **Home screen widgets** — what is overdue and due today, and the notes you were last reading
 - **Pinned notes on the home screen** — pin a note from its menu and it sits in a widget as a card, its first lines as plain text, a tap away; a list, or two columns when the widget is wide
-- **Full-text search** over the whole vault with ranked results and highlighted excerpts, and Obsidian's operators: `"an exact phrase"`, `-word` to leave notes out, `path:Folder` to look in one folder
+- **Full-text search** over the whole vault with ranked results and highlighted excerpts, and Obsidian's operators: `"an exact phrase"`, `-word` to leave notes out, `path:Folder` to look in one folder. Persian is found whichever keyboard wrote it: Arabic and Persian forms of the same letter, Persian and ASCII digits, and the zero-width non-joiner all match, and results are shown in the note's own letters
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
-- **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary
-- **Today's note** — the Daily notes plugin's folder and date format, read from the vault, behind a button in the browser and a launcher shortcut
+- **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary; hold one to push it to tomorrow, the weekend, next week or any day, with undo
+- **Today's note** — the Daily notes plugin's folder and date format, read from the vault, behind a button in the browser and a launcher shortcut. Weekly, monthly and yearly formats are understood as such, and a periodic note has arrows to the previous and next one that exist
 - **`obsidian://` links** — `open` and `search` links from other apps are followed in the vault they name, matched by its name here or its repository's
 - **Several vaults** — separate, each with its own files, index, search and tasks
 - **Attachments** — PDFs read in place; everything else opens in whatever app handles it
