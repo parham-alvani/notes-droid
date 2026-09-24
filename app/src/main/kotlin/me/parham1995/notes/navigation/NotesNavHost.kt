@@ -172,6 +172,23 @@ private data class Tab(
     val icon: String,
 )
 
+/**
+ * The tab a screen belongs to, whether it is the tab's own root or something
+ * pushed on top of it -- Tags over the browser, a settings section over
+ * Settings.
+ *
+ * Switching tabs always pops back to the start destination first, so the
+ * stack is the start tab, at most one other tab's root, and whatever was
+ * pushed on that. Asking the destination on screen cannot answer it: Tags
+ * is no tab's route, the bar highlighted nothing, and a tap on Browse
+ * restored the browser's saved stack with Tags still on top of it.
+ */
+internal fun <T> tabInUse(
+    tabs: List<T>,
+    start: T,
+    onStack: (T) -> Boolean,
+): T = tabs.firstOrNull { it != start && onStack(it) } ?: start
+
 @Composable
 fun NotesNavHost(
     openScreen: StateFlow<String?> = MutableStateFlow(null),
@@ -313,18 +330,37 @@ fun NotesNavHost(
         destination?.hasRoute(NoteRoute::class) != true &&
             destination?.hasRoute(GraphRoute::class) != true
 
+    // Keyed on the entry on screen so it is asked again after every move. Null
+    // until the NavHost below has set its graph: reading the graph before that
+    // throws, and did, on every launch.
+    val inUse =
+        remember(backStackEntry) {
+            if (backStackEntry == null) return@remember null
+            val start = navController.graph.findStartDestination()
+            tabInUse(
+                tabs = tabs,
+                start = tabs.firstOrNull { start.hasRoute(it.route::class) } ?: tabs.first(),
+            ) { tab -> runCatching { navController.getBackStackEntry(tab.route::class) }.isSuccess }
+        }
+
     TabFrame(
         tabs =
             tabs.map { tab ->
                 TabEntry(
                     label = stringResource(tab.label),
                     icon = tab.icon,
-                    selected = destination?.hierarchy()?.any { it.hasRoute(tab.route::class) } == true,
+                    selected = tab == inUse,
                     onClick = {
-                        navController.navigate(tab.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+                        if (tab == inUse) {
+                            // Already here: back to the tab's own root, the
+                            // way every other app's bar answers a second tap.
+                            navController.popBackStack(tab.route::class, inclusive = false)
+                        } else {
+                            navController.navigate(tab.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
                     },
                 )
@@ -421,6 +457,3 @@ fun NotesNavHost(
         }
     }
 }
-
-private fun androidx.navigation.NavDestination.hierarchy(): Sequence<androidx.navigation.NavDestination> =
-    generateSequence(this) { it.parent }
