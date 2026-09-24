@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -78,12 +79,14 @@ import me.parham1995.notes.feature.drawer.FileDrawerSheet
 import me.parham1995.notes.feature.drawer.FileDrawerViewModel
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.ItemRow
+import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.icon.VaultIcon
 import me.parham1995.notes.ui.image.ImageViewer
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.pdf.PdfViewer
+import me.parham1995.notes.ui.readingPadding
 import me.parham1995.notes.ui.render.Attachments
 import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
@@ -100,7 +103,10 @@ fun NoteScreen(
     onBack: () -> Unit,
     onOpenNote: (Long) -> Unit,
     onOpenFolder: (String) -> Unit,
+    onSearch: (String) -> Unit,
     onOpenGraph: (Long) -> Unit = {},
+    /** A heading to land on, for a note opened from a bookmark that names one. */
+    heading: String? = null,
     viewModel: NoteViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -127,6 +133,10 @@ fun NoteScreen(
     var peekBroken by remember { mutableStateOf<String?>(null) }
     // A heading to land on once the note it belongs to has loaded.
     var pendingHeading by remember { mutableStateOf<String?>(null) }
+    // A heading asked for with the note it is in, handed over only once that
+    // note is the one on screen: set while another is still showing, it would
+    // be looked for there, not found, and dropped.
+    var headingIn by remember(noteId, heading) { mutableStateOf(heading?.let { noteId to it }) }
 
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
 
@@ -195,6 +205,13 @@ fun NoteScreen(
     LaunchedEffect(drawer.isOpen, loadedId) {
         if (drawer.isOpen) loadedId?.let { files.locate(it) }
     }
+    LaunchedEffect(loadedId, headingIn) {
+        val (id, text) = headingIn ?: return@LaunchedEffect
+        if (loadedId == id) {
+            pendingHeading = text
+            headingIn = null
+        }
+    }
     LaunchedEffect(loadedId, pendingHeading) {
         val note = state.note ?: return@LaunchedEffect
         // A heading asked for wins over where the note was left: it is the
@@ -240,6 +257,13 @@ fun NoteScreen(
                 onOpenNote = { id -> closeThen { viewModel.openTab(id, inNewTab = false) } },
                 onOpenNoteInNewTab = { id -> closeThen { viewModel.openTab(id, inNewTab = true) } },
                 onBrowseFolder = { path -> closeThen { onOpenFolder(path) } },
+                onOpenHeading = { id, text ->
+                    closeThen {
+                        headingIn = id to text
+                        viewModel.openTab(id, inNewTab = false)
+                    }
+                },
+                onSearch = { query -> closeThen { onSearch(query) } },
             )
         },
     ) {
@@ -437,7 +461,9 @@ fun NoteScreen(
                     if (showContents) {
                         FolderContents(state.contents, onOpenNote, onOpenFolder)
                     } else {
-                        Box(Modifier.fillMaxSize()) {
+                        // The column held to a reading width on a wide window.
+                        BoxWithConstraints(Modifier.fillMaxSize()) {
+                            val readingWidth = LocalReading.current.lineWidth
                             when {
                                 state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                                 state.missing ->
@@ -453,6 +479,7 @@ fun NoteScreen(
                                             blocks = note.blocks,
                                             brokenLinks = state.brokenLinks,
                                             listState = listState,
+                                            contentPadding = readingPadding(maxWidth, readingWidth),
                                             onPinch = viewModel::pinchTextScale,
                                             // Remembered, keyed on what it is built from. A new
                                             // set of actions on every recomposition was unequal

@@ -24,12 +24,16 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Find in note**, and notes that resume where you left them
 - **A files drawer** in the note screen — filter by name, the tabs already open, the last few notes, and the folder this one sits in
 - **Home screen widgets** — what is overdue and due today, and the notes you were last reading
-- **Full-text search** over the whole vault with ranked results and highlighted excerpts
+- **Full-text search** over the whole vault with ranked results and highlighted excerpts, and Obsidian's operators: `"an exact phrase"`, `-word` to leave notes out, `path:Folder` to look in one folder
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
 - **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary
+- **Today's note** — the Daily notes plugin's folder and date format, read from the vault, behind a button in the browser and a launcher shortcut
+- **`obsidian://` links** — `open` and `search` links from other apps are followed in the vault they name, matched by its name here or its repository's
 - **Several vaults** — separate, each with its own files, index, search and tasks
 - **Attachments** — PDFs read in place; everything else opens in whatever app handles it
+- **The vault's own bookmarks** — Obsidian's Bookmarks plugin, groups and all, at the top of the browser and in the files drawer: a note, a heading in one, a folder or a saved search
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
+- **Tablets and landscape** — the note held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar on a wide window
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
 - **A little writing** — tick a task off, add one, capture a thought — each a commit, and offered only where the credential can actually push
 

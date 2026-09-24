@@ -1,10 +1,14 @@
 package me.parham1995.notes.ui
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import me.parham1995.notes.data.LineWidth
 import me.parham1995.notes.data.ReadingSettings
 
 /**
@@ -15,6 +19,27 @@ import me.parham1995.notes.data.ReadingSettings
  * screen does not grow when someone makes their notes larger.
  */
 val LocalReading = staticCompositionLocalOf { ReadingSettings() }
+
+/**
+ * The padding that holds a note's column to [width] in a window [available]
+ * wide: at least the usual margin, and whatever is left over split between the
+ * two sides so the column sits in the middle.
+ *
+ * Padding rather than a narrower list, so the margins still scroll the note:
+ * a list cut to 680dp in the middle of a tablet leaves two strips down the
+ * sides that a thumb lands on and nothing answers.
+ */
+fun readingPadding(
+    available: Dp,
+    width: LineWidth,
+    margin: Dp = READING_MARGIN,
+): PaddingValues {
+    val column = width.maxDp?.dp ?: available
+    val side = maxOf(margin, (available - column) / 2)
+    return PaddingValues(horizontal = side, vertical = margin)
+}
+
+private val READING_MARGIN = 16.dp
 
 /**
  * A style as the reader asked for it: their size, their line spacing, and the

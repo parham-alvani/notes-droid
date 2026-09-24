@@ -1,23 +1,19 @@
 package me.parham1995.notes.navigation
 
+import android.widget.Toast
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -30,8 +26,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import me.parham1995.notes.R
+import me.parham1995.notes.data.Destination
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.feature.browser.BrowserScreen
 import me.parham1995.notes.feature.graph.GraphScreen
@@ -42,7 +40,6 @@ import me.parham1995.notes.feature.sync.SettingsHomeScreen
 import me.parham1995.notes.feature.sync.SettingsSection
 import me.parham1995.notes.feature.sync.SyncScreen
 import me.parham1995.notes.feature.tasks.TasksScreen
-import me.parham1995.notes.ui.icon.LucideGlyph
 
 /**
  * Routes are type-safe and a note is addressed by its **id**, never its path.
@@ -64,7 +61,13 @@ data class BrowseRoute(
 object TasksRoute
 
 @Serializable
-object SearchRoute
+data class SearchRoute(
+    /**
+     * What to search for on arrival -- a bookmarked search, or one another app
+     * asked for. Empty is the tab itself, which keeps whatever was typed last.
+     */
+    val query: String = "",
+)
 
 @Serializable
 object SettingsRoute
@@ -98,10 +101,29 @@ private fun NavController.openNote(
     id: Long,
     newTab: Boolean = false,
     fresh: Boolean = false,
-) = navigate(NoteRoute(id, newTab, fresh)) {
+    heading: String? = null,
+) = navigate(NoteRoute(id, newTab, fresh, heading)) {
     popUpTo<NoteRoute> { inclusive = true }
     launchSingleTop = true
 }
+
+/** The browser's root, as its tab would open it: for a vault just switched to. */
+private fun NavController.browseRoot() =
+    navigate(BrowseRoute()) {
+        popUpTo(graph.findStartDestination().id)
+        launchSingleTop = true
+    }
+
+/**
+ * The search tab, asked to look for [query].
+ *
+ * Single-top, so a search already on screen takes the new query rather than
+ * stacking a second search screen under the first.
+ */
+private fun NavController.search(query: String) =
+    navigate(SearchRoute(query)) {
+        launchSingleTop = true
+    }
 
 @Serializable
 data class NoteRoute(
@@ -125,6 +147,8 @@ data class NoteRoute(
      * is the next step of the thread already being read, and pushes.
      */
     val fresh: Boolean = false,
+    /** A heading to land on, for a bookmark that names one. */
+    val heading: String? = null,
 )
 
 private data class Tab(
@@ -138,6 +162,7 @@ private data class Tab(
 fun NotesNavHost(
     openScreen: StateFlow<String?> = MutableStateFlow(null),
     openNote: StateFlow<Long?> = MutableStateFlow(null),
+    openLink: StateFlow<String?> = MutableStateFlow(null),
     startScreen: StartScreen = StartScreen.BROWSE,
 ) {
     val navController = rememberNavController()
@@ -154,14 +179,39 @@ fun NotesNavHost(
     // settle it too.
     var resumed by rememberSaveable { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    val jumps: JumpViewModel = hiltViewModel()
+
+    // Today's daily note, found and never made: the app does not write notes,
+    // so a day without one says where it would be and leaves it at that.
+    fun openToday() =
+        scope.launch {
+            when (val found = jumps.today()) {
+                is Destination.Note -> navController.openNote(found.noteId, fresh = true)
+                is Destination.NoDailyNote ->
+                    snackbar.showSnackbar(resources.getString(R.string.today_missing, found.path))
+                // A day is only ever a note or the lack of one.
+                else -> Unit
+            }
+        }
+
     // A one-shot: consumed so that rotating the phone afterwards does not yank
     // the person back to wherever they were sent half an hour ago.
     val requested by openScreen.collectAsStateWithLifecycle()
     LaunchedEffect(requested) {
+        if (requested == SCREEN_TODAY) {
+            resumed = true
+            openToday()
+            (openScreen as? MutableStateFlow)?.value = null
+            return@LaunchedEffect
+        }
         val destination =
             when (requested) {
                 "tasks" -> TasksRoute
-                "search" -> SearchRoute
+                "search" -> SearchRoute()
                 else -> null
             }
         if (destination != null) {
@@ -185,6 +235,37 @@ fun NotesNavHost(
             (openNote as? MutableStateFlow)?.value = null
         }
     }
+    // An obsidian:// link from another app, followed in the vault it names.
+    // Whatever cannot be followed still opens the app, and says why.
+    val requestedLink by openLink.collectAsStateWithLifecycle()
+    LaunchedEffect(requestedLink) {
+        val uri = requestedLink ?: return@LaunchedEffect
+        resumed = true
+        (openLink as? MutableStateFlow)?.value = null
+        val message =
+            when (val found = jumps.follow(uri)) {
+                is Destination.Note -> {
+                    navController.openNote(found.noteId, fresh = true, heading = found.heading)
+                    null
+                }
+                is Destination.Search -> {
+                    navController.search(found.query)
+                    null
+                }
+                is Destination.Vault -> {
+                    navController.browseRoot()
+                    null
+                }
+                is Destination.UnknownNote -> {
+                    navController.browseRoot()
+                    resources.getString(R.string.link_unknown_note, found.file)
+                }
+                is Destination.UnknownVault -> resources.getString(R.string.link_unknown_vault, found.name)
+                is Destination.NoDailyNote, null -> resources.getString(R.string.link_not_followed)
+            }
+        message?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
+
     // Reopen the note that was being read, once and only at launch.
     //
     // The tabs are restored from storage asynchronously, so this waits for
@@ -203,7 +284,7 @@ fun NotesNavHost(
         listOf(
             Tab(BrowseRoute(), R.string.nav_browse, "folder-tree"),
             Tab(TasksRoute, R.string.tasks_title, "list-todo"),
-            Tab(SearchRoute, R.string.nav_search, "search"),
+            Tab(SearchRoute(), R.string.nav_search, "search"),
             Tab(SettingsRoute, R.string.settings_title, "settings"),
         )
 
@@ -218,47 +299,34 @@ fun NotesNavHost(
         destination?.hasRoute(NoteRoute::class) != true &&
             destination?.hasRoute(GraphRoute::class) != true
 
-    Scaffold(
-        bottomBar = {
-            if (showBar) {
-                NavigationBar {
-                    tabs.forEach { tab ->
-                        val selected = destination?.hierarchy()?.any { it.hasRoute(tab.route::class) } == true
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                LucideGlyph(
-                                    name = tab.icon,
-                                    size = NAV_ICON,
-                                    // Follows the bar's own selected/unselected
-                                    // colours instead of picking its own.
-                                    tint = LocalContentColor.current,
-                                    contentDescription = stringResource(tab.label),
-                                )
-                            },
-                            label = { Text(stringResource(tab.label)) },
-                        )
-                    }
-                }
-            }
-        },
-    ) { padding ->
+    TabFrame(
+        tabs =
+            tabs.map { tab ->
+                TabEntry(
+                    label = stringResource(tab.label),
+                    icon = tab.icon,
+                    selected = destination?.hierarchy()?.any { it.hasRoute(tab.route::class) } == true,
+                    onClick = {
+                        navController.navigate(tab.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
+            },
+        showTabs = showBar,
+        snackbar = snackbar,
+    ) { placement ->
         NavHost(
             navController = navController,
             startDestination =
                 when (start) {
                     StartScreen.BROWSE -> BrowseRoute()
                     StartScreen.TASKS -> TasksRoute
-                    StartScreen.SEARCH -> SearchRoute
+                    StartScreen.SEARCH -> SearchRoute()
                 },
-            modifier = Modifier.fillMaxSize().padding(if (showBar) padding else PaddingValues()),
+            modifier = placement,
         ) {
             composable<BrowseRoute> { entry ->
                 BrowserScreen(
@@ -270,13 +338,17 @@ fun NotesNavHost(
                             SettingsSectionRoute(SettingsSection.ADVANCED.name),
                         )
                     },
+                    onOpenHeading = { id, heading -> navController.openNote(id, fresh = true, heading = heading) },
+                    onSearch = { navController.search(it) },
+                    onToday = { openToday() },
                 )
             }
             composable<TasksRoute> {
                 TasksScreen(onOpenNote = { navController.openNote(it, fresh = true) })
             }
-            composable<SearchRoute> {
+            composable<SearchRoute> { entry ->
                 SearchScreen(
+                    initialQuery = entry.toRoute<SearchRoute>().query,
                     onOpenNote = { navController.openNote(it, fresh = true) },
                     onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
                 )
@@ -313,10 +385,12 @@ fun NotesNavHost(
                     noteId = route.id,
                     openInNewTab = route.newTab,
                     fresh = route.fresh,
+                    heading = route.heading,
                     onOpenGraph = { navController.navigate(GraphRoute(it)) },
                     onBack = { navController.popBackStack() },
                     onOpenNote = { navController.openNote(it) },
                     onOpenFolder = { navController.navigate(BrowseRoute(it)) },
+                    onSearch = { navController.search(it) },
                 )
             }
         }
@@ -325,5 +399,3 @@ fun NotesNavHost(
 
 private fun androidx.navigation.NavDestination.hierarchy(): Sequence<androidx.navigation.NavDestination> =
     generateSequence(this) { it.parent }
-
-private val NAV_ICON = 24.dp

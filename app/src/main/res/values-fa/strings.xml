@@ -264,6 +264,7 @@
     <string name="browse_recent">اخیرا باز شده</string>
     <string name="browse_all_notes">همهٔ یادداشت‌ها - %1$d</string>
     <string name="search_full_text">متن کامل</string>
+    <string name="search_syntax">عبارت دقیق: \"برداشت سرخ\" · کنار گذاشتن: ‎-واژه · فقط یک پوشه: ‎path:پوشه/زیرپوشه</string>
     <string name="ssh_no_key">هنوز کلیدی نیست.</string>
     <string name="ssh_created">%1$s · ساخته‌شده در %2$s</string>
     <string name="ssh_created_unknown">نامعلوم</string>
@@ -284,4 +285,17 @@
     <string name="unsupported_tasks_query">پرس‌وجوی Tasks</string>
     <string name="unsupported_excalidraw">نقاشی Excalidraw</string>
     <string name="diagram_rendering">در حال کشیدن نمودار&#8230;</string>
+    <string name="bookmarks_title">نشانک‌ها</string>
+    <string name="today_action">یادداشت امروز</string>
+    <string name="today_missing">هنوز یادداشتی برای امروز نیست؛ جایش %1$s است</string>
+    <string name="shortcut_today_short">امروز</string>
+    <string name="shortcut_today_long">یادداشت روزانهٔ امروز</string>
+    <string name="link_unknown_vault">دفتری به نام %1$s اینجا نیست</string>
+    <string name="link_unknown_note">یادداشتی به نام %1$s در این دفتر نیست</string>
+    <string name="link_not_followed">این پیوند اینجا باز نمی‌شود</string>
+    <string name="settings_line_width">پهنای خط</string>
+    <string name="width_narrow">باریک</string>
+    <string name="width_comfortable">راحت</string>
+    <string name="width_full">تمام‌عرض</string>
+    <string name="help_line_width">پهنای متن یادداشت روی تبلت یا در حالت افقی. گوشیِ ایستاده از هر سه باریک‌تر است.</string>
 </resources>

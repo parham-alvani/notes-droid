@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,9 +49,11 @@ import me.parham1995.notes.ui.inScript
 fun SearchScreen(
     onOpenNote: (Long) -> Unit,
     onOpenNoteInNewTab: (Long) -> Unit,
+    initialQuery: String = "",
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(initialQuery) { viewModel.start(initialQuery) }
 
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -107,17 +110,43 @@ fun SearchScreen(
                         spacing = 2.dp,
                     ) {
                         Text(row.hit.title, style = MaterialTheme.typography.bodyMedium)
-                        AutoDirection(row.hit.snippet) {
+                        // A folder searched on its own has no excerpt, only a
+                        // place; an empty line where one would be says less.
+                        if (row.hit.snippet.isBlank()) {
                             Text(
-                                text = row.hit.snippet.highlighted(),
-                                style = MaterialTheme.typography.bodySmall.inScript(),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 3,
+                                row.hit.path,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.outline,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                        } else {
+                            AutoDirection(row.hit.snippet) {
+                                Text(
+                                    text = row.hit.snippet.highlighted(),
+                                    style = MaterialTheme.typography.bodySmall.inScript(),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                     HorizontalDivider()
+                }
+            }
+
+            // What the box understands, where there is nothing else to show.
+            // Operators nobody knows about are operators nobody uses.
+            if (state.query.isBlank()) {
+                item {
+                    Text(
+                        stringResource(R.string.search_syntax),
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 

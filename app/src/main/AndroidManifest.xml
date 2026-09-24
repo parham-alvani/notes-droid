@@ -53,6 +53,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!--
+                obsidian://open and obsidian://search, as other apps and notes
+                elsewhere write them. Only read: what a link means is decided
+                in ObsidianUri, and a link naming a vault or note this app does
+                not have opens the app and says so.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="obsidian" />
+            </intent-filter>
+
             <!-- Long-pressing the launcher icon goes straight to a screen. -->
             <meta-data
                 android:name="android.app.shortcuts"

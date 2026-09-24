@@ -19,6 +19,7 @@ import me.parham1995.notes.R
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.ImagePolicy
+import me.parham1995.notes.data.LineWidth
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.data.SyncLog
@@ -313,6 +314,8 @@ class SyncViewModel
         fun setTextScale(scale: Float) = viewModelScope.launch { settingsStore.setTextScale(scale) }
 
         fun setLineSpacing(spacing: Float) = viewModelScope.launch { settingsStore.setLineSpacing(spacing) }
+
+        fun setLineWidth(width: LineWidth) = viewModelScope.launch { settingsStore.setLineWidth(width) }
 
         fun setTheme(theme: ThemeChoice) = viewModelScope.launch { settingsStore.setTheme(theme) }
 

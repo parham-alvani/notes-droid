@@ -42,11 +42,12 @@ just verify-apk
 core/markdown/   kotlin("jvm")     parser, link resolver, block model -- NO Android
 core/sync/       kotlin("jvm")     transports, planner, VaultFilter  -- NO Android
 core/icons/      kotlin("jvm")     Iconic plugin config parsing      -- NO Android
+core/obsidian/   kotlin("jvm")     bookmarks, daily notes, obsidian:// -- NO Android
 core/data/       android-library   Room, DataStore, files, WorkManager
 app/             application       Compose UI and DI wiring
 ```
 
-**Keep Android out of the three JVM modules.** Their tests run in seconds instead of forty, and the compiler physically prevents reaching for a `Context`. If a piece of logic is worth iterating on, it belongs in one of them. This is also why CI runs no emulator and there are no instrumentation tests: the risk surface that can be tested on the JVM is most of it.
+**Keep Android out of the four JVM modules.** Their tests run in seconds instead of forty, and the compiler physically prevents reaching for a `Context`. If a piece of logic is worth iterating on, it belongs in one of them. This is also why CI runs no emulator and there are no instrumentation tests: the risk surface that can be tested on the JVM is most of it.
 
 ## The rule that keeps being broken: everything is scoped to a vault
 
@@ -199,4 +200,6 @@ Do not solve this in `VaultFilter` instead. That decides what reaches the device
 - **ktlint's `no-consecutive-comments`:** inserting a function immediately before another orphans that one's KDoc. Anchor insertions on the `/**`, not on the `@Composable`.
 - **An activity is handed its launch intent again on every recreation** -- rotation, a theme or language change, process death, reopening from recents. Anything acted on from `intent` in `onCreate` fires each time unless it is gated on `savedInstanceState == null` and stripped once read. `launchRequest` does both for `MainActivity`.
 - **A `NavHost` given a new `startDestination` builds a new graph and resets the back stack.** Feeding it from a settings flow threw the person out of Settings the moment they changed the start screen, and a flow's `initialValue` made the first frame build the wrong graph. Read it once (`rememberSaveable`), and hold the splash until the settings have loaded rather than drawing from defaults.
+- **`context.getString` inside a composition fails lint** (`LocalContextGetResourceValueCall`): it is not configuration-aware. Read strings for a toast or a snackbar through `LocalResources.current`; keep `LocalContext` for the `Toast` itself.
+- **A heading to scroll to has to name the note it is in.** The note screen resolves `pendingHeading` against whatever note is loaded when the value changes, and drops it if that note lacks the heading. Set it and switch tabs in the same breath and it is looked for in the note being left. `headingIn` pairs it with its note id and hands it over only once that note is on screen; the bookmark and `NoteRoute.heading` paths use it.
 - **Lint only checks resources, not Kotlin.** A `Text("Status")` or a `"$n overdue"` built in a view model or a widget compiles, passes lint, and shows English on a Persian phone. View models say which resource with `UiText`; widgets use `context.getString`. `grep -rn 'Text("' app/src/main` is the check.

@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.browser
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -46,12 +47,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.ui.BookmarkActions
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.bookmarkItems
+import me.parham1995.notes.ui.bookmarkNodes
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
@@ -63,10 +68,18 @@ fun BrowserScreen(
     onOpenNote: (Long) -> Unit,
     onOpenNoteInNewTab: (Long) -> Unit,
     onOpenAdvancedSettings: () -> Unit,
+    /** A bookmarked heading: the note, and where in it to land. */
+    onOpenHeading: (Long, String) -> Unit,
+    onSearch: (String) -> Unit,
+    /** Today's daily note, from Obsidian's Daily notes settings. */
+    onToday: () -> Unit,
     initialPath: String = "",
     viewModel: BrowserViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
+    // Shut again on a vault switch: the keys are positions in one vault's tree.
+    var openGroups by remember(bookmarks.vaultId) { mutableStateOf(emptySet<String>()) }
 
     // Only on arrival. Keying on the argument rather than running every
     // composition means walking up the tree afterwards is not undone on the
@@ -111,6 +124,17 @@ fun BrowserScreen(
         )
     }
 
+    val noteMissing = stringResource(R.string.note_missing)
+    val bookmarkActions =
+        BookmarkActions(
+            onNote = { id, heading -> if (heading == null) onOpenNote(id) else onOpenHeading(id, heading) },
+            onFolder = { viewModel.open(it) },
+            onSearch = onSearch,
+            onUrl = { url -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) } },
+            onMissing = { Toast.makeText(context, noteMissing, Toast.LENGTH_SHORT).show() },
+            onToggleGroup = { key -> openGroups = if (key in openGroups) openGroups - key else openGroups + key },
+        )
+
     // Inside a folder, back walks up the tree before it leaves the screen.
     BackHandler(enabled = state.path.isNotEmpty()) { viewModel.up() }
 
@@ -135,6 +159,13 @@ fun BrowserScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onToday) {
+                        LucideGlyph(
+                            "calendar-days",
+                            size = 20.dp,
+                            contentDescription = stringResource(R.string.today_action),
+                        )
+                    }
                     IconButton(onClick = { viewModel.randomNote(onOpenNote) }) {
                         LucideGlyph(
                             "shuffle",
@@ -238,6 +269,14 @@ fun BrowserScreen(
                 }
 
                 LazyColumn(Modifier.fillMaxSize()) {
+                    // First, because they are the places this vault's author
+                    // chose to keep within reach.
+                    if (state.path.isEmpty() && bookmarks.items.isNotEmpty()) {
+                        item { SectionLabel(stringResource(R.string.bookmarks_title)) }
+                        bookmarkItems(bookmarkNodes(bookmarks, openGroups), openGroups, bookmarkActions)
+                        item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+                    }
+
                     if (state.path.isEmpty() && state.recent.isNotEmpty()) {
                         item {
                             SectionLabel(stringResource(R.string.browse_recent))

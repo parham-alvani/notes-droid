@@ -6,13 +6,15 @@ import me.parham1995.notes.widget.RecentNotesWidget
 
 /**
  * Where something outside the app asked to be taken: the digest notification,
- * a launcher shortcut, a widget.
+ * a launcher shortcut, a widget, an `obsidian://` link.
  */
 data class LaunchRequest(
-    /** A screen by name, `tasks` or `search`. */
+    /** A screen by name: `tasks`, `search`, or `today` for today's daily note. */
     val screen: String? = null,
     /** A note id, from a widget row. */
     val note: Long? = null,
+    /** An `obsidian://` link another app handed over, as it was written. */
+    val link: String? = null,
 )
 
 /**
@@ -38,7 +40,11 @@ fun launchRequest(
         intent.getStringExtra(EXTRA_OPEN)
             ?: SCREEN_TASKS.takeIf { intent.getBooleanExtra(TaskDigestWorker.EXTRA_OPEN_TASKS, false) }
     val note = intent.getLongExtra(RecentNotesWidget.EXTRA_NOTE, 0L).takeIf { it > 0 }
-    return if (screen == null && note == null) null else LaunchRequest(screen, note)
+    val link =
+        intent.dataString?.takeIf {
+            intent.action == Intent.ACTION_VIEW && it.startsWith(OBSIDIAN_SCHEME, ignoreCase = true)
+        }
+    return if (screen == null && note == null && link == null) null else LaunchRequest(screen, note, link)
 }
 
 /**
@@ -50,9 +56,15 @@ fun Intent.consumeLaunchRequest() {
     removeExtra(EXTRA_OPEN)
     removeExtra(TaskDigestWorker.EXTRA_OPEN_TASKS)
     removeExtra(RecentNotesWidget.EXTRA_NOTE)
+    if (dataString?.startsWith(OBSIDIAN_SCHEME, ignoreCase = true) == true) data = null
 }
+
+private const val OBSIDIAN_SCHEME = "obsidian:"
 
 /** Matches `me.parham1995.notes.OPEN` in `res/xml/shortcuts.xml`. */
 const val EXTRA_OPEN = "me.parham1995.notes.OPEN"
 
 private const val SCREEN_TASKS = "tasks"
+
+/** Today's daily note, from the launcher shortcut of that name. */
+const val SCREEN_TODAY = "today"

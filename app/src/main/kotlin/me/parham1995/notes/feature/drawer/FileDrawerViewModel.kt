@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
+import me.parham1995.notes.data.ObsidianConfigStore
+import me.parham1995.notes.data.VaultBookmarks
 import me.parham1995.notes.data.VaultIcons
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
@@ -77,8 +79,15 @@ class FileDrawerViewModel
         private val repository: VaultRepository,
         private val tabs: NoteTabs,
         icons: IconStore,
+        configs: ObsidianConfigStore,
         private val savedState: SavedStateHandle,
     ) : ViewModel() {
+        /** The vault's bookmarks, the other thing kept within reach. */
+        val bookmarks: StateFlow<VaultBookmarks> =
+            configs
+                .bookmarks(repository.activeVaultId)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), VaultBookmarks.EMPTY)
+
         private val _state = MutableStateFlow(FileDrawerUiState())
         val state: StateFlow<FileDrawerUiState> = _state.asStateFlow()
 
@@ -197,5 +206,6 @@ class FileDrawerViewModel
             const val RECENT = 8
             const val DEBOUNCE_MS = 150L
             const val KEY_FOLDER = "drawer_folder"
+            const val STOP_AFTER_MS = 5_000L
         }
     }

@@ -74,6 +74,16 @@ class VaultFilterTest {
     }
 
     @Test
+    fun `so do the bookmarks and the daily notes settings`() {
+        assertThat(filter.kindOf(".obsidian/bookmarks.json")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.kindOf(".obsidian/daily-notes.json")).isEqualTo(BlobKind.CONFIG)
+        // And nothing beside them: the rest of the editor's settings stay out.
+        assertThat(filter.kindOf(".obsidian/workspace.json")).isNull()
+        assertThat(filter.kindOf(".obsidian/bookmarks.json.bak")).isNull()
+        assertThat(filter.kindOf("notes/.obsidian/bookmarks.json")).isNull()
+    }
+
+    @Test
     fun `the exception is that one file and does not open up its directory`() {
         assertThat(filter.kindOf(".obsidian/plugins/iconic/manifest.json")).isNull()
         assertThat(filter.kindOf(".obsidian/plugins/iconic/data.json.bak")).isNull()

@@ -52,6 +52,9 @@ class MainActivity : ComponentActivity() {
     /** A note id from a widget row. */
     private val openNote = MutableStateFlow<Long?>(null)
 
+    /** An `obsidian://` link from another app. */
+    private val openLink = MutableStateFlow<String?>(null)
+
     @Inject
     lateinit var settingsStore: Provider<SettingsStore>
 
@@ -91,6 +94,7 @@ class MainActivity : ComponentActivity() {
         intent?.consumeLaunchRequest()
         openScreen.value = request?.screen
         openNote.value = request?.note
+        openLink.value = request?.link
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,6 +129,7 @@ class MainActivity : ComponentActivity() {
                         NotesNavHost(
                             openScreen = openScreen,
                             openNote = openNote,
+                            openLink = openLink,
                             startScreen = current.reading.startScreen,
                         )
                     }
