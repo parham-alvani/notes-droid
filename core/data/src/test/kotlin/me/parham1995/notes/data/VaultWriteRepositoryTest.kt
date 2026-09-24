@@ -295,6 +295,79 @@ class VaultWriteRepositoryTest {
             assertThat(database.pendingEditDao().all()).isEmpty()
         }
 
+    /** Seeds [path] with [text], indexes it, and hands back its one open task. */
+    private suspend fun seedTask(
+        path: String,
+        text: String,
+    ): me.parham1995.notes.data.database.TaskRow {
+        files.write(vaultId, path, text.toByteArray())
+        indexer.indexAll(vaultId, listOf(PathAndSha(path, "sha-seed")))
+        transport.content = files.readText(vaultId, path)
+        return database
+            .taskDao()
+            .open(vaultId)
+            .first()
+            .single()
+    }
+
+    @Test
+    fun `a moved task is on its new day at once, and undo puts the line back`() =
+        runTest {
+            val path = "Tasks/Home.md"
+            val original = "## Home\n\n- [ ] call the bank ➕ 2026-09-01 ^bank\n"
+            val task = seedTask(path, original)
+
+            val moved = writes.rescheduleTask(task, "2026-10-05")
+
+            assertThat(moved.result).isEqualTo(WriteResult.Pushed)
+            assertThat(transport.content).isEqualTo("## Home\n\n- [ ] call the bank ➕ 2026-09-01 ⏳ 2026-10-05 ^bank\n")
+            // Indexed as it was written, which is what moves it between groups
+            // on the task screen without waiting for a sync.
+            val after = database.taskDao().open(vaultId).first().single()
+            assertThat(after.actionableOn).isEqualTo("2026-10-05")
+
+            val undo = moved.undo!!
+            assertThat(undo.date).isNull()
+            assertThat(writes.rescheduleTask(undo.task, undo.date).result).isEqualTo(WriteResult.Pushed)
+            assertThat(transport.content).isEqualTo(original)
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun `a move made offline lands on the task even after the note grew above it`() =
+        runTest {
+            val path = "Tasks/Home.md"
+            val task = seedTask(path, "## Home\n\n- [ ] call the bank ⏳ 2026-09-10\n")
+            transport.offline = true
+
+            val moved = writes.rescheduleTask(task, "2026-10-05")
+
+            assertThat(moved.result).isInstanceOf(WriteResult.Queued::class.java)
+            assertThat(moved.undo?.date).isEqualTo("2026-09-10")
+            assertThat(files.readText(vaultId, path)).contains("⏳ 2026-10-05")
+
+            transport.offline = false
+            transport.content = "## Home\n\nA paragraph written at the desk.\n\n- [ ] call the bank ⏳ 2026-09-10\n"
+
+            assertThat(writes.flush()).isEqualTo(1)
+            assertThat(transport.content)
+                .isEqualTo("## Home\n\nA paragraph written at the desk.\n\n- [ ] call the bank ⏳ 2026-10-05\n")
+        }
+
+    @Test
+    fun `moving a task that is gone is refused, and nothing is queued`() =
+        runTest {
+            val path = "Tasks/Home.md"
+            val task = seedTask(path, "- [ ] call the bank\n")
+            files.write(vaultId, path, "- [ ] something else entirely\n".toByteArray())
+
+            val moved = writes.rescheduleTask(task, "2026-10-05")
+
+            assertThat(moved.result).isInstanceOf(WriteResult.Refused::class.java)
+            assertThat(moved.undo).isNull()
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
     private companion object {
         const val SCRATCHPAD = "Scratchpad.md"
     }

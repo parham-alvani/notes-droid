@@ -131,9 +131,9 @@ object TaskLine {
         /** Which date moved: `⏳` or `📅`. */
         val emoji: String,
         /**
-         * The date it carried before, or null when it had none and a scheduled
-         * date was added -- which is what tells an undo whether to move the
-         * date back or take it off again.
+         * What the field said before, as written, or null when there was no
+         * such field and a scheduled date was added -- which is what tells an
+         * undo whether to move the date back or take it off again.
          */
         val previous: String?,
     )
@@ -166,7 +166,7 @@ object TaskLine {
         val previous = parts.rest.substring(range.first, range.last + 1)
         if (previous == date) return null
         val rest = parts.rest.replaceRange(range.first, range.last + 1, if (range.isEmpty()) " $date" else date)
-        return Rescheduled(parts.head + rest + parts.tail, emoji, previous.takeIf { it.toDateOrNull() != null })
+        return Rescheduled(parts.head + rest + parts.tail, emoji, previous)
     }
 
     /**
