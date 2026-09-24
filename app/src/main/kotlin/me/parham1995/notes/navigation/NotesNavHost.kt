@@ -2,16 +2,7 @@ package me.parham1995.notes.navigation
 
 import android.widget.Toast
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,10 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -50,7 +39,6 @@ import me.parham1995.notes.feature.sync.SettingsHomeScreen
 import me.parham1995.notes.feature.sync.SettingsSection
 import me.parham1995.notes.feature.sync.SyncScreen
 import me.parham1995.notes.feature.tasks.TasksScreen
-import me.parham1995.notes.ui.icon.LucideGlyph
 
 /**
  * Routes are type-safe and a note is addressed by its **id**, never its path.
@@ -309,39 +297,25 @@ fun NotesNavHost(
         destination?.hasRoute(NoteRoute::class) != true &&
             destination?.hasRoute(GraphRoute::class) != true
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = {
-            if (showBar) {
-                NavigationBar {
-                    tabs.forEach { tab ->
-                        val selected = destination?.hierarchy()?.any { it.hasRoute(tab.route::class) } == true
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                LucideGlyph(
-                                    name = tab.icon,
-                                    size = NAV_ICON,
-                                    // Follows the bar's own selected/unselected
-                                    // colours instead of picking its own.
-                                    tint = LocalContentColor.current,
-                                    contentDescription = stringResource(tab.label),
-                                )
-                            },
-                            label = { Text(stringResource(tab.label)) },
-                        )
-                    }
-                }
-            }
-        },
-    ) { padding ->
+    TabFrame(
+        tabs =
+            tabs.map { tab ->
+                TabEntry(
+                    label = stringResource(tab.label),
+                    icon = tab.icon,
+                    selected = destination?.hierarchy()?.any { it.hasRoute(tab.route::class) } == true,
+                    onClick = {
+                        navController.navigate(tab.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
+            },
+        showTabs = showBar,
+        snackbar = snackbar,
+    ) { placement ->
         NavHost(
             navController = navController,
             startDestination =
@@ -350,7 +324,7 @@ fun NotesNavHost(
                     StartScreen.TASKS -> TasksRoute
                     StartScreen.SEARCH -> SearchRoute()
                 },
-            modifier = Modifier.fillMaxSize().padding(if (showBar) padding else PaddingValues()),
+            modifier = placement,
         ) {
             composable<BrowseRoute> { entry ->
                 BrowserScreen(
@@ -423,5 +397,3 @@ fun NotesNavHost(
 
 private fun androidx.navigation.NavDestination.hierarchy(): Sequence<androidx.navigation.NavDestination> =
     generateSequence(this) { it.parent }
-
-private val NAV_ICON = 24.dp
