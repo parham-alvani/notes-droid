@@ -1,5 +1,6 @@
 package me.parham1995.notes.navigation
 
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -117,6 +118,13 @@ private fun NavController.openNote(
     launchSingleTop = true
 }
 
+/** The browser's root, as its tab would open it: for a vault just switched to. */
+private fun NavController.browseRoot() =
+    navigate(BrowseRoute()) {
+        popUpTo(graph.findStartDestination().id)
+        launchSingleTop = true
+    }
+
 /**
  * The search tab, asked to look for [query].
  *
@@ -165,6 +173,7 @@ private data class Tab(
 fun NotesNavHost(
     openScreen: StateFlow<String?> = MutableStateFlow(null),
     openNote: StateFlow<Long?> = MutableStateFlow(null),
+    openLink: StateFlow<String?> = MutableStateFlow(null),
     startScreen: StartScreen = StartScreen.BROWSE,
 ) {
     val navController = rememberNavController()
@@ -194,6 +203,8 @@ fun NotesNavHost(
                 is Destination.Note -> navController.openNote(found.noteId, fresh = true)
                 is Destination.NoDailyNote ->
                     snackbar.showSnackbar(context.getString(R.string.today_missing, found.path))
+                // A day is only ever a note or the lack of one.
+                else -> Unit
             }
         }
 
@@ -234,6 +245,37 @@ fun NotesNavHost(
             (openNote as? MutableStateFlow)?.value = null
         }
     }
+    // An obsidian:// link from another app, followed in the vault it names.
+    // Whatever cannot be followed still opens the app, and says why.
+    val requestedLink by openLink.collectAsStateWithLifecycle()
+    LaunchedEffect(requestedLink) {
+        val uri = requestedLink ?: return@LaunchedEffect
+        resumed = true
+        (openLink as? MutableStateFlow)?.value = null
+        val message =
+            when (val found = jumps.follow(uri)) {
+                is Destination.Note -> {
+                    navController.openNote(found.noteId, fresh = true, heading = found.heading)
+                    null
+                }
+                is Destination.Search -> {
+                    navController.search(found.query)
+                    null
+                }
+                is Destination.Vault -> {
+                    navController.browseRoot()
+                    null
+                }
+                is Destination.UnknownNote -> {
+                    navController.browseRoot()
+                    context.getString(R.string.link_unknown_note, found.file)
+                }
+                is Destination.UnknownVault -> context.getString(R.string.link_unknown_vault, found.name)
+                is Destination.NoDailyNote, null -> context.getString(R.string.link_not_followed)
+            }
+        message?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
+
     // Reopen the note that was being read, once and only at launch.
     //
     // The tabs are restored from storage asynchronously, so this waits for

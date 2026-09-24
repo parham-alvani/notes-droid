@@ -364,6 +364,34 @@ class VaultRepository
             path: String,
         ): Pair<Long, String>? = notes.byPath(vaultId, path)?.let { it.id to it.title.ifBlank { it.name } }
 
+        /**
+         * The note [target] names in [vaultId], read the way a wikilink is: a
+         * full path or a bare name, `.md` optional, case forgiven where it is
+         * unambiguous. How a link from outside the app -- `obsidian://open` --
+         * names a note, and resolved in the one vault it names.
+         */
+        suspend fun find(
+            vaultId: Long,
+            target: String,
+        ): Long? {
+            val refs = notes.allIds(vaultId)
+            val path = LinkResolver(refs.map { it.path }).resolve(target.trim().trim('/'), source = "") ?: return null
+            return refs.firstOrNull { it.path == path }?.id
+        }
+
+        /**
+         * The vault Obsidian would call [name]: by the name it was given here,
+         * and otherwise by its repository's, ignoring case either way. Obsidian
+         * names a vault after its folder on the desktop, which is usually the
+         * repository's name and sometimes what it has been renamed to here.
+         */
+        suspend fun vaultNamed(name: String): VaultEntity? {
+            val all = vaults.all()
+            val wanted = name.trim()
+            return all.firstOrNull { it.name.isNotBlank() && it.name.trim().equals(wanted, ignoreCase = true) }
+                ?: all.firstOrNull { it.repo.equals(wanted, ignoreCase = true) }
+        }
+
         /** Full-text results, ranked with the title weighted above the body. */
         suspend fun search(query: String): List<SearchHit> = search.search(active(), query)
 

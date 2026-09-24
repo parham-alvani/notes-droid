@@ -282,4 +282,7 @@
     <string name="today_missing">No note for today yet - it would be %1$s</string>
     <string name="shortcut_today_short">Today</string>
     <string name="shortcut_today_long">Today\'s daily note</string>
+    <string name="link_unknown_vault">No vault here is called %1$s</string>
+    <string name="link_unknown_note">No note called %1$s in this vault</string>
+    <string name="link_not_followed">That link cannot be opened here</string>
 </resources>

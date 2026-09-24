@@ -282,4 +282,7 @@
     <string name="today_missing">هنوز یادداشتی برای امروز نیست؛ جایش %1$s است</string>
     <string name="shortcut_today_short">امروز</string>
     <string name="shortcut_today_long">یادداشت روزانهٔ امروز</string>
+    <string name="link_unknown_vault">دفتری به نام %1$s اینجا نیست</string>
+    <string name="link_unknown_note">یادداشتی به نام %1$s در این دفتر نیست</string>
+    <string name="link_not_followed">این پیوند اینجا باز نمی‌شود</string>
 </resources>

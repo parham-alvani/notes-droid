@@ -1,6 +1,7 @@
 package me.parham1995.notes.navigation
 
 import android.content.Intent
+import android.net.Uri
 import com.google.common.truth.Truth.assertThat
 import me.parham1995.notes.data.TaskDigestWorker
 import me.parham1995.notes.widget.RecentNotesWidget
@@ -40,6 +41,27 @@ class LaunchRequestTest {
     fun `the today shortcut asks for today's note`() {
         val intent = Intent().putExtra(EXTRA_OPEN, SCREEN_TODAY)
         assertThat(launchRequest(intent, restoring = false)).isEqualTo(LaunchRequest(screen = "today"))
+    }
+
+    private fun link(uri: String) = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+
+    @Test
+    fun `an obsidian link is handed over as written`() {
+        val uri = "obsidian://open?vault=v&file=Plan"
+        assertThat(launchRequest(link(uri), restoring = false)).isEqualTo(LaunchRequest(link = uri))
+    }
+
+    @Test
+    fun `an obsidian link is answered once`() {
+        val intent = link("obsidian://search?query=red")
+        intent.consumeLaunchRequest()
+        assertThat(launchRequest(intent, restoring = false)).isNull()
+        assertThat(launchRequest(link("obsidian://open?vault=v"), restoring = true)).isNull()
+    }
+
+    @Test
+    fun `other data on an intent is not a link to follow`() {
+        assertThat(launchRequest(link("https://example.org"), restoring = false)).isNull()
     }
 
     @Test

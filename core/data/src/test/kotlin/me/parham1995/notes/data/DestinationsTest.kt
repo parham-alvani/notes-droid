@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.obsidian.ObsidianLink
 import me.parham1995.notes.sync.VaultFilter
 import org.junit.After
 import org.junit.Before
@@ -14,7 +15,8 @@ import org.robolectric.RobolectricTestRunner
 import java.time.LocalDate
 
 /**
- * Notes asked for from outside a list: today's, so far. Fixtures are synthetic.
+ * Notes asked for from outside a list: today's, and what an obsidian:// link
+ * names. Fixtures are synthetic.
  */
 @RunWith(RobolectricTestRunner::class)
 class DestinationsTest {
@@ -113,6 +115,54 @@ class DestinationsTest {
 
             assertThat(destinations.dailyNote(day)).isEqualTo(Destination.NoDailyNote(1L, "2026-03-04.md"))
             assertThat(database.noteDao().byPath(1L, "2026-03-04.md")).isNull()
+        }
+
+    private suspend fun id(
+        vaultId: Long,
+        path: String,
+    ) = database.noteDao().idOf(vaultId, path)!!
+
+    @Test
+    fun `a link finds its note in the vault it names, by name or by repository`() =
+        runTest {
+            // Both vaults hold Projects/Plan.md; the link says which it means.
+            vault(1L, "Projects/Plan.md")
+            vault(2L, "Projects/Plan.md", "Inbox.md")
+            settings.setActiveVault(1L)
+
+            assertThat(destinations.follow(ObsidianLink.Open("V2", "Projects/Plan")))
+                .isEqualTo(Destination.Note(2L, id(2L, "Projects/Plan.md")))
+            assertThat(destinations.follow(ObsidianLink.Open("REPO-2", "Inbox.md")))
+                .isEqualTo(Destination.Note(2L, id(2L, "Inbox.md")))
+            // A bare name resolves the way a wikilink does, heading and all.
+            assertThat(destinations.follow(ObsidianLink.Open("v2", "Plan", heading = "Goals")))
+                .isEqualTo(Destination.Note(2L, id(2L, "Projects/Plan.md"), "Goals"))
+        }
+
+    @Test
+    fun `a link naming no vault is followed in the one being read`() =
+        runTest {
+            vault(1L, "Plan.md")
+            vault(2L, "Plan.md")
+            settings.setActiveVault(2L)
+
+            assertThat(
+                destinations.follow(ObsidianLink.Open(null, "Plan")),
+            ).isEqualTo(Destination.Note(2L, id(2L, "Plan.md")))
+            assertThat(destinations.follow(ObsidianLink.Search(null, "red"))).isEqualTo(Destination.Search(2L, "red"))
+        }
+
+    @Test
+    fun `what a link names and this app does not have is said, not guessed at`() =
+        runTest {
+            vault(1L, "Plan.md")
+            settings.setActiveVault(1L)
+
+            assertThat(destinations.follow(ObsidianLink.Open("Elsewhere", "Plan")))
+                .isEqualTo(Destination.UnknownVault("Elsewhere"))
+            assertThat(destinations.follow(ObsidianLink.Open("v1", "Missing")))
+                .isEqualTo(Destination.UnknownNote(1L, "Missing"))
+            assertThat(destinations.follow(ObsidianLink.Open("v1"))).isEqualTo(Destination.Vault(1L))
         }
 
     @Test
