@@ -135,10 +135,26 @@ private fun NavController.browseRoot() =
  * Single-top, so a search already on screen takes the new query rather than
  * stacking a second search screen under the first.
  */
-private fun NavController.search(query: String) =
-    navigate(SearchRoute(query)) {
-        launchSingleTop = true
-    }
+private fun NavController.search(query: String) = switchTab(SearchRoute(query), restore = false)
+
+/**
+ * Onto a tab's own screen the way the bar gets there: back to the start
+ * destination first, keeping the tab being left as it was.
+ *
+ * Pushed on top instead -- a search from a link, a shortcut's screen -- the
+ * stack held two tabs' roots at once, and the bar, which works out the tab in
+ * use from the one root above the start, lit Tasks under a search. [restore]
+ * brings back the tab as it was left; a search that carries its own query
+ * does not want the old one back.
+ */
+private fun NavController.switchTab(
+    route: Any,
+    restore: Boolean = true,
+) = navigate(route) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = restore
+}
 
 @Serializable
 data class NoteRoute(
@@ -251,7 +267,7 @@ fun NotesNavHost(
             // Asked for by name, so reopening the last note on top of it would
             // bury exactly what was asked for.
             resumed = true
-            navController.navigate(destination) { launchSingleTop = true }
+            navController.switchTab(destination)
             (openScreen as? MutableStateFlow)?.value = null
         }
     }
