@@ -9,14 +9,19 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.CrashLog
+import me.parham1995.notes.data.PinStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
+import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
+import me.parham1995.notes.widget.PinnedNotesWidget
 import me.parham1995.notes.widget.RecentNotesWidget
 import me.parham1995.notes.widget.TasksWidget
 import javax.inject.Inject
@@ -41,6 +46,12 @@ class NotesApplication :
 
     @Inject
     lateinit var scheduler: Provider<SyncScheduler>
+
+    @Inject
+    lateinit var pins: Provider<PinStore>
+
+    @Inject
+    lateinit var vaults: Provider<VaultRepository>
 
     /**
      * Startup scheduling runs here, and a failure in it must not be fatal.
@@ -77,12 +88,33 @@ class NotesApplication :
         SyncWorker.afterSync = {
             TasksWidget.refresh(this)
             RecentNotesWidget.refresh(this)
+            PinnedNotesWidget.refresh(this)
         }
         // A task ticked in the app leaves the home screen a tick behind
         // otherwise, until whenever the next background refresh happens to run.
         VaultWriteRepository.afterWrite = {
             TasksWidget.refresh(this)
             RecentNotesWidget.refresh(this)
+            PinnedNotesWidget.refresh(this)
+        }
+        refreshPinsWhenTheyChange()
+    }
+
+    /**
+     * Redraws the pinned notes widget when a note is pinned or unpinned, or
+     * the vault being read changes -- the two things it shows that a sync
+     * does not move.
+     *
+     * The first value is the state at launch, which the widget already drew,
+     * so it is skipped rather than answered with a redraw every time the
+     * process starts.
+     */
+    private fun refreshPinsWhenTheyChange() {
+        scope.launch {
+            combine(pins.get().pins, vaults.get().activeVaultId) { all, active -> all to active }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { PinnedNotesWidget.refresh(this@NotesApplication) }
         }
     }
 

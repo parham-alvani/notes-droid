@@ -306,4 +306,7 @@
     <string name="note_more">بیشتر</string>
     <string name="note_pin">سنجاق به صفحهٔ اصلی</string>
     <string name="note_unpin">برداشتن از صفحهٔ اصلی</string>
+    <string name="widget_pinned_title">سنجاق‌شده‌ها</string>
+    <string name="widget_pinned_empty">یادداشتی را از منوی خودش سنجاق کنید تا اینجا بیاید</string>
+    <string name="widget_pinned_description">یادداشت‌هایی که سنجاق کرده‌اید، با چند خط اولشان</string>
 </resources>

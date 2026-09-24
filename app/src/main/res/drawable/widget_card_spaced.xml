@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A card with the gap under it, for a list that has no spacing of its own. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/widget_card_background"
+    android:insetBottom="6dp" />

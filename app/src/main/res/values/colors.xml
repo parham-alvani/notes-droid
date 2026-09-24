@@ -3,4 +3,7 @@
     <!-- naz.vim: hl("Normal", { fg = white, bg = black }) -->
     <color name="naz_background">#323232</color>
     <color name="naz_white">#FFF5F5F0</color>
+    <!-- A pinned note's card on the home screen, one step up from the background. -->
+    <color name="naz_card">#404040</color>
+    <color name="naz_card_text">#FFD0D0C8</color>
 </resources>
