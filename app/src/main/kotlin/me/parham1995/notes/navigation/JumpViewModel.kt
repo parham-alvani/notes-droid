@@ -1,12 +1,17 @@
 package me.parham1995.notes.navigation
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import me.parham1995.notes.data.Destination
 import me.parham1995.notes.data.Destinations
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.obsidian.ObsidianUri
+import me.parham1995.notes.obsidian.Period
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -26,6 +31,15 @@ class JumpViewModel
         private val destinations: Destinations,
         private val repository: VaultRepository,
     ) : ViewModel() {
+        /**
+         * How long the vault being read's daily note covers, so "today" can
+         * say "this week" when a note is a week.
+         */
+        val dailyPeriod: StateFlow<Period> =
+            destinations
+                .dailyPeriod()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), Period.DAY)
+
         /** Today's daily note in the vault being read, or where it would be. */
         suspend fun today(): Destination = destinations.dailyNote(LocalDate.now())
 
@@ -52,4 +66,8 @@ class JumpViewModel
                     is Destination.UnknownNote -> vaultId
                     is Destination.UnknownVault -> null
                 }
+
+        private companion object {
+            const val STOP_AFTER_MS = 5_000L
+        }
     }

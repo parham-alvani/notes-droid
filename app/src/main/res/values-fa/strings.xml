@@ -293,8 +293,8 @@
     <string name="bookmarks_title">نشانک‌ها</string>
     <string name="today_action">یادداشت امروز</string>
     <string name="today_missing">هنوز یادداشتی برای امروز نیست؛ جایش %1$s است</string>
-    <string name="shortcut_today_short">امروز</string>
-    <string name="shortcut_today_long">یادداشت روزانهٔ امروز</string>
+    <string name="shortcut_today_short">روزنگار</string>
+    <string name="shortcut_today_long">یادداشت امروز یا این هفته</string>
     <string name="link_unknown_vault">دفتری به نام %1$s اینجا نیست</string>
     <string name="link_unknown_note">یادداشتی به نام %1$s در این دفتر نیست</string>
     <string name="link_not_followed">این پیوند اینجا باز نمی‌شود</string>
@@ -317,4 +317,17 @@
     <string name="reschedule_moved">به %1$s منتقل شد</string>
     <string name="reschedule_moved_queued">اینجا به %1$s منتقل شد - %2$s</string>
     <string name="action_undo">واگرد</string>
+    <!-- Periodic notes: a daily-notes format that names a week, a month, a quarter or a year. -->
+    <string name="this_week_action">یادداشت این هفته</string>
+    <string name="this_month_action">یادداشت این ماه</string>
+    <string name="this_quarter_action">یادداشت این فصل</string>
+    <string name="this_year_action">یادداشت امسال</string>
+    <string name="week_missing">هنوز یادداشتی برای این هفته نیست؛ جایش %1$s است</string>
+    <string name="month_missing">هنوز یادداشتی برای این ماه نیست؛ جایش %1$s است</string>
+    <string name="quarter_missing">هنوز یادداشتی برای این فصل نیست؛ جایش %1$s است</string>
+    <string name="year_missing">هنوز یادداشتی برای امسال نیست؛ جایش %1$s است</string>
+    <string name="period_previous">قبلی: %1$s</string>
+    <string name="period_next">بعدی: %1$s</string>
+    <string name="period_no_previous">یادداشت قبلی‌ای نیست</string>
+    <string name="period_no_next">یادداشت بعدی‌ای نیست</string>
 </resources>

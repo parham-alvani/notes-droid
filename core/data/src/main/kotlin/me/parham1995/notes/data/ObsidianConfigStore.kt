@@ -70,6 +70,13 @@ class ObsidianConfigStore
             return VaultBookmarks(vaultId, items, ids)
         }
 
+        /** The daily notes settings of whichever vault [vault] names, kept current across syncs. */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        fun dailyNotes(vault: Flow<Long>): Flow<DailyNotes> =
+            combine(vault, synced) { id, _ -> id }
+                .mapLatest { dailyNotes(it) }
+                .flowOn(Dispatchers.IO)
+
         /** Where [vaultId] keeps its daily notes; the plugin's defaults when it has not said. */
         suspend fun dailyNotes(vaultId: Long): DailyNotes =
             read(vaultId, VaultFilter.DAILY_NOTES, "daily notes settings", DailyNotes::parse) ?: DailyNotes()

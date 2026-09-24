@@ -52,12 +52,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.obsidian.Period
 import me.parham1995.notes.ui.BookmarkActions
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.bookmarkItems
 import me.parham1995.notes.ui.bookmarkNodes
 import me.parham1995.notes.ui.icon.LucideGlyph
+import me.parham1995.notes.ui.openLabel
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
 import java.io.File
@@ -75,6 +77,8 @@ fun BrowserScreen(
     onToday: () -> Unit,
     initialPath: String = "",
     onOpenTags: () -> Unit = {},
+    /** How long a daily note covers, which is what [onToday] is labelled by. */
+    todayPeriod: Period = Period.DAY,
     viewModel: BrowserViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -164,7 +168,7 @@ fun BrowserScreen(
                         LucideGlyph(
                             "calendar-days",
                             size = 20.dp,
-                            contentDescription = stringResource(R.string.today_action),
+                            contentDescription = stringResource(todayPeriod.openLabel()),
                         )
                     }
                     IconButton(onClick = onOpenTags) {

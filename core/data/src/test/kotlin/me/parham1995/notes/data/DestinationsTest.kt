@@ -3,9 +3,11 @@ package me.parham1995.notes.data
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import me.parham1995.notes.data.database.NoteRef
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.obsidian.ObsidianLink
+import me.parham1995.notes.obsidian.Period
 import me.parham1995.notes.sync.VaultFilter
 import org.junit.After
 import org.junit.Before
@@ -66,7 +68,7 @@ class DestinationsTest {
                 syncState = database.syncStateDao(),
                 log = SyncLog(database.syncLogDao()),
             )
-        destinations = Destinations(repository, configs)
+        destinations = Destinations(repository, configs, database.noteDao())
     }
 
     @After
@@ -177,5 +179,56 @@ class DestinationsTest {
             settings.setActiveVault(2L)
 
             assertThat(destinations.dailyNote(day)).isEqualTo(Destination.NoDailyNote(2L, "2026-03-04.md"))
+        }
+
+    private suspend fun weekly(vaultId: Long) =
+        files.write(vaultId, VaultFilter.DAILY_NOTES, """{"format":"YYYY-[W]ww"}""".toByteArray())
+
+    private suspend fun ref(
+        vaultId: Long,
+        path: String,
+    ) = NoteRef(id(vaultId, path), path)
+
+    @Test
+    fun `a weekly format's missing note says it is the week's`() =
+        runTest {
+            vault(1L, "Other.md")
+            weekly(1L)
+            settings.setActiveVault(1L)
+
+            // A Thursday in moment's week 39 of 2026.
+            assertThat(destinations.dailyNote(LocalDate.of(2026, 9, 24)))
+                .isEqualTo(Destination.NoDailyNote(1L, "2026-W39.md", Period.WEEK))
+        }
+
+    @Test
+    fun `either side of a weekly note is the nearest week that has one`() =
+        runTest {
+            // A sparse journal: nothing for weeks 36 to 38, nor after 40.
+            vault(1L, "2026-W34.md", "2026-W35.md", "2026-W39.md", "2026-W40.md", "Plan.md", "Notes/2026-W38.md")
+            weekly(1L)
+
+            assertThat(destinations.neighbours(1L, "2026-W39.md"))
+                .isEqualTo(PeriodNeighbours(1L, Period.WEEK, ref(1L, "2026-W35.md"), ref(1L, "2026-W40.md")))
+            assertThat(destinations.neighbours(1L, "2026-W40.md"))
+                .isEqualTo(PeriodNeighbours(1L, Period.WEEK, ref(1L, "2026-W39.md"), null))
+            assertThat(destinations.neighbours(1L, "2026-W34.md")?.previous).isNull()
+            // Not a daily note: no series to move along.
+            assertThat(destinations.neighbours(1L, "Plan.md")).isNull()
+        }
+
+    @Test
+    fun `the series is the vault's own`() =
+        runTest {
+            // The second vault keeps every week and daily notes by the day;
+            // none of that is the first vault's journal.
+            vault(1L, "2026-W35.md", "2026-W39.md")
+            vault(2L, "2026-W36.md", "2026-W37.md", "2026-W38.md", "2026-W39.md", "2026-W40.md")
+            weekly(1L)
+
+            assertThat(destinations.neighbours(1L, "2026-W39.md"))
+                .isEqualTo(PeriodNeighbours(1L, Period.WEEK, ref(1L, "2026-W35.md"), null))
+            // Vault 2 has no settings, so its daily notes are YYYY-MM-DD.
+            assertThat(destinations.neighbours(2L, "2026-W39.md")).isNull()
         }
 }

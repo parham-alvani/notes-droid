@@ -42,6 +42,7 @@ import me.parham1995.notes.feature.sync.SyncScreen
 import me.parham1995.notes.feature.tags.TagsScreen
 import me.parham1995.notes.feature.tags.TagsViewModel
 import me.parham1995.notes.feature.tasks.TasksScreen
+import me.parham1995.notes.ui.missingMessage
 
 /**
  * Routes are type-safe and a note is addressed by its **id**, never its path.
@@ -215,6 +216,7 @@ fun NotesNavHost(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val jumps: JumpViewModel = hiltViewModel()
+    val dailyPeriod by jumps.dailyPeriod.collectAsStateWithLifecycle()
 
     // Today's daily note, found and never made: the app does not write notes,
     // so a day without one says where it would be and leaves it at that.
@@ -223,7 +225,7 @@ fun NotesNavHost(
             when (val found = jumps.today()) {
                 is Destination.Note -> navController.openNote(found.noteId, fresh = true)
                 is Destination.NoDailyNote ->
-                    snackbar.showSnackbar(resources.getString(R.string.today_missing, found.path))
+                    snackbar.showSnackbar(resources.getString(found.period.missingMessage(), found.path))
                 // A day is only ever a note or the lack of one.
                 else -> Unit
             }
@@ -394,6 +396,7 @@ fun NotesNavHost(
                     onOpenHeading = { id, heading -> navController.openNote(id, fresh = true, heading = heading) },
                     onSearch = { navController.search(it) },
                     onToday = { openToday() },
+                    todayPeriod = dailyPeriod,
                     onOpenTags = { navController.navigate(TagsRoute()) },
                 )
             }
