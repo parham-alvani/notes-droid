@@ -1,9 +1,11 @@
 package me.parham1995.notes.data
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NoteRef
 import me.parham1995.notes.obsidian.ObsidianLink
@@ -129,7 +131,11 @@ class Destinations
             val paths = refs.map { it.path }
 
             fun ref(step: Int) = series.nearest(paths, path, step)?.let { found -> refs.first { it.path == found } }
-            return PeriodNeighbours(vaultId, series.period, previous = ref(-1), next = ref(1))
+            // Every note's name is read against the format: cheap, but a
+            // vault's worth of it, and asked for as a note opens.
+            return withContext(Dispatchers.Default) {
+                PeriodNeighbours(vaultId, series.period, previous = ref(-1), next = ref(1))
+            }
         }
 
         /**
