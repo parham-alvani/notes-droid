@@ -78,7 +78,11 @@ interface NoteDao {
         limit: Int,
     ): Flow<List<NoteEntity>>
 
-    @Query("UPDATE notes SET openedAt = :at WHERE id = :id")
+    /**
+     * Opened, and read as it stands: the sha is taken at the same moment, so
+     * the note stops counting as updated since it was read.
+     */
+    @Query("UPDATE notes SET openedAt = :at, readSha = blobSha WHERE id = :id")
     suspend fun markOpened(
         id: Long,
         at: Long,
@@ -120,6 +124,28 @@ interface NoteDao {
         prefix: String,
         limit: Int,
     ): List<NoteEntity>
+
+    /**
+     * Notes that changed since they were last opened, most recent change
+     * first.
+     *
+     * A note never opened is not here, however recently it changed: that is
+     * most of the vault after every sync, and a list of everything says
+     * nothing.
+     */
+    @Query(
+        """
+        SELECT * FROM notes
+        WHERE vaultId = :vaultId AND openedAt IS NOT NULL
+          AND readSha IS NOT NULL AND readSha != blobSha
+        ORDER BY changedAt DESC, openedAt DESC
+        LIMIT :limit
+        """,
+    )
+    fun updatedSinceRead(
+        vaultId: Long,
+        limit: Int,
+    ): Flow<List<NoteEntity>>
 
     @Query("UPDATE notes SET scrollIndex = :block WHERE id = :id")
     suspend fun rememberScroll(

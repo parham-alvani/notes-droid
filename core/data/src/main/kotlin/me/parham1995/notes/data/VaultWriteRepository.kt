@@ -430,6 +430,8 @@ class VaultWriteRepository
                 vaultId = vaultId,
                 changed = listOf(PathAndSha(path, sha)),
                 removed = emptyList(),
+                // The person wrote this here; it is not news to them.
+                ownWrite = true,
             )
         }
 

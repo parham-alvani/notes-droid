@@ -21,7 +21,7 @@ import androidx.sqlite.execSQL
         TagEntity::class,
         AliasEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -415,6 +415,27 @@ abstract class NotesDatabase : RoomDatabase() {
                     )
                     connection.execSQL("CREATE INDEX IF NOT EXISTS `index_aliases_noteId` ON `aliases` (`noteId`)")
                     connection.execSQL("CREATE INDEX IF NOT EXISTS `index_aliases_folded` ON `aliases` (`folded`)")
+                }
+            }
+
+        /**
+         * Remembers which version of a note was last read, and when each
+         * note last changed.
+         *
+         * Every note already opened is taken to have been read as it stands,
+         * so nothing lights up as "updated since you read it" on the upgrade
+         * itself -- the migration cannot know what was on screen last week,
+         * and guessing "everything" would bury the first real change. When a
+         * note last changed is not recorded anywhere yet; the time it was
+         * last indexed is the nearest thing there is.
+         */
+        val MIGRATION_13_14 =
+            object : Migration(13, 14) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `notes` ADD COLUMN `readSha` TEXT")
+                    connection.execSQL("ALTER TABLE `notes` ADD COLUMN `changedAt` INTEGER NOT NULL DEFAULT 0")
+                    connection.execSQL("UPDATE `notes` SET `readSha` = `blobSha` WHERE `openedAt` IS NOT NULL")
+                    connection.execSQL("UPDATE `notes` SET `changedAt` = `indexedAt`")
                 }
             }
 

@@ -25,6 +25,7 @@ import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.database.byPath
 import me.parham1995.notes.data.database.escapeLike
+import me.parham1995.notes.data.database.isUpdatedSinceRead
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
@@ -55,6 +56,8 @@ data class VaultItem(
     /** When it was last opened, and when it last changed -- for ordering. */
     val openedAt: Long? = null,
     val changedAt: Long = 0,
+    /** Opened before, and changed upstream since. */
+    val updatedSinceRead: Boolean = false,
 )
 
 /** A note prepared for display. */
@@ -165,6 +168,10 @@ class VaultRepository
         fun recentlyOpened(limit: Int = RECENT_LIMIT): Flow<List<NoteEntity>> =
             activeVaultId.flatMapLatest { notes.recentlyOpened(it, limit) }
 
+        /** Notes in the active vault that changed since they were last opened. */
+        fun updatedSinceRead(limit: Int = UPDATED_LIMIT): Flow<List<NoteEntity>> =
+            activeVaultId.flatMapLatest { notes.updatedSinceRead(it, limit) }
+
         /**
          * One level of the tree, re-emitted whenever the notes table changes.
          *
@@ -255,7 +262,8 @@ class VaultRepository
                             noteId = it.id,
                             isRtl = it.isRtl,
                             openedAt = it.openedAt,
-                            changedAt = it.indexedAt,
+                            changedAt = it.changedAt,
+                            updatedSinceRead = it.isUpdatedSinceRead,
                         )
                     }
 
@@ -449,6 +457,9 @@ class VaultRepository
 
         private companion object {
             const val RECENT_LIMIT = 12
+
+            /** Enough to catch up on after a day away, not a changelog. */
+            const val UPDATED_LIMIT = 20
             const val QUICK_LIMIT = 15
         }
     }

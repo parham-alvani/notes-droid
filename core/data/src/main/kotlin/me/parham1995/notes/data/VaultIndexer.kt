@@ -95,11 +95,17 @@ class VaultIndexer
             search.optimize()
         }
 
-        /** Reindexes only what changed, and drops what went away. */
+        /**
+         * Reindexes only what changed, and drops what went away.
+         *
+         * [ownWrite] says this device wrote [changed] itself, so a note the
+         * reader was up to date with stays read -- see [IndexDao.writeBatch].
+         */
         suspend fun indexChanged(
             vaultId: Long,
             changed: List<PathAndSha>,
             removed: List<String>,
+            ownWrite: Boolean = false,
         ) {
             // A guide that arrives or changes is treated as one that went
             // away, so a file that used to be indexed stops being a note
@@ -112,7 +118,7 @@ class VaultIndexer
 
             remove(vaultId, removed)
 
-            changed.chunked(BATCH).forEach { batch -> writeBatch(vaultId, parseBatch(vaultId, batch)) }
+            changed.chunked(BATCH).forEach { batch -> writeBatch(vaultId, parseBatch(vaultId, batch), ownWrite) }
 
             // Cheaper than a full resolve and still correct: only links whose
             // target may have appeared or vanished need revisiting, and the
@@ -158,8 +164,10 @@ class VaultIndexer
         private suspend fun writeBatch(
             vaultId: Long,
             batch: List<Indexed>,
+            ownWrite: Boolean = false,
         ) {
             if (batch.isEmpty()) return
+            val now = System.currentTimeMillis()
 
             val writes =
                 batch.map { indexed ->
@@ -184,7 +192,10 @@ class VaultIndexer
                                 isRtl = indexed.note.isRtl,
                                 hasMermaid = indexed.note.hasMermaid,
                                 hasMath = indexed.note.hasMath,
-                                indexedAt = System.currentTimeMillis(),
+                                indexedAt = now,
+                                // Kept from the row when the sha has not
+                                // moved; see IndexDao.writeBatch.
+                                changedAt = now,
                             ),
                         headings =
                             indexed.note.headings.mapIndexed { ordinal, heading ->
@@ -238,6 +249,7 @@ class VaultIndexer
                             indexed.note.aliases.map { alias ->
                                 AliasEntity(noteId = 0, alias = alias, folded = Slugs.fold(alias))
                             },
+                        ownWrite = ownWrite,
                     )
                 }
 

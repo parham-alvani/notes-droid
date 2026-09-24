@@ -19,6 +19,12 @@ data class NoteWrite(
     val tags: List<TagEntity> = emptyList(),
     /** `noteId` is assigned during the write. */
     val aliases: List<AliasEntity> = emptyList(),
+    /**
+     * This device wrote the new text itself -- a ticked task, an added one, a
+     * capture. The reader already knows what it says, so a note they had read
+     * stays read rather than lighting up as changed by someone else.
+     */
+    val ownWrite: Boolean = false,
 )
 
 /**
@@ -51,7 +57,9 @@ abstract class IndexDao {
      * What a person has done with a note, which a reindex has no business
      * forgetting -- see [writeBatch].
      */
-    @Query("SELECT id, openedAt, scrollIndex FROM notes WHERE vaultId = :vaultId AND path = :path")
+    @Query(
+        "SELECT id, blobSha, openedAt, scrollIndex, readSha, changedAt FROM notes WHERE vaultId = :vaultId AND path = :path",
+    )
     abstract suspend fun stateOf(
         vaultId: Long,
         path: String,
@@ -113,7 +121,10 @@ abstract class IndexDao {
      * where it was left. The entity the indexer builds knows none of those --
      * it has just parsed a file -- and upserting it as it stands reset them on
      * every change: Recents emptied and every note reopened at the top after
-     * each sync, and a full reindex reissued every id as well.
+     * each sync, and a full reindex reissued every id as well. Which version
+     * the reader last read, and when the file last moved, are kept for the
+     * same reason: a full reindex restamping them would light up, or bury,
+     * every note at once.
      */
     @Transaction
     open suspend fun writeBatch(batch: List<NoteWrite>): List<Long> =
@@ -123,7 +134,13 @@ abstract class IndexDao {
                 if (state == null) {
                     write.note.copy(id = 0)
                 } else {
-                    write.note.copy(id = state.id, openedAt = state.openedAt, scrollIndex = state.scrollIndex)
+                    write.note.copy(
+                        id = state.id,
+                        openedAt = state.openedAt,
+                        scrollIndex = state.scrollIndex,
+                        readSha = readShaAfter(state, write),
+                        changedAt = if (state.blobSha == write.note.blobSha) state.changedAt else write.note.changedAt,
+                    )
                 }
             val existing = state?.id ?: 0
             val id = upsertNote(note).takeIf { it > 0 } ?: existing
@@ -182,6 +199,24 @@ abstract class IndexDao {
             }
         }
 
+    /**
+     * What the reader has read, after this write.
+     *
+     * Only this device's own edit moves it, and only when the reader was up
+     * to date beforehand: ticking a task in a note read yesterday, which has
+     * changed since at the desk, must not quietly mark the desk's change as
+     * seen too.
+     */
+    private fun readShaAfter(
+        state: NoteState,
+        write: NoteWrite,
+    ): String? =
+        if (write.ownWrite && state.readSha != null && state.readSha == state.blobSha) {
+            write.note.blobSha
+        } else {
+            state.readSha
+        }
+
     @Query("UPDATE links SET targetId = NULL WHERE targetId = :noteId")
     abstract suspend fun detachInbound(noteId: Long)
 
@@ -195,6 +230,9 @@ abstract class IndexDao {
 /** The part of a note that belongs to the reader rather than the file. */
 data class NoteState(
     val id: Long,
+    val blobSha: String,
     val openedAt: Long?,
     val scrollIndex: Int,
+    val readSha: String?,
+    val changedAt: Long,
 )

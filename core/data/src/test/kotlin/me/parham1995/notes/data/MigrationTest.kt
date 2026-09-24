@@ -386,6 +386,45 @@ class MigrationTest {
             },
         )
 
+    @Test
+    fun `notes already opened count as read as they stand, in either vault`() =
+        withData(
+            version = 13,
+            migration = NotesDatabase.MIGRATION_13_14,
+            seed = { connection ->
+                // Two vaults each holding a README, one opened and one not in
+                // each, so the update cannot be right by touching every row
+                // or by keying on the path.
+                connection.execSQL(
+                    "INSERT INTO notes (id, vaultId, path, parent, name, slug, title, blobSha, size, " +
+                        "isFolderNote, isRtl, hasMermaid, hasMath, indexedAt, openedAt, scrollIndex) VALUES " +
+                        "(1, 1, 'README.md', '', 'README', 'readme', 'README', 'a1', 1, 0, 0, 0, 0, 100, 7, 4), " +
+                        "(2, 2, 'README.md', '', 'README', 'readme', 'README', 'b1', 1, 0, 0, 0, 0, 200, NULL, 0), " +
+                        "(3, 1, 'Other.md', '', 'Other', 'other', 'Other', 'a2', 1, 0, 0, 0, 0, 300, NULL, 0), " +
+                        "(4, 2, 'Other.md', '', 'Other', 'other', 'Other', 'b2', 1, 0, 0, 0, 0, 400, 9, 2)",
+                )
+            },
+            check = { connection ->
+                assertThat(
+                    texts(
+                        connection,
+                        "SELECT id || ':' || IFNULL(readSha, 'null') || ':' || changedAt FROM notes ORDER BY id",
+                    ),
+                ).containsExactly("1:a1:100", "2:null:200", "3:null:300", "4:b2:400").inOrder()
+                // Nothing lights up on the upgrade itself.
+                assertThat(
+                    texts(
+                        connection,
+                        "SELECT COUNT(*) FROM notes WHERE openedAt IS NOT NULL AND readSha IS NOT blobSha",
+                    ),
+                ).containsExactly("0")
+                // What the reader already had is untouched.
+                assertThat(
+                    texts(connection, "SELECT id || ':' || IFNULL(openedAt, '') || ':' || scrollIndex FROM notes"),
+                ).containsExactly("1:7:4", "2::0", "3::0", "4:9:2")
+            },
+        )
+
     private fun texts(
         connection: SQLiteConnection,
         sql: String,
@@ -481,6 +520,7 @@ class MigrationTest {
                 10..11 to NotesDatabase.MIGRATION_10_11,
                 11..12 to NotesDatabase.MIGRATION_11_12,
                 12..13 to NotesDatabase.MIGRATION_12_13,
+                13..14 to NotesDatabase.MIGRATION_13_14,
             )
 
         val CURRENT = MIGRATIONS.maxOf { (range, _) -> range.last }

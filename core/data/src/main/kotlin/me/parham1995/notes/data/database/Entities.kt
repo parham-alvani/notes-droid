@@ -172,7 +172,33 @@ data class NoteEntity(
      * 89KB one because you followed a link out of it is its own small defeat.
      */
     val scrollIndex: Int = 0,
+    /**
+     * The [blobSha] this note had when it was last opened.
+     *
+     * The laptop commits the vault every few minutes and a sync knows exactly
+     * which files moved, but a person coming back to a note cannot tell it
+     * has changed underneath them. Kept apart from [openedAt] because *when*
+     * it was read says nothing about *what* was read: a note is "updated
+     * since you read it" when this and [blobSha] disagree. Null for a note
+     * never opened, which is deliberately not "updated" -- that would be the
+     * whole vault.
+     */
+    val readSha: String? = null,
+    /**
+     * When [blobSha] last moved, as far as this device saw it.
+     *
+     * Not [indexedAt]: a full reindex, which follows most releases, restamps
+     * every note at once and would put the whole vault at "just now".
+     */
+    val changedAt: Long = 0,
 )
+
+/**
+ * Opened before, and a different version now. The same test as
+ * [NoteDao.updatedSinceRead], for rows that arrive by another query.
+ */
+val NoteEntity.isUpdatedSinceRead: Boolean
+    get() = openedAt != null && readSha != null && readSha != blobSha
 
 @Entity(
     tableName = "links",
