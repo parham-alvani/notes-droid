@@ -20,6 +20,8 @@ fun plainText(nodes: List<MdInline>): String =
                 is MdInline.Link -> append(plainText(node.children))
                 is MdInline.WikiLink -> append(node.display)
                 is MdInline.InlineMath -> append(node.latex)
+                is MdInline.Tag -> append('#').append(node.name)
+                is MdInline.FootnoteRef -> Unit
                 MdInline.LineBreak, MdInline.SoftBreak -> append(' ')
             }
         }

@@ -440,6 +440,8 @@ private fun List<MdInline>.flat(): String =
             is MdInline.Link -> it.children.flat()
             is MdInline.WikiLink -> it.display
             is MdInline.InlineMath -> it.latex
+            is MdInline.Tag -> "#" + it.name
+            is MdInline.FootnoteRef -> ""
             MdInline.LineBreak, MdInline.SoftBreak -> " "
         }
     }

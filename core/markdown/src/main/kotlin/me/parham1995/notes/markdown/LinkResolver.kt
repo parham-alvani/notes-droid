@@ -16,15 +16,34 @@ package me.parham1995.notes.markdown
  *  - **Case.** A handful of links only match case-insensitively. They work on
  *    the author's case-insensitive filesystem and would silently break here,
  *    so a folded index backs up the exact one.
+ *
+ * And one the rule is not: **aliases.** A note whose front matter says
+ * `aliases: [Other name]` answers to `[[Other name]]` -- but only when no
+ * file does. Obsidian gives a real name priority over an alias, so an alias
+ * is consulted last, after every path and folded path has missed.
+ *
+ * [aliases] is keyed by path and must come from the same vault as [paths]:
+ * an alias, like a link, means something only inside the vault that wrote it.
  */
 class LinkResolver(
     paths: Collection<String>,
+    aliases: Map<String, Collection<String>> = emptyMap(),
 ) {
     private val exact = HashMap<String, MutableList<String>>()
     private val folded = HashMap<String, MutableList<String>>()
+    private val aliased = HashMap<String, MutableList<String>>()
 
     init {
         paths.forEach { register(Slugs.normalize(it)) }
+        aliases.forEach { (path, names) ->
+            val normalized = Slugs.normalize(path)
+            names.forEach { name ->
+                val key = Slugs.fold(name.trim())
+                if (key.isNotEmpty()) {
+                    aliased.getOrPut(key) { mutableListOf() }.let { if (normalized !in it) it += normalized }
+                }
+            }
+        }
     }
 
     private fun register(path: String) {
@@ -82,7 +101,7 @@ class LinkResolver(
             relative(cleaned, source)?.let { return it }
         }
 
-        val candidates = exact[cleaned] ?: folded[Slugs.fold(cleaned)] ?: return null
+        val candidates = exact[cleaned] ?: folded[Slugs.fold(cleaned)] ?: aliased[Slugs.fold(cleaned)] ?: return null
         return when (candidates.size) {
             1 -> candidates.first()
             else -> disambiguate(candidates, source)

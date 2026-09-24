@@ -11,6 +11,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.Dispatchers
+import me.parham1995.notes.data.database.AliasDao
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.HeadingDao
 import me.parham1995.notes.data.database.IndexDao
@@ -21,6 +22,7 @@ import me.parham1995.notes.data.database.PendingEditDao
 import me.parham1995.notes.data.database.SearchDao
 import me.parham1995.notes.data.database.SyncLogDao
 import me.parham1995.notes.data.database.SyncStateDao
+import me.parham1995.notes.data.database.TagDao
 import me.parham1995.notes.data.database.TaskDao
 import me.parham1995.notes.data.database.VaultDao
 import okhttp3.OkHttpClient
@@ -55,6 +57,7 @@ object DataModule {
                 NotesDatabase.MIGRATION_9_10,
                 NotesDatabase.MIGRATION_10_11,
                 NotesDatabase.MIGRATION_11_12,
+                NotesDatabase.MIGRATION_12_13,
             ).addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(connection: SQLiteConnection) = NotesDatabase.createSearchIndex(connection)
@@ -97,6 +100,12 @@ object DataModule {
 
     @Provides
     fun pendingEditDao(database: NotesDatabase): PendingEditDao = database.pendingEditDao()
+
+    @Provides
+    fun tagDao(database: NotesDatabase): TagDao = database.tagDao()
+
+    @Provides
+    fun aliasDao(database: NotesDatabase): AliasDao = database.aliasDao()
 
     @Provides
     @Singleton

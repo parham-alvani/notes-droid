@@ -39,6 +39,8 @@ import me.parham1995.notes.feature.ssh.SshScreen
 import me.parham1995.notes.feature.sync.SettingsHomeScreen
 import me.parham1995.notes.feature.sync.SettingsSection
 import me.parham1995.notes.feature.sync.SyncScreen
+import me.parham1995.notes.feature.tags.TagsScreen
+import me.parham1995.notes.feature.tags.TagsViewModel
 import me.parham1995.notes.feature.tasks.TasksScreen
 
 /**
@@ -79,6 +81,18 @@ object SshRoute
 @Serializable
 data class SettingsSectionRoute(
     val section: String,
+)
+
+/**
+ * The tags of a vault, or the notes under one tag when [tag] names it.
+ *
+ * [vaultId] is the vault a tag was tapped in, so a note from one vault never
+ * lists another's; [TagsViewModel.ACTIVE_VAULT] means the one being browsed.
+ */
+@Serializable
+data class TagsRoute(
+    val tag: String = "",
+    val vaultId: Long = TagsViewModel.ACTIVE_VAULT,
 )
 
 @Serializable
@@ -341,6 +355,16 @@ fun NotesNavHost(
                     onOpenHeading = { id, heading -> navController.openNote(id, fresh = true, heading = heading) },
                     onSearch = { navController.search(it) },
                     onToday = { openToday() },
+                    onOpenTags = { navController.navigate(TagsRoute()) },
+                )
+            }
+            composable<TagsRoute> { entry ->
+                val route = entry.toRoute<TagsRoute>()
+                TagsScreen(
+                    tag = route.tag,
+                    vaultId = route.vaultId,
+                    onBack = { navController.popBackStack() },
+                    onOpenNote = { navController.openNote(it, fresh = true) },
                 )
             }
             composable<TasksRoute> {
@@ -391,6 +415,7 @@ fun NotesNavHost(
                     onOpenNote = { navController.openNote(it) },
                     onOpenFolder = { navController.navigate(BrowseRoute(it)) },
                     onSearch = { navController.search(it) },
+                    onOpenTag = { vaultId, tag -> navController.navigate(TagsRoute(tag, vaultId)) },
                 )
             }
         }

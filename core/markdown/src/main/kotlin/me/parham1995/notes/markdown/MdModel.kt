@@ -69,6 +69,24 @@ sealed interface MdInline {
         val latex: String,
     ) : MdInline
 
+    /**
+     * `#tag` or `#parent/child` in running text, without its `#`. Drawn as a
+     * tag rather than as the word, and tapping it lists every note carrying it.
+     */
+    data class Tag(
+        val name: String,
+    ) : MdInline
+
+    /**
+     * `[^label]` or an inline `^[text]`, drawn as its [number]: the order the
+     * note first refers to it in, which is how Obsidian numbers them whatever
+     * the labels say.
+     */
+    data class FootnoteRef(
+        val label: String,
+        val number: Int,
+    ) : MdInline
+
     /** A hard break: two trailing spaces, a backslash, or a prose `<br>`. */
     data object LineBreak : MdInline
 
@@ -305,11 +323,36 @@ sealed interface MdBlock {
         val kind: UnsupportedKind = UnsupportedKind.OTHER,
     ) : MdBlock
 
+    /**
+     * The note's footnotes, gathered at its end in the order they are first
+     * referred to -- wherever their definitions were written.
+     */
+    data class Footnotes(
+        override val id: Int,
+        val entries: List<FootnoteEntry>,
+    ) : MdBlock
+
+    /**
+     * The YAML at the top of a note. [values] is every key with its value run
+     * together; [properties] is the same read properly, lists as lists, which
+     * is what the Properties block draws.
+     */
     data class FrontMatter(
         override val id: Int,
         val values: Map<String, String>,
+        val properties: List<FrontMatterProperty> = emptyList(),
     ) : MdBlock
 }
+
+/** One footnote: its number, the label it was written with, and what it says. */
+data class FootnoteEntry(
+    val label: String,
+    val number: Int,
+    val blocks: List<MdBlock>,
+)
+
+/** Every footnote in [this] note's blocks, for finding the one a reference names. */
+fun List<MdBlock>.footnotes(): List<FootnoteEntry> = filterIsInstance<MdBlock.Footnotes>().flatMap { it.entries }
 
 /** A parsed note: its blocks plus everything the index needs. */
 data class ParsedNote(
@@ -322,6 +365,20 @@ data class ParsedNote(
     val isRtl: Boolean,
     val hasMermaid: Boolean,
     val hasMath: Boolean,
+    /**
+     * Every tag the note carries, front matter first, then inline in reading
+     * order -- case-insensitively distinct, each spelled as it was first met.
+     */
+    val tags: List<String> = emptyList(),
+    /** Other names the note answers to in a `[[link]]`, from `aliases`. */
+    val aliases: List<String> = emptyList(),
+    /**
+     * Each `^block-id` in the note and the position in [blocks] of the block
+     * it names -- a position, not an id, for the same reason as a heading's.
+     */
+    val blockRefs: Map<String, Int> = emptyMap(),
+    /** What embedding each `^block-id` draws: the block, or a list item alone. */
+    val blockTargets: Map<String, MdBlock> = emptyMap(),
 )
 
 data class ParsedHeading(

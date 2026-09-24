@@ -39,6 +39,7 @@ object LinkExtraction {
                 }
             }
 
+            is MdBlock.Footnotes -> block.entries.forEach { entry -> entry.blocks.forEach { collect(it, out) } }
             is MdBlock.Image -> out += ParsedLink(LinkKind.IMAGE, block.path, block.alt, context = block.alt.orEmpty())
             is MdBlock.Attachment -> out += ParsedLink(LinkKind.WIKI_EMBED, block.path, block.label)
             is MdBlock.NoteEmbed ->

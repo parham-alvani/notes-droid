@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.parham1995.notes.R
 import me.parham1995.notes.markdown.CalloutKind
+import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MdAlign
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.MdDirection
@@ -98,6 +99,12 @@ data class RenderActions(
      * Null as a whole means embeds are drawn as links only.
      */
     val transclude: (suspend (target: String, heading: String?) -> Transcluded?)? = null,
+    /**
+     * Show one footnote. The inline tap only knows a label, and which note's
+     * footnote that is depends on where the tap was -- the note, or a note
+     * embedded in it -- so each looks its own up and hands the entry here.
+     */
+    val showFootnote: (FootnoteEntry) -> Unit = {},
 )
 
 @Composable
@@ -154,11 +161,12 @@ fun MdBlockView(
                 )
             is MdBlock.Attachment -> AttachmentView(block, actions, modifier)
             is MdBlock.NoteEmbed -> NoteEmbedView(block, actions, modifier)
+            is MdBlock.Footnotes -> FootnotesView(block, actions, brokenLinks, modifier)
             is MdBlock.ThematicBreak -> HorizontalDivider(modifier.padding(vertical = 8.dp))
             is MdBlock.Unsupported -> UnsupportedView(block, modifier)
-            // Front matter is metadata; only `direction` and `cssclasses` ever
-            // affected rendering, and both are handled by detection instead.
-            is MdBlock.FrontMatter -> Unit
+            // Obsidian's Properties view: shown, folded on a tap, and a
+            // tag in it is a tag.
+            is MdBlock.FrontMatter -> PropertiesView(block, actions, modifier)
         }
     }
 }

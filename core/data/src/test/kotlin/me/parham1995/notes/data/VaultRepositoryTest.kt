@@ -1,5 +1,6 @@
 package me.parham1995.notes.data
 
+import androidx.room.useReaderConnection
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
@@ -45,6 +46,7 @@ class VaultRepositoryTest {
                 tasks = database.taskDao(),
                 index = database.indexDao(),
                 search = search,
+                aliases = database.aliasDao(),
             )
         repository =
             VaultRepository(
@@ -57,6 +59,8 @@ class VaultRepositoryTest {
                 blobs = database.blobDao(),
                 vaults = database.vaultDao(),
                 settings = SettingsStore(ApplicationProvider.getApplicationContext()),
+                tags = database.tagDao(),
+                aliases = database.aliasDao(),
             )
     }
 
@@ -668,6 +672,150 @@ class VaultRepositoryTest {
             indexInto(first, "A.md" to "a changed")
 
             assertThat(database.noteDao().count(second).first()).isEqualTo(1)
+        }
+
+    @Test
+    fun `an opened note knows where its block ids are and what they embed`() =
+        runTest {
+            index("Note.md" to "# Title\n\n- a\n- b\n\nThe line. ^here")
+
+            val note = repository.note(database.noteDao().idOf(first, "Note.md")!!)!!
+            // A position in the blocks on screen, past the list's items.
+            assertThat(note.blockRefs).containsExactly("here", 2)
+            assertThat(note.blocks[2]).isEqualTo(note.blockTargets["here"])
+        }
+
+    // -- tags and aliases --------------------------------------------------
+
+    @Test
+    fun `tags are indexed, and a parent tag finds its children's notes`() =
+        runTest {
+            index(
+                "A.md" to "---\ntags: [project/alpha]\n---\nbody",
+                "B.md" to "about #project/beta and #Idea",
+                "C.md" to "nothing tagged, #projects is another tag",
+            )
+
+            assertThat(repository.notesTagged(first, "project").map { it.name }).containsExactly("A", "B").inOrder()
+            assertThat(repository.notesTagged(first, "project/beta").map { it.name }).containsExactly("B")
+            // Case is not a different tag.
+            assertThat(repository.notesTagged(first, "#idea").map { it.name }).containsExactly("B")
+
+            val tree = repository.tagTree(first).first()
+            assertThat(tree.map { it.path to it.count }).containsExactly("Idea" to 1, "project" to 2, "projects" to 1)
+        }
+
+    @Test
+    fun `tags belong to their own vault`() =
+        runTest {
+            indexInto(first, "Mine.md" to "#shared")
+            indexInto(second, "Theirs.md" to "#shared #only-there")
+
+            assertThat(repository.notesTagged(first, "shared").map { it.name }).containsExactly("Mine")
+            assertThat(repository.tagTree(first).first().map { it.path }).containsExactly("shared")
+        }
+
+    @Test
+    fun `a tag an edited note no longer carries is gone, and so is a removed note's`() =
+        runTest {
+            index("A.md" to "#old", "B.md" to "#kept")
+            index("A.md" to "#new", "B.md" to "#kept")
+            assertThat(repository.notesTagged(first, "old")).isEmpty()
+            assertThat(repository.notesTagged(first, "new").map { it.name }).containsExactly("A")
+
+            indexer.indexChanged(first, changed = emptyList(), removed = listOf("A.md", "B.md"))
+            assertThat(repository.tagTree(first).first()).isEmpty()
+            // Counted raw: every query joins `notes`, so an orphaned row is
+            // invisible to all of them and would sit there for good.
+            assertThat(rows("tags")).isEqualTo(0)
+        }
+
+    @Test
+    fun `a removed note takes its aliases with it`() =
+        runTest {
+            index("A.md" to "---\naliases: [Other]\n---\n")
+            assertThat(rows("aliases")).isEqualTo(1)
+
+            indexer.indexChanged(first, changed = emptyList(), removed = listOf("A.md"))
+            assertThat(rows("aliases")).isEqualTo(0)
+        }
+
+    private suspend fun rows(table: String): Long =
+        database.useReaderConnection { connection ->
+            connection.usePrepared("SELECT COUNT(*) FROM $table") { statement ->
+                statement.step()
+                statement.getLong(0)
+            }
+        }
+
+    @Test
+    fun `a link finds a note by its alias, in the index and on the page`() =
+        runTest {
+            index(
+                "People/Jane Doe.md" to "---\naliases: [Jane, JD]\n---\nabout her",
+                "Source.md" to "met [[Jane]] and [[jd]] and [[Nobody]]",
+            )
+
+            val jane = database.noteDao().idOf(first, "People/Jane Doe.md")!!
+            assertThat(repository.backlinks(jane).map { it.title }).containsExactly("Source", "Source")
+
+            val source = repository.note(database.noteDao().idOf(first, "Source.md")!!)!!
+            assertThat(source.linkTargets).containsExactly("Jane", jane, "jd", jane)
+            assertThat(source.brokenTargets).containsExactly("Nobody")
+        }
+
+    @Test
+    fun `a real name beats an alias`() =
+        runTest {
+            index(
+                "Jane.md" to "the real one",
+                "Other.md" to "---\nalias: Jane\n---\n",
+                "Source.md" to "[[Jane]]",
+            )
+
+            val real = database.noteDao().idOf(first, "Jane.md")!!
+            val source = repository.note(database.noteDao().idOf(first, "Source.md")!!)!!
+            assertThat(source.linkTargets["Jane"]).isEqualTo(real)
+            assertThat(repository.backlinks(real)).hasSize(1)
+        }
+
+    @Test
+    fun `an alias taken away lets go of the links that used it`() =
+        runTest {
+            index("Target.md" to "---\naliases: [Nick]\n---\n", "Source.md" to "[[Nick]]")
+            val target = database.noteDao().idOf(first, "Target.md")!!
+            assertThat(repository.backlinks(target)).hasSize(1)
+
+            // Only the target changes; the link in Source is not reparsed.
+            files.write(first, "Target.md", "no aliases now".toByteArray())
+            indexer.indexChanged(first, changed = listOf(PathAndSha("Target.md", "sha-changed")), removed = emptyList())
+
+            assertThat(repository.backlinks(target)).isEmpty()
+            assertThat(database.linkDao().unresolved(first).map { it.rawTarget }).contains("Nick")
+        }
+
+    @Test
+    fun `an alias cannot be reached from another vault`() =
+        runTest {
+            indexInto(second, "Target.md" to "---\naliases: [Nick]\n---\n")
+            indexInto(first, "Source.md" to "[[Nick]]")
+
+            val note = repository.note(database.noteDao().idOf(first, "Source.md")!!)!!
+            assertThat(note.brokenTargets).containsExactly("Nick")
+            assertThat(repository.quickSwitch("nick")).isEmpty()
+        }
+
+    @Test
+    fun `the quick switcher offers a note by its alias`() =
+        runTest {
+            index(
+                "People/Jane Doe.md" to "---\naliases: [Janie]\n---\n",
+                "Janitor.md" to "x",
+                "Unrelated.md" to "y",
+            )
+
+            // A name that starts with it first, then an alias that does.
+            assertThat(repository.quickSwitch("jani").map { it.name }).containsExactly("Janitor", "Jane Doe").inOrder()
         }
 
     private companion object {

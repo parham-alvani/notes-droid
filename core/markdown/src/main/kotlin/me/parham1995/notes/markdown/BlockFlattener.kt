@@ -1,5 +1,8 @@
 package me.parham1995.notes.markdown
 
+import org.commonmark.ext.footnotes.FootnoteDefinition
+import org.commonmark.ext.footnotes.FootnoteReference
+import org.commonmark.ext.footnotes.InlineFootnote
 import org.commonmark.ext.front.matter.YamlFrontMatterBlock
 import org.commonmark.ext.front.matter.YamlFrontMatterNode
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
@@ -46,14 +49,35 @@ class BlockFlattener(
     private var hasMermaid = false
     private var hasMath = false
     private val frontMatter = linkedMapOf<String, String>()
+    private var properties = emptyList<FrontMatterProperty>()
+    private val inlineTags = mutableListOf<String>()
 
-    fun flatten(document: Node): ParsedNote {
-        val blocks = mutableListOf<MdBlock>()
-        var child = document.firstChild
-        while (child != null) {
-            blocks += blocksFor(child)
-            child = child.next
-        }
+    /** Footnote labels in the order they are first referred to, which numbers them. */
+    private val footnoteOrder = mutableListOf<String>()
+    private val definitions = HashMap<String, FootnoteDefinition>()
+    private val inlineFootnotes = HashMap<String, List<MdBlock>>()
+
+    /**
+     * `^block-id` markers, each with the id of the block it names -- an id, to
+     * be turned into a position once the list is final -- and what embedding
+     * it should draw.
+     */
+    private val blockAnchors = LinkedHashMap<String, Int>()
+    private val blockTargets = HashMap<String, MdBlock>()
+
+    /** A `^id` written on a line of its own, waiting for the block before it. */
+    private var orphanRef: String? = null
+
+    /** The source, when it is to hand, is what front matter is read from. */
+    private var source: String? = null
+
+    fun flatten(
+        document: Node,
+        source: String? = null,
+    ): ParsedNote {
+        this.source = source
+        val blocks = blocksOf(document.children()).toMutableList()
+        footnotes()?.let { blocks += it }
 
         val plainText = plain.toString().trim()
         return ParsedNote(
@@ -68,10 +92,86 @@ class BlockFlattener(
             isRtl = TextDirection.containsRtl(plainText),
             hasMermaid = hasMermaid,
             hasMath = hasMath,
+            tags = Tags.distinct(Tags.fromFrontMatter(properties) + inlineTags),
+            aliases = FrontMatter.aliases(properties),
+            blockRefs = blockAnchors.mapValues { (_, id) -> positionOf(id, blocks) },
+            blockTargets = blockTargets.toMap(),
         )
     }
 
+    /**
+     * Blocks for a run of sibling nodes, with a `^id` written on a line of its
+     * own given to the block before it -- which is what Obsidian does with one
+     * under a table, a quote or a list, where there is no line to end with it.
+     */
+    private fun blocksOf(nodes: List<Node>): List<MdBlock> {
+        val out = mutableListOf<MdBlock>()
+        nodes.forEach { node ->
+            val made = blocksFor(node)
+            orphanRef?.let { ref ->
+                orphanRef = null
+                out.lastOrNull()?.let { record(ref, it) }
+            }
+            out += made
+        }
+        return out
+    }
+
+    private fun record(
+        ref: String,
+        block: MdBlock,
+        target: MdBlock = block,
+    ) {
+        if (ref in blockAnchors) return
+        blockAnchors[ref] = block.id
+        blockTargets[ref] = target
+    }
+
+    /**
+     * Takes a trailing ` ^block-id` off the last text of [node] and returns
+     * the id, or null when it does not end with one.
+     */
+    private fun stripBlockId(node: Node): String? {
+        val last = node.lastChild as? Text ?: return null
+        val match = BLOCK_ID.find(last.literal) ?: return null
+        val rest = last.literal.substring(0, match.range.first).trimEnd()
+        if (rest.isEmpty()) last.unlink() else last.literal = rest
+        return match.groupValues[1]
+    }
+
     private fun id() = nextId++
+
+    private fun footnoteNumber(label: String): Int {
+        val at = footnoteOrder.indexOf(label)
+        if (at >= 0) return at + 1
+        footnoteOrder += label
+        return footnoteOrder.size
+    }
+
+    /**
+     * The footnotes block, or null when nothing refers to one.
+     *
+     * Built last, in the order of first reference, because a definition may
+     * be written anywhere -- before the text that cites it, or in the middle
+     * of a list. A definition nothing cites is left out, as Obsidian leaves it
+     * out of reading view. Converting one can cite another, so the list is
+     * walked by index while it grows.
+     */
+    private fun footnotes(): MdBlock.Footnotes? {
+        if (footnoteOrder.isEmpty()) return null
+        val entries = mutableListOf<FootnoteEntry>()
+        var index = 0
+        while (index < footnoteOrder.size) {
+            val label = footnoteOrder[index]
+            val content =
+                inlineFootnotes[label]
+                    ?: definitions[label]?.children()?.let { blocksOf(it) }
+                    ?: emptyList()
+            entries += FootnoteEntry(label, index + 1, content)
+            index++
+        }
+        return MdBlock.Footnotes(id(), entries)
+    }
 
     /**
      * Turns each heading's block *id* into its position in the rendered list.
@@ -90,14 +190,16 @@ class BlockFlattener(
     private fun positioned(
         found: List<ParsedHeading>,
         blocks: List<MdBlock>,
-    ): List<ParsedHeading> {
-        val positionOfId = blocks.withIndex().associate { (index, block) -> block.id to index }
-        val topLevelIds = blocks.map { it.id }
-        return found.map { heading ->
-            val exact = positionOfId[heading.blockIndex]
-            val containing = topLevelIds.indexOfLast { it <= heading.blockIndex }
-            heading.copy(blockIndex = exact ?: containing.coerceAtLeast(0))
-        }
+    ): List<ParsedHeading> = found.map { heading -> heading.copy(blockIndex = positionOf(heading.blockIndex, blocks)) }
+
+    /** Where the block with [id] is on screen: itself, or whatever contains it. */
+    private fun positionOf(
+        id: Int,
+        blocks: List<MdBlock>,
+    ): Int {
+        val exact = blocks.indexOfFirst { it.id == id }
+        if (exact >= 0) return exact
+        return blocks.indexOfLast { it.id <= id }.coerceAtLeast(0)
     }
 
     private fun blocksFor(node: Node): List<MdBlock> =
@@ -113,10 +215,16 @@ class BlockFlattener(
             is ThematicBreak -> listOf(MdBlock.ThematicBreak(id()))
             is YamlFrontMatterBlock -> listOf(frontMatter(node))
             is HtmlBlock -> htmlBlock(node)
+            // Gathered, and drawn at the end with the others.
+            is FootnoteDefinition -> {
+                definitions.putIfAbsent(node.label, node)
+                emptyList()
+            }
             else -> emptyList()
         }
 
     private fun heading(node: Heading): MdBlock.Heading {
+        val ref = stripBlockId(node)
         val inlines = inlines(node)
         val text = plainTextOf(node)
         plain.append(text).append('\n')
@@ -129,6 +237,7 @@ class BlockFlattener(
                 direction = TextDirection.of(text),
             )
         headings += ParsedHeading(node.level, text, Slugs.heading(text), nextId - 1)
+        ref?.let { record(it, block) }
         return block
     }
 
@@ -144,6 +253,9 @@ class BlockFlattener(
      * formula with a sentence above it without trace.
      */
     private fun paragraph(node: Paragraph): List<MdBlock> {
+        // Obsidian's `^block-id` is an address, not words: it comes off the
+        // end of the text and is remembered against the block it ends.
+        val ref = stripBlockId(node)
         val out = mutableListOf<MdBlock>()
         val run = mutableListOf<Node>()
 
@@ -165,6 +277,10 @@ class BlockFlattener(
             }
         }
         flush()
+        if (ref != null) {
+            // A line that was nothing but the marker names the block before it.
+            if (out.isEmpty()) orphanRef = ref else record(ref, out.last())
+        }
         return out
     }
 
@@ -290,7 +406,7 @@ class BlockFlattener(
 
     private fun callout(node: CalloutNode): MdBlock {
         val self = id()
-        val children = node.children().flatMap { blocksFor(it) }
+        val children = blocksOf(node.children())
         plain.append(node.titleText).append('\n')
         return MdBlock.Callout(
             id = self,
@@ -313,7 +429,7 @@ class BlockFlattener(
 
     private fun quote(node: BlockQuote): MdBlock {
         val self = id()
-        val children = node.children().flatMap { blocksFor(it) }
+        val children = blocksOf(node.children())
         return MdBlock.Quote(self, children)
     }
 
@@ -324,7 +440,15 @@ class BlockFlattener(
     ): MdBlock {
         val self = id()
         val items =
-            node.children().filterIsInstance<ListItem>().map { item ->
+            node.children().filterIsInstance<ListItem>().mapIndexed { index, item ->
+                // Before the task's metadata is read: the id is written last,
+                // after the dates, and has to come off first.
+                val ref =
+                    item
+                        .children()
+                        .filterIsInstance<Paragraph>()
+                        .firstOrNull()
+                        ?.let { stripBlockId(it) }
                 val marker = findTaskMarker(item)
                 var state =
                     when {
@@ -345,13 +469,22 @@ class BlockFlattener(
                 }
 
                 val meta = extractTaskMeta(item)
-                MdListItem(
-                    blocks = item.children().flatMap { blocksFor(it) },
-                    task = state,
-                    taskMeta = meta,
-                    line = item.sourceSpans.firstOrNull()?.lineIndex ?: -1,
-                    status = status,
-                )
+                val built =
+                    MdListItem(
+                        blocks = blocksOf(item.children()),
+                        task = state,
+                        taskMeta = meta,
+                        line = item.sourceSpans.firstOrNull()?.lineIndex ?: -1,
+                        status = status,
+                    )
+                // An item's id names the item, and embedding it draws that
+                // item alone, as a list of one.
+                if (ref != null) {
+                    built.blocks.firstOrNull()?.let { first ->
+                        record(ref, first, MdBlock.ListBlock(id(), ordered, start + index, listOf(built)))
+                    }
+                }
+                built
             }
         return MdBlock.ListBlock(self, ordered, start, items)
     }
@@ -443,10 +576,15 @@ class BlockFlattener(
         }
 
     private fun frontMatter(node: YamlFrontMatterBlock): MdBlock {
-        node.children().filterIsInstance<YamlFrontMatterNode>().forEach {
-            frontMatter[it.key] = it.values.joinToString(", ")
-        }
-        return MdBlock.FrontMatter(id(), frontMatter.toMap())
+        // Read from the source when there is one: the extension's own reading
+        // drops a key with a space in it and cannot tell a list from a string.
+        properties =
+            source?.let { FrontMatter.parse(it) }
+                ?: node.children().filterIsInstance<YamlFrontMatterNode>().map {
+                    FrontMatterProperty(it.key, it.values, isList = it.values.size > 1)
+                }
+        properties.forEach { frontMatter[it.key] = it.values.joinToString(", ") }
+        return MdBlock.FrontMatter(id(), frontMatter.toMap(), properties)
     }
 
     private fun htmlBlock(node: HtmlBlock): List<MdBlock> {
@@ -470,6 +608,22 @@ class BlockFlattener(
             is StrongEmphasis -> MdInline.Strong(inlines(node))
             is Strikethrough -> MdInline.Strikethrough(inlines(node))
             is HighlightNode -> MdInline.Highlight(inlines(node))
+            is TagNode -> {
+                inlineTags += node.name
+                MdInline.Tag(node.name)
+            }
+
+            is FootnoteReference -> MdInline.FootnoteRef(node.label, footnoteNumber(node.label))
+
+            // Its text becomes a footnote of its own, under a label no
+            // written one can have.
+            is InlineFootnote -> {
+                val label = INLINE_FOOTNOTE + inlineFootnotes.size
+                val text = plainTextOf(node)
+                plain.append(text).append('\n')
+                inlineFootnotes[label] = listOf(MdBlock.Paragraph(id(), inlines(node), TextDirection.of(text)))
+                MdInline.FootnoteRef(label, footnoteNumber(label))
+            }
             is SoftLineBreak -> MdInline.SoftBreak
             is HardLineBreak -> MdInline.LineBreak
             is InlineMathNode -> {
@@ -517,6 +671,10 @@ class BlockFlattener(
                     is SoftLineBreak, is HardLineBreak -> append(' ')
                     is WikiLinkNode -> append(current.alias ?: current.target)
                     is InlineMathNode -> append(current.latex)
+                    is TagNode -> append('#').append(current.name)
+                    // Not part of the sentence it is attached to; its text
+                    // is recorded as a footnote of its own.
+                    is InlineFootnote -> return
                     else -> Unit
                 }
                 var child = current.firstChild
@@ -530,6 +688,12 @@ class BlockFlattener(
 
     private companion object {
         val BR = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
+
+        /** ` ^id` at the very end: letters, digits and dashes, as Obsidian makes them. */
+        val BLOCK_ID = Regex("""(?:^|\s)\^([A-Za-z0-9-]+)\s*$""")
+
+        /** `[^...]` labels cannot contain a space, so this can never collide with one. */
+        const val INLINE_FOOTNOTE = "inline "
 
         /** `[c] ` at the very start: one character that is not a bracket or a space. */
         val CUSTOM_STATUS = Regex("""^\[([^\]\s])] """)

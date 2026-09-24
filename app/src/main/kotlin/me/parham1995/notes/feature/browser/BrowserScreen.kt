@@ -74,6 +74,7 @@ fun BrowserScreen(
     /** Today's daily note, from Obsidian's Daily notes settings. */
     onToday: () -> Unit,
     initialPath: String = "",
+    onOpenTags: () -> Unit = {},
     viewModel: BrowserViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -164,6 +165,13 @@ fun BrowserScreen(
                             "calendar-days",
                             size = 20.dp,
                             contentDescription = stringResource(R.string.today_action),
+                        )
+                    }
+                    IconButton(onClick = onOpenTags) {
+                        LucideGlyph(
+                            "tags",
+                            size = 20.dp,
+                            contentDescription = stringResource(R.string.tags_title),
                         )
                     }
                     IconButton(onClick = { viewModel.randomNote(onOpenNote) }) {

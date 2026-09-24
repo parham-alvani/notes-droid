@@ -6,8 +6,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performFirstLinkClick
 import com.google.common.truth.Truth.assertThat
+import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MarkdownParser
+import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.Transclusion
+import me.parham1995.notes.markdown.footnotes
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -93,4 +96,33 @@ class NoteEmbedTest {
         compose.onNodeWithText("Nowhere").assertExists()
         compose.onNodeWithText("This link goes nowhere yet").assertExists()
     }
+
+    @Test
+    fun `a footnote in an embed is the embedded note's own`() {
+        // Both notes use the label `1`; the embedded one means something else.
+        val cited = MarkdownParser.parseNote("## Claim\n\nIt holds[^1].\n\n[^1]: The embedded source.")
+        val shown = mutableListOf<String>()
+        val actions =
+            RenderActions(
+                showFootnote = { entry -> shown += plainText(entry) },
+                transclude = { _, heading ->
+                    Transclusion.section(cited.blocks, heading)?.let {
+                        Transcluded(7, "Cited", it, emptyMap(), emptySet(), cited.blocks.footnotes())
+                    }
+                },
+            )
+        render("Outer[^1].\n\n![[Cited#Claim]]\n\n[^1]: The outer source.", actions)
+
+        compose.onNodeWithText("It holds1.").performFirstLinkClick()
+        compose.waitForIdle()
+        assertThat(shown).containsExactly("The embedded source.")
+    }
+
+    private fun plainText(entry: FootnoteEntry): String =
+        entry.blocks
+            .filterIsInstance<MdBlock.Paragraph>()
+            .joinToString(" ") {
+                me.parham1995.notes.markdown
+                    .plainText(it.inlines)
+            }
 }

@@ -1,6 +1,7 @@
 package me.parham1995.notes.markdown
 
 import org.commonmark.ext.autolink.AutolinkExtension
+import org.commonmark.ext.footnotes.FootnotesExtension
 import org.commonmark.ext.front.matter.YamlFrontMatterExtension
 import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
 import org.commonmark.ext.gfm.tables.TablesExtension
@@ -38,7 +39,13 @@ object MarkdownParser {
                     TaskListItemsExtension.create(),
                     YamlFrontMatterExtension.create(),
                     AutolinkExtension.create(),
+                    // `[^1]` with a `[^1]: text` somewhere, and Obsidian's
+                    // inline `^[text]` as well.
+                    FootnotesExtension.builder().inlineFootnotes(true).build(),
                     WikiLinkExtension.create(),
+                    // After the wikilinks, so the `#` of `[[Note#Heading]]`
+                    // is already part of a link.
+                    TagExtension.create(),
                     HighlightExtension.create(),
                     MathExtension.create(),
                 ),
@@ -75,5 +82,5 @@ object MarkdownParser {
     fun parseNote(
         markdown: String,
         imageResolver: (String) -> String = { it },
-    ): ParsedNote = BlockFlattener(imageResolver).flatten(instance.parse(markdown))
+    ): ParsedNote = BlockFlattener(imageResolver).flatten(instance.parse(markdown), markdown)
 }

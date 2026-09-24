@@ -134,6 +134,8 @@ object TaskExtractor {
                 is MdInline.Strong -> node.children.plain()
                 is MdInline.Highlight -> node.children.plain()
                 is MdInline.Strikethrough -> node.children.plain()
+                // Kept as written: a task's tags are part of what it says.
+                is MdInline.Tag -> "#" + node.name
                 else -> ""
             }
         }

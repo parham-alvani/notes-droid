@@ -15,6 +15,10 @@ data class NoteWrite(
     val links: List<LinkEntity>,
     /** `noteId` is assigned during the write. */
     val tasks: List<TaskEntity>,
+    /** `noteId` is assigned during the write. */
+    val tags: List<TagEntity> = emptyList(),
+    /** `noteId` is assigned during the write. */
+    val aliases: List<AliasEntity> = emptyList(),
 )
 
 /**
@@ -74,6 +78,18 @@ abstract class IndexDao {
     @Insert
     abstract suspend fun insertTasks(rows: List<TaskEntity>)
 
+    @Query("DELETE FROM tags WHERE noteId = :noteId")
+    abstract suspend fun deleteTags(noteId: Long)
+
+    @Insert
+    abstract suspend fun insertTags(rows: List<TagEntity>)
+
+    @Query("DELETE FROM aliases WHERE noteId = :noteId")
+    abstract suspend fun deleteAliases(noteId: Long)
+
+    @Insert
+    abstract suspend fun insertAliases(rows: List<AliasEntity>)
+
     @Query("UPDATE links SET targetId = :targetId WHERE id = :id")
     abstract suspend fun setTarget(
         id: Long,
@@ -121,6 +137,18 @@ abstract class IndexDao {
             deleteTasks(id)
             if (write.tasks.isNotEmpty()) insertTasks(write.tasks.map { it.copy(noteId = id) })
 
+            deleteTags(id)
+            if (write.tags.isNotEmpty()) insertTags(write.tags.map { it.copy(noteId = id) })
+
+            deleteAliases(id)
+            if (write.aliases.isNotEmpty()) insertAliases(write.aliases.map { it.copy(noteId = id) })
+
+            // What links here is worked out again. A link may have found this
+            // note by an alias it no longer has; resolving only revisits
+            // links with no target, so detaching is how they are looked at
+            // again rather than pointing here for good.
+            if (state != null) detachInbound(id)
+
             id
         }
 
@@ -148,6 +176,8 @@ abstract class IndexDao {
                 deleteLinks(id)
                 deleteHeadings(id)
                 deleteTasks(id)
+                deleteTags(id)
+                deleteAliases(id)
                 deleteNote(id)
             }
         }

@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
+import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.ui.LocalReading
@@ -44,6 +45,8 @@ class Transcluded(
     val blocks: List<MdBlock>,
     val linkTargets: Map<String, Long>,
     val brokenLinks: Set<String>,
+    /** The whole note's footnotes, which a section embedded alone still cites. */
+    val footnotes: List<FootnoteEntry> = emptyList(),
 )
 
 /**
@@ -160,6 +163,11 @@ internal fun NoteEmbedView(
                                     } else {
                                         actions.inline.onInternalLink(destination)
                                     }
+                                },
+                                // Its own footnotes: the note around it numbers
+                                // different ones with the same labels.
+                                onFootnote = { label ->
+                                    note.footnotes.firstOrNull { it.label == label }?.let(actions.showFootnote)
                                 },
                             ),
                     )
