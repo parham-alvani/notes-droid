@@ -33,6 +33,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Attachments** — PDFs read in place; everything else opens in whatever app handles it
 - **The vault's own bookmarks** — Obsidian's Bookmarks plugin, groups and all, at the top of the browser and in the files drawer: a note, a heading in one, a folder or a saved search
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
+- **Tablets and landscape** — the note held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar on a wide window
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
 - **A little writing** — tick a task off, add one, capture a thought — each a commit, and offered only where the credential can actually push
 

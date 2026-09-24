@@ -285,4 +285,9 @@
     <string name="link_unknown_vault">No vault here is called %1$s</string>
     <string name="link_unknown_note">No note called %1$s in this vault</string>
     <string name="link_not_followed">That link cannot be opened here</string>
+    <string name="settings_line_width">Line width</string>
+    <string name="width_narrow">narrow</string>
+    <string name="width_comfortable">comfortable</string>
+    <string name="width_full">full</string>
+    <string name="help_line_width">How wide a note\'s text may run on a tablet or in landscape. A phone held upright is narrower than all three.</string>
 </resources>

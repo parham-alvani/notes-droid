@@ -285,4 +285,9 @@
     <string name="link_unknown_vault">دفتری به نام %1$s اینجا نیست</string>
     <string name="link_unknown_note">یادداشتی به نام %1$s در این دفتر نیست</string>
     <string name="link_not_followed">این پیوند اینجا باز نمی‌شود</string>
+    <string name="settings_line_width">پهنای خط</string>
+    <string name="width_narrow">باریک</string>
+    <string name="width_comfortable">راحت</string>
+    <string name="width_full">تمام‌عرض</string>
+    <string name="help_line_width">پهنای متن یادداشت روی تبلت یا در حالت افقی. گوشیِ ایستاده از هر سه باریک‌تر است.</string>
 </resources>

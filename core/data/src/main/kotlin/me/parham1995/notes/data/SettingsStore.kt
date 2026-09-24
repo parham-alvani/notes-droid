@@ -118,6 +118,27 @@ enum class ThemeChoice {
     }
 }
 
+/**
+ * How long a line of a note may run.
+ *
+ * A phone held upright is narrower than all of these, so this only ever shows
+ * on a tablet or in landscape -- where a note set edge to edge runs to 150
+ * characters a line and the eye loses its place going back for the next one.
+ */
+enum class LineWidth(
+    /** The widest the text column may be, or null for the whole window. */
+    val maxDp: Int?,
+) {
+    NARROW(560),
+    COMFORTABLE(680),
+    FULL(null),
+    ;
+
+    companion object {
+        fun parse(raw: String?): LineWidth = entries.firstOrNull { it.name == raw } ?: COMFORTABLE
+    }
+}
+
 /** How a note is set. */
 data class ReadingSettings(
     /** Multiplies every text size in the reader. */
@@ -148,6 +169,7 @@ data class ReadingSettings(
      */
     val hideCompletedTasks: Boolean = false,
     val browserSort: BrowserSort = BrowserSort.NAME,
+    val lineWidth: LineWidth = LineWidth.COMFORTABLE,
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
@@ -274,6 +296,7 @@ class SettingsStore
                             hideCompletedTasks = preferences[HIDE_DONE_TASKS] ?: false,
                             startScreen = StartScreen.parse(preferences[START_SCREEN]),
                             browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
+                            lineWidth = LineWidth.parse(preferences[LINE_WIDTH]),
                         ),
                 )
             }
@@ -356,6 +379,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[LINE_SPACING] = spacing }
         }
 
+        suspend fun setLineWidth(width: LineWidth) {
+            context.settingsDataStore.edit { it[LINE_WIDTH] = width.name }
+        }
+
         suspend fun setTheme(theme: ThemeChoice) {
             context.settingsDataStore.edit { it[THEME] = theme.name }
         }
@@ -409,6 +436,7 @@ class SettingsStore
             val ACTIVE_VAULT = longPreferencesKey("active_vault")
             val TEXT_SCALE = floatPreferencesKey("reading_text_scale")
             val LINE_SPACING = floatPreferencesKey("reading_line_spacing")
+            val LINE_WIDTH = stringPreferencesKey("reading_line_width")
             val THEME = stringPreferencesKey("reading_theme")
             val PERSIAN_FONT = booleanPreferencesKey("reading_persian_font")
             val STYLUS_SPOTLIGHT = booleanPreferencesKey("reading_stylus_spotlight")

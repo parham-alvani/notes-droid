@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -78,12 +79,14 @@ import me.parham1995.notes.feature.drawer.FileDrawerSheet
 import me.parham1995.notes.feature.drawer.FileDrawerViewModel
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.ItemRow
+import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.icon.VaultIcon
 import me.parham1995.notes.ui.image.ImageViewer
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.pdf.PdfViewer
+import me.parham1995.notes.ui.readingPadding
 import me.parham1995.notes.ui.render.Attachments
 import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
@@ -435,7 +438,9 @@ fun NoteScreen(
                     if (showContents) {
                         FolderContents(state.contents, onOpenNote, onOpenFolder)
                     } else {
-                        Box(Modifier.fillMaxSize()) {
+                        // The column held to a reading width on a wide window.
+                        BoxWithConstraints(Modifier.fillMaxSize()) {
+                            val readingWidth = LocalReading.current.lineWidth
                             when {
                                 state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                                 state.missing ->
@@ -451,6 +456,7 @@ fun NoteScreen(
                                             blocks = note.blocks,
                                             brokenLinks = state.brokenLinks,
                                             listState = listState,
+                                            contentPadding = readingPadding(maxWidth, readingWidth),
                                             onPinch = viewModel::pinchTextScale,
                                             actions =
                                                 RenderActions(

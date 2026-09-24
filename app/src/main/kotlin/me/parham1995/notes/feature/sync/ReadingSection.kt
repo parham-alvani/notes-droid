@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
 import me.parham1995.notes.data.BrowserSort
+import me.parham1995.notes.data.LineWidth
 import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.data.ThemeChoice
@@ -70,6 +71,22 @@ internal fun ReadingCard(
                 )
             }
         }
+
+        Text(stringResource(R.string.settings_line_width), style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LineWidth.entries.forEach { width ->
+                FilterChip(
+                    selected = reading.lineWidth == width,
+                    onClick = { viewModel.setLineWidth(width) },
+                    label = { Text(stringResource(width.label)) },
+                )
+            }
+        }
+        Text(
+            stringResource(R.string.help_line_width),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         // Shown at the size and spacing chosen, so the choice is visible where
         // it is made rather than two screens away.
@@ -184,6 +201,15 @@ private val ThemeChoice.label: Int
             ThemeChoice.DARK -> R.string.theme_dark
             ThemeChoice.LIGHT -> R.string.theme_light
             ThemeChoice.SYSTEM -> R.string.theme_system
+        }
+
+@get:StringRes
+private val LineWidth.label: Int
+    get() =
+        when (this) {
+            LineWidth.NARROW -> R.string.width_narrow
+            LineWidth.COMFORTABLE -> R.string.width_comfortable
+            LineWidth.FULL -> R.string.width_full
         }
 
 @get:StringRes
