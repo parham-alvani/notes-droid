@@ -64,13 +64,13 @@ When adding a query, the question is not "does this work" but "which vault is th
 
 ## Writing: three rules, and none of them is optional
 
-The app writes, but only three edits: tick a task, add a task, append to a scratchpad. `VaultWriteRepository` is the only place any of it happens. If something new wants to write, it goes through there.
+The app writes, but only four edits: tick a task, add a task, move a task to another day, append to a scratchpad. `VaultWriteRepository` is the only place any of it happens. If something new wants to write, it goes through there.
 
 - **Ask the host what the credential may do; never infer it.** `permissions.push` on REST, an abandoned `Transport.openPush()` on SSH. A read-only deploy key and a `Contents: read-only` token are indistinguishable from working ones until the push, so guessing permissively means the person finds out *after* typing the thing they wanted to keep. The answer lives on `vaults.canWrite`, refreshed every sync, and every affordance is gated on it plus an author being set.
-- **An edit is a function of the file's current text, never a patch.** `VaultEdits` holds all three as pure `(String?) -> String?`, and every conflict — GitHub's stale-sha refusal, a rejected push — is answered by reading again and calling the function again. Returning null means "the file already says this", which is a quiet success, not a failure.
+- **An edit is a function of the file's current text, never a patch.** `VaultEdits` holds all four as pure `(String?) -> String?`, and every conflict — GitHub's stale-sha refusal, a rejected push — is answered by reading again and calling the function again. Returning null means "the file already says this", which is a quiet success, not a failure — so an edit asked about a task that is no longer there must not return null. `VaultEdits.reschedule` throws `TaskNotFound` instead, and the write path reports it.
 - **Queue first, flush at the start of a sync.** An edit is applied locally and written to `pending_edits` before it is attempted, so it survives no signal and a crash. Flushing *after* a pull would let an SSH vault's `reset --hard` wipe the local copy of something still queued, which looks exactly like losing it.
 
-A task is found again by the source line the indexer recorded (`tasks.line`, from commonmark's block source spans), then checked against what the index made of that line. Text alone cannot do it — the stored text has had markup and emoji metadata stripped — and a line number alone cannot either, because notes grow paragraphs above tasks.
+A task is found again by the source line the indexer recorded (`tasks.line`, from commonmark's block source spans), then checked against what the index made of that line — `TaskLine.locate`, shared by the tick and the move. Text alone cannot do it — the stored text has had markup and emoji metadata stripped — and a line number alone cannot either, because notes grow paragraphs above tasks.
 
 ## Room
 
