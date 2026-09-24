@@ -307,8 +307,10 @@ class VaultIndexer
              * 8: footnote definitions are gathered into one block at the end
              *    rather than left as paragraphs where they were written, so
              *    block positions after one moved.
+             * 9: a `^block-id` on a line of its own is an address for the
+             *    block above it, not a paragraph -- positions moved again.
              */
-            const val VERSION = 8
+            const val VERSION = 9
 
             /**
              * Files that are kept on the device but are not notes.

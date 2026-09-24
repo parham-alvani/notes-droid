@@ -82,6 +82,10 @@ data class RenderedNote(
      * the vault's own gaps stay visible.
      */
     val brokenTargets: Set<String>,
+    /** Each `^block-id` in the note and the position of the block it names. */
+    val blockRefs: Map<String, Int> = emptyMap(),
+    /** What an embed of each `^block-id` draws. */
+    val blockTargets: Map<String, MdBlock> = emptyMap(),
 )
 
 /**
@@ -313,6 +317,8 @@ class VaultRepository
                     scrollIndex = entity.scrollIndex,
                     linkTargets = targets,
                     brokenTargets = allTargets - targets.keys,
+                    blockRefs = parsed.blockRefs,
+                    blockTargets = parsed.blockTargets,
                 )
             }
 

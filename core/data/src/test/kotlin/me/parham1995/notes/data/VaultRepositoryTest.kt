@@ -674,6 +674,17 @@ class VaultRepositoryTest {
             assertThat(database.noteDao().count(second).first()).isEqualTo(1)
         }
 
+    @Test
+    fun `an opened note knows where its block ids are and what they embed`() =
+        runTest {
+            index("Note.md" to "# Title\n\n- a\n- b\n\nThe line. ^here")
+
+            val note = repository.note(database.noteDao().idOf(first, "Note.md")!!)!!
+            // A position in the blocks on screen, past the list's items.
+            assertThat(note.blockRefs).containsExactly("here", 2)
+            assertThat(note.blocks[2]).isEqualTo(note.blockTargets["here"])
+        }
+
     // -- tags and aliases --------------------------------------------------
 
     @Test

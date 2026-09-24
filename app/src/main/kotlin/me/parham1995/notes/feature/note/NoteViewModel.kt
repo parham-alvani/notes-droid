@@ -20,6 +20,7 @@ import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.markdown.HeadingPath
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteMatch
 import me.parham1995.notes.markdown.NoteSearch
@@ -284,7 +285,7 @@ class NoteViewModel
         ): Transcluded? {
             val id = targetOf(target) ?: return null
             val note = repository.note(id) ?: return null
-            val section = Transclusion.section(note.blocks, heading) ?: return null
+            val section = Transclusion.section(note.blocks, heading, note.blockTargets) ?: return null
             return Transcluded(
                 noteId = id,
                 title = note.title,
@@ -346,7 +347,8 @@ private const val PROSE_CHARS = 40
  * Matched on the heading's own text, trimmed and ignoring case, because
  * Obsidian does not slugify an anchor -- the real ones in this vault contain
  * em dashes, parentheses and Persian, and slugifying either of those two ways
- * agrees with nothing.
+ * agrees with nothing. `Chapter#Section` is the Section under that Chapter,
+ * and `^id` is the block carrying that id, from [blockRefs].
  *
  * Null when nothing matches, which is a link to a heading that was renamed.
  * The note still opens; it just opens where it was left.
@@ -354,8 +356,11 @@ private const val PROSE_CHARS = 40
 internal fun blockForHeading(
     headings: List<HeadingEntity>,
     heading: String?,
+    blockRefs: Map<String, Int> = emptyMap(),
 ): Int? {
     val wanted = heading?.trim().orEmpty()
     if (wanted.isEmpty()) return null
-    return headings.firstOrNull { it.text.trim().equals(wanted, ignoreCase = true) }?.blockIndex
+    if (wanted.startsWith('^')) return blockRefs[wanted.substring(1)]
+    val ordered = headings.sortedBy { it.ordinal }
+    return HeadingPath.find(ordered.map { it.level to it.text }, wanted)?.let { ordered[it].blockIndex }
 }

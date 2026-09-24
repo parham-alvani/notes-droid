@@ -203,7 +203,7 @@ fun NoteScreen(
         val note = state.note ?: return@LaunchedEffect
         // A heading asked for wins over where the note was left: it is the
         // reason the note was opened at all.
-        val target = blockForHeading(note.headings, pendingHeading)
+        val target = blockForHeading(note.headings, pendingHeading, note.blockRefs)
         when {
             target != null -> {
                 listState.scrollToItem(target)

@@ -372,6 +372,13 @@ data class ParsedNote(
     val tags: List<String> = emptyList(),
     /** Other names the note answers to in a `[[link]]`, from `aliases`. */
     val aliases: List<String> = emptyList(),
+    /**
+     * Each `^block-id` in the note and the position in [blocks] of the block
+     * it names -- a position, not an id, for the same reason as a heading's.
+     */
+    val blockRefs: Map<String, Int> = emptyMap(),
+    /** What embedding each `^block-id` draws: the block, or a list item alone. */
+    val blockTargets: Map<String, MdBlock> = emptyMap(),
 )
 
 data class ParsedHeading(
