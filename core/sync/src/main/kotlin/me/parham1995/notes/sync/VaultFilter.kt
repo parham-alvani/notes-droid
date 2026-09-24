@@ -79,8 +79,9 @@ class VaultFilter(
          *
          * 2: the Iconic plugin's icon assignments.
          * 3: attachments -- PDFs, video, audio, archives, office documents.
+         * 4: Obsidian's bookmarks and daily-notes settings.
          */
-        const val VERSION = 3
+        const val VERSION = 4
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -97,7 +98,21 @@ class VaultFilter(
          */
         const val ICONIC_CONFIG = ".obsidian/plugins/iconic/data.json"
 
-        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG)
+        /**
+         * The core Bookmarks plugin's list. Like the icon assignments it is
+         * part of how the vault is found your way around rather than how the
+         * editor is set up, and it is a few kilobytes.
+         */
+        const val BOOKMARKS = ".obsidian/bookmarks.json"
+
+        /**
+         * The core Daily notes plugin's folder and date format -- which is all
+         * it takes to know where today's note is. Obsidian only writes the file
+         * once a setting has been changed from its default.
+         */
+        const val DAILY_NOTES = ".obsidian/daily-notes.json"
+
+        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES)
 
         /**
          * Formats the reader draws itself. Everything else it can offer is in

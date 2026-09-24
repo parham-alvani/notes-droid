@@ -42,11 +42,12 @@ just verify-apk
 core/markdown/   kotlin("jvm")     parser, link resolver, block model -- NO Android
 core/sync/       kotlin("jvm")     transports, planner, VaultFilter  -- NO Android
 core/icons/      kotlin("jvm")     Iconic plugin config parsing      -- NO Android
+core/obsidian/   kotlin("jvm")     bookmarks, daily notes, obsidian:// -- NO Android
 core/data/       android-library   Room, DataStore, files, WorkManager
 app/             application       Compose UI and DI wiring
 ```
 
-**Keep Android out of the three JVM modules.** Their tests run in seconds instead of forty, and the compiler physically prevents reaching for a `Context`. If a piece of logic is worth iterating on, it belongs in one of them. This is also why CI runs no emulator and there are no instrumentation tests: the risk surface that can be tested on the JVM is most of it.
+**Keep Android out of the four JVM modules.** Their tests run in seconds instead of forty, and the compiler physically prevents reaching for a `Context`. If a piece of logic is worth iterating on, it belongs in one of them. This is also why CI runs no emulator and there are no instrumentation tests: the risk surface that can be tested on the JVM is most of it.
 
 ## The rule that keeps being broken: everything is scoped to a vault
 

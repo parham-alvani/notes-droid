@@ -26,6 +26,7 @@ android {
 dependencies {
     api(projects.core.sync)
     api(projects.core.icons)
+    api(projects.core.obsidian)
     api(projects.core.markdown)
 
     implementation(libs.room.runtime)
