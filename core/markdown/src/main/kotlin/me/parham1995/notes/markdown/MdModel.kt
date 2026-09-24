@@ -77,6 +77,16 @@ sealed interface MdInline {
         val name: String,
     ) : MdInline
 
+    /**
+     * `[^label]` or an inline `^[text]`, drawn as its [number]: the order the
+     * note first refers to it in, which is how Obsidian numbers them whatever
+     * the labels say.
+     */
+    data class FootnoteRef(
+        val label: String,
+        val number: Int,
+    ) : MdInline
+
     /** A hard break: two trailing spaces, a backslash, or a prose `<br>`. */
     data object LineBreak : MdInline
 
@@ -314,6 +324,15 @@ sealed interface MdBlock {
     ) : MdBlock
 
     /**
+     * The note's footnotes, gathered at its end in the order they are first
+     * referred to -- wherever their definitions were written.
+     */
+    data class Footnotes(
+        override val id: Int,
+        val entries: List<FootnoteEntry>,
+    ) : MdBlock
+
+    /**
      * The YAML at the top of a note. [values] is every key with its value run
      * together; [properties] is the same read properly, lists as lists, which
      * is what the Properties block draws.
@@ -324,6 +343,16 @@ sealed interface MdBlock {
         val properties: List<FrontMatterProperty> = emptyList(),
     ) : MdBlock
 }
+
+/** One footnote: its number, the label it was written with, and what it says. */
+data class FootnoteEntry(
+    val label: String,
+    val number: Int,
+    val blocks: List<MdBlock>,
+)
+
+/** Every footnote in [this] note's blocks, for finding the one a reference names. */
+fun List<MdBlock>.footnotes(): List<FootnoteEntry> = filterIsInstance<MdBlock.Footnotes>().flatMap { it.entries }
 
 /** A parsed note: its blocks plus everything the index needs. */
 data class ParsedNote(

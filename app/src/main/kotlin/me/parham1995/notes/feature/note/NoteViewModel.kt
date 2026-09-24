@@ -24,6 +24,7 @@ import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteMatch
 import me.parham1995.notes.markdown.NoteSearch
 import me.parham1995.notes.markdown.Transclusion
+import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.markdown.plainText
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.render.Transcluded
@@ -290,6 +291,7 @@ class NoteViewModel
                 blocks = section.filterNot { it is MdBlock.FrontMatter },
                 linkTargets = note.linkTargets,
                 brokenLinks = note.brokenTargets,
+                footnotes = note.blocks.footnotes(),
             )
         }
 

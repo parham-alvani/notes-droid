@@ -19,7 +19,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Offline-first** — the vault lives on the device, so everything works with no connection
 - **Incremental sync** — a refresh with nothing upstream costs a single HTTP request, and a renamed note transfers no bytes at all
 - **Markdown-only by default** — images are fetched on demand, so a default install is a fraction of the repository's size
-- **Obsidian flavour** — `[[wikilinks]]` with Obsidian's own resolution rules, callouts, `==highlight==`, wiki-embeds, tables, task lists
+- **Obsidian flavour** — `[[wikilinks]]` with Obsidian's own resolution rules, callouts, `==highlight==`, wiki-embeds, tables, task lists, footnotes (`[^1]` and inline `^[…]`) that open where they are cited
 - **Tags** — inline `#tags` and nested `#parent/child` ones, and those in front matter; tap one for every note carrying it, or browse the vault's tag tree
 - **Properties and aliases** — front matter shown as a foldable Properties block, and a note's `aliases` answer to `[[links]]` and the quick switcher
 - **Backlinks, unlinked mentions, an outline and a connections graph** for every note

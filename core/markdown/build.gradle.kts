@@ -9,6 +9,7 @@ dependencies {
     implementation(libs.commonmark.task.list)
     implementation(libs.commonmark.front.matter)
     implementation(libs.commonmark.autolink)
+    implementation(libs.commonmark.footnotes)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)

@@ -81,6 +81,10 @@ object NoteSearch {
             is MdBlock.Attachment -> label
             is MdBlock.NoteEmbed -> label
             is MdBlock.Image -> alt.orEmpty()
+            is MdBlock.Footnotes ->
+                entries.joinToString(
+                    " ",
+                ) { entry -> entry.blocks.joinToString(" ") { it.searchableText() } }
             else -> ""
         }
 

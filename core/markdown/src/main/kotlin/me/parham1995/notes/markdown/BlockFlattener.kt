@@ -1,5 +1,8 @@
 package me.parham1995.notes.markdown
 
+import org.commonmark.ext.footnotes.FootnoteDefinition
+import org.commonmark.ext.footnotes.FootnoteReference
+import org.commonmark.ext.footnotes.InlineFootnote
 import org.commonmark.ext.front.matter.YamlFrontMatterBlock
 import org.commonmark.ext.front.matter.YamlFrontMatterNode
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
@@ -49,6 +52,11 @@ class BlockFlattener(
     private var properties = emptyList<FrontMatterProperty>()
     private val inlineTags = mutableListOf<String>()
 
+    /** Footnote labels in the order they are first referred to, which numbers them. */
+    private val footnoteOrder = mutableListOf<String>()
+    private val definitions = HashMap<String, FootnoteDefinition>()
+    private val inlineFootnotes = HashMap<String, List<MdBlock>>()
+
     /** The source, when it is to hand, is what front matter is read from. */
     private var source: String? = null
 
@@ -63,6 +71,7 @@ class BlockFlattener(
             blocks += blocksFor(child)
             child = child.next
         }
+        footnotes()?.let { blocks += it }
 
         val plainText = plain.toString().trim()
         return ParsedNote(
@@ -83,6 +92,38 @@ class BlockFlattener(
     }
 
     private fun id() = nextId++
+
+    private fun footnoteNumber(label: String): Int {
+        val at = footnoteOrder.indexOf(label)
+        if (at >= 0) return at + 1
+        footnoteOrder += label
+        return footnoteOrder.size
+    }
+
+    /**
+     * The footnotes block, or null when nothing refers to one.
+     *
+     * Built last, in the order of first reference, because a definition may
+     * be written anywhere -- before the text that cites it, or in the middle
+     * of a list. A definition nothing cites is left out, as Obsidian leaves it
+     * out of reading view. Converting one can cite another, so the list is
+     * walked by index while it grows.
+     */
+    private fun footnotes(): MdBlock.Footnotes? {
+        if (footnoteOrder.isEmpty()) return null
+        val entries = mutableListOf<FootnoteEntry>()
+        var index = 0
+        while (index < footnoteOrder.size) {
+            val label = footnoteOrder[index]
+            val content =
+                inlineFootnotes[label]
+                    ?: definitions[label]?.children()?.flatMap { blocksFor(it) }
+                    ?: emptyList()
+            entries += FootnoteEntry(label, index + 1, content)
+            index++
+        }
+        return MdBlock.Footnotes(id(), entries)
+    }
 
     /**
      * Turns each heading's block *id* into its position in the rendered list.
@@ -124,6 +165,11 @@ class BlockFlattener(
             is ThematicBreak -> listOf(MdBlock.ThematicBreak(id()))
             is YamlFrontMatterBlock -> listOf(frontMatter(node))
             is HtmlBlock -> htmlBlock(node)
+            // Gathered, and drawn at the end with the others.
+            is FootnoteDefinition -> {
+                definitions.putIfAbsent(node.label, node)
+                emptyList()
+            }
             else -> emptyList()
         }
 
@@ -490,6 +536,18 @@ class BlockFlattener(
                 inlineTags += node.name
                 MdInline.Tag(node.name)
             }
+
+            is FootnoteReference -> MdInline.FootnoteRef(node.label, footnoteNumber(node.label))
+
+            // Its text becomes a footnote of its own, under a label no
+            // written one can have.
+            is InlineFootnote -> {
+                val label = INLINE_FOOTNOTE + inlineFootnotes.size
+                val text = plainTextOf(node)
+                plain.append(text).append('\n')
+                inlineFootnotes[label] = listOf(MdBlock.Paragraph(id(), inlines(node), TextDirection.of(text)))
+                MdInline.FootnoteRef(label, footnoteNumber(label))
+            }
             is SoftLineBreak -> MdInline.SoftBreak
             is HardLineBreak -> MdInline.LineBreak
             is InlineMathNode -> {
@@ -538,6 +596,9 @@ class BlockFlattener(
                     is WikiLinkNode -> append(current.alias ?: current.target)
                     is InlineMathNode -> append(current.latex)
                     is TagNode -> append('#').append(current.name)
+                    // Not part of the sentence it is attached to; its text
+                    // is recorded as a footnote of its own.
+                    is InlineFootnote -> return
                     else -> Unit
                 }
                 var child = current.firstChild
@@ -551,6 +612,9 @@ class BlockFlattener(
 
     private companion object {
         val BR = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
+
+        /** `[^...]` labels cannot contain a space, so this can never collide with one. */
+        const val INLINE_FOOTNOTE = "inline "
 
         /** `[c] ` at the very start: one character that is not a bracket or a space. */
         val CUSTOM_STATUS = Regex("""^\[([^\]\s])] """)

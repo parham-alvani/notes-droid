@@ -37,6 +37,8 @@
     <string name="note_no_headings">سرتیتری ندارد</string>
     <string name="note_find">جستجو در یادداشت</string>
     <string name="note_properties">ویژگی‌ها</string>
+    <string name="note_footnotes">پانوشت‌ها</string>
+    <string name="note_footnote">پانوشت %1$d</string>
     <string name="tags_title">برچسب‌ها</string>
     <string name="tags_empty">این دفتر هیچ برچسبی ندارد.</string>
     <string name="note_find_previous">مورد قبلی</string>

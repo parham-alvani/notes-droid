@@ -36,6 +36,8 @@
     <string name="note_no_headings">No headings</string>
     <string name="note_find">Find in note</string>
     <string name="note_properties">Properties</string>
+    <string name="note_footnotes">Footnotes</string>
+    <string name="note_footnote">Footnote %1$d</string>
     <string name="tags_title">Tags</string>
     <string name="tags_empty">No tags in this vault.</string>
     <string name="note_find_previous">Previous match</string>

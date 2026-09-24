@@ -304,8 +304,11 @@ class VaultIndexer
              *    dropped and any one-character status a task -- so the
              *    stored block positions and tasks moved.
              * 7: tags and aliases, and links that find a note by its alias.
+             * 8: footnote definitions are gathered into one block at the end
+             *    rather than left as paragraphs where they were written, so
+             *    block positions after one moved.
              */
-            const val VERSION = 7
+            const val VERSION = 8
 
             /**
              * Files that are kept on the device but are not notes.

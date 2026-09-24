@@ -24,10 +24,14 @@ object Transclusion {
             blocks.indexOfFirst { it is MdBlock.Heading && it.text.trim().equals(wanted, ignoreCase = true) }
         if (start < 0) return null
         val level = (blocks[start] as MdBlock.Heading).level
+        // The footnotes gathered at the end of the note belong to the whole
+        // note, not to its last section.
         val end =
             (start + 1 until blocks.size)
-                .firstOrNull { index -> (blocks[index] as? MdBlock.Heading)?.let { it.level <= level } == true }
-                ?: blocks.size
+                .firstOrNull { index ->
+                    val block = blocks[index]
+                    block is MdBlock.Footnotes || (block as? MdBlock.Heading)?.let { it.level <= level } == true
+                } ?: blocks.size
         return blocks.subList(start, end)
     }
 }

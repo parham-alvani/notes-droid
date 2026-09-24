@@ -93,6 +93,7 @@ commonmark-strikethrough = { group = "org.commonmark", name = "commonmark-ext-gf
 commonmark-task-list = { group = "org.commonmark", name = "commonmark-ext-task-list-items", version.ref = "commonmark" }
 commonmark-front-matter = { group = "org.commonmark", name = "commonmark-ext-yaml-front-matter", version.ref = "commonmark" }
 commonmark-autolink = { group = "org.commonmark", name = "commonmark-ext-autolink", version.ref = "commonmark" }
+commonmark-footnotes = { group = "org.commonmark", name = "commonmark-ext-footnotes", version.ref = "commonmark" }
 
 # rendering
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }

@@ -12,9 +12,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.em
 import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.ui.theme.Markup
@@ -42,6 +44,8 @@ data class InlineActions(
     val onBrokenLink: (target: String) -> Unit = {},
     /** A `#tag`, by its name without the `#`: list the notes carrying it. */
     val onTag: (tag: String) -> Unit = {},
+    /** A footnote's number, by the label it was written with: show what it says. */
+    val onFootnote: (label: String) -> Unit = {},
 )
 
 /**
@@ -185,6 +189,24 @@ private fun appendInlines(
                 builder.withLink(link) { builder.append('#').append(node.name) }
             }
 
+            // A number set small and high, the way a footnote is read; the
+            // note itself is a tap away rather than a scroll to the bottom.
+            is MdInline.FootnoteRef -> {
+                val link =
+                    LinkAnnotation.Clickable(
+                        tag = FOOTNOTE_PREFIX + node.label,
+                        styles =
+                            TextLinkStyles(
+                                SpanStyle(
+                                    color = colors.primary,
+                                    fontSize = 0.75.em,
+                                    baselineShift = BaselineShift.Superscript,
+                                ),
+                            ),
+                    ) { actions.onFootnote(node.label) }
+                builder.withLink(link) { builder.append(node.number.toString()) }
+            }
+
             is MdInline.InlineMath -> {
                 val index = formulas.size
                 formulas += node.latex
@@ -201,3 +223,4 @@ private fun appendInlines(
 
 internal const val MATH_TAG_PREFIX = "math:"
 private const val TAG_PREFIX = "tag:"
+private const val FOOTNOTE_PREFIX = "footnote:"
