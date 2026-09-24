@@ -43,6 +43,7 @@ class DestinationsTest {
                 tasks = database.taskDao(),
                 index = database.indexDao(),
                 search = search,
+                aliases = database.aliasDao(),
             )
         val repository =
             VaultRepository(
@@ -53,6 +54,8 @@ class DestinationsTest {
                 search = search,
                 tasks = database.taskDao(),
                 blobs = database.blobDao(),
+                tags = database.tagDao(),
+                aliases = database.aliasDao(),
                 vaults = database.vaultDao(),
                 settings = settings,
             )

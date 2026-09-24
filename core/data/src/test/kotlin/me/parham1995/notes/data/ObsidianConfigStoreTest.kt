@@ -39,6 +39,7 @@ class ObsidianConfigStoreTest {
                 tasks = database.taskDao(),
                 index = database.indexDao(),
                 search = SearchIndex(database),
+                aliases = database.aliasDao(),
             )
         store =
             ObsidianConfigStore(

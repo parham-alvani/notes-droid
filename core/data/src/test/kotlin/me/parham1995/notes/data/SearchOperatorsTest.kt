@@ -38,6 +38,7 @@ class SearchOperatorsTest {
                 tasks = database.taskDao(),
                 index = database.indexDao(),
                 search = search,
+                aliases = database.aliasDao(),
             )
     }
 
