@@ -100,7 +100,10 @@ fun NoteScreen(
     onBack: () -> Unit,
     onOpenNote: (Long) -> Unit,
     onOpenFolder: (String) -> Unit,
+    onSearch: (String) -> Unit,
     onOpenGraph: (Long) -> Unit = {},
+    /** A heading to land on, for a note opened from a bookmark that names one. */
+    heading: String? = null,
     viewModel: NoteViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -126,6 +129,10 @@ fun NoteScreen(
     var peekBroken by remember { mutableStateOf<String?>(null) }
     // A heading to land on once the note it belongs to has loaded.
     var pendingHeading by remember { mutableStateOf<String?>(null) }
+    // A heading asked for with the note it is in, handed over only once that
+    // note is the one on screen: set while another is still showing, it would
+    // be looked for there, not found, and dropped.
+    var headingIn by remember(noteId, heading) { mutableStateOf(heading?.let { noteId to it }) }
 
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
 
@@ -175,6 +182,13 @@ fun NoteScreen(
     LaunchedEffect(drawer.isOpen, loadedId) {
         if (drawer.isOpen) loadedId?.let { files.locate(it) }
     }
+    LaunchedEffect(loadedId, headingIn) {
+        val (id, text) = headingIn ?: return@LaunchedEffect
+        if (loadedId == id) {
+            pendingHeading = text
+            headingIn = null
+        }
+    }
     LaunchedEffect(loadedId, pendingHeading) {
         val note = state.note ?: return@LaunchedEffect
         // A heading asked for wins over where the note was left: it is the
@@ -220,6 +234,13 @@ fun NoteScreen(
                 onOpenNote = { id -> closeThen { viewModel.openTab(id, inNewTab = false) } },
                 onOpenNoteInNewTab = { id -> closeThen { viewModel.openTab(id, inNewTab = true) } },
                 onBrowseFolder = { path -> closeThen { onOpenFolder(path) } },
+                onOpenHeading = { id, text ->
+                    closeThen {
+                        headingIn = id to text
+                        viewModel.openTab(id, inNewTab = false)
+                    }
+                },
+                onSearch = { query -> closeThen { onSearch(query) } },
             )
         },
     ) {

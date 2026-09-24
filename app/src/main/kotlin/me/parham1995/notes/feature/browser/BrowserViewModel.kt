@@ -7,18 +7,22 @@ import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.IconStore
+import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
+import me.parham1995.notes.data.VaultBookmarks
 import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.data.VaultRepository
@@ -74,8 +78,20 @@ class BrowserViewModel
         private val icons: IconStore,
         private val scheduler: SyncScheduler,
         private val settings: SettingsStore,
+        configs: ObsidianConfigStore,
         private val savedState: SavedStateHandle,
     ) : ViewModel() {
+        /**
+         * The vault's own bookmarks, from Obsidian's Bookmarks plugin.
+         *
+         * Apart from [state] because nothing else on the screen depends on
+         * them, and folding a sixth input into its `combine` would buy nothing.
+         */
+        val bookmarks: StateFlow<VaultBookmarks> =
+            configs
+                .bookmarks(repository.activeVaultId)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), VaultBookmarks.EMPTY)
+
         /**
          * The folder being shown. Kept in saved state so a process killed in
          * the background comes back to the folder it was in, not the root.
@@ -270,3 +286,5 @@ private const val KEY_STARTED = "browser_started"
 
 /** Kept short on purpose; see [BrowserViewModel.recent]. */
 private const val RECENT_ON_ROOT = 3
+
+private const val STOP_AFTER_MS = 5_000L

@@ -64,7 +64,13 @@ data class BrowseRoute(
 object TasksRoute
 
 @Serializable
-object SearchRoute
+data class SearchRoute(
+    /**
+     * What to search for on arrival -- a bookmarked search, or one another app
+     * asked for. Empty is the tab itself, which keeps whatever was typed last.
+     */
+    val query: String = "",
+)
 
 @Serializable
 object SettingsRoute
@@ -98,10 +104,22 @@ private fun NavController.openNote(
     id: Long,
     newTab: Boolean = false,
     fresh: Boolean = false,
-) = navigate(NoteRoute(id, newTab, fresh)) {
+    heading: String? = null,
+) = navigate(NoteRoute(id, newTab, fresh, heading)) {
     popUpTo<NoteRoute> { inclusive = true }
     launchSingleTop = true
 }
+
+/**
+ * The search tab, asked to look for [query].
+ *
+ * Single-top, so a search already on screen takes the new query rather than
+ * stacking a second search screen under the first.
+ */
+private fun NavController.search(query: String) =
+    navigate(SearchRoute(query)) {
+        launchSingleTop = true
+    }
 
 @Serializable
 data class NoteRoute(
@@ -125,6 +143,8 @@ data class NoteRoute(
      * is the next step of the thread already being read, and pushes.
      */
     val fresh: Boolean = false,
+    /** A heading to land on, for a bookmark that names one. */
+    val heading: String? = null,
 )
 
 private data class Tab(
@@ -161,7 +181,7 @@ fun NotesNavHost(
         val destination =
             when (requested) {
                 "tasks" -> TasksRoute
-                "search" -> SearchRoute
+                "search" -> SearchRoute()
                 else -> null
             }
         if (destination != null) {
@@ -203,7 +223,7 @@ fun NotesNavHost(
         listOf(
             Tab(BrowseRoute(), R.string.nav_browse, "folder-tree"),
             Tab(TasksRoute, R.string.tasks_title, "list-todo"),
-            Tab(SearchRoute, R.string.nav_search, "search"),
+            Tab(SearchRoute(), R.string.nav_search, "search"),
             Tab(SettingsRoute, R.string.settings_title, "settings"),
         )
 
@@ -256,7 +276,7 @@ fun NotesNavHost(
                 when (start) {
                     StartScreen.BROWSE -> BrowseRoute()
                     StartScreen.TASKS -> TasksRoute
-                    StartScreen.SEARCH -> SearchRoute
+                    StartScreen.SEARCH -> SearchRoute()
                 },
             modifier = Modifier.fillMaxSize().padding(if (showBar) padding else PaddingValues()),
         ) {
@@ -270,13 +290,16 @@ fun NotesNavHost(
                             SettingsSectionRoute(SettingsSection.ADVANCED.name),
                         )
                     },
+                    onOpenHeading = { id, heading -> navController.openNote(id, fresh = true, heading = heading) },
+                    onSearch = { navController.search(it) },
                 )
             }
             composable<TasksRoute> {
                 TasksScreen(onOpenNote = { navController.openNote(it, fresh = true) })
             }
-            composable<SearchRoute> {
+            composable<SearchRoute> { entry ->
                 SearchScreen(
+                    initialQuery = entry.toRoute<SearchRoute>().query,
                     onOpenNote = { navController.openNote(it, fresh = true) },
                     onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
                 )
@@ -313,10 +336,12 @@ fun NotesNavHost(
                     noteId = route.id,
                     openInNewTab = route.newTab,
                     fresh = route.fresh,
+                    heading = route.heading,
                     onOpenGraph = { navController.navigate(GraphRoute(it)) },
                     onBack = { navController.popBackStack() },
                     onOpenNote = { navController.openNote(it) },
                     onOpenFolder = { navController.navigate(BrowseRoute(it)) },
+                    onSearch = { navController.search(it) },
                 )
             }
         }

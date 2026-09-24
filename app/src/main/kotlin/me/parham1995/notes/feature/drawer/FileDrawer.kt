@@ -1,5 +1,7 @@
 package me.parham1995.notes.feature.drawer
 
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,12 +28,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
+import me.parham1995.notes.ui.BookmarkActions
 import me.parham1995.notes.ui.ItemRow
+import me.parham1995.notes.ui.bookmarkItems
+import me.parham1995.notes.ui.bookmarkNodes
 import me.parham1995.notes.ui.icon.LucideGlyph
 
 /**
@@ -54,7 +62,26 @@ fun FileDrawerSheet(
     onOpenNote: (Long) -> Unit,
     onOpenNoteInNewTab: (Long) -> Unit,
     onBrowseFolder: (String) -> Unit,
+    /** A bookmarked heading: the note, and where in it to land. */
+    onOpenHeading: (Long, String) -> Unit,
+    onSearch: (String) -> Unit,
 ) {
+    val context = LocalContext.current
+    val noteMissing = stringResource(R.string.note_missing)
+    val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
+    // Shut again on a vault switch: the keys are positions in one vault's tree.
+    var openGroups by remember(bookmarks.vaultId) { mutableStateOf(emptySet<String>()) }
+    val bookmarkActions =
+        BookmarkActions(
+            onNote = { id, heading -> if (heading == null) onOpenNote(id) else onOpenHeading(id, heading) },
+            // Walked here, like any other folder the drawer shows.
+            onFolder = viewModel::openFolder,
+            onSearch = onSearch,
+            onUrl = { url -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) } },
+            onMissing = { Toast.makeText(context, noteMissing, Toast.LENGTH_SHORT).show() },
+            onToggleGroup = { key -> openGroups = if (key in openGroups) openGroups - key else openGroups + key },
+        )
+
     ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
             VaultHeader(state, viewModel, onBrowseFolder)
@@ -92,6 +119,11 @@ fun FileDrawerSheet(
                 items(state.tabs, key = { "tab-${it.index}-${it.noteId}" }) { tab ->
                     TabRow(tab, viewModel)
                 }
+            }
+
+            if (bookmarks.items.isNotEmpty()) {
+                item { SectionLabel(stringResource(R.string.bookmarks_title)) }
+                bookmarkItems(bookmarkNodes(bookmarks, openGroups), openGroups, bookmarkActions)
             }
 
             if (state.recent.isNotEmpty()) {

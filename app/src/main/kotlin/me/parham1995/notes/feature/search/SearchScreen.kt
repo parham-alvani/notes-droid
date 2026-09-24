@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,9 +49,11 @@ import me.parham1995.notes.ui.inScript
 fun SearchScreen(
     onOpenNote: (Long) -> Unit,
     onOpenNoteInNewTab: (Long) -> Unit,
+    initialQuery: String = "",
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(initialQuery) { viewModel.start(initialQuery) }
 
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(

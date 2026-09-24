@@ -104,8 +104,25 @@ class SearchViewModel
 
         fun clear() = onQueryChange("")
 
+        /**
+         * Searches for [initial] if it was asked for from outside -- a
+         * bookmarked search, a link from another app -- and has not already
+         * been.
+         *
+         * Once per query rather than once per screen: the screen asks again
+         * whenever it is composed, and replacing what was typed since each
+         * time would undo it; but a new query arriving at a search already
+         * open is a new request.
+         */
+        fun start(initial: String) {
+            if (initial.isEmpty() || savedState.get<String>(KEY_ARRIVED) == initial) return
+            savedState[KEY_ARRIVED] = initial
+            onQueryChange(initial)
+        }
+
         private companion object {
             const val DEBOUNCE_MS = 200L
             const val KEY_QUERY = "search_query"
+            const val KEY_ARRIVED = "search_arrived"
         }
     }
