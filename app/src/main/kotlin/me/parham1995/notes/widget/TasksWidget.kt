@@ -139,9 +139,14 @@ class TasksWidget : AppWidgetProvider() {
             context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
         launch.putExtra(TaskDigestWorker.EXTRA_OPEN_TASKS, true)
         launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        // Its own request code. The recent-notes widget's headline asks for
+        // the same launch intent with request code 0 and no extras, and
+        // PendingIntents that differ only in extras are one PendingIntent:
+        // with FLAG_UPDATE_CURRENT whichever widget redrew last decided
+        // whether tapping this one opened the task list.
         return PendingIntent.getActivity(
             context,
-            0,
+            OPEN_TASKS_REQUEST,
             launch,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -173,6 +178,7 @@ class TasksWidget : AppWidgetProvider() {
 
         private val PRESSING = setOf(TaskBucket.OVERDUE, TaskBucket.TODAY)
         private const val CAPTURE_REQUEST = 1
+        private const val OPEN_TASKS_REQUEST = -3
         private const val ROWS = 4
 
         // naz, by value: RemoteViews cannot read the Compose theme.
