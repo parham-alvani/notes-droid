@@ -69,9 +69,37 @@ class CrashLog
                 file.takeIf { it.isFile }?.readText()?.takeIf { it.isNotBlank() }
             }
 
-        suspend fun clear() = withContext(Dispatchers.IO) { file.delete() }
+        /**
+         * The last crash, unless it has already been [acknowledge]d.
+         *
+         * For the browser's banner, which is an announcement rather than the
+         * record: dismissing it only for the life of the screen brought the
+         * same old crash back on every launch.
+         */
+        suspend fun unseen(): String? =
+            withContext(Dispatchers.IO) {
+                read()?.takeIf { crash -> seen.takeIf { it.isFile }?.readText() != fingerprint(crash) }
+            }
+
+        /** Stops [unseen] announcing the crash on record, which stays readable. */
+        suspend fun acknowledge() =
+            withContext(Dispatchers.IO) {
+                read()?.let { seen.writeText(fingerprint(it)) }
+            }
+
+        suspend fun clear() =
+            withContext(Dispatchers.IO) {
+                seen.delete()
+                file.delete()
+            }
+
+        /** Its first line is the moment it happened, which is what tells two apart. */
+        private fun fingerprint(crash: String): String = crash.lineSequence().first()
+
+        private val seen: File get() = File(context.filesDir, SEEN)
 
         private companion object {
             const val NAME = "last-crash.txt"
+            const val SEEN = "last-crash.seen"
         }
     }

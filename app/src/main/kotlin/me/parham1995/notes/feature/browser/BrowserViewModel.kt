@@ -165,13 +165,16 @@ class BrowserViewModel
 
         fun dismissCrashNotice() {
             crashed.value = false
+            // Remembered, not just hidden: the same crash came back on every
+            // launch until it was cleared from Advanced.
+            viewModelScope.launch { crashLog.acknowledge() }
         }
 
         private val _state = MutableStateFlow(BrowserUiState())
         val state: StateFlow<BrowserUiState> = _state.asStateFlow()
 
         init {
-            viewModelScope.launch { crashed.value = crashLog.read() != null }
+            viewModelScope.launch { crashed.value = crashLog.unseen() != null }
             viewModelScope.launch {
                 browserStates(
                     path = path,
