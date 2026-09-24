@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Runs [draw] off the main thread, keeping the broadcast alive until it ends.
@@ -20,12 +21,29 @@ internal fun BroadcastReceiver.drawAsync(draw: suspend () -> Unit) {
     val pending = goAsync()
     CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
         try {
-            draw()
+            withinBroadcastBudget(draw)
         } finally {
             pending.finish()
         }
     }
 }
+
+/**
+ * Runs [draw], abandoning it once the broadcast's time is nearly up.
+ *
+ * Holding the broadcast open is also a promise to close it in time: a
+ * broadcast to an app on screen gets ten seconds, and one that overruns is an
+ * "app not responding" dialog for the whole app, not for the widget. The first
+ * launch after an upgrade -- migrations running and the database busy --
+ * overran exactly that way. A widget that misses one refresh draws on the
+ * next, which is far the smaller failure.
+ */
+internal suspend fun withinBroadcastBudget(draw: suspend () -> Unit) {
+    withTimeoutOrNull(BROADCAST_BUDGET_MS) { draw() }
+}
+
+/** Under the ten seconds a foreground broadcast is given, with room to finish. */
+internal const val BROADCAST_BUDGET_MS = 8_000L
 
 /**
  * How many rows fit in a widget of a given height.
