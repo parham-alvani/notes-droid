@@ -37,6 +37,12 @@ class LaunchRequestTest {
     }
 
     @Test
+    fun `the today shortcut asks for today's note`() {
+        val intent = Intent().putExtra(EXTRA_OPEN, SCREEN_TODAY)
+        assertThat(launchRequest(intent, restoring = false)).isEqualTo(LaunchRequest(screen = "today"))
+    }
+
+    @Test
     fun `a recreation asks for nothing, whatever the intent still carries`() {
         assertThat(launchRequest(widgetRow(42), restoring = true)).isNull()
     }

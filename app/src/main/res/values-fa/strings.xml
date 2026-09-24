@@ -278,4 +278,8 @@
     <string name="widget_tasks_overdue">عقب‌افتاده: %1$d</string>
     <string name="widget_tasks_both">عقب‌افتاده: %1$d · امروز: %2$d</string>
     <string name="bookmarks_title">نشانک‌ها</string>
+    <string name="today_action">یادداشت امروز</string>
+    <string name="today_missing">هنوز یادداشتی برای امروز نیست؛ جایش %1$s است</string>
+    <string name="shortcut_today_short">امروز</string>
+    <string name="shortcut_today_long">یادداشت روزانهٔ امروز</string>
 </resources>

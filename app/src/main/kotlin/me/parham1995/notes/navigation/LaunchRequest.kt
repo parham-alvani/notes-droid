@@ -9,7 +9,7 @@ import me.parham1995.notes.widget.RecentNotesWidget
  * a launcher shortcut, a widget.
  */
 data class LaunchRequest(
-    /** A screen by name, `tasks` or `search`. */
+    /** A screen by name: `tasks`, `search`, or `today` for today's daily note. */
     val screen: String? = null,
     /** A note id, from a widget row. */
     val note: Long? = null,
@@ -56,3 +56,6 @@ fun Intent.consumeLaunchRequest() {
 const val EXTRA_OPEN = "me.parham1995.notes.OPEN"
 
 private const val SCREEN_TASKS = "tasks"
+
+/** Today's daily note, from the launcher shortcut of that name. */
+const val SCREEN_TODAY = "today"

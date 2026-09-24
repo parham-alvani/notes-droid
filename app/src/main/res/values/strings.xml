@@ -278,4 +278,8 @@
     <string name="widget_tasks_overdue">Overdue: %1$d</string>
     <string name="widget_tasks_both">Overdue: %1$d · today: %2$d</string>
     <string name="bookmarks_title">Bookmarks</string>
+    <string name="today_action">Today\'s note</string>
+    <string name="today_missing">No note for today yet - it would be %1$s</string>
+    <string name="shortcut_today_short">Today</string>
+    <string name="shortcut_today_long">Today\'s daily note</string>
 </resources>

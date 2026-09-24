@@ -8,14 +8,19 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -30,8 +35,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import me.parham1995.notes.R
+import me.parham1995.notes.data.Destination
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.feature.browser.BrowserScreen
 import me.parham1995.notes.feature.graph.GraphScreen
@@ -174,10 +181,32 @@ fun NotesNavHost(
     // settle it too.
     var resumed by rememberSaveable { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    val jumps: JumpViewModel = hiltViewModel()
+
+    // Today's daily note, found and never made: the app does not write notes,
+    // so a day without one says where it would be and leaves it at that.
+    fun openToday() =
+        scope.launch {
+            when (val found = jumps.today()) {
+                is Destination.Note -> navController.openNote(found.noteId, fresh = true)
+                is Destination.NoDailyNote ->
+                    snackbar.showSnackbar(context.getString(R.string.today_missing, found.path))
+            }
+        }
+
     // A one-shot: consumed so that rotating the phone afterwards does not yank
     // the person back to wherever they were sent half an hour ago.
     val requested by openScreen.collectAsStateWithLifecycle()
     LaunchedEffect(requested) {
+        if (requested == SCREEN_TODAY) {
+            resumed = true
+            openToday()
+            (openScreen as? MutableStateFlow)?.value = null
+            return@LaunchedEffect
+        }
         val destination =
             when (requested) {
                 "tasks" -> TasksRoute
@@ -239,6 +268,7 @@ fun NotesNavHost(
             destination?.hasRoute(GraphRoute::class) != true
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             if (showBar) {
                 NavigationBar {
@@ -292,6 +322,7 @@ fun NotesNavHost(
                     },
                     onOpenHeading = { id, heading -> navController.openNote(id, fresh = true, heading = heading) },
                     onSearch = { navController.search(it) },
+                    onToday = { openToday() },
                 )
             }
             composable<TasksRoute> {

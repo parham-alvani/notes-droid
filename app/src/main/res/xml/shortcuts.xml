@@ -35,6 +35,23 @@
     </shortcut>
 
     <shortcut
+        android:shortcutId="today"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_today_short"
+        android:shortcutLongLabel="@string/shortcut_today_long">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="me.parham1995.notes"
+            android:targetClass="me.parham1995.notes.MainActivity">
+            <extra
+                android:name="me.parham1995.notes.OPEN"
+                android:value="today" />
+        </intent>
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
         android:shortcutId="capture"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher"

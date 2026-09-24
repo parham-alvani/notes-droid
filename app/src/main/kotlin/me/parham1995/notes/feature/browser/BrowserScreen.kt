@@ -71,6 +71,8 @@ fun BrowserScreen(
     /** A bookmarked heading: the note, and where in it to land. */
     onOpenHeading: (Long, String) -> Unit,
     onSearch: (String) -> Unit,
+    /** Today's daily note, from Obsidian's Daily notes settings. */
+    onToday: () -> Unit,
     initialPath: String = "",
     viewModel: BrowserViewModel = hiltViewModel(),
 ) {
@@ -157,6 +159,13 @@ fun BrowserScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onToday) {
+                        LucideGlyph(
+                            "calendar-days",
+                            size = 20.dp,
+                            contentDescription = stringResource(R.string.today_action),
+                        )
+                    }
                     IconButton(onClick = { viewModel.randomNote(onOpenNote) }) {
                         LucideGlyph(
                             "shuffle",

@@ -27,6 +27,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts, and Obsidian's operators: `"an exact phrase"`, `-word` to leave notes out, `path:Folder` to look in one folder
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
 - **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary
+- **Today's note** — the Daily notes plugin's folder and date format, read from the vault, behind a button in the browser and a launcher shortcut
 - **Several vaults** — separate, each with its own files, index, search and tasks
 - **Attachments** — PDFs read in place; everything else opens in whatever app handles it
 - **The vault's own bookmarks** — Obsidian's Bookmarks plugin, groups and all, at the top of the browser and in the files drawer: a note, a heading in one, a folder or a saved search
