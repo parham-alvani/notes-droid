@@ -12,6 +12,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -179,6 +180,7 @@ fun NotesNavHost(
     var resumed by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val jumps: JumpViewModel = hiltViewModel()
@@ -190,7 +192,7 @@ fun NotesNavHost(
             when (val found = jumps.today()) {
                 is Destination.Note -> navController.openNote(found.noteId, fresh = true)
                 is Destination.NoDailyNote ->
-                    snackbar.showSnackbar(context.getString(R.string.today_missing, found.path))
+                    snackbar.showSnackbar(resources.getString(R.string.today_missing, found.path))
                 // A day is only ever a note or the lack of one.
                 else -> Unit
             }
@@ -256,10 +258,10 @@ fun NotesNavHost(
                 }
                 is Destination.UnknownNote -> {
                     navController.browseRoot()
-                    context.getString(R.string.link_unknown_note, found.file)
+                    resources.getString(R.string.link_unknown_note, found.file)
                 }
-                is Destination.UnknownVault -> context.getString(R.string.link_unknown_vault, found.name)
-                is Destination.NoDailyNote, null -> context.getString(R.string.link_not_followed)
+                is Destination.UnknownVault -> resources.getString(R.string.link_unknown_vault, found.name)
+                is Destination.NoDailyNote, null -> resources.getString(R.string.link_not_followed)
             }
         message?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
     }
