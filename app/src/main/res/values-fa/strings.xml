@@ -303,4 +303,7 @@
     <string name="width_comfortable">راحت</string>
     <string name="width_full">تمام‌عرض</string>
     <string name="help_line_width">پهنای متن یادداشت روی تبلت یا در حالت افقی. گوشیِ ایستاده از هر سه باریک‌تر است.</string>
+    <string name="note_more">بیشتر</string>
+    <string name="note_pin">سنجاق به صفحهٔ اصلی</string>
+    <string name="note_unpin">برداشتن از صفحهٔ اصلی</string>
 </resources>
