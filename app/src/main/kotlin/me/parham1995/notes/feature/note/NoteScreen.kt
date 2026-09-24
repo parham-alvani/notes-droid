@@ -101,6 +101,7 @@ fun NoteScreen(
     onOpenNote: (Long) -> Unit,
     onOpenFolder: (String) -> Unit,
     onOpenGraph: (Long) -> Unit = {},
+    onOpenTag: (vaultId: Long, tag: String) -> Unit = { _, _ -> },
     viewModel: NoteViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -510,6 +511,9 @@ fun NoteScreen(
                                                                     }
                                                                 },
                                                                 onBrokenLink = { target -> peekBroken = target },
+                                                                // The note's own vault: a tag means
+                                                                // nothing across two of them.
+                                                                onTag = { tag -> onOpenTag(note.vaultId, tag) },
                                                                 onInternalLink = { destination ->
                                                                     val route =
                                                                         routeOf(destination, note.path) {

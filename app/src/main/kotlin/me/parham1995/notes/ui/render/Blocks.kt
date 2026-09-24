@@ -156,9 +156,9 @@ fun MdBlockView(
             is MdBlock.NoteEmbed -> NoteEmbedView(block, actions, modifier)
             is MdBlock.ThematicBreak -> HorizontalDivider(modifier.padding(vertical = 8.dp))
             is MdBlock.Unsupported -> UnsupportedView(block, modifier)
-            // Front matter is metadata; only `direction` and `cssclasses` ever
-            // affected rendering, and both are handled by detection instead.
-            is MdBlock.FrontMatter -> Unit
+            // Obsidian's Properties view: shown, folded on a tap, and a
+            // tag in it is a tag.
+            is MdBlock.FrontMatter -> PropertiesView(block, actions, modifier)
         }
     }
 }

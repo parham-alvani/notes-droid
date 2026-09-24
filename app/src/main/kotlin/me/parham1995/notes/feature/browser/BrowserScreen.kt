@@ -64,6 +64,7 @@ fun BrowserScreen(
     onOpenNoteInNewTab: (Long) -> Unit,
     onOpenAdvancedSettings: () -> Unit,
     initialPath: String = "",
+    onOpenTags: () -> Unit = {},
     viewModel: BrowserViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -135,6 +136,13 @@ fun BrowserScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenTags) {
+                        LucideGlyph(
+                            "tags",
+                            size = 20.dp,
+                            contentDescription = stringResource(R.string.tags_title),
+                        )
+                    }
                     IconButton(onClick = { viewModel.randomNote(onOpenNote) }) {
                         LucideGlyph(
                             "shuffle",
