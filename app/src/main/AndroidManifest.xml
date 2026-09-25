@@ -148,6 +148,23 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!--
+            The vaults in the system file picker, one root each, so another
+            app's upload or attach button can reach a note. Exported, but only
+            the system picker holds MANAGE_DOCUMENTS; the app a file is picked
+            for gets a grant on that one file and nothing else. Read-only.
+        -->
+        <provider
+            android:name="me.parham1995.notes.data.VaultDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
         <!-- NotesApplication is a Configuration.Provider, so WorkManager is
              initialised on demand and androidx.startup must not do it first. -->
         <provider

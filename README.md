@@ -35,6 +35,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **`obsidian://` links** — `open` and `search` links from other apps are followed in the vault they name, matched by its name here or its repository's
 - **Several vaults** — separate, each with its own files, index, search and tasks
 - **Attachments** — PDFs read in place; everything else opens in whatever app handles it
+- **In the system file picker** — each vault is a place of its own in Android's picker, so any app's upload or attach button can reach a note or an attachment; read-only, and `.git` and `.obsidian` stay out of it
 - **The vault's own bookmarks** — Obsidian's Bookmarks plugin, groups and all, at the top of the browser and in the files drawer: a note, a heading in one, a folder or a saved search
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Tablets and landscape** — the note held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar on a wide window

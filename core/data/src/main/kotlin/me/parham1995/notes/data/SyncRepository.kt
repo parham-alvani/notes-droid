@@ -68,6 +68,7 @@ class SyncRepository
         private val transports: VaultTransports,
         private val writes: VaultWriteRepository,
         private val gate: VaultGate,
+        private val documents: VaultDocuments,
     ) {
         val status: Flow<SyncStatus> =
             syncState.observe().map {
@@ -229,6 +230,7 @@ class SyncRepository
             files.deleteVault(id)
             sshKeys.delete(vault.id)
             vaults.delete(id)
+            documents.changed()
             log.warn("removed ${vault.owner}/${vault.repo}")
         }
 
@@ -438,6 +440,10 @@ class SyncRepository
                 // is long past. Without this it would wait for the next one.
                 runCatchingUnlessCancelled { writes.drain() }
                     .onFailure { log.warn("could not send queued edits: " + it.describeChain()) }
+
+                // Whatever the outcome, the files on disk may have moved; an
+                // open file picker should look again.
+                documents.changed()
 
                 failure?.let { throw it }
                 log.info("sync finished in ${(System.currentTimeMillis() - startedAt) / 1000}s")
