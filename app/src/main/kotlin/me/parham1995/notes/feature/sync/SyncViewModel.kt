@@ -309,6 +309,10 @@ class SyncViewModel
 
         fun setTaskDigest(enabled: Boolean) = viewModelScope.launch { settingsStore.setTaskDigest(enabled) }
 
+        fun setAppLock(enabled: Boolean) = viewModelScope.launch { settingsStore.setAppLock(enabled) }
+
+        fun setLockPicker(enabled: Boolean) = viewModelScope.launch { settingsStore.setLockPicker(enabled) }
+
         fun setTaskDigestHour(hour: Int) = viewModelScope.launch { settingsStore.setTaskDigestHour(hour) }
 
         fun setTextScale(scale: Float) = viewModelScope.launch { settingsStore.setTextScale(scale) }

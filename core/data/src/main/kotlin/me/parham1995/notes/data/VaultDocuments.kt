@@ -3,6 +3,8 @@ package me.parham1995.notes.data
 import android.content.Context
 import android.database.Cursor
 import android.database.MatrixCursor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.provider.DocumentsContract.Root
@@ -12,12 +14,15 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.SearchText
 import java.io.File
 import java.io.FileNotFoundException
+import java.nio.file.Files
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,11 +53,17 @@ class VaultDocuments
         @param:ApplicationContext private val context: Context,
         private val files: VaultFileStore,
         private val vaults: VaultDao,
+        private val notes: NoteDao,
+        private val lock: AppLock,
+        private val settings: SettingsStore,
     ) {
         val authority: String get() = authorityOf(context)
 
         fun roots(projection: Array<out String>?): Cursor {
             val cursor = MatrixCursor(projection ?: ROOT_COLUMNS)
+            cursor.setNotificationUri(context.contentResolver, DocumentsContract.buildRootsUri(authority))
+            // Locked: no roots at all, rather than roots that fail when opened.
+            if (locked()) return cursor
             val title = context.applicationInfo.loadLabel(context.packageManager).toString()
             synced().forEach { vault ->
                 cursor.newRow().apply {
@@ -63,11 +74,11 @@ class VaultDocuments
                     add(Root.COLUMN_ICON, context.applicationInfo.icon)
                     add(
                         Root.COLUMN_FLAGS,
-                        Root.FLAG_LOCAL_ONLY or Root.FLAG_SUPPORTS_IS_CHILD or Root.FLAG_SUPPORTS_SEARCH,
+                        Root.FLAG_LOCAL_ONLY or Root.FLAG_SUPPORTS_IS_CHILD or Root.FLAG_SUPPORTS_SEARCH or
+                            Root.FLAG_SUPPORTS_RECENTS,
                     )
                 }
             }
-            cursor.setNotificationUri(context.contentResolver, DocumentsContract.buildRootsUri(authority))
             return cursor
         }
 
@@ -114,6 +125,7 @@ class VaultDocuments
         ): Cursor {
             val cursor = MatrixCursor(projection ?: DOCUMENT_COLUMNS)
             val vaultId = rootId.toLongOrNull() ?: throw FileNotFoundException("no such root: $rootId")
+            if (locked()) throw FileNotFoundException("locked")
             val wanted = SearchText.foldName(query.trim())
             if (wanted.isEmpty()) return cursor
             val root = fileOf(vaultId, "")
@@ -124,6 +136,60 @@ class VaultDocuments
                 .take(SEARCH_LIMIT)
                 .forEach { row(cursor, vaultId, it.relativeTo(root).invariantSeparatorsPath, it) }
             return cursor
+        }
+
+        /**
+         * The notes last read in the app, newest first -- what the picker's
+         * Recent list shows for this vault. The note that was open a minute
+         * ago is the likeliest thing to be sent somewhere.
+         */
+        fun recents(
+            rootId: String,
+            projection: Array<out String>?,
+        ): Cursor {
+            val cursor = MatrixCursor(projection ?: DOCUMENT_COLUMNS)
+            val vaultId = rootId.toLongOrNull() ?: throw FileNotFoundException("no such root: $rootId")
+            if (locked()) throw FileNotFoundException("locked")
+            if (runBlocking { vaults.byId(vaultId) } == null) throw FileNotFoundException("no such vault: $vaultId")
+            runBlocking { notes.recentlyOpened(vaultId, RECENT_LIMIT).first() }
+                .filterNot { note -> note.path.split('/').any { it.startsWith(".") } }
+                .forEach { note ->
+                    val file = runCatching { fileOf(vaultId, note.path) }.getOrNull() ?: return@forEach
+                    if (file.isFile && !file.isMachinery()) row(cursor, vaultId, note.path, file)
+                }
+            return cursor
+        }
+
+        /**
+         * A small JPEG of an image in a vault, for the picker's grid.
+         *
+         * Decoded at a fraction of its size -- a photo from a phone is twelve
+         * megapixels, and the picker asks for a thumbnail per cell -- and kept
+         * in the cache directory under a name that changes with the file.
+         */
+        fun thumbnail(
+            documentId: String,
+            width: Int,
+            height: Int,
+        ): File {
+            val source = open(documentId)
+            if (!mimeTypeOf(source.name).startsWith("image/")) throw FileNotFoundException("not an image: $documentId")
+            val out =
+                File(
+                    File(context.cacheDir, "thumbnails").apply { mkdirs() },
+                    "${(documentId + source.lastModified() + source.length()).hashCode()}-${width}x$height.jpg",
+                )
+            if (out.isFile) return out
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(source.path, bounds)
+            var sample = 1
+            while (bounds.outWidth / (sample * 2) >= width && bounds.outHeight / (sample * 2) >= height) sample *= 2
+            val bitmap =
+                BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply { inSampleSize = sample })
+                    ?: throw FileNotFoundException("cannot decode: $documentId")
+            out.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, THUMBNAIL_QUALITY, it) }
+            bitmap.recycle()
+            return out
         }
 
         fun isChild(
@@ -155,7 +221,20 @@ class VaultDocuments
         private fun synced(): List<VaultEntity> =
             runBlocking { vaults.all() }.filter { files.rootOf(it.id).isDirectory }
 
+        /**
+         * Whether the app lock keeps the vaults from other apps just now.
+         *
+         * Checked on every call, not only for the roots: an app that was handed
+         * a document once can keep the link and open it again later, and the
+         * lock has to hold against that too.
+         */
+        private fun locked(): Boolean {
+            val privacy = runBlocking { settings.current() }.privacy
+            return privacy.appLock && privacy.lockPicker && !lock.isOpen()
+        }
+
         private fun locate(documentId: String): Pair<Long, String> {
+            if (locked()) throw FileNotFoundException("locked")
             val (vaultId, path) = parse(documentId) ?: throw FileNotFoundException("no such document: $documentId")
             if (path.split('/').any { it.startsWith(".") }) throw FileNotFoundException("no such document: $documentId")
             if (runBlocking { vaults.byId(vaultId) } == null) throw FileNotFoundException("no such vault: $vaultId")
@@ -188,7 +267,16 @@ class VaultDocuments
                 add(Document.COLUMN_MIME_TYPE, if (file.isDirectory) Document.MIME_TYPE_DIR else mimeTypeOf(file.name))
                 add(Document.COLUMN_SIZE, if (file.isDirectory) null else file.length())
                 add(Document.COLUMN_LAST_MODIFIED, file.lastModified())
-                add(Document.COLUMN_FLAGS, 0)
+                add(
+                    Document.COLUMN_FLAGS,
+                    if (!file.isDirectory &&
+                        mimeTypeOf(file.name).startsWith("image/")
+                    ) {
+                        Document.FLAG_SUPPORTS_THUMBNAIL
+                    } else {
+                        0
+                    },
+                )
             }
         }
 
@@ -202,6 +290,8 @@ class VaultDocuments
 
         companion object {
             private const val SEARCH_LIMIT = 50
+            private const val RECENT_LIMIT = 20
+            private const val THUMBNAIL_QUALITY = 85
 
             fun authorityOf(context: Context): String = "${context.packageName}.documents"
 
@@ -222,7 +312,14 @@ class VaultDocuments
                 name: String,
             ) = if (parent.isEmpty()) name else "$parent/$name"
 
-            private fun File.isMachinery() = name.startsWith(".")
+            /**
+             * What the picker never offers: repository machinery, and links.
+             * A symlink can point anywhere -- opening one is refused already,
+             * because [VaultFileStore.fileFor] resolves it -- but listing it
+             * showed a name and a size from outside the vault, and the search
+             * walked through it into whatever it named.
+             */
+            private fun File.isMachinery() = name.startsWith(".") || Files.isSymbolicLink(toPath())
 
             /**
              * Markdown first, because the platform's table does not know it on

@@ -151,6 +151,8 @@ class VaultRepository
 
         suspend fun setActiveVault(id: Long) = settings.setActiveVault(id)
 
+        suspend fun vault(id: Long): VaultEntity? = vaults.byId(id)
+
         /** Every open task in the vault, soonest first, undated last. */
         fun openTasks(): Flow<List<TaskRow>> = activeVaultId.flatMapLatest { tasks.open(it) }
 

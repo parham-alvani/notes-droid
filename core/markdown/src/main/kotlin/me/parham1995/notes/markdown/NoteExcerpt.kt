@@ -37,15 +37,19 @@ object NoteExcerpt {
      * A heading at the very top that only repeats [title] is left out: the
      * card already says the title, and saying it twice spends one of eight
      * lines on nothing.
+     *
+     * [lineChars] is where one line is cut. A card wants it short; a widget
+     * showing a whole note wants the paragraph.
      */
     fun lines(
         markdown: String,
         maxLines: Int = DEFAULT_LINES,
         title: String? = null,
+        lineChars: Int = MAX_LINE_CHARS,
     ): List<String> {
         if (maxLines <= 0) return emptyList()
         val blocks = MarkdownParser.parseNote(markdown).blocks
-        val out = Collector(maxLines)
+        val out = Collector(maxLines, lineChars)
         var first = true
         for (block in blocks) {
             if (out.full) break
@@ -64,13 +68,15 @@ object NoteExcerpt {
         markdown: String,
         maxLines: Int = DEFAULT_LINES,
         title: String? = null,
-    ): String = lines(markdown, maxLines, title).joinToString("\n")
+        lineChars: Int = MAX_LINE_CHARS,
+    ): String = lines(markdown, maxLines, title, lineChars).joinToString("\n")
 
     private fun MdBlock.Heading.sameAs(title: String): Boolean =
         plainText(inlines).trim().equals(title.trim(), ignoreCase = true)
 
     private class Collector(
         val max: Int,
+        val lineChars: Int,
     ) {
         val lines = ArrayList<String>()
 
@@ -175,7 +181,7 @@ object NoteExcerpt {
         }
 
         private fun clip(text: String): String =
-            if (text.length <= MAX_LINE_CHARS) text else text.take(MAX_LINE_CHARS - 1).trimEnd() + "…"
+            if (text.length <= lineChars) text else text.take(lineChars - 1).trimEnd() + "…"
     }
 
     /** Top-level inlines cut at every line break, soft or hard. */

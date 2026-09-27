@@ -43,6 +43,9 @@ fun NoteMenu(
     pinned: Boolean,
     onShare: () -> Unit,
     onTogglePin: () -> Unit,
+    speaking: Boolean = false,
+    onReadAloud: () -> Unit = {},
+    onAddWidget: () -> Unit = {},
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -60,6 +63,22 @@ fun NoteMenu(
                 onClick = {
                     open = false
                     onTogglePin()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.note_add_widget)) },
+                leadingIcon = { LucideGlyph("sticky-note", size = 18.dp) },
+                onClick = {
+                    open = false
+                    onAddWidget()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(if (speaking) R.string.note_stop_reading else R.string.note_read_aloud)) },
+                leadingIcon = { LucideGlyph(if (speaking) "square" else "volume-2", size = 18.dp) },
+                onClick = {
+                    open = false
+                    onReadAloud()
                 },
             )
             DropdownMenuItem(

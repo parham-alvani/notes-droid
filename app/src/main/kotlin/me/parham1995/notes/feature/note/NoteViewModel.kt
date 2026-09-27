@@ -3,6 +3,7 @@ package me.parham1995.notes.feature.note
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -199,41 +200,60 @@ class NoteViewModel
             _state.value = _state.value.copy(note = note)
         }
 
+        /** The note being loaded, so that asking for another stops it. */
+        private var loading: Job? = null
+
+        /**
+         * Shows [id], and only [id].
+         *
+         * The load before it is cancelled rather than left to finish. Two loads
+         * in flight used to race, and the one that finished last won -- which
+         * is the larger note, not the newer request. A link from another app
+         * lost exactly that way: the screen asked for the tab already open,
+         * then for the linked note, and the old tab's long note landed second.
+         */
         fun load(id: Long) {
             if (_state.value.note?.id == id) return
+            loading?.cancel()
             // The journal strip is kept while the next note loads, so stepping
             // along a journal does not pull the page up and down under the finger.
             _state.value = NoteUiState(loading = true, periodic = _state.value.periodic)
-            viewModelScope.launch {
-                val note = repository.note(id)
-                if (note == null) {
-                    _state.value = NoteUiState(loading = false, missing = true)
-                    return@launch
+            loading =
+                viewModelScope.launch {
+                    val note = repository.note(id)
+                    if (note == null) {
+                        _state.value = NoteUiState(loading = false, missing = true)
+                        return@launch
+                    }
+                    repository.markOpened(id)
+                    val assignments = icons.config.first()
+                    val writable = writes.canWrite(note.vaultId).first()
+                    _state.value =
+                        NoteUiState(
+                            loading = false,
+                            note = note,
+                            backlinks = repository.backlinks(id),
+                            icon = assignments.forFile(note.vaultId, note.path),
+                            writable = writable,
+                            periodic = destinations.neighbours(note.vaultId, note.path),
+                            contents =
+                                if (!note.isFolderNote) {
+                                    emptyList()
+                                } else {
+                                    // `A/B/B.md` is the landing page for `A/B`.
+                                    // `children` already leaves the note itself
+                                    // out of its own folder's listing.
+                                    repository
+                                        .children(note.path.substringBeforeLast('/', ""))
+                                        .map {
+                                            VaultRowItem(
+                                                it,
+                                                assignments.forPath(note.vaultId, it.path, it.isFolder),
+                                            )
+                                        }
+                                },
+                        )
                 }
-                repository.markOpened(id)
-                val assignments = icons.config.first()
-                val writable = writes.canWrite(note.vaultId).first()
-                _state.value =
-                    NoteUiState(
-                        loading = false,
-                        note = note,
-                        backlinks = repository.backlinks(id),
-                        icon = assignments.forFile(note.vaultId, note.path),
-                        writable = writable,
-                        periodic = destinations.neighbours(note.vaultId, note.path),
-                        contents =
-                            if (!note.isFolderNote) {
-                                emptyList()
-                            } else {
-                                // `A/B/B.md` is the landing page for `A/B`.
-                                // `children` already leaves the note itself
-                                // out of its own folder's listing.
-                                repository
-                                    .children(note.path.substringBeforeLast('/', ""))
-                                    .map { VaultRowItem(it, assignments.forPath(note.vaultId, it.path, it.isFolder)) }
-                            },
-                    )
-            }
         }
 
         /**

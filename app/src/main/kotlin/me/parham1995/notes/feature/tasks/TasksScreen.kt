@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.tasks
 
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +51,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.database.TaskRow
+import me.parham1995.notes.reminder.ReminderViewModel
+import me.parham1995.notes.reminder.forReading
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.RescheduleSheet
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -56,6 +60,7 @@ import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Naz
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 /**
  * Everything open across the whole vault, in the order it is answerable.
@@ -74,6 +79,18 @@ fun TasksScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var adding by remember { mutableStateOf(false) }
+
+    val reminders: ReminderViewModel = hiltViewModel()
+    val context = LocalContext.current
+    val scheduled = stringResource(R.string.reminder_scheduled)
+
+    fun remind(
+        row: TaskRow,
+        at: LocalDateTime,
+    ) {
+        reminders.remind(row, at)
+        Toast.makeText(context, scheduled.format(at.forReading()), Toast.LENGTH_LONG).show()
+    }
 
     // Said once and cleared: the same message arriving again on a
     // recomposition would stack a second snackbar on top of the first.
@@ -204,6 +221,7 @@ fun TasksScreen(
             today = LocalDate.now(),
             onComplete = { viewModel.complete(it) },
             onReschedule = { row, date -> viewModel.reschedule(row, date) },
+            onRemind = { row, at -> remind(row, at) },
             onOpen = { onOpenNote(it.noteId) },
             modifier = Modifier.fillMaxSize().padding(padding),
         )
@@ -227,6 +245,7 @@ internal fun TaskList(
     onReschedule: (TaskRow, LocalDate) -> Unit,
     onOpen: (TaskRow) -> Unit,
     modifier: Modifier = Modifier,
+    onRemind: ((TaskRow, LocalDateTime) -> Unit)? = null,
 ) {
     var moving by remember { mutableStateOf<TaskRow?>(null) }
 
@@ -238,6 +257,14 @@ internal fun TaskList(
                 onReschedule(row, date)
             },
             onDismiss = { moving = null },
+            canMove = canWrite,
+            onRemind =
+                onRemind?.let { remind ->
+                    { at: LocalDateTime ->
+                        moving = null
+                        remind(row, at)
+                    }
+                },
         )
     }
 
@@ -250,7 +277,9 @@ internal fun TaskList(
                 // The same gate as the checkbox: offered only where the
                 // vault can be pushed to and an author is set.
                 val complete: (() -> Unit)? = if (canWrite) ({ onComplete(row) }) else null
-                val reschedule: (() -> Unit)? = if (canWrite) ({ moving = row }) else null
+                // A reminder is kept on the phone and needs no write, so a
+                // held row opens the sheet wherever there is one to set.
+                val reschedule: (() -> Unit)? = if (canWrite || onRemind != null) ({ moving = row }) else null
                 TaskRowView(
                     row = row,
                     bucket = group.bucket,

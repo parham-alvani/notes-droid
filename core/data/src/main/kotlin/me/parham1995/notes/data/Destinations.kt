@@ -65,6 +65,8 @@ data class PeriodNeighbours(
     val period: Period,
     val previous: NoteRef?,
     val next: NoteRef?,
+    /** The same time of year in earlier years, with how many years back, nearest first. */
+    val yearsAgo: List<Pair<Int, NoteRef>> = emptyList(),
 )
 
 /**
@@ -134,7 +136,20 @@ class Destinations
             // Every note's name is read against the format: cheap, but a
             // vault's worth of it, and asked for as a note opens.
             return withContext(Dispatchers.Default) {
-                PeriodNeighbours(vaultId, series.period, previous = ref(-1), next = ref(1))
+                val byPath = refs.associateBy { it.path }
+                PeriodNeighbours(
+                    vaultId,
+                    series.period,
+                    previous = ref(-1),
+                    next = ref(1),
+                    yearsAgo =
+                        series.yearsAgo(paths, path).mapNotNull { (years, found) ->
+                            byPath[found]?.let {
+                                years to
+                                    it
+                            }
+                        },
+                )
             }
         }
 

@@ -3,7 +3,17 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permissions are declared by :core:data, alongside the worker that needs
-         them, and merge in from there. -->
+         them, and merge in from there. This one is the app lock's, which is
+         a screen and so lives here. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Task reminders: an alarm at the minute asked for, and set again after
+         a reboot. USE_EXACT_ALARM is granted on install from Android 13;
+         before that SCHEDULE_EXACT_ALARM is, and was all there was. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
 
     <!--
         From Android 11 an app cannot see what else is installed unless it says
@@ -121,6 +131,32 @@
                 android:resource="@xml/pinned_widget_info" />
         </receiver>
 
+        <!-- One note, whole. Not exported: the launcher's answer to a pin
+             request comes back through a PendingIntent this app made. -->
+        <receiver
+            android:name=".widget.NoteWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/note_widget_info" />
+        </receiver>
+
+        <!-- Exported because the launcher starts it; it checks the widget is this app's. -->
+        <activity
+            android:name=".widget.NoteWidgetConfigureActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/widget_note_pick"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Notes">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.TasksWidget"
             android:exported="false">
@@ -171,5 +207,36 @@
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
             tools:node="remove" />
+        <receiver
+            android:name=".reminder.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Quick Settings tiles: the capture and journal shortcuts, from the
+             notification shade rather than the launcher. -->
+        <service
+            android:name=".tile.CaptureTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_capture"
+            android:label="@string/shortcut_capture_short"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".tile.TodayTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_today"
+            android:label="@string/shortcut_today_short"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

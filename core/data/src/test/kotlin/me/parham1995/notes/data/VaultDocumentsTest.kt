@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
 import org.junit.After
@@ -30,13 +31,15 @@ class VaultDocumentsTest {
     private lateinit var database: NotesDatabase
     private lateinit var files: VaultFileStore
     private lateinit var documents: VaultDocuments
+    private val lock = AppLock()
+    private val settings = SettingsStore(context)
 
     @Before
     fun setUp() {
         database = testDatabase()
         files = VaultFileStore(context)
         runBlocking { files.clear() }
-        documents = VaultDocuments(context, files, database.vaultDao())
+        documents = VaultDocuments(context, files, database.vaultDao(), database.noteDao(), lock, settings)
         runBlocking {
             vault(1L, "Garden")
             vault(2L, "Workshop")
@@ -52,7 +55,11 @@ class VaultDocumentsTest {
     @After
     fun tearDown() {
         database.close()
-        runBlocking { files.clear() }
+        // Settings outlive a test; a lock left on would fail the next class.
+        runBlocking {
+            settings.setAppLock(false)
+            files.clear()
+        }
     }
 
     private suspend fun vault(
@@ -127,6 +134,95 @@ class VaultDocumentsTest {
         assertThrows(FileNotFoundException::class.java) { documents.open("1:.git/config") }
         assertThrows(FileNotFoundException::class.java) { documents.children("1:.obsidian", null) }
     }
+
+    @Test
+    fun `a link out of the vault is neither listed nor searched through`() =
+        runTest {
+            val outside =
+                kotlin.io.path
+                    .createTempDirectory("outside")
+                    .toFile()
+            java.io.File(outside, "Secret.md").writeText("x")
+            java.nio.file.Files
+                .createSymbolicLink(files.fileFor(1L, "Away").toPath(), outside.toPath())
+
+            assertThat(documents.children("1:", null).strings(Document.COLUMN_DOCUMENT_ID)).doesNotContain("1:Away")
+            assertThat(documents.search("1", "secret", null).strings(Document.COLUMN_DOCUMENT_ID)).isEmpty()
+            assertThrows(FileNotFoundException::class.java) { documents.open("1:Away/Secret.md") }
+            outside.deleteRecursively()
+        }
+
+    private suspend fun opened(
+        vaultId: Long,
+        path: String,
+        at: Long,
+    ) {
+        val name = path.substringAfterLast('/').substringBeforeLast('.')
+        val id =
+            database.noteDao().upsert(
+                NoteEntity(
+                    vaultId = vaultId,
+                    path = path,
+                    parent = path.substringBeforeLast('/', ""),
+                    name = name,
+                    slug = name.lowercase(),
+                    title = name,
+                    blobSha = "sha",
+                    size = 1,
+                    isFolderNote = false,
+                    isRtl = false,
+                    hasMermaid = false,
+                    hasMath = false,
+                    indexedAt = 0,
+                ),
+            )
+        database.noteDao().markOpened(id, at)
+    }
+
+    @Test
+    fun `recent is what was read last in that vault, newest first`() =
+        runTest {
+            opened(1L, "README.md", at = 10)
+            opened(1L, "Plants/Tomato.md", at = 20)
+            opened(1L, "Gone.md", at = 30)
+            opened(2L, "README.md", at = 40)
+
+            assertThat(documents.recents("1", null).strings(Document.COLUMN_DOCUMENT_ID))
+                .containsExactly("1:Plants/Tomato.md", "1:README.md")
+                .inOrder()
+        }
+
+    @Test
+    fun `only an image offers a thumbnail`() {
+        fun flags(id: String) =
+            documents.document(id, null).use {
+                it.moveToFirst()
+                it.getInt(it.getColumnIndexOrThrow(Document.COLUMN_FLAGS))
+            }
+
+        assertThat(flags("1:uploads/leaf.png") and Document.FLAG_SUPPORTS_THUMBNAIL).isNotEqualTo(0)
+        assertThat(flags("1:README.md") and Document.FLAG_SUPPORTS_THUMBNAIL).isEqualTo(0)
+        assertThrows(FileNotFoundException::class.java) { documents.thumbnail("1:README.md", 64, 64) }
+    }
+
+    @Test
+    fun `while the app is locked other apps see no vaults and cannot open one`() =
+        runTest {
+            settings.setAppLock(true)
+
+            assertThat(documents.roots(null).count).isEqualTo(0)
+            // A link handed out before the lock closed is refused too.
+            assertThrows(FileNotFoundException::class.java) { documents.open("1:README.md") }
+            assertThrows(FileNotFoundException::class.java) { documents.search("1", "tomato", null) }
+
+            // Locked, but asked to leave the picker alone.
+            settings.setLockPicker(false)
+            assertThat(documents.roots(null).count).isEqualTo(2)
+            settings.setLockPicker(true)
+
+            lock.unlock()
+            assertThat(documents.open("1:README.md").readText()).isEqualTo("garden")
+        }
 
     @Test
     fun `a removed vault is not served even while its files linger`() =

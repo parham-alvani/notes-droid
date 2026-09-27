@@ -6,13 +6,17 @@ import android.content.pm.PackageManager
 import android.graphics.Color.TRANSPARENT
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -23,6 +27,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
+import me.parham1995.notes.data.AppLock
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.navigation.NotesNavHost
@@ -30,6 +35,8 @@ import me.parham1995.notes.navigation.consumeLaunchRequest
 import me.parham1995.notes.navigation.launchRequest
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.icon.ProvideLucide
+import me.parham1995.notes.ui.lock.LockScreen
+import me.parham1995.notes.ui.lock.Unlocker
 import me.parham1995.notes.ui.theme.NotesTheme
 import javax.inject.Inject
 import javax.inject.Provider
@@ -57,6 +64,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var settingsStore: Provider<SettingsStore>
+
+    @Inject
+    lateinit var appLock: AppLock
 
     /**
      * The settings, or null until they have first been read.
@@ -132,8 +142,45 @@ class MainActivity : ComponentActivity() {
                             openLink = openLink,
                             startScreen = current.reading.startScreen,
                         )
+                        val unlocked by appLock.unlocked.collectAsStateWithLifecycle()
+                        HideFromRecents(current.privacy.appLock)
+                        if (current.privacy.appLock && !unlocked) {
+                            val title = stringResource(R.string.lock_prompt_title)
+                            LockScreen(
+                                onUnlock = { Unlocker.ask(this, title, appLock::unlock) },
+                                onLeave = { moveTaskToBack(true) },
+                            )
+                        }
                     }
                 }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        appLock.shown()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        appLock.hidden()
+    }
+
+    /**
+     * A locked app is not locked if the recent apps list shows the note it
+     * was left on. Android 13 can leave the thumbnail out; before that the
+     * only way is to forbid screenshots of the window altogether.
+     */
+    @Composable
+    private fun HideFromRecents(hidden: Boolean) {
+        LaunchedEffect(hidden) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                setRecentsScreenshotEnabled(!hidden)
+            } else if (hidden) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
         }
     }

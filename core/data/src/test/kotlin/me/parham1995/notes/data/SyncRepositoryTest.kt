@@ -147,7 +147,15 @@ class SyncRepositoryTest {
                 transports = transports,
                 writes = writes,
                 gate = gate,
-                documents = VaultDocuments(context, files, database.vaultDao()),
+                documents =
+                    VaultDocuments(
+                        context,
+                        files,
+                        database.vaultDao(),
+                        database.noteDao(),
+                        AppLock(),
+                        SettingsStore(context),
+                    ),
             )
     }
 

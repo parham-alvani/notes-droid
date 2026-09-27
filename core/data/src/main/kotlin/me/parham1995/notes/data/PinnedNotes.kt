@@ -74,7 +74,35 @@ class PinnedNotes
             return found
         }
 
+        /**
+         * One note as a widget of its own shows it: the title and as much of
+         * the text as [WHOLE_BYTES] holds, paragraphs whole. Null when the
+         * note is not there -- renamed, deleted, or not synced yet.
+         */
+        suspend fun whole(
+            vaultId: Long,
+            path: String,
+        ): PinnedNote? {
+            val note = notes.byPath(vaultId, path) ?: return null
+            val title = note.title.ifBlank { note.name }
+            val text =
+                runCatchingUnlessCancelled { readHead(files.fileFor(note.vaultId, note.path), WHOLE_BYTES) }
+                    .getOrNull()
+            val body =
+                text?.let {
+                    runCatchingUnlessCancelled {
+                        NoteExcerpt.text(it, WHOLE_LINES, title, lineChars = WHOLE_LINE_CHARS)
+                    }.getOrNull()
+                }
+            return PinnedNote(note.id, note.vaultId, note.path, title, body.orEmpty())
+        }
+
         companion object {
+            /** A whole note on the home screen: far more than anything worth reading there. */
+            const val WHOLE_BYTES = 64 * 1024
+            const val WHOLE_LINES = 300
+            const val WHOLE_LINE_CHARS = 4000
+
             /** Enough for eight lines of anything short of a wall of front matter. */
             const val EXCERPT_BYTES = 16 * 1024
 

@@ -1,6 +1,8 @@
 package me.parham1995.notes.data
 
+import android.content.res.AssetFileDescriptor
 import android.database.Cursor
+import android.graphics.Point
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsProvider
@@ -42,6 +44,24 @@ class VaultDocumentsProvider : DocumentsProvider() {
         query: String,
         projection: Array<out String>?,
     ): Cursor = documents.search(rootId, query, projection)
+
+    override fun queryRecentDocuments(
+        rootId: String,
+        projection: Array<out String>?,
+    ): Cursor = documents.recents(rootId, projection)
+
+    override fun openDocumentThumbnail(
+        documentId: String,
+        sizeHint: Point,
+        signal: CancellationSignal?,
+    ): AssetFileDescriptor {
+        val file = documents.thumbnail(documentId, sizeHint.x, sizeHint.y)
+        return AssetFileDescriptor(
+            ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY),
+            0,
+            AssetFileDescriptor.UNKNOWN_LENGTH,
+        )
+    }
 
     override fun isChildDocument(
         parentDocumentId: String,

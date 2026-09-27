@@ -185,4 +185,29 @@ class PeriodicNotesTest {
         // From a note that is not in the series there is no direction at all.
         assertThat(weekly.nearest(paths, "Plan.md", 1)).isNull()
     }
+
+    @Test
+    fun `the same week in earlier years, nearest first, by the time of year`() {
+        // 2026-W39 starts on Sunday 20 September; in 2025 the week holding
+        // the 20th is W38, in 2024 W38 again, and in 2022 W39.
+        val paths = listOf("2026-W39.md", "2025-W38.md", "2025-W39.md", "2024-W38.md", "2022-W39.md", "Plan.md")
+
+        assertThat(weekly.yearsAgo(paths, "2026-W39.md"))
+            .containsExactly(1 to "2025-W38.md", 2 to "2024-W38.md", 4 to "2022-W39.md")
+            .inOrder()
+        assertThat(weekly.yearsAgo(paths, "Plan.md")).isEmpty()
+    }
+
+    @Test
+    fun `a daily journal looks back at the same day`() {
+        val daily = notes("YYYY-MM-DD", folder = "Journal")
+        val paths = listOf("Journal/2026-09-27.md", "Journal/2025-09-27.md", "Journal/2025-09-26.md")
+
+        assertThat(daily.yearsAgo(paths, "Journal/2026-09-27.md")).containsExactly(1 to "Journal/2025-09-27.md")
+    }
+
+    @Test
+    fun `a yearly note has no years ago of its own`() {
+        assertThat(notes("YYYY").yearsAgo(listOf("2025.md", "2026.md"), "2026.md")).isEmpty()
+    }
 }

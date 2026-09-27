@@ -50,6 +50,7 @@ enum class SettingsSection(
         R.string.settings_section_notifications_summary,
         "bell",
     ),
+    PRIVACY(R.string.settings_section_privacy, R.string.settings_section_privacy_summary, "lock"),
     ADVANCED(R.string.settings_section_advanced, R.string.settings_section_advanced_summary, "wrench"),
 }
 

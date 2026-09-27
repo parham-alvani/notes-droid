@@ -75,10 +75,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.data.Pin
 import me.parham1995.notes.feature.drawer.FileDrawerSheet
 import me.parham1995.notes.feature.drawer.FileDrawerViewModel
 import me.parham1995.notes.markdown.FootnoteEntry
+import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.markdown.footnotes
+import me.parham1995.notes.reminder.ReminderViewModel
+import me.parham1995.notes.reminder.forReading
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.LocalReading
@@ -97,6 +101,7 @@ import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
 import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Markup
+import me.parham1995.notes.widget.NoteWidget
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -146,6 +151,23 @@ fun NoteScreen(
 
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
 
+    // Read aloud: one engine per note screen, shut down when it goes, so
+    // leaving the note stops the voice rather than leaving it talking.
+    var speaking by remember { mutableStateOf(false) }
+    val noPersianVoice = stringResource(R.string.read_aloud_no_persian)
+    val cannotPlaceWidget = stringResource(R.string.note_add_widget_unsupported)
+    val reader =
+        remember {
+            ReadAloud(
+                context,
+                onSpeaking = { speaking = it },
+                onNoPersian = { Toast.makeText(context, noPersianVoice, Toast.LENGTH_LONG).show() },
+            )
+        }
+    DisposableEffect(reader) { onDispose { reader.shutdown() } }
+    // Another note, another text: the old one is not read over the new.
+    LaunchedEffect(state.note?.id) { if (speaking) reader.stop() }
+
     // Pinned to the home screen by vault and path, so the pin outlives the id.
     val pins: PinViewModel = hiltViewModel()
     val pinned by pins.pinned.collectAsStateWithLifecycle()
@@ -188,8 +210,16 @@ fun NoteScreen(
     // The route argument only ever seeds the set. After that the screen
     // follows whichever tab is being read, so switching tabs does not have to
     // navigate and lose the back stack.
-    LaunchedEffect(noteId) { viewModel.openTab(noteId, inNewTab = openInNewTab, fresh = fresh) }
-    val activeId = tabs.current?.noteId ?: noteId
+    //
+    // Until that seed has landed the route is the answer, not the tab strip:
+    // the strip still has the tab that was open before, and reading it first
+    // loaded that note on the way to this one.
+    var seeded by remember(noteId) { mutableStateOf(false) }
+    LaunchedEffect(noteId) {
+        viewModel.openTab(noteId, inNewTab = openInNewTab, fresh = fresh)
+        seeded = true
+    }
+    val activeId = if (seeded) tabs.current?.noteId ?: noteId else noteId
 
     LaunchedEffect(activeId) { viewModel.load(activeId) }
 
@@ -254,7 +284,10 @@ fun NoteScreen(
         }
     }
 
-    // A task being moved to another day, by its source line.
+    // A task being moved to another day, or given a reminder, by its source line.
+    val reminders: ReminderViewModel = hiltViewModel()
+    val reminderScheduled = stringResource(R.string.reminder_scheduled)
+    val taskNotIndexed = stringResource(R.string.task_not_indexed)
     var moving by remember(noteId) { mutableStateOf<Int?>(null) }
     moving?.let { line ->
         RescheduleSheet(
@@ -264,6 +297,16 @@ fun NoteScreen(
                 viewModel.rescheduleTask(line, date)
             },
             onDismiss = { moving = null },
+            canMove = state.writable,
+            onRemind = { at ->
+                moving = null
+                state.note?.let { note ->
+                    reminders.remindInNote(note.id, line, at) { set ->
+                        val said = if (set) reminderScheduled.format(at.forReading()) else taskNotIndexed
+                        Toast.makeText(context, said, Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
         )
     }
 
@@ -288,12 +331,9 @@ fun NoteScreen(
                         } else {
                             null
                         },
-                    onRescheduleTask =
-                        if (state.writable) {
-                            { line -> moving = line }
-                        } else {
-                            null
-                        },
+                    // Always: a reminder needs no write, so the sheet opens
+                    // on any vault and offers moving only where it can.
+                    onRescheduleTask = { line -> moving = line },
                     inline =
                         InlineActions(
                             // A look before a leap.
@@ -567,6 +607,21 @@ fun NoteScreen(
                                 }
                             },
                             onTogglePin = pins::toggle,
+                            speaking = speaking,
+                            onReadAloud = {
+                                val note = state.note
+                                when {
+                                    speaking -> reader.stop()
+                                    note != null -> reader.speak(SpokenText.of(note.blocks))
+                                }
+                            },
+                            onAddWidget = {
+                                state.note?.let { note ->
+                                    if (!NoteWidget.request(context, Pin(note.vaultId, note.path))) {
+                                        Toast.makeText(context, cannotPlaceWidget, Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
                         )
                     },
                 )

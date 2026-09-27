@@ -84,7 +84,10 @@ fun SyncScreen(
                     }
                 }
 
-                SettingsSection.READING -> ReadingCard(state, viewModel)
+                SettingsSection.READING -> {
+                    ReadingCard(state, viewModel)
+                    TilesCard()
+                }
 
                 SettingsSection.WRITING -> {
                     WritingCard(state, viewModel)
@@ -98,7 +101,12 @@ fun SyncScreen(
                     StatusCard(state, viewModel)
                 }
 
-                SettingsSection.NOTIFICATIONS -> TaskDigestCard(state, viewModel)
+                SettingsSection.NOTIFICATIONS -> {
+                    TaskDigestCard(state, viewModel)
+                    RemindersCard()
+                }
+
+                SettingsSection.PRIVACY -> PrivacyCard(state, viewModel)
 
                 SettingsSection.ADVANCED -> {
                     state.lastCrash?.let { CrashCard(it, viewModel) }

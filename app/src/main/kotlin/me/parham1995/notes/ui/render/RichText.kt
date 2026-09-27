@@ -10,11 +10,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -51,6 +53,14 @@ fun RichText(
     val (annotated, formulas) =
         remember(inlines, actions, brokenLinks, colors) {
             annotate(inlines, colors, actions, brokenLinks)
+        }
+    // Addresses and numbers are found after the text is drawn, off the main
+    // thread: the classifier is a model, and a note must not wait for it.
+    val context = LocalContext.current
+    val contacts by produceState(emptyList(), annotated.text) { value = ContactLinks.find(context, annotated.text) }
+    val linked =
+        remember(annotated, contacts, actions) {
+            annotated.withContacts(contacts, colors) { actions.onExternalLink(it) }
         }
     val color = colors.onSurface
     val density = LocalDensity.current
@@ -96,7 +106,7 @@ fun RichText(
             }.toMap()
 
     Text(
-        text = annotated,
+        text = linked,
         modifier = modifier,
         style = style,
         textAlign = textAlign,

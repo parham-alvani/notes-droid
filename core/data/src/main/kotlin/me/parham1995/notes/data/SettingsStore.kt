@@ -204,6 +204,19 @@ data class WriteSettings(
     }
 }
 
+/**
+ * Who may read the vault on this phone.
+ *
+ * Off by default: a lock is a thing a person asks for, and one that appears
+ * after an update asks for a fingerprint nobody expected to give.
+ */
+data class PrivacySettings(
+    /** Ask for the fingerprint or the screen lock before showing anything. */
+    val appLock: Boolean = false,
+    /** While locked, other apps' file pickers do not see the vaults either. */
+    val lockPicker: Boolean = true,
+)
+
 /** Which repository to read and how. Nothing about the vault is compiled in. */
 data class VaultSettings(
     val owner: String = "",
@@ -243,6 +256,7 @@ data class VaultSettings(
      */
     val activeVaultId: Long = 0,
     val write: WriteSettings = WriteSettings(),
+    val privacy: PrivacySettings = PrivacySettings(),
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
 
@@ -285,6 +299,11 @@ class SettingsStore
                                 preferences[SCRATCHPAD_PATH]?.takeIf { it.isNotBlank() }
                                     ?: WriteSettings.DEFAULT_SCRATCHPAD,
                             scratchpadVaultId = preferences[SCRATCHPAD_VAULT] ?: 0L,
+                        ),
+                    privacy =
+                        PrivacySettings(
+                            appLock = preferences[APP_LOCK] ?: false,
+                            lockPicker = preferences[LOCK_PICKER] ?: true,
                         ),
                     reading =
                         ReadingSettings(
@@ -417,6 +436,14 @@ class SettingsStore
             }
         }
 
+        suspend fun setAppLock(enabled: Boolean) {
+            context.settingsDataStore.edit { it[APP_LOCK] = enabled }
+        }
+
+        suspend fun setLockPicker(enabled: Boolean) {
+            context.settingsDataStore.edit { it[LOCK_PICKER] = enabled }
+        }
+
         suspend fun setBrowserSort(sort: BrowserSort) {
             context.settingsDataStore.edit { it[BROWSER_SORT] = sort.name }
         }
@@ -448,5 +475,7 @@ class SettingsStore
             val SCRATCHPAD_PATH = stringPreferencesKey("scratchpad_path")
             val SCRATCHPAD_VAULT = longPreferencesKey("scratchpad_vault")
             val HIDE_DONE_TASKS = booleanPreferencesKey("hide_completed_tasks")
+            val APP_LOCK = booleanPreferencesKey("app_lock")
+            val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")
         }
     }

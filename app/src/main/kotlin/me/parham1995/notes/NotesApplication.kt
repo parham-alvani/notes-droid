@@ -21,6 +21,8 @@ import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
+import me.parham1995.notes.reminder.Reminders
+import me.parham1995.notes.widget.NoteWidget
 import me.parham1995.notes.widget.PinnedNotesWidget
 import me.parham1995.notes.widget.RecentNotesWidget
 import me.parham1995.notes.widget.TasksWidget
@@ -52,6 +54,9 @@ class NotesApplication :
 
     @Inject
     lateinit var vaults: Provider<VaultRepository>
+
+    @Inject
+    lateinit var reminders: Provider<Reminders>
 
     /**
      * Startup scheduling runs here, and a failure in it must not be fatal.
@@ -89,6 +94,7 @@ class NotesApplication :
             TasksWidget.refresh(this)
             RecentNotesWidget.refresh(this)
             PinnedNotesWidget.refresh(this)
+            NoteWidget.refresh(this)
         }
         // A task ticked in the app leaves the home screen a tick behind
         // otherwise, until whenever the next background refresh happens to run.
@@ -96,8 +102,12 @@ class NotesApplication :
             TasksWidget.refresh(this)
             RecentNotesWidget.refresh(this)
             PinnedNotesWidget.refresh(this)
+            NoteWidget.refresh(this)
         }
         refreshPinsWhenTheyChange()
+        // A force-stop forgets every alarm and leaves no broadcast to say so;
+        // the next launch is the first chance to set them again.
+        reminders.get().rearm(this)
     }
 
     /**

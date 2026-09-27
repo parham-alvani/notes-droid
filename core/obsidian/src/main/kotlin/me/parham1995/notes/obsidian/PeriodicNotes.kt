@@ -119,6 +119,30 @@ class PeriodicNotes(
     fun next(path: String): String? = periodOf(path)?.let { pathOf(shift(it, 1)) }
 
     /**
+     * The notes of [paths] for the same stretch of the year as [from], in
+     * earlier years -- this week a year ago, two years ago -- as how many
+     * years back and the path, the nearest year first.
+     *
+     * Found by the calendar day, not by the number in the name: the week
+     * holding the 20th of September is week 39 one year and 38 the next, and
+     * it is the time of year that is being looked back at. Nothing for a
+     * yearly note, whose earlier years are simply the previous notes.
+     */
+    fun yearsAgo(
+        paths: Collection<String>,
+        from: String,
+    ): List<Pair<Int, String>> {
+        if (period == Period.YEAR) return emptyList()
+        val here = periodOf(from) ?: return emptyList()
+        val existing = paths.toSet()
+        val earliest = paths.mapNotNull { periodOf(it) }.minOrNull() ?: return emptyList()
+        return (1..here.year - earliest.year).mapNotNull { years ->
+            val path = pathOf(startOf(here.minusYears(years.toLong())))
+            path.takeIf { it in existing && it != from }?.let { years to it }
+        }
+    }
+
+    /**
      * Of [paths], the daily note closest to [from] in the direction [step]
      * points (negative is earlier). Not necessarily the adjacent period: a
      * weekly journal kept in fits and starts has gaps, and the note before a
