@@ -606,7 +606,7 @@ fun NoteScreen(
                                     }
                                 }
                             },
-                            onTogglePin = pins::toggle,
+                            onTogglePin = { pins.toggle() },
                             speaking = speaking,
                             onReadAloud = {
                                 val note = state.note

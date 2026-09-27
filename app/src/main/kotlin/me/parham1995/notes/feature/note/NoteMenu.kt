@@ -16,6 +16,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -122,9 +123,10 @@ class PinViewModel
             note.value = Pin(vaultId, path)
         }
 
-        fun toggle() {
-            val pin = note.value ?: return
-            viewModelScope.launch { pins.toggle(pin.vaultId, pin.path) }
+        /** The write, for a caller that has to know it is done; null with no note to pin. */
+        fun toggle(): Job? {
+            val pin = note.value ?: return null
+            return viewModelScope.launch { pins.toggle(pin.vaultId, pin.path) }
         }
 
         private companion object {

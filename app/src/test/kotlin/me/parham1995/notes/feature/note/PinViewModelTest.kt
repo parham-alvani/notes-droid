@@ -47,19 +47,21 @@ class PinViewModelTest {
             val model = PinViewModel(store)
             model.track(vaultId = 7, path = "Folder/Note.md")
 
-            model.toggle()
-            assertThat(store.isPinned(7, "Folder/Note.md").first { it }).isTrue()
+            // Waited on, not watched for: waiting for the flow to say so hung
+            // on a slow CI runner, and the write finishing is what is meant.
+            model.toggle()?.join()
+            assertThat(store.isPinned(7, "Folder/Note.md").first()).isTrue()
             // The same path in another vault is another note.
             assertThat(store.isPinned(8, "Folder/Note.md").first()).isFalse()
 
-            model.toggle()
-            assertThat(store.isPinned(7, "Folder/Note.md").first { !it }).isFalse()
+            model.toggle()?.join()
+            assertThat(store.isPinned(7, "Folder/Note.md").first()).isFalse()
         }
 
     @Test
     fun `with no note on screen there is nothing to pin`() =
         runTest {
-            PinViewModel(store).toggle()
+            assertThat(PinViewModel(store).toggle()).isNull()
 
             assertThat(store.pins.first()).isEmpty()
         }
