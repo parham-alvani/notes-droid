@@ -1,0 +1,7 @@
+A lock, reminders, and one note on the home screen.
+
+The app can ask for a fingerprint or the screen lock when it opens, keeps itself out of the recent apps list while locked, and keeps the vaults from other apps' file pickers. A task can remind you at a time, and be ticked from the notification. A note can be a widget of its own, whole and scrolling, and Capture and Journal are Quick Settings tiles.
+
+Addresses, phone numbers and emails in a note open the maps app, the dialer or a new email. A note can be read aloud, a paragraph at a time in its own language. The journal bar offers the same week in earlier years, and the file picker shows the notes you read last and thumbnails of images.
+
+A link from another app now opens the note it names rather than the one that was already open.
