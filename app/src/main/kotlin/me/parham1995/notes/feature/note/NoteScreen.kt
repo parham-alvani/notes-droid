@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
+import me.parham1995.notes.data.runCatchingUnlessCancelled
 import me.parham1995.notes.feature.drawer.FileDrawerSheet
 import me.parham1995.notes.feature.drawer.FileDrawerViewModel
 import me.parham1995.notes.markdown.FootnoteEntry
@@ -138,7 +139,9 @@ fun NoteScreen(
     // A PDF opens in place; everything else is handed to another app.
     var reading by remember(noteId) { mutableStateOf<File?>(null) }
     // The embedded image being looked at full screen, by its vault path.
-    var zoomed by remember(noteId) { mutableStateOf<Pair<String, String?>?>(null) }
+    // With its vault: one picked from the drawer is in the vault the drawer
+    // shows, which need not be the note's.
+    var zoomed by remember(noteId) { mutableStateOf<ZoomedImage?>(null) }
     var finding by remember(noteId) { mutableStateOf(false) }
     var peeking by remember { mutableStateOf<LinkTarget?>(null) }
     var peekBroken by remember { mutableStateOf<String?>(null) }
@@ -153,20 +156,31 @@ fun NoteScreen(
 
     // Read aloud: one engine per note screen, shut down when it goes, so
     // leaving the note stops the voice rather than leaving it talking.
-    var speaking by remember { mutableStateOf(false) }
+    // The block being read, so the page follows along; null when silent.
+    var spokenBlock by remember { mutableStateOf<Int?>(null) }
+    val speaking = spokenBlock != null
     val noPersianVoice = stringResource(R.string.read_aloud_no_persian)
     val cannotPlaceWidget = stringResource(R.string.note_add_widget_unsupported)
+    val pdfFailed = stringResource(R.string.note_share_pdf_failed)
     val reader =
         remember {
             ReadAloud(
                 context,
-                onSpeaking = { speaking = it },
+                title = { state.note?.title.orEmpty() },
+                onBlock = { spokenBlock = it },
                 onNoPersian = { Toast.makeText(context, noPersianVoice, Toast.LENGTH_LONG).show() },
             )
         }
     DisposableEffect(reader) { onDispose { reader.shutdown() } }
     // Another note, another text: the old one is not read over the new.
     LaunchedEffect(state.note?.id) { if (speaking) reader.stop() }
+    // Keep the paragraph being read on screen -- unless it already is, so the
+    // page does not jump under someone reading along.
+    LaunchedEffect(spokenBlock) {
+        val block = spokenBlock ?: return@LaunchedEffect
+        val shown = listState.layoutInfo.visibleItemsInfo.map { it.index }
+        if (block !in shown.dropLast(1)) listState.animateScrollToItem(block)
+    }
 
     // Pinned to the home screen by vault and path, so the pin outlives the id.
     val pins: PinViewModel = hiltViewModel()
@@ -188,7 +202,13 @@ fun NoteScreen(
     fun openAttachment(
         path: String,
         fetch: suspend (String) -> File? = viewModel::attachment,
+        vaultId: Long? = state.note?.vaultId,
     ) {
+        // A picture is shown here, zoomable, rather than handed to a chooser.
+        if (Attachments.isImage(path) && vaultId != null) {
+            zoomed = ZoomedImage(vaultId, path, alt = null)
+            return
+        }
         scope.launch {
             val file = fetch(path)
             val message =
@@ -313,6 +333,11 @@ fun NoteScreen(
         )
     }
 
+    var showPlaces by remember(noteId) { mutableStateOf(false) }
+    if (showPlaces) {
+        state.note?.let { note -> PlacesSheet(note.blocks, onDismiss = { showPlaces = false }) }
+    }
+
     // A footnote opened from its number, over the note.
     var footnote by remember(noteId) { mutableStateOf<FootnoteEntry?>(null) }
 
@@ -320,11 +345,18 @@ fun NoteScreen(
     // the same links the page has. Remembered, keyed on what it is built from:
     // a new set of actions on every recomposition was unequal to the last, so a
     // keystroke in the find bar or a snackbar recomposed every block on screen.
+    val upcoming by reminders.upcoming.collectAsStateWithLifecycle()
+    val remindedLines =
+        state.note
+            ?.let { note ->
+                upcoming.filter { it.vaultId == note.vaultId && it.path == note.path }.map { it.line }.toSet()
+            }.orEmpty()
     val noteActions =
         state.note?.let { note ->
-            remember(note.id, note.vaultId, note.path, state.writable) {
+            remember(note.id, note.vaultId, note.path, state.writable, remindedLines) {
                 RenderActions(
                     vaultId = note.vaultId,
+                    remindedLines = remindedLines,
                     // Ticking a box where it is
                     // written, rather than only
                     // from the task list.
@@ -440,7 +472,7 @@ fun NoteScreen(
                     // Never wired either: images were
                     // drawn, took a tap, and did
                     // nothing with it.
-                    onImage = { path, alt -> zoomed = path to alt },
+                    onImage = { path, alt -> state.note?.let { zoomed = ZoomedImage(it.vaultId, path, alt) } },
                     // Another note drawn in place, rather
                     // than offered to an app that had
                     // nothing to open.
@@ -468,7 +500,9 @@ fun NoteScreen(
                 onOpenNote = { id -> closeThen { viewModel.openTab(id, inNewTab = false) } },
                 onOpenNoteInNewTab = { id -> closeThen { viewModel.openTab(id, inNewTab = true) } },
                 onBrowseFolder = { path -> closeThen { onOpenFolder(path) } },
-                onOpenFile = { path -> closeThen { openAttachment(path, files::attachment) } },
+                onOpenFile = { path ->
+                    closeThen { openAttachment(path, files::attachment, drawerState.activeVaultId.takeIf { it != 0L }) }
+                },
                 onOpenHeading = { id, text ->
                     closeThen {
                         headingIn = id to text
@@ -619,6 +653,22 @@ fun NoteScreen(
                                     note != null -> reader.speak(SpokenText.of(note.blocks))
                                 }
                             },
+                            onPlaces = { showPlaces = true },
+                            onSharePdf = {
+                                state.note?.let { note ->
+                                    scope.launch {
+                                        runCatchingUnlessCancelled { NotePdf.share(context, note.title, note.blocks) }
+                                            .onFailure {
+                                                Toast
+                                                    .makeText(
+                                                        context,
+                                                        pdfFailed,
+                                                        Toast.LENGTH_SHORT,
+                                                    ).show()
+                                            }
+                                    }
+                                }
+                            },
                             onAddWidget = {
                                 state.note?.let { note ->
                                     if (!NoteWidget.request(context, Pin(note.vaultId, note.path))) {
@@ -711,6 +761,7 @@ fun NoteScreen(
                                             contentPadding = readingPadding(maxWidth, readingWidth),
                                             onPinch = viewModel::pinchTextScale,
                                             actions = noteActions ?: RenderActions(),
+                                            spoken = spokenBlock,
                                         )
                                     }
                             }
@@ -720,18 +771,18 @@ fun NoteScreen(
             }
         }
 
-        // Both are needed: an image belongs to the vault of the note embedding it,
-        // and there is nothing to show once that note has gone.
-        state.note?.let { note ->
-            zoomed?.let { (path, alt) ->
+        // The image names its own vault: the note's for an embed, the
+        // drawer's for a file picked there.
+        run {
+            zoomed?.let { (vaultId, path, alt) ->
                 ImageViewer(
-                    vaultId = note.vaultId,
+                    vaultId = vaultId,
                     path = path,
                     alt = alt,
                     onDismiss = { zoomed = null },
                     onOpenExternally = {
                         scope.launch {
-                            val file = viewModel.attachment(path)
+                            val file = files.attachmentIn(vaultId, path)
                             val opened = file != null && Attachments.open(context, file)
                             if (!opened) {
                                 Toast
@@ -1243,3 +1294,10 @@ private fun BrokenLinkPeek(
         }
     }
 }
+
+/** A picture shown full screen, by the vault it is in and its path there. */
+private data class ZoomedImage(
+    val vaultId: Long,
+    val path: String,
+    val alt: String?,
+)

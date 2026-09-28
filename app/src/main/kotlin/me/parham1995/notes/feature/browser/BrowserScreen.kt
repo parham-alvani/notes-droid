@@ -59,6 +59,7 @@ import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.bookmarkItems
 import me.parham1995.notes.ui.bookmarkNodes
 import me.parham1995.notes.ui.icon.LucideGlyph
+import me.parham1995.notes.ui.image.ImageViewer
 import me.parham1995.notes.ui.openLabel
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
@@ -97,22 +98,46 @@ fun BrowserScreen(
     val scope = rememberCoroutineScope()
     // A PDF is read here; anything else goes to whatever app owns that type.
     var reading by remember { mutableStateOf<File?>(null) }
+    // A picture, by its path in the vault being browsed, shown here zoomable.
+    var viewing by remember { mutableStateOf<String?>(null) }
 
     val openAttachment: (String) -> Unit = { path ->
-        scope.launch {
-            val file = viewModel.attachment(path)
-            val message =
-                when {
-                    file == null -> couldNotFetch.format(path.substringAfterLast('/'))
-                    Attachments.isPdf(path) -> {
-                        reading = file
-                        null
+        if (Attachments.isImage(path)) {
+            viewing = path
+        } else {
+            scope.launch {
+                val file = viewModel.attachment(path)
+                val message =
+                    when {
+                        file == null -> couldNotFetch.format(path.substringAfterLast('/'))
+                        Attachments.isPdf(path) -> {
+                            reading = file
+                            null
+                        }
+                        Attachments.open(context, file) -> null
+                        else -> nothingOpens
                     }
-                    Attachments.open(context, file) -> null
-                    else -> nothingOpens
-                }
-            message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+                message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+            }
         }
+    }
+
+    viewing?.let { path ->
+        ImageViewer(
+            vaultId = state.activeVaultId,
+            path = path,
+            alt = null,
+            onDismiss = { viewing = null },
+            onOpenExternally = {
+                viewing = null
+                scope.launch {
+                    val file = viewModel.attachment(path)
+                    if (file == null || !Attachments.open(context, file)) {
+                        Toast.makeText(context, nothingOpens, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+        )
     }
 
     reading?.let { file ->

@@ -32,15 +32,17 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Quick Settings tiles** — capture a thought, or open the journal, from the panel you swipe down
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts, and Obsidian's operators: `"an exact phrase"`, `-word` to leave notes out, `path:Folder` to look in one folder. Persian is found whichever keyboard wrote it: Arabic and Persian forms of the same letter, Persian and ASCII digits, and the zero-width non-joiner all match, and results are shown in the note's own letters
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it
-- **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary; hold one to push it to tomorrow, the weekend, next week or any day, with undo, or to be reminded of it at a time — kept on the phone, not written into the note, and ticked from the notification
+- **Tasks** — every open task in the vault on one screen, grouped by when it is answerable, with an optional daily summary; hold one to push it to tomorrow, the weekend, next week or any day, with undo, or to be reminded of it at a time — kept on the phone, not written into the note, marked with a bell, and ticked or put off an hour from the notification
 - **Today's note** — the Daily notes plugin's folder and date format, read from the vault, behind a button in the browser and a launcher shortcut. Weekly, monthly and yearly formats are understood as such, and a periodic note has arrows to the previous and next one that exist, and to the same week — or day, or month — in earlier years
 - **`obsidian://` links** — `open` and `search` links from other apps are followed in the vault they name, matched by its name here or its repository's
 - **Several vaults** — separate, each with its own files, index, search and tasks
-- **Attachments** — PDFs read in place; everything else opens in whatever app handles it
+- **Attachments** — PDFs and pictures shown in place, zoomable; everything else opens in whatever app handles it
+- **Share as PDF** — a note printed to A4, headings, lists and quotes set as they read, Persian right to left, for someone who does not read markdown
+- **What's new** — once, after an update, the release's own notes
 - **In the system file picker** — each vault is a place of its own in Android's picker, so any app's upload or attach button can reach a note or an attachment; read-only, with image thumbnails and the notes you read last under Recent; `.git` and `.obsidian` stay out of it
-- **App lock** — a fingerprint or the screen lock when the app opens and after a minute away; locked, it shows nothing in the recent apps list and, unless asked otherwise, the file picker does not see the vaults either
-- **Addresses, phone numbers and emails** written as plain text in a note are links: to the maps app, the dialer, a new email
-- **Read aloud** — a note read by the phone's voice, a paragraph at a time, each in its own language where the phone has a Persian voice
+- **App lock** — a fingerprint or the screen lock when the app opens and after a minute away; locked, it shows nothing in the recent apps list and, unless asked otherwise, the file picker stops seeing the vaults fifteen minutes after the app was left
+- **Addresses, phone numbers and emails** written as plain text in a note are links: to the maps app, the dialer, a new email; every address a note mentions is also listed under *Places in this note*
+- **Read aloud** — a note read by the phone's voice, a paragraph at a time, each in its own language where the phone has a Persian voice; the page follows along, and a notification can stop it from anywhere
 - **The vault's own bookmarks** — Obsidian's Bookmarks plugin, groups and all, at the top of the browser and in the files drawer: a note, a heading in one, a folder or a saved search
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Tablets and landscape** — the note held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar on a wide window

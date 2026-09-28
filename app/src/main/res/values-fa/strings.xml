@@ -342,7 +342,7 @@
     <string name="card_app_lock">قفل برنامه</string>
     <string name="settings_app_lock">درخواست اثر انگشت یا قفل صفحه</string>
     <string name="help_app_lock">هنگام باز شدن برنامه، و وقتی بیش از یک دقیقه از آن بیرون بوده‌اید، پرسیده می‌شود. در حالت قفل، فهرست برنامه‌های اخیر چیزی از آن نشان نمی‌دهد.</string>
-    <string name="settings_lock_picker">پنهان کردن دفترها از انتخابگر فایل برنامه‌های دیگر هنگام قفل</string>
+    <string name="settings_lock_picker">پنهان کردن دفترها از انتخابگر فایل برنامه‌های دیگر هنگام قفل. تا ۱۵ دقیقه پس از بیرون رفتن می‌مانند، آن‌قدر که بشود یادداشتی را پیوست کرد.</string>
     <string name="app_lock_no_screen_lock">اول در تنظیمات گوشی یک قفل صفحه بگذارید: وقتی اثر انگشت خوانده نشود، همان برنامه را باز می‌کند.</string>
     <string name="lock_title">دفتر قفل است</string>
     <string name="lock_unlock">باز کردن</string>
@@ -377,4 +377,15 @@
     <string name="help_tiles">یادداشت سریع، یا باز کردن روزنگار این هفته، از پنلی که پایین می‌کشید. برای افزودن، روی یکی بزنید.</string>
     <string name="help_tiles_editor">یادداشت و روزنگار را می‌شود از دکمه ویرایش پنلی که پایین می‌کشید اضافه کرد.</string>
     <string name="tile_already_added">از قبل در تنظیمات سریع هست. دو بار پایین بکشید تا پیدایش کنید.</string>
+    <string name="task_reminder_set">یادآوری تنظیم شده</string>
+    <string name="reminder_snooze">یک ساعت دیگر</string>
+    <string name="read_aloud_channel">خواندن با صدا</string>
+    <string name="read_aloud_now">در حال خواندن</string>
+    <string name="whats_new_title">تازه‌های %1$s</string>
+    <string name="whats_new_ok">فهمیدم</string>
+    <string name="note_share_pdf">اشتراک به‌صورت PDF</string>
+    <string name="note_share_pdf_failed">ساختن PDF از این یادداشت ممکن نشد</string>
+    <string name="places_title">مکان‌های این یادداشت</string>
+    <string name="places_none">نشانی‌ای در این یادداشت نیست.</string>
+    <string name="places_copy">کپی نشانی</string>
 </resources>

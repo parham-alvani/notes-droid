@@ -436,6 +436,13 @@ class SettingsStore
             }
         }
 
+        /** The version whose changes were last shown; zero before anything was. */
+        val seenVersion: Flow<Int> = context.settingsDataStore.data.map { it[SEEN_VERSION] ?: 0 }
+
+        suspend fun setSeenVersion(versionCode: Int) {
+            context.settingsDataStore.edit { it[SEEN_VERSION] = versionCode }
+        }
+
         suspend fun setAppLock(enabled: Boolean) {
             context.settingsDataStore.edit { it[APP_LOCK] = enabled }
         }
@@ -476,6 +483,7 @@ class SettingsStore
             val SCRATCHPAD_VAULT = longPreferencesKey("scratchpad_vault")
             val HIDE_DONE_TASKS = booleanPreferencesKey("hide_completed_tasks")
             val APP_LOCK = booleanPreferencesKey("app_lock")
+            val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")
         }
     }

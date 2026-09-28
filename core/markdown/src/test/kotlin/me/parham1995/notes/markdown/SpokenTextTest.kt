@@ -54,4 +54,14 @@ class SpokenTextTest {
         assertThat(said.all { it.length <= 3000 && it.endsWith(".") }).isTrue()
         assertThat(said.joinToString(" ")).isEqualTo(sentence.repeat(200).trim())
     }
+
+    @Test
+    fun `each utterance knows which block to follow along to`() {
+        val said = spoken("# Title\n\n```\ncode\n```\n\n- one\n- two\n\nAfter.")
+
+        // The code block is block 1 and says nothing; the list is block 2.
+        assertThat(said.map { it.text to it.block })
+            .containsExactly("Title" to 0, "one" to 2, "two" to 2, "After." to 3)
+            .inOrder()
+    }
 }

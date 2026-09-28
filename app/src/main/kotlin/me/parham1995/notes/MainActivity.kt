@@ -34,6 +34,7 @@ import me.parham1995.notes.navigation.NotesNavHost
 import me.parham1995.notes.navigation.consumeLaunchRequest
 import me.parham1995.notes.navigation.launchRequest
 import me.parham1995.notes.ui.LocalReading
+import me.parham1995.notes.ui.WhatsNew
 import me.parham1995.notes.ui.icon.ProvideLucide
 import me.parham1995.notes.ui.lock.LockScreen
 import me.parham1995.notes.ui.lock.Unlocker
@@ -142,6 +143,8 @@ class MainActivity : ComponentActivity() {
                             openLink = openLink,
                             startScreen = current.reading.startScreen,
                         )
+                        // Under the lock, which is drawn after it and covers it.
+                        WhatsNew(settingsStore.get(), configured = current.activeVaultId != 0L)
                         val unlocked by appLock.unlocked.collectAsStateWithLifecycle()
                         HideFromRecents(current.privacy.appLock)
                         if (current.privacy.appLock && !unlocked) {

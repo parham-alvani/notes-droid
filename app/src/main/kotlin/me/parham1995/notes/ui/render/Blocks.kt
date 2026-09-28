@@ -95,10 +95,11 @@ data class RenderActions(
     val onCompleteTask: ((line: Int) -> Unit)? = null,
     /**
      * Offer to move the open task written on this source line to another day,
-     * from a long press on its box. Null where the vault cannot be written to,
-     * the same as [onCompleteTask].
+     * or to be reminded of it, from a long press on its box.
      */
     val onRescheduleTask: ((line: Int) -> Unit)? = null,
+    /** The source lines of tasks that have a reminder waiting: they carry a bell. */
+    val remindedLines: Set<Int> = emptySet(),
     /**
      * Another note's blocks for an `![[embed]]`, the section its heading names
      * when it names one, or null when there is no such note or heading.
@@ -463,6 +464,15 @@ private fun ListBlockView(
                     onComplete = actions.onCompleteTask,
                     onReschedule = actions.onRescheduleTask,
                 )
+                if (item.line >= 0 && item.line in actions.remindedLines) {
+                    LucideGlyph(
+                        "bell",
+                        size = 14.dp,
+                        tint = Naz.Orange,
+                        modifier = Modifier.padding(top = 4.dp),
+                        contentDescription = stringResource(R.string.task_reminder_set),
+                    )
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     item.blocks.forEach { child ->
                         // A nested list indents; anything else sits flush with

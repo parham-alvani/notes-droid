@@ -94,6 +94,12 @@ class FileDrawerViewModel
          */
         suspend fun attachment(path: String): File? = files.localFile(repository.activeVaultId.first(), path)
 
+        /** A file in a named vault, for a picture already on screen that asks to leave the app. */
+        suspend fun attachmentIn(
+            vaultId: Long,
+            path: String,
+        ): File? = files.localFile(vaultId, path)
+
         /** The vault's bookmarks, the other thing kept within reach. */
         val bookmarks: StateFlow<VaultBookmarks> =
             configs

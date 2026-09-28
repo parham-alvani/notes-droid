@@ -2,10 +2,14 @@
 <!--
     Only the vault, and only for reading. The app's own directory also holds
     the SSH key and the git metadata, and none of that should be reachable
-    through a content URI handed to another application.
+    through a content URI handed to another application. The one other place
+    is a folder of the cache that holds nothing but notes printed to share.
 -->
 <paths>
     <files-path
         name="vault"
         path="vault/" />
+    <cache-path
+        name="shared"
+        path="shared/" />
 </paths>

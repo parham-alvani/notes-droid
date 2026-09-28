@@ -207,6 +207,11 @@
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
             tools:node="remove" />
+        <!-- The Stop button on the reading-aloud notification. -->
+        <receiver
+            android:name=".feature.note.ReadAloud$StopReading"
+            android:exported="false" />
+
         <receiver
             android:name=".reminder.ReminderReceiver"
             android:exported="false">

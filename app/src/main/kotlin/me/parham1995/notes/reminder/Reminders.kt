@@ -88,6 +88,10 @@ class Reminders
         companion object {
             const val ACTION_RING = "me.parham1995.notes.reminder.RING"
             const val ACTION_DONE = "me.parham1995.notes.reminder.DONE"
+            const val ACTION_SNOOZE = "me.parham1995.notes.reminder.SNOOZE"
+
+            /** How far Snooze puts a reminder off. */
+            const val SNOOZE_MS = 60 * 60_000L
             const val EXTRA_ID = "me.parham1995.notes.reminder.ID"
             const val CHANNEL_ID = "task-reminders"
 
@@ -132,6 +136,7 @@ class ReminderReceiver : BroadcastReceiver() {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> reminders.rearm(context)
             Reminders.ACTION_RING -> later { ring(context, intent.getLongExtra(Reminders.EXTRA_ID, 0L)) }
             Reminders.ACTION_DONE -> later { done(context, intent) }
+            Reminders.ACTION_SNOOZE -> snooze(context, intent)
         }
     }
 
@@ -170,6 +175,16 @@ class ReminderReceiver : BroadcastReceiver() {
         val vault = repository.vault(reminder.vaultId)
         val canTick = task != null && writes.canWrite(reminder.vaultId).first()
         notify(context, reminder, vault?.label, canTick)
+    }
+
+    /** The same reminder again an hour from now, under a new id. */
+    private fun snooze(
+        context: Context,
+        intent: Intent,
+    ) {
+        val reminder = rung(intent) ?: return
+        context.getSystemService(NotificationManager::class.java)?.cancel(Reminders.notificationId(reminder.id))
+        reminders.set(context, reminder.copy(id = 0, at = System.currentTimeMillis() + Reminders.SNOOZE_MS))
     }
 
     private suspend fun done(
@@ -215,6 +230,17 @@ class ReminderReceiver : BroadcastReceiver() {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
         vaultName?.let { builder.setContentIntent(open(context, reminder, it)) }
+        // Always offered: putting a reminder off writes nothing to the vault.
+        builder.addAction(
+            0,
+            context.getString(R.string.reminder_snooze),
+            PendingIntent.getBroadcast(
+                context,
+                SNOOZE_REQUEST_BASE + reminder.id.toInt(),
+                carrying(Intent(context, ReminderReceiver::class.java).setAction(Reminders.ACTION_SNOOZE), reminder),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ),
+        )
         if (canTick) {
             builder.addAction(
                 0,
@@ -251,6 +277,9 @@ class ReminderReceiver : BroadcastReceiver() {
 
     private companion object {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        // Kept apart from the Done buttons' request codes, which are the ids.
+        const val SNOOZE_REQUEST_BASE = 1_000_000
 
         // A rung reminder has left the store -- the store is what is still to
         // come -- so the Done button carries the task itself. It is tapped

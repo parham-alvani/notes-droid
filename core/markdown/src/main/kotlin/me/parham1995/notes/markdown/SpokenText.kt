@@ -14,14 +14,22 @@ object SpokenText {
     data class Utterance(
         val text: String,
         val persian: Boolean,
+        /**
+         * Which of the note's top-level blocks it was read from -- a position
+         * in [of]'s list, which is the reader's list too, so the screen can
+         * follow along. Not a block id: ids are handed to nested blocks as well.
+         */
+        val block: Int = 0,
     )
 
     fun of(blocks: List<MdBlock>): List<Utterance> =
-        buildList<String> { blocks.forEach { spoken(it) } }
-            .map { it.replace(WHITESPACE, " ").trim() }
-            .filter { text -> text.any { it.isLetterOrDigit() } }
-            .flatMap { split(it) }
-            .map { Utterance(it, isPersian(it)) }
+        blocks.flatMapIndexed { index, block ->
+            buildList<String> { spoken(block) }
+                .map { it.replace(WHITESPACE, " ").trim() }
+                .filter { text -> text.any { it.isLetterOrDigit() } }
+                .flatMap { split(it) }
+                .map { Utterance(it, isPersian(it), index) }
+        }
 
     private fun MutableList<String>.spoken(block: MdBlock) {
         when (block) {

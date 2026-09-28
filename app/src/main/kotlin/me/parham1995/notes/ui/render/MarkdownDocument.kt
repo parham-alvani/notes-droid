@@ -1,13 +1,16 @@
 package me.parham1995.notes.ui.render
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +43,8 @@ fun MarkdownDocument(
      * the places a document is shown but not read as one.
      */
     onPinch: ((Float) -> Unit)? = null,
+    /** The block being read aloud, by its position, tinted so it can be followed. */
+    spoken: Int? = null,
 ) {
     val reading = LocalReading.current
     // Outside the SelectionContainer, so watching the pen cannot interfere
@@ -77,13 +82,25 @@ fun MarkdownDocument(
                 contentPadding = contentPadding,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(items = blocks, key = { it.id }) { block ->
-                    MdBlockView(block, actions, brokenLinks)
+                itemsIndexed(items = blocks, key = { _, block -> block.id }) { index, block ->
+                    val tint =
+                        if (index == spoken) {
+                            Modifier.background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = SPOKEN_ALPHA),
+                                MaterialTheme.shapes.small,
+                            )
+                        } else {
+                            Modifier
+                        }
+                    Box(tint) { MdBlockView(block, actions, brokenLinks) }
                 }
             }
         }
     }
 }
+
+/** Faint: it marks the paragraph, it does not repaint it. */
+private const val SPOKEN_ALPHA = 0.12f
 
 /** How far a pinch must go before it counts as one. */
 private const val PINCH_SLOP = 0.15f

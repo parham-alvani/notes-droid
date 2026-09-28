@@ -51,6 +51,18 @@ fun gitValue(vararg args: String): String =
             .trim()
     }.getOrDefault("")
 
+/** A release's changelog as a Java string literal's contents, or empty when it has none. */
+fun changelogOf(versionCode: Int): String =
+    rootProject
+        .file("fastlane/metadata/android/en-US/changelogs/$versionCode.txt")
+        .takeIf { it.isFile }
+        ?.readText()
+        ?.trim()
+        ?.replace("\\", "\\\\")
+        ?.replace("\"", "\\\"")
+        ?.replace("\n", "\\n")
+        .orEmpty()
+
 android {
     namespace = "me.parham1995.notes"
 
@@ -72,6 +84,10 @@ android {
         buildConfigField("String", "REPOSITORY", "\"https://github.com/parham-alvani/notes-droid\"")
         buildConfigField("String", "AUTHOR", "\"Parham Alvani\"")
         buildConfigField("String", "LICENSE", "\"GPL-3.0\"")
+        // What this release says about itself, from the changelog `just bump`
+        // asks for -- one text, written once, shown in the app after an update
+        // as well as on F-Droid and the release page.
+        buildConfigField("String", "CHANGELOG", "\"${changelogOf(versionCode ?: 0)}\"")
     }
 
     signingConfigs {

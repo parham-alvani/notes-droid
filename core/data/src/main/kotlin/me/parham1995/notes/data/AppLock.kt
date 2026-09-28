@@ -54,17 +54,22 @@ class AppLock(
     }
 
     /**
-     * Whether what is behind the lock may be handed to someone else now -- the
-     * file picker asks while the app itself is in the background, so the
-     * grace period is counted here rather than waiting for [shown].
+     * Whether another app's file picker may see the vaults now.
+     *
+     * Longer than the app's own [GRACE_MS], on purpose. The picker is always
+     * asked from somewhere else -- the app is in the background by definition
+     * -- and attaching a note means opening Daftar to check it, going to the
+     * message, finding the button. A minute made the vaults vanish in the
+     * middle of exactly that. The app itself still locks after a minute.
      */
     fun isOpen(): Boolean {
         if (!_unlocked.value) return false
         val at = hiddenAt ?: return true
-        return now() - at <= GRACE_MS
+        return now() - at <= PICKER_GRACE_MS
     }
 
     companion object {
         const val GRACE_MS = 60_000L
+        const val PICKER_GRACE_MS = 15 * 60_000L
     }
 }

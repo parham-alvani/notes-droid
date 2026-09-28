@@ -47,6 +47,8 @@ fun NoteMenu(
     speaking: Boolean = false,
     onReadAloud: () -> Unit = {},
     onAddWidget: () -> Unit = {},
+    onSharePdf: () -> Unit = {},
+    onPlaces: () -> Unit = {},
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -75,6 +77,14 @@ fun NoteMenu(
                 },
             )
             DropdownMenuItem(
+                text = { Text(stringResource(R.string.places_title)) },
+                leadingIcon = { LucideGlyph("map-pin", size = 18.dp) },
+                onClick = {
+                    open = false
+                    onPlaces()
+                },
+            )
+            DropdownMenuItem(
                 text = { Text(stringResource(if (speaking) R.string.note_stop_reading else R.string.note_read_aloud)) },
                 leadingIcon = { LucideGlyph(if (speaking) "square" else "volume-2", size = 18.dp) },
                 onClick = {
@@ -88,6 +98,14 @@ fun NoteMenu(
                 onClick = {
                     open = false
                     onShare()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.note_share_pdf)) },
+                leadingIcon = { LucideGlyph("file-text", size = 18.dp) },
+                onClick = {
+                    open = false
+                    onSharePdf()
                 },
             )
         }

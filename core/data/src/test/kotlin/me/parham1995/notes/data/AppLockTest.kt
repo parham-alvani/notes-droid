@@ -34,13 +34,14 @@ class AppLockTest {
     }
 
     @Test
-    fun `other apps see it close while the app is still away`() {
+    fun `other apps keep seeing the vaults for a while after the app is left`() {
         lock.unlock()
         lock.hidden()
-        clock += 10
+        // Past the app's own minute, as attaching a file from a message takes.
+        clock += AppLock.GRACE_MS * 3
         assertThat(lock.isOpen()).isTrue()
 
-        clock += AppLock.GRACE_MS
+        clock += AppLock.PICKER_GRACE_MS
         assertThat(lock.isOpen()).isFalse()
     }
 

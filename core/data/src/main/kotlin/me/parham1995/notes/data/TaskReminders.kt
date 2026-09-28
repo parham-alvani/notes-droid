@@ -70,6 +70,17 @@ class TaskReminders
         companion object {
             private const val KEY = "reminders"
 
+            /**
+             * Which task a reminder is about, as a list of tasks can ask it:
+             * vault, note and text. Not the line -- the task list is read from
+             * the index, which moves lines as a note grows.
+             */
+            fun keyOf(
+                vaultId: Long,
+                path: String,
+                text: String,
+            ): String = "$vaultId\u0000$path\u0000$text"
+
             internal fun encode(reminders: List<TaskReminder>): String =
                 JSONArray(
                     reminders.map {

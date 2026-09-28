@@ -49,4 +49,13 @@ class AttachmentsTest {
         assertThat(Attachments.iconOf("scan.heic")).isEqualTo("image")
         assertThat(Attachments.iconOf("mystery.wat")).isEqualTo("paperclip")
     }
+
+    @Test
+    fun `a picture is shown here and anything else is handed on`() {
+        assertThat(Attachments.isImage("uploads/Photo.JPG")).isTrue()
+        assertThat(Attachments.isImage("scan.heic")).isTrue()
+        assertThat(Attachments.isImage("diagram.svg")).isFalse()
+        assertThat(Attachments.isImage("Manual.pdf")).isFalse()
+        assertThat(Attachments.isImage("no-extension")).isFalse()
+    }
 }

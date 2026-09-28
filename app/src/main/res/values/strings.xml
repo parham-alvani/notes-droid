@@ -342,7 +342,7 @@
     <string name="card_app_lock">App lock</string>
     <string name="settings_app_lock">Ask for a fingerprint or the screen lock</string>
     <string name="help_app_lock">Asked when the app opens, and again once it has been away for more than a minute. Locked, it shows nothing in the recent apps list.</string>
-    <string name="settings_lock_picker">Hide the vaults from other apps\' file pickers while locked</string>
+    <string name="settings_lock_picker">Hide the vaults from other apps\' file pickers while locked. They stay for 15 minutes after you leave, long enough to attach a note.</string>
     <string name="app_lock_no_screen_lock">Set a screen lock in the phone\'s settings first: it is what opens the app when a fingerprint will not.</string>
     <string name="lock_title">Daftar is locked</string>
     <string name="lock_unlock">Unlock</string>
@@ -377,4 +377,15 @@
     <string name="help_tiles">Capture a thought, or open this week\'s journal note, from the panel you swipe down. Tap one to add it.</string>
     <string name="help_tiles_editor">Capture and Journal can be added to the panel you swipe down, from its edit button.</string>
     <string name="tile_already_added">Already in Quick Settings. Swipe down twice to find it.</string>
+    <string name="task_reminder_set">Reminder set</string>
+    <string name="reminder_snooze">In an hour</string>
+    <string name="read_aloud_channel">Reading aloud</string>
+    <string name="read_aloud_now">Reading aloud</string>
+    <string name="whats_new_title">New in %1$s</string>
+    <string name="whats_new_ok">Got it</string>
+    <string name="note_share_pdf">Share as PDF</string>
+    <string name="note_share_pdf_failed">Could not make a PDF of this note</string>
+    <string name="places_title">Places in this note</string>
+    <string name="places_none">No addresses in this note.</string>
+    <string name="places_copy">Copy the address</string>
 </resources>

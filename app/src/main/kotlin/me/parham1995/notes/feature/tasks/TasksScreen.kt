@@ -50,6 +50,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.TaskBucket
+import me.parham1995.notes.data.TaskReminders
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
@@ -83,6 +84,9 @@ fun TasksScreen(
     val reminders: ReminderViewModel = hiltViewModel()
     val context = LocalContext.current
     val scheduled = stringResource(R.string.reminder_scheduled)
+
+    val upcoming by reminders.upcoming.collectAsStateWithLifecycle()
+    val remindedKeys = remember(upcoming) { upcoming.map { TaskReminders.keyOf(it.vaultId, it.path, it.text) }.toSet() }
 
     fun remind(
         row: TaskRow,
@@ -222,6 +226,7 @@ fun TasksScreen(
             onComplete = { viewModel.complete(it) },
             onReschedule = { row, date -> viewModel.reschedule(row, date) },
             onRemind = { row, at -> remind(row, at) },
+            reminded = { row -> TaskReminders.keyOf(row.vaultId, row.notePath, row.text) in remindedKeys },
             onOpen = { onOpenNote(it.noteId) },
             modifier = Modifier.fillMaxSize().padding(padding),
         )
@@ -246,6 +251,8 @@ internal fun TaskList(
     onOpen: (TaskRow) -> Unit,
     modifier: Modifier = Modifier,
     onRemind: ((TaskRow, LocalDateTime) -> Unit)? = null,
+    /** Whether a task has a reminder waiting, to draw its bell. */
+    reminded: (TaskRow) -> Boolean = { false },
 ) {
     var moving by remember { mutableStateOf<TaskRow?>(null) }
 
@@ -286,6 +293,7 @@ internal fun TaskList(
                     onComplete = complete,
                     onReschedule = reschedule,
                     onClick = { onOpen(row) },
+                    reminded = reminded(row),
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             }
@@ -328,6 +336,7 @@ private fun TaskRowView(
     onComplete: (() -> Unit)?,
     onReschedule: (() -> Unit)?,
     onClick: () -> Unit,
+    reminded: Boolean = false,
 ) {
     Row(
         Modifier
@@ -383,6 +392,15 @@ private fun TaskRowView(
                         text = date,
                         style = MaterialTheme.typography.labelSmall,
                         color = bucket.accent(),
+                    )
+                }
+                if (reminded) {
+                    LucideGlyph(
+                        "bell",
+                        size = 12.dp,
+                        tint = Naz.Orange,
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        contentDescription = stringResource(R.string.task_reminder_set),
                     )
                 }
             }

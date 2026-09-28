@@ -70,6 +70,14 @@ object Attachments {
      */
     fun isPdf(name: String): Boolean = name.substringAfterLast('.', "").equals("pdf", ignoreCase = true)
 
+    /**
+     * A picture Daftar can show itself, zoomable, rather than hand to another
+     * app. Not SVG: nothing here decodes it.
+     */
+    fun isImage(name: String): Boolean = name.substringAfterLast('.', "").lowercase(Locale.ROOT) in IMAGES
+
+    private val IMAGES = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif")
+
     /** What Lucide glyph stands for this kind of file, in a listing. */
     fun iconOf(name: String): String =
         when (name.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
