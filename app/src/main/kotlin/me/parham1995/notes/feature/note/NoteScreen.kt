@@ -185,9 +185,12 @@ fun NoteScreen(
 
     // An embedded file, or a Markdown link to one. A PDF is read here;
     // everything else belongs to whatever app owns that type.
-    fun openAttachment(path: String) {
+    fun openAttachment(
+        path: String,
+        fetch: suspend (String) -> File? = viewModel::attachment,
+    ) {
         scope.launch {
-            val file = viewModel.attachment(path)
+            val file = fetch(path)
             val message =
                 when {
                     file == null -> couldNotFetch.format(path.substringAfterLast('/'))
@@ -465,6 +468,7 @@ fun NoteScreen(
                 onOpenNote = { id -> closeThen { viewModel.openTab(id, inNewTab = false) } },
                 onOpenNoteInNewTab = { id -> closeThen { viewModel.openTab(id, inNewTab = true) } },
                 onBrowseFolder = { path -> closeThen { onOpenFolder(path) } },
+                onOpenFile = { path -> closeThen { openAttachment(path, files::attachment) } },
                 onOpenHeading = { id, text ->
                     closeThen {
                         headingIn = id to text

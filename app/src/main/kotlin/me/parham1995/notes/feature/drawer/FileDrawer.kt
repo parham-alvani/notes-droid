@@ -36,11 +36,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
+import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.ui.BookmarkActions
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.bookmarkItems
 import me.parham1995.notes.ui.bookmarkNodes
 import me.parham1995.notes.ui.icon.LucideGlyph
+import me.parham1995.notes.ui.render.Attachments
 
 /**
  * Somewhere else to go, without leaving where you are.
@@ -65,6 +67,8 @@ fun FileDrawerSheet(
     /** A bookmarked heading: the note, and where in it to land. */
     onOpenHeading: (Long, String) -> Unit,
     onSearch: (String) -> Unit,
+    /** A file that is not a note, by its path: a PDF to read, anything else for another app. */
+    onOpenFile: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val noteMissing = stringResource(R.string.note_missing)
@@ -149,15 +153,20 @@ fun FileDrawerSheet(
                 ItemRow(
                     title = item.name,
                     icon = row.icon,
-                    defaultIcon = if (item.isFolder) "folder" else "file-text",
+                    defaultIcon =
+                        when {
+                            item.isFolder -> "folder"
+                            item.isAttachment -> Attachments.iconOf(item.path)
+                            else -> "file-text"
+                        },
                     // A folder opens in the drawer; its own note, when it has
                     // one, is what holding it asks for. The browser is where
                     // the whole tree lives, and it is one tap up in the header.
                     onClick = {
-                        when {
-                            item.isFolder -> viewModel.openFolder(item.path)
-                            item.noteId != null -> onOpenNote(item.noteId!!)
-                            else -> Unit
+                        when (val tap = drawerTap(item)) {
+                            is DrawerTap.Folder -> viewModel.openFolder(tap.path)
+                            is DrawerTap.Note -> onOpenNote(tap.id)
+                            is DrawerTap.File -> onOpenFile(tap.path)
                         }
                     },
                     onLongClick = {
@@ -298,5 +307,34 @@ private fun TabRow(
         IconButton(onClick = { viewModel.closeTab(tab.index) }) {
             LucideGlyph("x", size = 16.dp, contentDescription = stringResource(R.string.action_close))
         }
+    }
+}
+
+/** What a tap on a row of the drawer's folder listing asks for. */
+internal sealed interface DrawerTap {
+    data class Folder(
+        val path: String,
+    ) : DrawerTap
+
+    data class Note(
+        val id: Long,
+    ) : DrawerTap
+
+    data class File(
+        val path: String,
+    ) : DrawerTap
+}
+
+/**
+ * A folder opens in the drawer, a note in the reader, and anything else -- a
+ * PDF, a picture -- the way an attachment in a note does. That last one was
+ * listed, drawn and inert: a tap on it did nothing at all.
+ */
+internal fun drawerTap(item: VaultItem): DrawerTap {
+    val note = item.noteId
+    return when {
+        item.isFolder -> DrawerTap.Folder(item.path)
+        note != null -> DrawerTap.Note(note)
+        else -> DrawerTap.File(item.path)
     }
 }

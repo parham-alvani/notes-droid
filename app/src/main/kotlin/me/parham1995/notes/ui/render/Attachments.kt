@@ -73,6 +73,7 @@ object Attachments {
     /** What Lucide glyph stands for this kind of file, in a listing. */
     fun iconOf(name: String): String =
         when (name.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
+            "png", "jpg", "jpeg", "gif", "webp", "heic", "bmp", "svg" -> "image"
             "mp4", "mov", "mkv", "webm", "avi" -> "film"
             "mp3", "m4a", "ogg", "opus", "wav", "flac" -> "music"
             "zip", "tar", "gz", "7z" -> "file-archive"

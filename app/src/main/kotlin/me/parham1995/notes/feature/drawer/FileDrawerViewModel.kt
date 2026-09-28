@@ -10,12 +10,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.VaultBookmarks
+import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultIcons
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.NoteEntity
@@ -24,6 +26,7 @@ import me.parham1995.notes.feature.search.settledIn
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.folderListing
+import java.io.File
 import javax.inject.Inject
 
 /** One note, as the drawer lists it. */
@@ -78,10 +81,19 @@ class FileDrawerViewModel
     constructor(
         private val repository: VaultRepository,
         private val tabs: NoteTabs,
+        private val files: VaultFileSource,
         icons: IconStore,
         configs: ObsidianConfigStore,
         private val savedState: SavedStateHandle,
     ) : ViewModel() {
+        /**
+         * A file the drawer lists that is not a note -- a PDF, a picture --
+         * fetched first if the device has only ever recorded it. In the vault
+         * the drawer shows, which is the one being read, not necessarily the
+         * one the note on screen came from.
+         */
+        suspend fun attachment(path: String): File? = files.localFile(repository.activeVaultId.first(), path)
+
         /** The vault's bookmarks, the other thing kept within reach. */
         val bookmarks: StateFlow<VaultBookmarks> =
             configs

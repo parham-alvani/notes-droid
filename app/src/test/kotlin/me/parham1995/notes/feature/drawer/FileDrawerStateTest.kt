@@ -1,6 +1,7 @@
 package me.parham1995.notes.feature.drawer
 
 import com.google.common.truth.Truth.assertThat
+import me.parham1995.notes.data.VaultItem
 import org.junit.Test
 
 /**
@@ -34,5 +35,16 @@ class FileDrawerStateTest {
     fun `a query decides which half of the drawer is shown`() {
         assertThat(FileDrawerUiState(query = "  ").filtering).isFalse()
         assertThat(FileDrawerUiState(query = "fleet").filtering).isTrue()
+    }
+
+    @Test
+    fun `a tap on a file that is not a note opens the file`() {
+        assertThat(drawerTap(VaultItem("Papers/Lease.pdf", "Lease.pdf", isFolder = false)))
+            .isEqualTo(DrawerTap.File("Papers/Lease.pdf"))
+        assertThat(drawerTap(VaultItem("Plants/Tomato.md", "Tomato", isFolder = false, noteId = 4)))
+            .isEqualTo(DrawerTap.Note(4))
+        // A folder with a landing page still opens as a folder; holding it opens the page.
+        assertThat(drawerTap(VaultItem("Plants", "Plants", isFolder = true, noteId = 9)))
+            .isEqualTo(DrawerTap.Folder("Plants"))
     }
 }

@@ -45,6 +45,8 @@ class AttachmentsTest {
         assertThat(Attachments.iconOf("Manual.pdf")).isEqualTo("file-text")
         assertThat(Attachments.iconOf("books.epub")).isEqualTo("book-open-text")
         assertThat(Attachments.iconOf("archive.zip")).isEqualTo("file-archive")
+        assertThat(Attachments.iconOf("Photo.JPG")).isEqualTo("image")
+        assertThat(Attachments.iconOf("scan.heic")).isEqualTo("image")
         assertThat(Attachments.iconOf("mystery.wat")).isEqualTo("paperclip")
     }
 }
