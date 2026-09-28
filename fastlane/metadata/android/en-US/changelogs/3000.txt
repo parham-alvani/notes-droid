@@ -1,0 +1,5 @@
+Pictures in place, reminders you can see, and notes you can send.
+
+Pictures open in Daftar's own zoomable viewer from the browser, the files drawer and links. A task with a reminder shows a bell, and a reminder can be put off an hour from its notification. Read aloud keeps the paragraph it is reading highlighted and on screen, and can be stopped from its notification.
+
+A note can be shared as a PDF for someone who does not use Obsidian, and Places in this note lists every address it mentions. With the app lock on, the file picker keeps your vaults for fifteen minutes after you leave the app. After each update the app says once what changed.
