@@ -1,0 +1,3 @@
+Files in the drawer open.
+
+A PDF, a picture or any other attachment tapped in the note screen's files drawer was listed and did nothing. It now opens the way a link in a note does: a PDF in the reader, anything else in the app that owns it. Pictures have a picture's icon in the drawer and the browser.
