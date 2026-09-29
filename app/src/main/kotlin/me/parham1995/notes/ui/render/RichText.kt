@@ -1,6 +1,8 @@
 package me.parham1995.notes.ui.render
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material3.LocalTextStyle
@@ -10,22 +12,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
+import me.parham1995.notes.dictionary.wordAt
 import me.parham1995.notes.markdown.MdInline
+import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.inScript
 
 /**
@@ -105,13 +115,63 @@ fun RichText(
                     }
             }.toMap()
 
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val onDefine = actions.onDefine.takeIf { LocalReading.current.holdToDefine }
     Text(
         text = linked,
-        modifier = modifier,
+        modifier = modifier.holdToDefine(linked.text, { layout }, onDefine),
         style = style,
         textAlign = textAlign,
         inlineContent = inlineContent,
+        onTextLayout = { layout = it },
     )
+}
+
+/**
+ * Holding a finger still on a word hands the word to [onDefine].
+ *
+ * Watched on the initial pass and never consumed, so the selection the same
+ * hold starts goes ahead underneath: the dictionary opens and the word is
+ * also selected, ready to copy once the sheet is closed. A finger that lifts,
+ * slides past the touch slop -- a scroll -- or is joined by a second one
+ * before the long-press timeout is not a hold.
+ */
+private fun Modifier.holdToDefine(
+    text: String,
+    layout: () -> TextLayoutResult?,
+    onDefine: ((String) -> Unit)?,
+): Modifier {
+    if (onDefine == null) return this
+    return pointerInput(text, onDefine) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val interrupted =
+                withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val finger = event.changes.firstOrNull { it.id == down.id }
+                        val moved =
+                            finger == null ||
+                                (finger.position - down.position).getDistance() > viewConfiguration.touchSlop
+                        if (moved || !finger.pressed || event.changes.size > 1) break
+                    }
+                    true
+                }
+            if (interrupted == null) wordUnder(layout(), text, down.position)?.let(onDefine)
+        }
+    }
+}
+
+/** The word drawn under [position], and only if the finger is on the text rather than beside it. */
+private fun wordUnder(
+    layout: TextLayoutResult?,
+    text: String,
+    position: Offset,
+): String? {
+    layout ?: return null
+    val line = layout.getLineForVerticalPosition(position.y)
+    if (position.x < layout.getLineLeft(line) || position.x > layout.getLineRight(line)) return null
+    return wordAt(text, layout.getOffsetForPosition(position))
 }
 
 private fun TextUnit.isSpecified(): Boolean = this != TextUnit.Unspecified

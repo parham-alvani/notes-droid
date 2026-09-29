@@ -162,6 +162,18 @@ internal fun ReadingCard(
                 onCheckedChange = viewModel::setHideCompletedTasks,
             )
         }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_hold_to_define), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.help_hold_to_define),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = reading.holdToDefine, onCheckedChange = viewModel::setHoldToDefine)
+        }
     }
 
     SectionCard(stringResource(R.string.card_behaviour)) {

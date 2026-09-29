@@ -388,4 +388,18 @@
     <string name="places_title">مکان‌های این یادداشت</string>
     <string name="places_none">نشانی‌ای در این یادداشت نیست.</string>
     <string name="places_copy">کپی نشانی</string>
+    <string name="define_action">معنی</string>
+    <string name="define_hint">جست‌وجوی واژه</string>
+    <string name="define_none">«%1$s» در واژه‌نامه نیست.</string>
+    <string name="define_english_only">این واژه‌نامه فقط انگلیسی است.</string>
+    <string name="define_failed">واژه‌نامه باز نشد.</string>
+    <string name="define_pronounce">تلفظ</string>
+    <string name="define_noun">اسم</string>
+    <string name="define_verb">فعل</string>
+    <string name="define_adjective">صفت</string>
+    <string name="define_adverb">قید</string>
+    <string name="shortcut_define_short">واژه‌نامه</string>
+    <string name="shortcut_define_long">معنی یک واژه</string>
+    <string name="settings_hold_to_define">نگه‌داشتن انگشت روی واژه برای دیدن معنی</string>
+    <string name="help_hold_to_define">با نگه‌داشتن انگشت روی یک واژهٔ انگلیسی در نوشته، واژه‌نامه باز می‌شود. واژه برای رونوشت هم انتخاب می‌شود.</string>
 </resources>

@@ -46,6 +46,11 @@ data class InlineActions(
     val onTag: (tag: String) -> Unit = {},
     /** A footnote's number, by the label it was written with: show what it says. */
     val onFootnote: (label: String) -> Unit = {},
+    /**
+     * A word a finger was held on: look it up. Null where holding text should
+     * only select it -- everywhere but the reader.
+     */
+    val onDefine: ((word: String) -> Unit)? = null,
 )
 
 /**

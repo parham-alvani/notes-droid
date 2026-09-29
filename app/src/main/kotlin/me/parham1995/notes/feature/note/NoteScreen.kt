@@ -77,6 +77,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
 import me.parham1995.notes.data.runCatchingUnlessCancelled
+import me.parham1995.notes.feature.define.DefineActivity
 import me.parham1995.notes.feature.drawer.FileDrawerSheet
 import me.parham1995.notes.feature.drawer.FileDrawerViewModel
 import me.parham1995.notes.markdown.FootnoteEntry
@@ -408,6 +409,7 @@ fun NoteScreen(
                                 }
                             },
                             onBrokenLink = { target -> peekBroken = target },
+                            onDefine = { word -> context.startActivity(DefineActivity.lookUp(context, word)) },
                             // The note's own vault: a tag means
                             // nothing across two of them.
                             onTag = { tag -> onOpenTag(note.vaultId, tag) },

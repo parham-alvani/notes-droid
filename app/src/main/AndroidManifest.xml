@@ -109,6 +109,26 @@
             </intent-filter>
         </activity>
 
+        <!--
+            The dictionary. Its label is what the text-selection menu shows,
+            in this app and every other one, so it is the verb.
+        -->
+        <activity
+            android:name=".feature.define.DefineActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/define_action"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Notes.Sheet"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.RecentNotesWidget"
             android:exported="false">

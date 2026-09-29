@@ -168,6 +168,12 @@ data class ReadingSettings(
      * scrolling past things that no longer need doing.
      */
     val hideCompletedTasks: Boolean = false,
+    /**
+     * Holding a finger on a word in a note opens the dictionary on it. The
+     * word is still selected as well, so copying works as it did; off, a hold
+     * only selects.
+     */
+    val holdToDefine: Boolean = true,
     val browserSort: BrowserSort = BrowserSort.NAME,
     val lineWidth: LineWidth = LineWidth.COMFORTABLE,
 ) {
@@ -313,6 +319,7 @@ class SettingsStore
                             persianFont = preferences[PERSIAN_FONT] ?: true,
                             stylusSpotlight = preferences[STYLUS_SPOTLIGHT] ?: true,
                             hideCompletedTasks = preferences[HIDE_DONE_TASKS] ?: false,
+                            holdToDefine = preferences[HOLD_TO_DEFINE] ?: true,
                             startScreen = StartScreen.parse(preferences[START_SCREEN]),
                             browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
                             lineWidth = LineWidth.parse(preferences[LINE_WIDTH]),
@@ -418,6 +425,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[HIDE_DONE_TASKS] = enabled }
         }
 
+        suspend fun setHoldToDefine(enabled: Boolean) {
+            context.settingsDataStore.edit { it[HOLD_TO_DEFINE] = enabled }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -482,6 +493,7 @@ class SettingsStore
             val SCRATCHPAD_PATH = stringPreferencesKey("scratchpad_path")
             val SCRATCHPAD_VAULT = longPreferencesKey("scratchpad_vault")
             val HIDE_DONE_TASKS = booleanPreferencesKey("hide_completed_tasks")
+            val HOLD_TO_DEFINE = booleanPreferencesKey("hold_to_define")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")

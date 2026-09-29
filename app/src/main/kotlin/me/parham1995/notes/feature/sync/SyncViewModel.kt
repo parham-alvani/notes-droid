@@ -330,6 +330,8 @@ class SyncViewModel
         fun setHideCompletedTasks(enabled: Boolean) =
             viewModelScope.launch { settingsStore.setHideCompletedTasks(enabled) }
 
+        fun setHoldToDefine(enabled: Boolean) = viewModelScope.launch { settingsStore.setHoldToDefine(enabled) }
+
         fun setStartScreen(screen: StartScreen) = viewModelScope.launch { settingsStore.setStartScreen(screen) }
 
         fun setBrowserSort(sort: BrowserSort) = viewModelScope.launch { settingsStore.setBrowserSort(sort) }

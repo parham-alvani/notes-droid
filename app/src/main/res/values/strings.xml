@@ -388,4 +388,19 @@
     <string name="places_title">Places in this note</string>
     <string name="places_none">No addresses in this note.</string>
     <string name="places_copy">Copy the address</string>
+    <string name="define_action">Define</string>
+    <string name="define_hint">Look up a word</string>
+    <string name="define_none">No entry for “%1$s”.</string>
+    <string name="define_english_only">The dictionary is English only.</string>
+    <string name="define_failed">The dictionary could not be opened.</string>
+    <string name="define_pronounce">Say it</string>
+    <string name="define_noun">noun</string>
+    <string name="define_verb">verb</string>
+    <string name="define_adjective">adjective</string>
+    <string name="define_adverb">adverb</string>
+    <string name="define_source" translatable="false">Open English WordNet 2025 · CC BY 4.0</string>
+    <string name="shortcut_define_short">Dictionary</string>
+    <string name="shortcut_define_long">Look up a word</string>
+    <string name="settings_hold_to_define">Hold a word to look it up</string>
+    <string name="help_hold_to_define">Keeping a finger on an English word in a note opens the dictionary. The word is selected too, for copying.</string>
 </resources>

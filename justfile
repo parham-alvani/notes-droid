@@ -78,6 +78,23 @@ pull-db:
     adb exec-out run-as {{ APPLICATION_ID }} cat databases/notes.db > /tmp/notes.db
     @echo "wrote /tmp/notes.db"
 
+# rebuild the bundled English dictionary from Open English WordNet
+# The release is pinned by checksum, and the output is committed: an ordinary
+# build never downloads it.
+dictionary:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    edition=2025
+    sha=73355e48f8117a24ca9ebc23ed75b35434e6cd21cc9dd3984e80aff5a5f63636
+    work=$(mktemp -d)
+    trap 'rm -rf "$work"' EXIT
+    curl -fsSL -o "$work/wordnet.zip" \
+      "https://github.com/globalwordnet/english-wordnet/releases/download/$edition-edition/english-wordnet-$edition.zip"
+    echo "$sha  $work/wordnet.zip" | shasum -a 256 -c -
+    unzip -q "$work/wordnet.zip" -d "$work"
+    ./gradlew -q :core:dictionary:importWordNet -Pwordnet="$work/oewn$edition"
+    ls -l app/src/main/assets/dictionary
+
 # show what the app is using on device
 du:
     adb shell run-as {{ APPLICATION_ID }} du -sh files databases cache

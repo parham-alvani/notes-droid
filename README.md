@@ -43,6 +43,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **App lock** — a fingerprint or the screen lock when the app opens and after a minute away; locked, it shows nothing in the recent apps list and, unless asked otherwise, the file picker stops seeing the vaults fifteen minutes after the app was left
 - **Addresses, phone numbers and emails** written as plain text in a note are links: to the maps app, the dialer, a new email; every address a note mentions is also listed under *Places in this note*
 - **Read aloud** — a note read by the phone's voice, a paragraph at a time, each in its own language where the phone has a Persian voice; the page follows along, and a notification can stop it from anywhere
+- **English dictionary** — hold a finger on a word in a note, or pick *Define* from the text-selection menu in any app, for its meanings, examples and synonyms; inflections find their word ("mice" is mouse). Open English WordNet, bundled, so it works with no signal and no word leaves the phone
 - **The vault's own bookmarks** — Obsidian's Bookmarks plugin, groups and all, at the top of the browser and in the files drawer: a note, a heading in one, a folder or a saved search
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Tablets and landscape** — the note held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar on a wide window
@@ -255,3 +256,5 @@ There are no instrumentation tests and CI runs no emulator. The markdown and syn
 [GPL-3.0](LICENSE)
 
 Persian text is set in [Vazirmatn](https://github.com/rastikerdar/vazirmatn), which is licensed separately under the SIL Open Font License 1.1 — see [`licenses/Vazirmatn-OFL.txt`](licenses/Vazirmatn-OFL.txt).
+
+The dictionary is [Open English WordNet](https://en-word.net) 2025, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), reduced to headwords, definitions, examples and synonyms by `just dictionary`.

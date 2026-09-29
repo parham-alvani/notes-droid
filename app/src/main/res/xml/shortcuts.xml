@@ -63,4 +63,16 @@
             android:targetClass="me.parham1995.notes.feature.capture.CaptureActivity" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
+
+    <shortcut
+        android:shortcutId="define"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_define_short"
+        android:shortcutLongLabel="@string/shortcut_define_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="me.parham1995.notes"
+            android:targetClass="me.parham1995.notes.feature.define.DefineActivity" />
+    </shortcut>
 </shortcuts>
