@@ -1,0 +1,5 @@
+An English dictionary, on the phone.
+
+Hold a finger on a word in a note to see what it means: every sense, with examples and synonyms, and a button to hear it said. Inflected words find their dictionary form, so "mice" shows mouse and "running" shows run. Tap a synonym to look it up, or type another word.
+
+Define is also in the text-selection menu, so it works in other apps too, and there is a Dictionary shortcut on the app icon. It is Open English WordNet, bundled with the app: no signal needed, and no word leaves the phone. English only. Holding to look up can be turned off in Settings, Reading.
