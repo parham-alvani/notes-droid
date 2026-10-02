@@ -131,6 +131,18 @@ on; `TopBarLayoutTest` asserts two navigation buttons have disjoint bounds, and
 carries a second test proving the framework overlaps them without the `Row`, so
 the first test cannot quietly stop meaning anything.
 
+### Screenshots
+
+Semantics cannot see a block painted over another, a heading's rule in the wrong colour, or a Persian paragraph set left-to-right. `RendererScreenshotTest` draws synthetic notes through the real `MarkdownDocument`, in `NotesTheme` with `LocalReading`, and compares the pixels with the goldens in `app/src/test/screenshots/` (Roborazzi, on the same Robolectric setup). `just test` and CI run the comparison through `verifyRoborazziDebug`; a failure leaves the diff images under `app/build/outputs/roborazzi/`. After a change that is meant to move pixels, `just screenshots-record` redraws the goldens -- look at them before committing, because the record step accepts whatever was drawn.
+
+Three things the pictures depend on:
+
+- **`@GraphicsMode(NATIVE)` on the class.** Roborazzi draws through Robolectric's native graphics, and the default mode's made-up text metrics are the ones `TextScaleTest` already had to leave. Roborazzi's docs also suggest `robolectric.pixelCopyRenderMode=hardware`; the captures here came out identical with and without it, so it is not set.
+- **The icon set and the code colours arrive after the first frame.** `ProvideLucide` reads the icons off the main thread, so the test loads them itself and provides `LocalLucide`; code highlighting runs on `Dispatchers.Default`, so the test waits for the span styles. A picture taken without either is of a page with no checkboxes and grey code, and it will be flaky.
+- **The `highlights` library is Java 21 bytecode and the tests run on 17.** `CodeHighlighter` keeps every reference to it out of class initialisation so a code block can be composed at all on the JVM; the fixture uses `yaml`, which one of the app's own grammars colours. A fence in another language falls back to plain text in a test and is coloured on the phone.
+
+The goldens are recorded on macOS and checked on Linux. The comparison lets a pixel's colour drift a little (`MAX_PIXEL_DISTANCE`, for anti-aliasing on another OS) and lets no pixel change outright -- a percentage-of-pixels threshold was tried first and waved through a chevron 40% larger, because a chevron is a few hundred pixels of a quarter of a million. Whether Linux lands inside the colour tolerance has not been proven here; if CI fails on a golden that passes locally with no change behind it, the fix is to record on CI's platform or widen `MAX_PIXEL_DISTANCE`, not to delete the test.
+
 ## Verifying work, because compilation does not
 
 Several features in this project were written, compiled, reviewed and shipped **without ever being called**. `schedulePeriodic()` had no callers. `onAttachment` defaulted to an empty lambda. `notes.isRtl` was carried all the way to the UI and never read. The SSH key list was a one-shot snapshot that nothing re-took. A compiler cannot report an absent call site.

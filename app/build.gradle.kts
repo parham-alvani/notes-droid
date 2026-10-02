@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.roborazzi)
 }
 
 /**
@@ -154,6 +155,16 @@ android {
     }
 }
 
+/**
+ * Screenshot goldens, committed next to the tests that draw them. `just
+ * screenshots-record` rewrites them; `verifyRoborazziDebug` -- part of `just
+ * test` -- fails on a pixel that moved, with the diff under
+ * `app/build/outputs/roborazzi/`.
+ */
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
+}
+
 dependencies {
     implementation(projects.core.data)
     implementation(projects.core.sync)
@@ -196,5 +207,9 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
+    // Pixels, not semantics: a block drawn over another has correct bounds in
+    // the semantics tree and is still unreadable on the page.
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
     debugImplementation(libs.compose.ui.test.manifest)
 }
