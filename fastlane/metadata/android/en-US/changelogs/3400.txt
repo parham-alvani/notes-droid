@@ -1,0 +1,7 @@
+Widgets redrawn, and a terminal for setup.
+
+The home screen widgets are drawn with Glance now: the same four, with rounded corners from the system, the app's colours in light and dark, and every line reading in its own direction. Widgets placed before the update keep working.
+
+The app can be set up from a terminal over adb: add a vault, switch it to SSH, print the key to register, test it, start a sync. Only the adb shell can reach it.
+
+The first seconds are compiled ahead of time from a profile recorded on a phone, so a cold start and the first scroll of a long note are quicker.
