@@ -28,8 +28,21 @@ import me.parham1995.notes.ui.theme.Naz
 object CodeHighlighter {
     private val cache = LruCache<String, AnnotatedString>(CACHE_ENTRIES)
 
-    /** naz's groups, expressed as the shape the tokeniser wants. */
-    private val nazTheme =
+    /**
+     * naz's groups, expressed as the shape the tokeniser wants.
+     *
+     * Built on each call, and the language table below is kept in names rather
+     * than the library's enum, so that nothing from `highlights` is touched
+     * until a fence actually needs it. The library ships Java 21 bytecode: D8
+     * takes it for the phone, but the JVM tests run on 17 and cannot load a
+     * class from it. A field here took the whole object down with it, so no
+     * code block could be drawn in a test, coloured or not -- and a `lazy`
+     * field is no better, because its delegate is an `invokedynamic` lambda
+     * whose signature names the type, which is loaded at link time. The
+     * grammars this app carries itself (yaml, sql, json and the rest in
+     * `CodeGrammars`) never reach the library and so draw anywhere.
+     */
+    private fun nazTheme(): SyntaxTheme =
         SyntaxTheme(
             key = "naz",
             code = Naz.White.rgb(),
@@ -50,36 +63,40 @@ object CodeHighlighter {
      */
     private val languages =
         mapOf(
-            "bash" to SyntaxLanguage.SHELL,
-            "sh" to SyntaxLanguage.SHELL,
-            "zsh" to SyntaxLanguage.SHELL,
-            "shell" to SyntaxLanguage.SHELL,
-            "console" to SyntaxLanguage.SHELL,
-            "python" to SyntaxLanguage.PYTHON,
-            "py" to SyntaxLanguage.PYTHON,
-            "go" to SyntaxLanguage.GO,
-            "golang" to SyntaxLanguage.GO,
-            "c" to SyntaxLanguage.C,
-            "cpp" to SyntaxLanguage.CPP,
-            "c++" to SyntaxLanguage.CPP,
-            "csharp" to SyntaxLanguage.CSHARP,
-            "cs" to SyntaxLanguage.CSHARP,
-            "java" to SyntaxLanguage.JAVA,
-            "kotlin" to SyntaxLanguage.KOTLIN,
-            "kt" to SyntaxLanguage.KOTLIN,
-            "rust" to SyntaxLanguage.RUST,
-            "rs" to SyntaxLanguage.RUST,
-            "typescript" to SyntaxLanguage.TYPESCRIPT,
-            "ts" to SyntaxLanguage.TYPESCRIPT,
-            "javascript" to SyntaxLanguage.JAVASCRIPT,
-            "js" to SyntaxLanguage.JAVASCRIPT,
-            "ruby" to SyntaxLanguage.RUBY,
-            "rb" to SyntaxLanguage.RUBY,
-            "php" to SyntaxLanguage.PHP,
-            "swift" to SyntaxLanguage.SWIFT,
-            "dart" to SyntaxLanguage.DART,
-            "perl" to SyntaxLanguage.PERL,
+            "bash" to "SHELL",
+            "sh" to "SHELL",
+            "zsh" to "SHELL",
+            "shell" to "SHELL",
+            "console" to "SHELL",
+            "python" to "PYTHON",
+            "py" to "PYTHON",
+            "go" to "GO",
+            "golang" to "GO",
+            "c" to "C",
+            "cpp" to "CPP",
+            "c++" to "CPP",
+            "csharp" to "CSHARP",
+            "cs" to "CSHARP",
+            "java" to "JAVA",
+            "kotlin" to "KOTLIN",
+            "kt" to "KOTLIN",
+            "rust" to "RUST",
+            "rs" to "RUST",
+            "typescript" to "TYPESCRIPT",
+            "ts" to "TYPESCRIPT",
+            "javascript" to "JAVASCRIPT",
+            "js" to "JAVASCRIPT",
+            "ruby" to "RUBY",
+            "rb" to "RUBY",
+            "php" to "PHP",
+            "swift" to "SWIFT",
+            "dart" to "DART",
+            "perl" to "PERL",
         )
+
+    /** The library's own name for a fence label, or its default grammar. */
+    private fun syntaxLanguage(language: String?): SyntaxLanguage =
+        SyntaxLanguage.valueOf(languages[language?.lowercase()] ?: "DEFAULT")
 
     /** True when the fence has a grammar rather than falling back to defaults. */
     fun isKnown(language: String?): Boolean = language?.lowercase() in languages || CodeGrammars.handles(language)
@@ -125,8 +142,8 @@ object CodeHighlighter {
                     Highlights
                         .Builder()
                         .code(code)
-                        .theme(nazTheme)
-                        .language(languages[language?.lowercase()] ?: SyntaxLanguage.DEFAULT)
+                        .theme(nazTheme())
+                        .language(syntaxLanguage(language))
                         .build()
                         .getHighlights()
 

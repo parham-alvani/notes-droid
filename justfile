@@ -34,11 +34,18 @@ build *args:
 release *args:
     ./gradlew assembleRelease {{ args }}
 
-# run the unit tests
 # `test` rather than `testDebugUnitTest`: the latter is an Android-variant
 # task and does not exist on the pure-JVM modules, so it skips most of them.
+# `verifyRoborazziDebug` is what puts the app's test run in verify mode: a
+# pixel that moved fails it, and the diff lands in app/build/outputs/roborazzi.
+# run the unit tests and compare the renderer's screenshots with their goldens
 test *args:
-    ./gradlew test {{ args }}
+    ./gradlew test verifyRoborazziDebug {{ args }}
+
+# redraw the screenshot goldens in app/src/test/screenshots after a deliberate change
+screenshots-record:
+    ./gradlew recordRoborazziDebug --tests '*ScreenshotTest*'
+    @git status --short app/src/test/screenshots
 
 [group('lint')]
 [private]
