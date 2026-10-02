@@ -21,7 +21,7 @@ import me.parham1995.notes.data.ThemeChoice
  * were chosen to glow on black and would otherwise be invisible on paper. It
  * exists because a phone gets read outdoors; dark stays the default.
  */
-private val NazScheme =
+internal val NazScheme =
     darkColorScheme(
         // Normal
         background = Naz.Black,
@@ -72,7 +72,7 @@ private val NazScheme =
  * green and aqua are legible on `#323232` and disappear on white. The rest are
  * naz's own, because a heading being orange is the part worth keeping.
  */
-private val DaylightScheme =
+internal val DaylightScheme =
     lightColorScheme(
         background = Daylight.Paper,
         onBackground = Daylight.Ink,

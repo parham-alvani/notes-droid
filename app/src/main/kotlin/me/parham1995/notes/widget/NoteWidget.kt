@@ -2,23 +2,31 @@ package me.parham1995.notes.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.view.View
-import android.widget.RemoteViews
-import androidx.annotation.RequiresApi
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
-import androidx.core.net.toUri
-import dagger.hilt.android.EntryPointAccessors
-import me.parham1995.notes.MainActivity
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
+import androidx.glance.GlanceTheme
+import androidx.glance.LocalContext
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.provideContent
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.padding
+import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
 import me.parham1995.notes.data.PinnedNote
 import me.parham1995.notes.data.runCatchingUnlessCancelled
-import java.net.URLEncoder
 
 /**
  * One note, whole, on the home screen -- a sticky note.
@@ -32,54 +40,62 @@ import java.net.URLEncoder
  * Placed from the note's menu, it arrives bound. Placed from the launcher's
  * widget list, it arrives empty and asks for a note when tapped.
  *
- * Android 12 and up scroll the text a line at a time in a collection; 10 and
- * 11 get as much as one text view holds, as the pinned widget does.
+ * The text is a scrolling list of lines, each reading its own way.
  */
-class NoteWidget : AppWidgetProvider() {
-    override fun onUpdate(
+class NoteAppWidget : GlanceAppWidget() {
+    override suspend fun provideGlance(
         context: Context,
-        manager: AppWidgetManager,
-        appWidgetIds: IntArray,
+        id: GlanceId,
     ) {
-        drawAsync {
-            val entry = EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
-            val bindings = NoteWidgetBindings(context)
-            appWidgetIds.forEach { id ->
-                val pin = bindings[id]
-                val note =
-                    pin?.let {
-                        runCatchingUnlessCancelled {
-                            entry.pinnedNotes().whole(
-                                it.vaultId,
-                                it.path,
-                            )
-                        }.getOrNull()
-                    }
-                val vault =
-                    pin?.let {
-                        runCatchingUnlessCancelled {
-                            entry.vaultRepository().vault(
-                                it.vaultId,
-                            )
-                        }.getOrNull()
-                    }
-                manager.updateAppWidget(id, build(context, id, pin, note, vault?.label))
+        val entry = context.widgetEntryPoint()
+        val colors = entry.widgetColors()
+        val widgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
+        val pin = NoteWidgetBindings(context)[widgetId]
+        val note =
+            pin?.let {
+                runCatchingUnlessCancelled {
+                    entry.pinnedNotes().whole(
+                        it.vaultId,
+                        it.path,
+                    )
+                }.getOrNull()
             }
+        val vault = pin?.let { runCatchingUnlessCancelled { entry.vaultRepository().vault(it.vaultId) }.getOrNull() }
+        val model = NoteModel(widgetId, pin, note, vault?.label)
+        provideContent {
+            GlanceTheme(colors) { NoteContent(model) }
         }
     }
+
+    override suspend fun onDelete(
+        context: Context,
+        glanceId: GlanceId,
+    ) {
+        NoteWidgetBindings(context).forget(intArrayOf(GlanceAppWidgetManager(context).getAppWidgetId(glanceId)))
+    }
+}
+
+/**
+ * The provider the manifest names (see [TasksWidget] for why it keeps this
+ * name), and the one that hears the launcher's answer to "put this note on
+ * the home screen": the id it gave the new widget, and the note the request
+ * was made for.
+ */
+class NoteWidget : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = NoteAppWidget()
 
     override fun onReceive(
         context: Context,
         intent: Intent,
     ) {
-        // The launcher's answer to "put this note on the home screen": the id
-        // it gave the new widget, and the note the request was made for.
         if (intent.action == ACTION_BIND) {
             val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
             val vaultId = intent.getLongExtra(EXTRA_VAULT, 0L)
             val path = intent.getStringExtra(EXTRA_PATH)
             if (id != AppWidgetManager.INVALID_APPWIDGET_ID && vaultId > 0 && path != null) {
                 NoteWidgetBindings(context)[id] = Pin(vaultId, path)
+                // Through Glance's own update path, which holds the broadcast
+                // open for as long as it needs and records the receiver.
                 onUpdate(context, AppWidgetManager.getInstance(context), intArrayOf(id))
             }
             return
@@ -87,126 +103,10 @@ class NoteWidget : AppWidgetProvider() {
         super.onReceive(context, intent)
     }
 
-    override fun onDeleted(
-        context: Context,
-        appWidgetIds: IntArray,
-    ) {
-        NoteWidgetBindings(context).forget(appWidgetIds)
-    }
-
-    internal fun build(
-        context: Context,
-        widgetId: Int,
-        pin: Pin?,
-        note: PinnedNote?,
-        vaultName: String?,
-        scrolls: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_note)
-        views.setViewVisibility(R.id.note_lines, View.GONE)
-        views.setViewVisibility(R.id.note_text, View.GONE)
-        views.setViewVisibility(R.id.note_empty, View.GONE)
-
-        // Unbound, or bound to a note that has since gone: say so, and let a
-        // tap choose again rather than drawing a blank card forever.
-        if (note == null || vaultName == null) {
-            views.setTextViewText(R.id.widget_headline, context.getString(R.string.widget_note_title))
-            views.setTextViewText(
-                R.id.note_empty,
-                context.getString(if (pin == null) R.string.widget_note_choose else R.string.widget_note_gone),
-            )
-            views.setViewVisibility(R.id.note_empty, View.VISIBLE)
-            val choose = choose(context, widgetId)
-            views.setOnClickPendingIntent(R.id.widget_note_root, choose)
-            views.setOnClickPendingIntent(R.id.note_empty, choose)
-            views.setOnClickPendingIntent(R.id.widget_headline, choose)
-            return views
-        }
-
-        views.setTextViewText(R.id.widget_headline, note.title)
-        val open = open(context, widgetId, vaultName, note.path)
-        views.setOnClickPendingIntent(R.id.widget_headline, open)
-        views.setOnClickPendingIntent(R.id.widget_note_root, open)
-        val lines = note.excerpt.lines().filter { it.isNotBlank() }
-        if (scrolls && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            fillLines(context, views, lines, open)
-        } else {
-            views.setTextViewText(R.id.note_text, lines.joinToString("\n"))
-            views.setOnClickPendingIntent(R.id.note_text, open)
-            views.setViewVisibility(R.id.note_text, View.VISIBLE)
-        }
-        return views
-    }
-
-    @RequiresApi(Build.VERSION_CODES.S)
-    private fun fillLines(
-        context: Context,
-        views: RemoteViews,
-        lines: List<String>,
-        open: PendingIntent,
-    ) {
-        val items =
-            RemoteViews.RemoteCollectionItems
-                .Builder()
-                .setViewTypeCount(1)
-        lines.forEachIndexed { index, line ->
-            val row = RemoteViews(context.packageName, R.layout.widget_note_line)
-            row.setTextViewText(R.id.line, line)
-            // Every line opens the same note; the template says which.
-            row.setOnClickFillInIntent(R.id.line, Intent())
-            items.addItem(index.toLong(), row)
-        }
-        views.setRemoteAdapter(R.id.note_lines, items.build())
-        views.setPendingIntentTemplate(R.id.note_lines, open)
-        views.setViewVisibility(R.id.note_lines, View.VISIBLE)
-    }
-
     companion object {
         const val ACTION_BIND = "me.parham1995.notes.widget.NOTE_WIDGET_BIND"
         private const val EXTRA_VAULT = "me.parham1995.notes.widget.VAULT"
         private const val EXTRA_PATH = "me.parham1995.notes.widget.PATH"
-
-        /**
-         * The note, opened the way an `obsidian://` link opens it -- which
-         * switches to the note's vault first, where a bare note id would open
-         * it inside whichever vault happened to be active.
-         */
-        private fun open(
-            context: Context,
-            widgetId: Int,
-            vaultName: String,
-            path: String,
-        ): PendingIntent {
-            val uri = "obsidian://open?vault=${encode(vaultName)}&file=${encode(path)}"
-            val intent =
-                Intent(context, MainActivity::class.java)
-                    .setAction(Intent.ACTION_VIEW)
-                    .setData(uri.toUri())
-                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            // Mutable: a line of the collection fills this template in.
-            return PendingIntent.getActivity(
-                context,
-                widgetId,
-                intent,
-                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-        }
-
-        private fun choose(
-            context: Context,
-            widgetId: Int,
-        ): PendingIntent =
-            PendingIntent.getActivity(
-                context,
-                widgetId,
-                Intent(context, NoteWidgetConfigureActivity::class.java)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
-                    // One task per widget being chosen for, not one shared.
-                    .setData("daftar-widget://$widgetId".toUri()),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-
-        private fun encode(text: String) = URLEncoder.encode(text, "UTF-8").replace("+", "%20")
 
         /**
          * Asks the launcher to place a widget showing [pin]. False when the
@@ -231,21 +131,66 @@ class NoteWidget : AppWidgetProvider() {
                 )
             return manager.requestPinAppWidget(ComponentName(context, NoteWidget::class.java), null, callback)
         }
+    }
+}
 
-        /** Redraws every placed copy: after a sync, a write, or a new binding. */
-        fun refresh(context: Context) {
-            val manager = AppWidgetManager.getInstance(context) ?: return
-            val ids = manager.getAppWidgetIds(ComponentName(context, NoteWidget::class.java))
-            if (ids.isEmpty()) return
-            context.sendBroadcast(
-                Intent(context, NoteWidget::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-                },
+/** What one placed note widget draws from. */
+internal data class NoteModel(
+    val widgetId: Int,
+    /** What the widget is bound to, or null when it has yet to be given a note. */
+    val pin: Pin?,
+    /** The note the pin names, or null when it is not in the vault. */
+    val note: PinnedNote?,
+    /** The vault's name, for the link that opens the note in it. */
+    val vaultName: String?,
+)
+
+@Composable
+internal fun NoteContent(model: NoteModel) {
+    val context = LocalContext.current
+    val note = model.note
+    val vaultName = model.vaultName
+    // Unbound, or bound to a note that has since gone: say so, and let a tap
+    // choose again rather than drawing a blank card forever.
+    if (note == null || vaultName == null) {
+        WidgetSurface(GlanceModifier.opens(WidgetIntents.choose(context, model.widgetId))) {
+            Headline(directed(context.getString(R.string.widget_note_title)))
+            Text(
+                text =
+                    context.getString(
+                        if (model.pin ==
+                            null
+                        ) {
+                            R.string.widget_note_choose
+                        } else {
+                            R.string.widget_note_gone
+                        },
+                    ),
+                modifier = GlanceModifier.fillMaxWidth().padding(top = HEADLINE_GAP_DP.dp),
+                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = ROW_SP.sp),
             )
+        }
+        return
+    }
+
+    val open = WidgetIntents.openLink(context, vaultName, note.path)
+    WidgetSurface(GlanceModifier.opens(open)) {
+        Headline(directed(note.title))
+        val lines = note.excerpt.lines().filter { it.isNotBlank() }
+        LazyColumn(GlanceModifier.fillMaxSize().padding(top = HEADLINE_GAP_DP.dp)) {
+            // Every line opens the same note.
+            items(lines.size, { it.toLong() }) { index ->
+                DirectedLine(
+                    directed(lines[index]),
+                    GlanceModifier.fillMaxWidth().padding(bottom = LINE_GAP_DP.dp).opens(open),
+                    TextStyle(color = GlanceTheme.colors.onSurface, fontSize = ROW_SP.sp),
+                )
+            }
         }
     }
 }
+
+private const val LINE_GAP_DP = 6
 
 /**
  * Which note each placed note widget shows, by widget id.

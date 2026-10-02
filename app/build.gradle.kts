@@ -214,6 +214,8 @@ dependencies {
     implementation(libs.jlatexmath)
     implementation(libs.highlights)
     implementation(libs.androidx.webkit)
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
@@ -229,5 +231,6 @@ dependencies {
     // the semantics tree and is still unreadable on the page.
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.glance.appwidget.testing)
     debugImplementation(libs.compose.ui.test.manifest)
 }

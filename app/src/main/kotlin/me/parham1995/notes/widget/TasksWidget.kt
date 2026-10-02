@@ -1,13 +1,28 @@
 package me.parham1995.notes.widget
 
-import android.app.PendingIntent
-import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import android.widget.RemoteViews
-import androidx.core.graphics.toColorInt
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
+import androidx.glance.GlanceTheme
+import androidx.glance.LocalContext
+import androidx.glance.action.clickable
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.provideContent
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Row
+import androidx.glance.layout.absolutePadding
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.padding
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
+import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -15,13 +30,31 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import me.parham1995.notes.R
 import me.parham1995.notes.data.PinnedNotes
+import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskBuckets
-import me.parham1995.notes.data.TaskDigestWorker
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.database.TaskRow
-import me.parham1995.notes.feature.capture.CaptureActivity
+import me.parham1995.notes.data.runCatchingUnlessCancelled
 import java.time.LocalDate
+
+/**
+ * What the widgets read. A widget is composed in a WorkManager session
+ * Glance runs, not inside anything Hilt injects into, so they reach the graph
+ * through an entry point.
+ */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface WidgetEntryPoint {
+    fun vaultRepository(): VaultRepository
+
+    fun pinnedNotes(): PinnedNotes
+
+    fun settingsStore(): SettingsStore
+}
+
+internal fun Context.widgetEntryPoint(): WidgetEntryPoint =
+    EntryPointAccessors.fromApplication(applicationContext, WidgetEntryPoint::class.java)
 
 /**
  * What is open, on the home screen.
@@ -34,156 +67,104 @@ import java.time.LocalDate
  * A count first and a few lines after it. The vault this was built for has 120
  * overdue tasks, so a widget that tried to list them would be a wall of text
  * that says less than the number does.
+ *
+ * Composed once per size the host may show it at, so a widget stretched to
+ * half the home screen lists more than a small one.
  */
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface WidgetEntryPoint {
-    fun vaultRepository(): VaultRepository
+class TasksAppWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
 
-    fun pinnedNotes(): PinnedNotes
+    override suspend fun provideGlance(
+        context: Context,
+        id: GlanceId,
+    ) {
+        val entry = context.widgetEntryPoint()
+        val colors = entry.widgetColors()
+        val today = LocalDate.now()
+        val open =
+            runCatchingUnlessCancelled { entry.vaultRepository().openTasks().first() }
+                .getOrDefault(emptyList())
+        val model = TasksModel(open.size, open.filter { TaskBuckets.of(it.actionableOn, today) in PRESSING }, today)
+        provideContent {
+            GlanceTheme(colors) { TasksContent(model) }
+        }
+    }
+
+    private companion object {
+        val PRESSING = setOf(TaskBucket.OVERDUE, TaskBucket.TODAY)
+    }
 }
 
-class TasksWidget : AppWidgetProvider() {
-    override fun onUpdate(
-        context: Context,
-        manager: AppWidgetManager,
-        appWidgetIds: IntArray,
-    ) {
-        render(context, manager, appWidgetIds)
-    }
+/**
+ * The provider the manifest names. A placed widget is bound to its provider's
+ * class name, so the receivers keep the names the RemoteViews providers had
+ * and an update does not empty the home screen.
+ */
+class TasksWidget : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = TasksAppWidget()
+}
 
-    private fun render(
-        context: Context,
-        manager: AppWidgetManager,
-        ids: IntArray,
-    ) {
-        // A provider is not a lifecycle owner and onUpdate is synchronous, so
-        // the work runs in the background and the result is pushed when it
-        // arrives. The widget keeps its previous content until then rather
-        // than blanking.
-        drawAsync {
-            val repository =
-                EntryPointAccessors
-                    .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
-                    .vaultRepository()
+/** Everything the tasks widget draws from: how many are open, which press, and what day it is. */
+internal data class TasksModel(
+    val openCount: Int,
+    /** Overdue and due today, in the order the task list shows them. */
+    val due: List<TaskRow>,
+    val today: LocalDate,
+)
 
-            val today = LocalDate.now()
-            val open = runCatching { repository.openTasks().first() }.getOrDefault(emptyList())
-            val due = open.filter { TaskBuckets.of(it.actionableOn, today) in PRESSING }
-
-            // Per widget: two copies can be different sizes, and each should
-            // fill what it was given rather than always drawing four rows.
-            ids.forEach { id ->
-                val rows = rowsForHeight(heightOf(manager, id))
-                manager.updateAppWidget(id, build(context, open.size, due, today, rows))
-            }
-        }
-    }
-
-    override fun onAppWidgetOptionsChanged(
-        context: Context,
-        manager: AppWidgetManager,
-        appWidgetId: Int,
-        newOptions: Bundle,
-    ) {
-        // Resizing is the moment the row count changes; without this the
-        // widget keeps what it drew at its old size until the next sync.
-        render(context, manager, intArrayOf(appWidgetId))
-    }
-
-    private fun build(
-        context: Context,
-        openCount: Int,
-        due: List<TaskRow>,
-        today: LocalDate,
-        rows: Int,
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_tasks)
-        val overdue = due.count { TaskBuckets.of(it.actionableOn, today) == TaskBucket.OVERDUE }
-        val todayCount = due.size - overdue
-
-        views.setTextViewText(
-            R.id.widget_headline,
-            when {
-                openCount == 0 -> context.getString(R.string.widget_tasks_none)
-                due.isEmpty() -> context.getString(R.string.widget_tasks_none_due, openCount)
-                overdue == 0 -> context.getString(R.string.widget_tasks_today, todayCount)
-                todayCount == 0 -> context.getString(R.string.widget_tasks_overdue, overdue)
-                else -> context.getString(R.string.widget_tasks_both, overdue, todayCount)
-            },
-        )
-        views.setTextColor(
-            R.id.widget_headline,
-            if (overdue > 0) OVERDUE_COLOUR else NORMAL_COLOUR,
-        )
-
-        views.removeAllViews(R.id.widget_tasks)
-        due.take(rows).forEach { task ->
-            val row = RemoteViews(context.packageName, R.layout.widget_task_row)
-            val late = TaskBuckets.of(task.actionableOn, today) == TaskBucket.OVERDUE
-            row.setTextViewText(R.id.row_marker, if (late) "!" else "-")
-            row.setTextColor(R.id.row_marker, if (late) OVERDUE_COLOUR else MUTED_COLOUR)
-            row.setTextViewText(R.id.row_text, task.text)
-            views.addView(R.id.widget_tasks, row)
+@Composable
+internal fun TasksContent(model: TasksModel) {
+    val context = LocalContext.current
+    val rows = rowsForSize()
+    val overdue = model.due.count { it.isLate(model.today) }
+    val todayCount = model.due.size - overdue
+    val headline =
+        when {
+            model.openCount == 0 -> context.getString(R.string.widget_tasks_none)
+            model.due.isEmpty() -> context.getString(R.string.widget_tasks_none_due, model.openCount)
+            overdue == 0 -> context.getString(R.string.widget_tasks_today, todayCount)
+            todayCount == 0 -> context.getString(R.string.widget_tasks_overdue, overdue)
+            else -> context.getString(R.string.widget_tasks_both, overdue, todayCount)
         }
 
-        views.setOnClickPendingIntent(R.id.widget_headline, openApp(context))
-        views.setOnClickPendingIntent(R.id.widget_tasks, openApp(context))
-        views.setOnClickPendingIntent(R.id.widget_capture, capture(context))
-        return views
-    }
-
-    /** Tapping anywhere opens the app on the task list. */
-    private fun openApp(context: Context): PendingIntent? {
-        val launch =
-            context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
-        launch.putExtra(TaskDigestWorker.EXTRA_OPEN_TASKS, true)
-        launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        // Its own request code. The recent-notes widget's headline asks for
-        // the same launch intent with request code 0 and no extras, and
-        // PendingIntents that differ only in extras are one PendingIntent:
-        // with FLAG_UPDATE_CURRENT whichever widget redrew last decided
-        // whether tapping this one opened the task list.
-        return PendingIntent.getActivity(
-            context,
-            OPEN_TASKS_REQUEST,
-            launch,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-    }
-
-    /** Straight into the capture field, with nothing else in the way. */
-    private fun capture(context: Context): PendingIntent =
-        PendingIntent.getActivity(
-            context,
-            CAPTURE_REQUEST,
-            Intent(context, CaptureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-
-    companion object {
-        /** Redraws every placed widget. Called when a sync changes the tasks. */
-        fun refresh(context: Context) {
-            val manager = AppWidgetManager.getInstance(context) ?: return
-            val component = android.content.ComponentName(context, TasksWidget::class.java)
-            val ids = manager.getAppWidgetIds(component)
-            if (ids.isEmpty()) return
-            context.sendBroadcast(
-                Intent(context, TasksWidget::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-                },
+    // Tapping anywhere opens the app on the task list; the glyph is the one
+    // exception, and sits on top.
+    WidgetSurface(GlanceModifier.opens(WidgetIntents.openTasks(context))) {
+        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Headline(
+                directed(headline),
+                GlanceModifier.defaultWeight(),
+                color = if (overdue > 0) GlanceTheme.colors.error else GlanceTheme.colors.onBackground,
+            )
+            // Capture, from the home screen. The one thing worth doing here
+            // that reading cannot: a thought arrives away from the desk and
+            // the vault is the place it belongs.
+            Text(
+                text = context.getString(R.string.widget_capture_glyph),
+                modifier =
+                    GlanceModifier
+                        .absolutePadding(left = CAPTURE_PAD_START_DP.dp, right = CAPTURE_PAD_END_DP.dp)
+                        .clickable(actionStartActivity(WidgetIntents.capture(context)))
+                        .semantics { contentDescription = context.getString(R.string.capture_title) },
+                style = TextStyle(color = GlanceTheme.colors.onBackground, fontSize = CAPTURE_SP.sp),
             )
         }
-
-        private val PRESSING = setOf(TaskBucket.OVERDUE, TaskBucket.TODAY)
-        private const val CAPTURE_REQUEST = 1
-        private const val OPEN_TASKS_REQUEST = -3
-        private const val ROWS = 4
-
-        // naz, by value: RemoteViews cannot read the Compose theme.
-        private val OVERDUE_COLOUR = "#FF5070".toColorInt()
-        private val NORMAL_COLOUR = "#F5F5F0".toColorInt()
-        private val MUTED_COLOUR = "#A8A8A0".toColorInt()
+        Stack(model.due.take(rows), GlanceModifier.padding(top = HEADLINE_GAP_DP.dp)) { task ->
+            val late = task.isLate(model.today)
+            MarkedRow(
+                marker = if (late) LATE_MARKER else DUE_MARKER,
+                markerColor = if (late) GlanceTheme.colors.error else GlanceTheme.colors.onSurfaceVariant,
+                line = directed(task.text),
+            )
+        }
     }
 }
+
+private fun TaskRow.isLate(today: LocalDate) = TaskBuckets.of(actionableOn, today) == TaskBucket.OVERDUE
+
+private const val LATE_MARKER = "!"
+private const val DUE_MARKER = "-"
+private const val CAPTURE_SP = 18
+private const val CAPTURE_PAD_START_DP = 10
+private const val CAPTURE_PAD_END_DP = 2
+internal const val HEADLINE_GAP_DP = 6

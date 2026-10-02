@@ -129,6 +129,14 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Home screen widgets, drawn with Glance. Each receiver is Glance's,
+            and the widget it serves composes in a WorkManager session of
+            Glance's own rather than inside the broadcast. The names are the
+            ones the RemoteViews providers had: a placed widget is bound to
+            its provider's class name, and renaming one empties the home
+            screen on update.
+        -->
         <receiver
             android:name=".widget.RecentNotesWidget"
             android:exported="false">

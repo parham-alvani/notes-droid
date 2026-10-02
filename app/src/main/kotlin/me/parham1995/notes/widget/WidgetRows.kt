@@ -1,62 +1,20 @@
 package me.parham1995.notes.widget
 
-import android.content.BroadcastReceiver
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-
-/**
- * Runs [draw] off the main thread, keeping the broadcast alive until it ends.
- *
- * A widget provider is a broadcast receiver, and once `onReceive` returns the
- * system is free to kill a process with nothing else running -- which, for a
- * widget updated by a sync in the background, is the usual case. A coroutine
- * merely launched from `onUpdate` could die half way through reading the
- * database, and the widget kept whatever it last drew. `goAsync` holds the
- * broadcast open until `finish`, which is what makes the work count.
- */
-internal fun BroadcastReceiver.drawAsync(draw: suspend () -> Unit) {
-    val pending = goAsync()
-    CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
-        try {
-            withinBroadcastBudget(draw)
-        } finally {
-            pending.finish()
-        }
-    }
-}
-
-/**
- * Runs [draw], abandoning it once the broadcast's time is nearly up.
- *
- * Holding the broadcast open is also a promise to close it in time: a
- * broadcast to an app on screen gets ten seconds, and one that overruns is an
- * "app not responding" dialog for the whole app, not for the widget. The first
- * launch after an upgrade -- migrations running and the database busy --
- * overran exactly that way. A widget that misses one refresh draws on the
- * next, which is far the smaller failure.
- */
-internal suspend fun withinBroadcastBudget(draw: suspend () -> Unit) {
-    withTimeoutOrNull(BROADCAST_BUDGET_MS) { draw() }
-}
-
-/** Under the ten seconds a foreground broadcast is given, with room to finish. */
-internal const val BROADCAST_BUDGET_MS = 8_000L
+import me.parham1995.notes.markdown.MdDirection
+import me.parham1995.notes.markdown.TextDirection
 
 /**
  * How many rows fit in a widget of a given height.
  *
  * Both widgets drew a fixed four or five rows whatever size they were given,
  * so a widget resized to half a home screen showed the same four lines as a
- * small one and left the rest empty. The height the host is offering is in the
- * options bundle, and it changes when the widget is resized.
+ * small one and left the rest empty. The height is the one Glance composes
+ * for ([androidx.glance.LocalSize]), which follows the host's resizing.
  *
- * Deliberately an estimate. RemoteViews cannot measure, so this is arithmetic
- * on a row height that matches the layout; being one row out costs a little
- * space or a clipped last row, and both are better than four rows in a box
- * built for twelve.
+ * Deliberately an estimate. A widget cannot measure itself, so this is
+ * arithmetic on a row height that matches the layout; being one row out costs
+ * a little space or a clipped last row, and both are better than four rows in
+ * a box built for twelve.
  */
 internal fun rowsForHeight(
     heightDp: Int,
@@ -87,29 +45,47 @@ private const val PADDING_DP = 24
 /**
  * How much of the reported height the widget actually gets to draw in.
  *
- * The number in the options bundle is the cell the widget sits in, not the
- * space inside it: measured on the device, a widget told 344dp had a panel of
- * about 280dp, the rest being the launcher's own margins. The proportion is
- * the launcher's business and differs between them, so this errs low on
- * purpose -- a row too few leaves a gap nobody notices, and a row too many is
- * drawn half off the bottom edge, which is what the previous two attempts at
- * this number did.
+ * The number a host reports is the cell the widget sits in, not the space
+ * inside it: measured on the device, a widget told 344dp had a panel of about
+ * 280dp, the rest being the launcher's own margins. The proportion is the
+ * launcher's business and differs between them, so this errs low on purpose
+ * -- a row too few leaves a gap nobody notices, and a row too many is drawn
+ * half off the bottom edge, which is what the previous two attempts at this
+ * number did.
  */
 private const val USABLE_FRACTION = 0.85f
 
 private const val MIN_ROWS = 3
-private const val MAX_ROWS = 18
 
 /**
- * The height a host is offering a widget, in dp.
- *
- * Portrait uses the minimum height; that is the number the home screen fixes
- * when the widget is placed or resized.
+ * The most rows any size is given, and so the most a widget asks the
+ * database for: every row is a query result and a PendingIntent.
  */
-internal fun heightOf(
-    manager: android.appwidget.AppWidgetManager,
-    id: Int,
-): Int =
-    runCatching {
-        manager.getAppWidgetOptions(id).getInt(android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-    }.getOrDefault(0)
+internal const val MAX_ROWS = 18
+
+/**
+ * A line of text and the direction it reads in.
+ *
+ * Glance lays every text view out in the locale's direction, with no way to
+ * ask for the first strong character instead -- so a Persian line on an
+ * English phone would start at the left and put its full stop on the wrong
+ * side, and an English line on a Persian phone the reverse. The text here is
+ * wrapped in a Unicode isolate that fixes its own direction whatever the
+ * paragraph's is, and [rtl] says which edge to align it to and, in a row with
+ * a marker, which side the marker goes.
+ */
+internal data class DirectedText(
+    val text: String,
+    val rtl: Boolean,
+)
+
+/** [text] the way it reads: the same rule the renderer applies per block. */
+internal fun directed(text: String): DirectedText {
+    val rtl = TextDirection.of(text) == MdDirection.RTL
+    return DirectedText((if (rtl) RLI else LRI) + text + PDI, rtl)
+}
+
+/** RIGHT-TO-LEFT ISOLATE, LEFT-TO-RIGHT ISOLATE, POP DIRECTIONAL ISOLATE. */
+private const val RLI = '⁧'
+private const val LRI = '⁦'
+private const val PDI = '⁩'

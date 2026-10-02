@@ -2,10 +2,10 @@
 <!-- Android 12 and up: a real preview in the picker, and cell-based sizing. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_description"
-    android:initialLayout="@layout/widget_tasks"
+    android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="180dp"
     android:minHeight="110dp"
-    android:previewLayout="@layout/widget_tasks"
+    android:previewLayout="@layout/widget_tasks_preview"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="3"
     android:targetCellHeight="2"

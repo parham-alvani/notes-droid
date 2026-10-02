@@ -1,18 +1,21 @@
 package me.parham1995.notes.widget
 
-import android.app.PendingIntent
-import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import android.widget.RemoteViews
-import androidx.core.graphics.toColorInt
-import dagger.hilt.android.EntryPointAccessors
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
+import androidx.glance.GlanceTheme
+import androidx.glance.LocalContext
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.provideContent
+import androidx.glance.layout.padding
 import kotlinx.coroutines.flow.first
 import me.parham1995.notes.R
 import me.parham1995.notes.data.database.NoteEntity
+import me.parham1995.notes.data.runCatchingUnlessCancelled
 
 /**
  * The notes you were last reading, one tap away.
@@ -24,103 +27,55 @@ import me.parham1995.notes.data.database.NoteEntity
  *
  * Each row opens its own note rather than the app, which is the entire point.
  */
-class RecentNotesWidget : AppWidgetProvider() {
-    override fun onUpdate(
-        context: Context,
-        manager: AppWidgetManager,
-        appWidgetIds: IntArray,
-    ) {
-        drawAsync {
-            val repository =
-                EntryPointAccessors
-                    .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
-                    .vaultRepository()
+class RecentNotesAppWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
 
-            // Per widget, because two copies of the same widget can be
-            // different sizes and each should fill what it was given.
-            appWidgetIds.forEach { id ->
-                val rows = rowsForHeight(heightOf(manager, id))
-                val recent =
-                    runCatching { repository.recentlyOpened(rows).first() }
-                        .getOrDefault(emptyList())
-                manager.updateAppWidget(id, build(context, recent))
-            }
+    override suspend fun provideGlance(
+        context: Context,
+        id: GlanceId,
+    ) {
+        val entry = context.widgetEntryPoint()
+        val colors = entry.widgetColors()
+        // As many as the tallest size could show; each size takes what fits it.
+        val recent =
+            runCatchingUnlessCancelled { entry.vaultRepository().recentlyOpened(MAX_ROWS).first() }
+                .getOrDefault(emptyList())
+        provideContent {
+            GlanceTheme(colors) { RecentNotesContent(recent) }
         }
     }
+}
 
-    override fun onAppWidgetOptionsChanged(
-        context: Context,
-        manager: AppWidgetManager,
-        appWidgetId: Int,
-        newOptions: Bundle,
-    ) {
-        // Resizing is the moment the row count changes, and without this the
-        // widget keeps whatever it drew at its old size until the next sync.
-        onUpdate(context, manager, intArrayOf(appWidgetId))
-    }
-
-    private fun build(
-        context: Context,
-        recent: List<NoteEntity>,
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_tasks)
-        views.setTextViewText(
-            R.id.widget_headline,
-            context.getString(if (recent.isEmpty()) R.string.widget_recent_empty else R.string.widget_recent_title),
-        )
-        views.setTextColor(R.id.widget_headline, HEADLINE_COLOUR)
-
-        views.removeAllViews(R.id.widget_tasks)
-        recent.forEach { note ->
-            val row = RemoteViews(context.packageName, R.layout.widget_task_row)
-            row.setTextViewText(R.id.row_marker, "·")
-            row.setTextColor(R.id.row_marker, MUTED_COLOUR)
-            row.setTextViewText(R.id.row_text, note.title.ifBlank { note.name })
-            // A distinct request code per note: PendingIntents with the same
-            // code and no difference the system can see are the same intent,
-            // and every row would open whichever note was added last.
-            row.setOnClickPendingIntent(R.id.row_text, openNote(context, note.id))
-            views.addView(R.id.widget_tasks, row)
-        }
-
-        views.setOnClickPendingIntent(R.id.widget_headline, openNote(context, null))
-        return views
-    }
-
-    private fun openNote(
-        context: Context,
-        noteId: Long?,
-    ): PendingIntent? {
-        val launch =
-            context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
-        noteId?.let { launch.putExtra(EXTRA_NOTE, it) }
-        launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        return PendingIntent.getActivity(
-            context,
-            noteId?.toInt() ?: 0,
-            launch,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-    }
+/** The provider the manifest names; see [TasksWidget] for why it keeps this name. */
+class RecentNotesWidget : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = RecentNotesAppWidget()
 
     companion object {
         /** A note id on the launch intent, so a widget row opens that note. */
         const val EXTRA_NOTE = "me.parham1995.notes.NOTE"
-
-        fun refresh(context: Context) {
-            val manager = AppWidgetManager.getInstance(context) ?: return
-            val ids = manager.getAppWidgetIds(ComponentName(context, RecentNotesWidget::class.java))
-            if (ids.isEmpty()) return
-            context.sendBroadcast(
-                Intent(context, RecentNotesWidget::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-                },
-            )
-        }
-
-        private const val ROWS = 5
-        private val HEADLINE_COLOUR = "#80E5FF".toColorInt()
-        private val MUTED_COLOUR = "#A8A8A0".toColorInt()
     }
 }
+
+@Composable
+internal fun RecentNotesContent(recent: List<NoteEntity>) {
+    val context = LocalContext.current
+    val rows = rowsForSize()
+    WidgetSurface(GlanceModifier.opens(WidgetIntents.openApp(context))) {
+        Headline(
+            directed(
+                context.getString(if (recent.isEmpty()) R.string.widget_recent_empty else R.string.widget_recent_title),
+            ),
+            color = GlanceTheme.colors.onSecondaryContainer,
+        )
+        Stack(recent.take(rows), GlanceModifier.padding(top = HEADLINE_GAP_DP.dp)) { note ->
+            MarkedRow(
+                marker = RECENT_MARKER,
+                markerColor = GlanceTheme.colors.onSurfaceVariant,
+                line = directed(note.title.ifBlank { note.name }),
+                modifier = GlanceModifier.opens(WidgetIntents.openNote(context, note.id)),
+            )
+        }
+    }
+}
+
+private const val RECENT_MARKER = "·"
