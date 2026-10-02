@@ -103,6 +103,8 @@ git commit -am "chore: release 0.13.7"
 git tag -a v0.13.7 -m "v0.13.7" && git push --follow-tags
 ```
 
+**`git add` the changelog before `git commit -am`.** `-a` stages modified files, not new ones, so a fresh `NNNN.txt` is left behind and the tag's APK is built with an empty `BuildConfig.CHANGELOG` -- the What's new sheet after that update shows nothing. 0.32.0 shipped that way. `just release-check` now refuses an untracked or placeholder changelog; run it after the commit, not before.
+
 **The tag must be annotated.** `git push --follow-tags` ignores a lightweight one, so the commit lands, the workflow never fires, and the release goes quietly missing. This has happened.
 
 `versionCode` is derived from the version (`0.13.7` → `1307`) so it cannot go backwards, and the workflow refuses a tag that disagrees with `app/build.gradle.kts`. CI signs; nothing is published by hand. Every release carries its certificate fingerprint — an APK signed with a different key cannot update an installed one, and uninstalling takes the synced vault, the token and the on-device SSH key.

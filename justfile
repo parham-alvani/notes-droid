@@ -135,5 +135,9 @@ release-check:
     @declared=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts); \
      code=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts); \
      echo "versionName $declared / versionCode $code"; \
-     test -f "fastlane/metadata/android/en-US/changelogs/$code.txt" \
-       && echo "changelog      ok" || echo "changelog      MISSING - run 'just bump $declared'"
+     log="fastlane/metadata/android/en-US/changelogs/$code.txt"; \
+     if ! test -f "$log"; then echo "changelog      MISSING - run 'just bump $declared'"; \
+     elif ! git ls-files --error-unmatch "$log" >/dev/null 2>&1; then \
+       echo "changelog      UNTRACKED - 'git add $log' first; 'commit -a' does not add new files, and the APK's What's new is built from the tree"; \
+     elif grep -q '^Describe what changed' "$log"; then echo "changelog      PLACEHOLDER - write $log"; \
+     else echo "changelog      ok"; fi
