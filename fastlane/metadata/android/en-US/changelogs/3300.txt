@@ -1,0 +1,5 @@
+A reader that moves.
+
+Swipe between open notes: the tabs are pages now, and the strip and the pages keep each other in step. A note's title travels from the row you tapped into the bar above the page, and a picture grows out of its place in the note when you open it and back into it when you close it.
+
+On a tablet or a phone on its side, the note sits beside the list it was picked from instead of replacing it. A note remembers which sections you folded shut. Folding a section, ticking a task and pinching the text size are felt as well as seen.
