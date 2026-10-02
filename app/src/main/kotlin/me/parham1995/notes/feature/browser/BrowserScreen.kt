@@ -60,9 +60,11 @@ import me.parham1995.notes.ui.bookmarkItems
 import me.parham1995.notes.ui.bookmarkNodes
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.image.ImageViewer
+import me.parham1995.notes.ui.noteTitleKey
 import me.parham1995.notes.ui.openLabel
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
+import me.parham1995.notes.ui.sharedBoundsIn
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -385,6 +387,8 @@ private fun BrowserRow(
             },
         // A folder with its own note opens that note; the chevron descends.
         underline = item.isFolder && item.noteId != null,
+        // The title travels into the note's bar when the row is opened.
+        titleModifier = item.noteId?.let { Modifier.sharedBoundsIn(noteTitleKey(it)) } ?: Modifier,
         onClick = {
             val note = item.noteId
             when {

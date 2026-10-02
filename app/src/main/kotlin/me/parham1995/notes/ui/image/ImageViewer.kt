@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,9 +58,13 @@ fun ImageViewer(
     alt: String?,
     onDismiss: () -> Unit,
     onOpenExternally: () -> Unit,
+    /** On the picture itself, not the layer, for sharing it with where it came from. */
+    modifier: Modifier = Modifier,
 ) {
     val image by rememberVaultImage(vaultId, path)
-    ZoomableViewer(
+    // In the window, not a dialog: the caller animates it in and out, and a
+    // picture shared with the page has to be in the same window as the page.
+    ZoomableContent(
         model = image.file,
         unavailable =
             stringResource(R.string.image_unavailable, path.substringAfterLast('/'))
@@ -68,6 +73,7 @@ fun ImageViewer(
         contentDescription = alt ?: path.substringAfterLast('/'),
         onDismiss = onDismiss,
         onOpenExternally = onOpenExternally,
+        modifier = modifier,
     )
 }
 
@@ -90,126 +96,145 @@ fun ZoomableViewer(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        val context = LocalContext.current
+        ZoomableContent(model, unavailable, caption, contentDescription, onDismiss, onOpenExternally)
+    }
+}
 
-        var scale by remember(model) { mutableFloatStateOf(1f) }
-        var offsetX by remember(model) { mutableFloatStateOf(0f) }
-        var offsetY by remember(model) { mutableFloatStateOf(0f) }
-        var frame by remember { mutableStateOf(IntSize.Zero) }
+/** The viewer itself, for a dialog or for a layer over the page. */
+@Composable
+private fun ZoomableContent(
+    model: Any?,
+    unavailable: String?,
+    caption: String?,
+    contentDescription: String?,
+    onDismiss: () -> Unit,
+    onOpenExternally: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
 
-        fun clamp() {
-            offsetX = offsetX.coerceIn(-panLimit(frame.width, scale), panLimit(frame.width, scale))
-            offsetY = offsetY.coerceIn(-panLimit(frame.height, scale), panLimit(frame.height, scale))
-        }
+    var scale by remember(model) { mutableFloatStateOf(1f) }
+    var offsetX by remember(model) { mutableFloatStateOf(0f) }
+    var offsetY by remember(model) { mutableFloatStateOf(0f) }
+    var frame by remember { mutableStateOf(IntSize.Zero) }
 
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .onSizeChanged { frame = it },
-            contentAlignment = Alignment.Center,
-        ) {
-            when (val loaded = model) {
-                null ->
-                    if (unavailable != null) {
-                        Text(unavailable, color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                    } else {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    }
+    fun clamp() {
+        offsetX = offsetX.coerceIn(-panLimit(frame.width, scale), panLimit(frame.width, scale))
+        offsetY = offsetY.coerceIn(-panLimit(frame.height, scale), panLimit(frame.height, scale))
+    }
 
-                else ->
-                    AsyncImage(
-                        model = ImageRequest.Builder(context).data(loaded).build(),
-                        contentDescription = contentDescription,
-                        contentScale = ContentScale.Fit,
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .graphicsLayer(
-                                    scaleX = scale,
-                                    scaleY = scale,
-                                    translationX = offsetX,
-                                    translationY = offsetY,
-                                ).pointerInput(model) {
-                                    detectTransformGestures { _, pan, zoom, _ ->
-                                        scale = (scale * zoom).coerceIn(MIN_ZOOM, MAX_ZOOM)
-                                        // Panning at rest would slide a
-                                        // fitted image around inside a frame
-                                        // it already fits.
-                                        if (scale > 1f) {
-                                            offsetX += pan.x
-                                            offsetY += pan.y
-                                        } else {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            // Over a page, a tap on the black must not reach the page.
+            .pointerInput(Unit) { detectTapGestures { } }
+            .onSizeChanged { frame = it },
+        contentAlignment = Alignment.Center,
+    ) {
+        when (val loaded = model) {
+            null ->
+                if (unavailable != null) {
+                    Text(unavailable, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+
+            else ->
+                AsyncImage(
+                    model = ImageRequest.Builder(context).data(loaded).build(),
+                    contentDescription = contentDescription,
+                    contentScale = ContentScale.Fit,
+                    modifier =
+                        modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offsetX,
+                                translationY = offsetY,
+                            ).pointerInput(model) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(MIN_ZOOM, MAX_ZOOM)
+                                    // Panning at rest would slide a
+                                    // fitted image around inside a frame
+                                    // it already fits.
+                                    if (scale > 1f) {
+                                        offsetX += pan.x
+                                        offsetY += pan.y
+                                    } else {
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    }
+                                    clamp()
+                                }
+                            }.pointerInput(model) {
+                                detectTapGestures(
+                                    // Back to fitted if it is zoomed at
+                                    // all, rather than only from exactly
+                                    // 1x -- a double tap after pinching to
+                                    // 1.2x should still be the way out.
+                                    onDoubleTap = {
+                                        if (abs(scale - 1f) > ZOOM_EPSILON) {
+                                            scale = 1f
                                             offsetX = 0f
                                             offsetY = 0f
+                                        } else {
+                                            scale = DOUBLE_TAP_ZOOM
                                         }
-                                        clamp()
-                                    }
-                                }.pointerInput(model) {
-                                    detectTapGestures(
-                                        // Back to fitted if it is zoomed at
-                                        // all, rather than only from exactly
-                                        // 1x -- a double tap after pinching to
-                                        // 1.2x should still be the way out.
-                                        onDoubleTap = {
-                                            if (abs(scale - 1f) > ZOOM_EPSILON) {
-                                                scale = 1f
-                                                offsetX = 0f
-                                                offsetY = 0f
-                                            } else {
-                                                scale = DOUBLE_TAP_ZOOM
-                                            }
-                                        },
-                                    )
-                                },
-                    )
-            }
+                                    },
+                                )
+                            },
+                )
+        }
 
+        // Over a page the layer runs under the status bar, so the
+        // controls step inside it.
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(8.dp),
+        ) {
+            LucideGlyph(
+                "x",
+                size = 22.dp,
+                contentDescription = stringResource(R.string.action_close),
+                tint = Color.White,
+            )
+        }
+
+        // The same way out the PDF viewer offers. An image in a note is
+        // often the thing being taken somewhere else -- sent to someone,
+        // marked up, saved -- and a viewer with no exit makes that a trip
+        // through the file manager.
+        onOpenExternally?.let { open ->
             IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                onClick = open,
+                modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp),
             ) {
                 LucideGlyph(
-                    "x",
-                    size = 22.dp,
-                    contentDescription = stringResource(R.string.action_close),
+                    "external-link",
+                    size = 20.dp,
+                    contentDescription = stringResource(R.string.action_open_externally),
                     tint = Color.White,
                 )
             }
+        }
 
-            // The same way out the PDF viewer offers. An image in a note is
-            // often the thing being taken somewhere else -- sent to someone,
-            // marked up, saved -- and a viewer with no exit makes that a trip
-            // through the file manager.
-            onOpenExternally?.let { open ->
-                IconButton(
-                    onClick = open,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                ) {
-                    LucideGlyph(
-                        "external-link",
-                        size = 20.dp,
-                        contentDescription = stringResource(R.string.action_open_externally),
-                        tint = Color.White,
-                    )
-                }
-            }
-
-            caption?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = it,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .background(Color.Black.copy(alpha = SCRIM))
-                            .padding(16.dp),
-                )
-            }
+        caption?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = SCRIM))
+                        .safeDrawingPadding()
+                        .padding(16.dp),
+            )
         }
     }
 }

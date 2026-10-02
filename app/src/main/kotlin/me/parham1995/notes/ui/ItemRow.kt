@@ -45,6 +45,8 @@ fun ItemRow(
     iconDescription: String? = null,
     /** Obsidian's own mark for a folder that has a note of its own. */
     underline: Boolean = false,
+    /** On the title alone: how a row shares it with the screen it opens. */
+    titleModifier: Modifier = Modifier,
     trailing: @Composable (() -> Unit)? = null,
 ) {
     Row(
@@ -60,6 +62,7 @@ fun ItemRow(
             AutoDirection(title) {
                 Text(
                     text = title,
+                    modifier = titleModifier,
                     style = MaterialTheme.typography.bodyLarge.inScript(),
                     textDecoration = if (underline) TextDecoration.Underline else null,
                     maxLines = 1,

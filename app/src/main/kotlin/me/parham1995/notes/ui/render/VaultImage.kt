@@ -24,7 +24,9 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import me.parham1995.notes.R
 import me.parham1995.notes.ui.image.rememberVaultImage
+import me.parham1995.notes.ui.imageKey
 import me.parham1995.notes.ui.inScript
+import me.parham1995.notes.ui.sharedElementIn
 
 /**
  * An embedded image.
@@ -77,6 +79,9 @@ fun VaultImage(
                     contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,
                     modifier =
                         sized
+                            // The same picture the viewer shows, so opening it
+                            // moves it rather than replacing it.
+                            .sharedElementIn(imageKey(vaultId, path))
                             .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onClick),
                 )

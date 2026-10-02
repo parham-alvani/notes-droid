@@ -2,8 +2,11 @@ package me.parham1995.notes.navigation
 
 import android.widget.Toast
 import androidx.annotation.StringRes
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,9 +19,11 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -42,6 +47,9 @@ import me.parham1995.notes.feature.sync.SyncScreen
 import me.parham1995.notes.feature.tags.TagsScreen
 import me.parham1995.notes.feature.tags.TagsViewModel
 import me.parham1995.notes.feature.tasks.TasksScreen
+import me.parham1995.notes.obsidian.Period
+import me.parham1995.notes.ui.LocalNavAnimatedVisibilityScope
+import me.parham1995.notes.ui.LocalSharedTransitionScope
 import me.parham1995.notes.ui.missingMessage
 
 /**
@@ -206,6 +214,7 @@ internal fun <T> tabInUse(
     onStack: (T) -> Boolean,
 ): T = tabs.firstOrNull { it != start && onStack(it) } ?: start
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun NotesNavHost(
     openScreen: StateFlow<String?> = MutableStateFlow(null),
@@ -389,93 +398,119 @@ fun NotesNavHost(
         showTabs = showBar,
         snackbar = snackbar,
     ) { placement ->
-        NavHost(
-            navController = navController,
-            startDestination =
-                when (start) {
-                    StartScreen.BROWSE -> BrowseRoute()
-                    StartScreen.TASKS -> TasksRoute
-                    StartScreen.SEARCH -> SearchRoute()
-                },
-            modifier = placement,
-        ) {
-            composable<BrowseRoute> { entry ->
-                BrowserScreen(
-                    initialPath = entry.toRoute<BrowseRoute>().path,
-                    onOpenNote = { navController.openNote(it, fresh = true) },
-                    onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
-                    onOpenAdvancedSettings = {
-                        navController.navigate(
-                            SettingsSectionRoute(SettingsSection.ADVANCED.name),
-                        )
-                    },
-                    onOpenHeading = { id, heading -> navController.openNote(id, fresh = true, heading = heading) },
-                    onSearch = { navController.search(it) },
-                    onToday = { openToday() },
-                    todayPeriod = dailyPeriod,
-                    onOpenTags = { navController.navigate(TagsRoute()) },
-                )
-            }
-            composable<TagsRoute> { entry ->
-                val route = entry.toRoute<TagsRoute>()
-                TagsScreen(
-                    tag = route.tag,
-                    vaultId = route.vaultId,
-                    onBack = { navController.popBackStack() },
-                    onOpenNote = { navController.openNote(it, fresh = true) },
-                )
-            }
-            composable<TasksRoute> {
-                TasksScreen(onOpenNote = { navController.openNote(it, fresh = true) })
-            }
-            composable<SearchRoute> { entry ->
-                SearchScreen(
-                    initialQuery = entry.toRoute<SearchRoute>().query,
-                    onOpenNote = { navController.openNote(it, fresh = true) },
-                    onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
-                )
-            }
-            composable<SettingsRoute> {
-                SettingsHomeScreen(
-                    onOpenSection = { navController.navigate(SettingsSectionRoute(it.name)) },
-                )
-            }
-            composable<SettingsSectionRoute> { entry ->
-                val section =
-                    SettingsSection.entries
-                        .firstOrNull { it.name == entry.toRoute<SettingsSectionRoute>().section }
-                        ?: SettingsSection.REPOSITORIES
-                SyncScreen(
-                    section = section,
-                    onBack = { navController.popBackStack() },
-                    onManageSshKeys = { navController.navigate(SshRoute) },
-                )
-            }
-            composable<GraphRoute> { entry ->
-                GraphScreen(
-                    noteId = entry.toRoute<GraphRoute>().id,
-                    onBack = { navController.popBackStack() },
-                    onOpenNote = { navController.openNote(it) },
-                )
-            }
-            composable<SshRoute> {
-                SshScreen(onBack = { navController.popBackStack() })
-            }
-            composable<NoteRoute> { entry ->
-                val route = entry.toRoute<NoteRoute>()
-                NoteScreen(
-                    noteId = route.id,
-                    openInNewTab = route.newTab,
-                    fresh = route.fresh,
-                    heading = route.heading,
-                    onOpenGraph = { navController.navigate(GraphRoute(it)) },
-                    onBack = { navController.popBackStack() },
-                    onOpenNote = { navController.openNote(it) },
-                    onOpenFolder = { navController.navigate(BrowseRoute(it)) },
-                    onSearch = { navController.search(it) },
-                    onOpenTag = { vaultId, tag -> navController.navigate(TagsRoute(tag, vaultId)) },
-                )
+        // One layout for every element shared across a navigation -- a note's
+        // title moving from the row it was tapped in to the bar above the
+        // page -- so a destination asks for the scope rather than being given
+        // it.
+        SharedTransitionLayout(placement) {
+            CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+                NavHost(
+                    navController = navController,
+                    startDestination =
+                        when (start) {
+                            StartScreen.BROWSE -> BrowseRoute()
+                            StartScreen.TASKS -> TasksRoute
+                            StartScreen.SEARCH -> SearchRoute()
+                        },
+                ) {
+                    graph(navController, dailyPeriod) { openToday() }
+                }
             }
         }
+    }
+}
+
+/**
+ * A destination that hands its own visibility down, so anything on it can
+ * share an element with the screen before or after it.
+ */
+private inline fun <reified T : Any> NavGraphBuilder.screen(
+    noinline content: @Composable (NavBackStackEntry) -> Unit,
+) = composable<T> { entry ->
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) { content(entry) }
+}
+
+/** Every destination, with what each needs from the host. */
+private fun NavGraphBuilder.graph(
+    navController: NavController,
+    dailyPeriod: Period,
+    openToday: () -> Unit,
+) {
+    screen<BrowseRoute> { entry ->
+        BrowserScreen(
+            initialPath = entry.toRoute<BrowseRoute>().path,
+            onOpenNote = { navController.openNote(it, fresh = true) },
+            onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
+            onOpenAdvancedSettings = {
+                navController.navigate(
+                    SettingsSectionRoute(SettingsSection.ADVANCED.name),
+                )
+            },
+            onOpenHeading = { id, heading -> navController.openNote(id, fresh = true, heading = heading) },
+            onSearch = { navController.search(it) },
+            onToday = { openToday() },
+            todayPeriod = dailyPeriod,
+            onOpenTags = { navController.navigate(TagsRoute()) },
+        )
+    }
+    screen<TagsRoute> { entry ->
+        val route = entry.toRoute<TagsRoute>()
+        TagsScreen(
+            tag = route.tag,
+            vaultId = route.vaultId,
+            onBack = { navController.popBackStack() },
+            onOpenNote = { navController.openNote(it, fresh = true) },
+        )
+    }
+    screen<TasksRoute> {
+        TasksScreen(onOpenNote = { navController.openNote(it, fresh = true) })
+    }
+    screen<SearchRoute> { entry ->
+        SearchScreen(
+            initialQuery = entry.toRoute<SearchRoute>().query,
+            onOpenNote = { navController.openNote(it, fresh = true) },
+            onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
+        )
+    }
+    screen<SettingsRoute> {
+        SettingsHomeScreen(
+            onOpenSection = { navController.navigate(SettingsSectionRoute(it.name)) },
+        )
+    }
+    screen<SettingsSectionRoute> { entry ->
+        val section =
+            SettingsSection.entries
+                .firstOrNull { it.name == entry.toRoute<SettingsSectionRoute>().section }
+                ?: SettingsSection.REPOSITORIES
+        SyncScreen(
+            section = section,
+            onBack = { navController.popBackStack() },
+            onManageSshKeys = { navController.navigate(SshRoute) },
+        )
+    }
+    screen<GraphRoute> { entry ->
+        GraphScreen(
+            noteId = entry.toRoute<GraphRoute>().id,
+            onBack = { navController.popBackStack() },
+            onOpenNote = { navController.openNote(it) },
+        )
+    }
+    screen<SshRoute> {
+        SshScreen(onBack = { navController.popBackStack() })
+    }
+    screen<NoteRoute> { entry ->
+        val route = entry.toRoute<NoteRoute>()
+        NoteScreen(
+            noteId = route.id,
+            openInNewTab = route.newTab,
+            fresh = route.fresh,
+            heading = route.heading,
+            onOpenGraph = { navController.navigate(GraphRoute(it)) },
+            onBack = { navController.popBackStack() },
+            onOpenNote = { navController.openNote(it) },
+            onOpenFolder = { navController.navigate(BrowseRoute(it)) },
+            onSearch = { navController.search(it) },
+            onOpenTag = { vaultId, tag -> navController.navigate(TagsRoute(tag, vaultId)) },
+        )
     }
 }

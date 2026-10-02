@@ -6,6 +6,9 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -97,7 +100,9 @@ import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.icon.VaultIcon
 import me.parham1995.notes.ui.image.ImageViewer
+import me.parham1995.notes.ui.imageKey
 import me.parham1995.notes.ui.inScript
+import me.parham1995.notes.ui.noteTitleKey
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.readingPadding
 import me.parham1995.notes.ui.render.Attachments
@@ -105,6 +110,8 @@ import me.parham1995.notes.ui.render.FootnoteSheet
 import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
+import me.parham1995.notes.ui.sharedBoundsIn
+import me.parham1995.notes.ui.sharedElementIn
 import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Markup
 import me.parham1995.notes.widget.NoteWidget
@@ -554,6 +561,11 @@ fun NoteScreen(
                             state.icon?.let { VaultIcon(spec = it, default = "file-text") }
                             Text(
                                 text = state.note?.title ?: "",
+                                // Keyed on the note the route asked for, which
+                                // is the one the row that opened it named --
+                                // the loaded note arrives after the transition
+                                // has already begun.
+                                modifier = Modifier.sharedBoundsIn(noteTitleKey(noteId)),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -807,8 +819,17 @@ fun NoteScreen(
 
         // The image names its own vault: the note's for an embed, the
         // drawer's for a file picked there.
-        run {
-            zoomed?.let { (vaultId, path, alt) ->
+        //
+        // Drawn over the page in the same window rather than in a dialog, so
+        // the picture can grow out of its place in the note and shrink back
+        // into it; a dialog is another window, and nothing is shared across
+        // one. The last image is kept through the exit so there is something
+        // to animate away.
+        var shownImage by remember { mutableStateOf<ZoomedImage?>(null) }
+        zoomed?.let { shownImage = it }
+        BackHandler(enabled = zoomed != null) { zoomed = null }
+        AnimatedVisibility(visible = zoomed != null, enter = fadeIn(), exit = fadeOut()) {
+            shownImage?.let { (vaultId, path, alt) ->
                 ImageViewer(
                     vaultId = vaultId,
                     path = path,
@@ -829,6 +850,7 @@ fun NoteScreen(
                             zoomed = null
                         }
                     },
+                    modifier = Modifier.sharedElementIn(imageKey(vaultId, path), visibility = this),
                 )
             }
         }

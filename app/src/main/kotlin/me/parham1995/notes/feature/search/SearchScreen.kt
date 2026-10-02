@@ -44,6 +44,8 @@ import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.icon.VaultIcon
 import me.parham1995.notes.ui.inScript
+import me.parham1995.notes.ui.noteTitleKey
+import me.parham1995.notes.ui.sharedBoundsIn
 
 @Composable
 fun SearchScreen(
@@ -86,7 +88,11 @@ fun SearchScreen(
                         onClick = { onOpenNote(row.note.id) },
                         onLongClick = { onOpenNoteInNewTab(row.note.id) },
                     ) {
-                        Text(row.note.title.ifBlank { row.note.name }, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            row.note.title.ifBlank { row.note.name },
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.sharedBoundsIn(noteTitleKey(row.note.id)),
+                        )
                         Text(
                             row.note.path,
                             style = MaterialTheme.typography.labelSmall,
