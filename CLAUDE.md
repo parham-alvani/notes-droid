@@ -94,6 +94,10 @@ Anything resolved reflectively or by name string gets renamed or removed in rele
 
 `tools/verify-apk.sh` checks the built APK still contains what it needs, including every class JGit and sshd name in `META-INF/services`. `just verify-apk` runs it. CI builds a debug-key-signed release APK on every push and runs it there too, so R8 trouble shows up before a tag rather than after one.
 
+## Driving the app over adb
+
+`tools/daftar` (or `just daftar …`) talks to `AdbSetupReceiver` through `am broadcast`: `status`, `add-vault OWNER REPO [NAME] [BRANCH]`, `remove-vault`, `transport VAULT ssh|rest`, `key VAULT` (prints the public line, generating it first), `test-key`, `token` (from stdin), `author NAME EMAIL`, `sync`. It is how a wiped phone is set up again in a minute, and how anything that would otherwise mean typing into a text field under a predictive keyboard is done -- `input text` goes through the keyboard, which completed "documents" three different ways. The receiver is exported but requires `android.permission.DUMP`, which only the shell and the system hold, so adb is the gate. Every argument is single-quoted for the device's second shell parse; an empty extra cannot be passed at all, so the wrapper omits it.
+
 ## Baseline profile
 
 `app/src/main/generated/baselineProfiles/baseline-prof.txt` and `startup-prof.txt` are recorded, not written: `just baseline-profile` drives the installed app on the connected phone through `baselineprofile/` (a `com.android.test` module with UI Automator) and writes what ART compiled on the way. The build type it records from, `nonMinifiedRelease`, is signed with the release key on purpose, so it installs over the phone's copy instead of asking for an uninstall. CI never records; it ships the committed file, and R8 and ART compile those paths on install. Re-record when a release changes what happens in the first seconds -- a new renderer, a new start screen -- not for every release.

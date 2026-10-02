@@ -239,6 +239,10 @@ Two things to know before submitting:
 
 F-Droid signs with its own key, so an F-Droid install and a GitHub-release install are different app identities and cannot update each other.
 
+## Setting up over adb
+
+With the phone connected, `tools/daftar` drives the installed app from a terminal: `tools/daftar add-vault OWNER REPO`, `tools/daftar transport REPO ssh`, `tools/daftar key REPO` to print the public key to register as a deploy key, `tools/daftar test-key REPO`, `tools/daftar sync`, `tools/daftar status`. Only the adb shell can reach the receiver behind it.
+
 ## Testing
 
 ```bash

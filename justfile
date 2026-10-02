@@ -130,6 +130,10 @@ baseline-profile:
     ./gradlew :app:generateBaselineProfile
     echo "written: app/src/main/generated/baselineProfiles/ -- commit both files"
 
+# drive the installed app over adb: status, add-vault, transport, key, test-key, token, author, sync
+daftar *args:
+    ./tools/daftar {{ args }}
+
 # check a release apk still carries what R8 cannot see
 [group('release')]
 verify-apk apk="app/build/outputs/apk/release/app-release.apk":

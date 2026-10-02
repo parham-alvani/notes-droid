@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Drive the installed app over adb. Usage:
+#   tools/daftar status
+#   tools/daftar add-vault OWNER REPO [NAME] [BRANCH]
+#   tools/daftar remove-vault VAULT
+#   tools/daftar transport VAULT ssh|rest
+#   tools/daftar key VAULT [--replace]      prints the public key line
+#   tools/daftar test-key VAULT
+#   tools/daftar token                      reads the token from stdin
+#   tools/daftar author NAME EMAIL
+#   tools/daftar sync
+# VAULT is a vault's name, its repository name, or its id. The receiver only
+# answers the shell (android.permission.DUMP), so this needs adb, not a token.
+set -euo pipefail
+ADB=${ADB:-adb}
+PKG=me.parham1995.notes
+RECEIVER="$PKG/.setup.AdbSetupReceiver"
+
+# adb shell joins its arguments with spaces and the device's shell splits
+# them again, so each one is single-quoted for that second parse.
+q() { local a; for a in "$@"; do printf "'%s' " "${a//\'/\'\\\'\'}"; done; }
+
+send() {
+    local out
+    out=$("$ADB" shell "am broadcast -n $RECEIVER -a $PKG.SETUP $(q "$@")" 2>&1)
+    # am prints: Broadcast completed: result=0, data="..."
+    # The answer may run to several lines, so it is cut out across them.
+    local code data
+    code=$(perl -0777 -ne 'print $1 if /result=(-?\d+)/' <<<"$out")
+    data=$(perl -0777 -ne 'print $1 if /data="(.*)"\s*$/s' <<<"$out")
+    if [ -z "$code" ]; then echo "$out" >&2; exit 2; fi
+    printf '%s\n' "$data"
+    [ "$code" = "0" ]
+}
+
+cmd=${1:-status}; shift || true
+case "$cmd" in
+    status) send --es cmd status ;;
+    add-vault)
+        # Empty extras cannot be passed: the shell drops the empty word and
+        # `am` then complains the next flag has no argument.
+        extra=(); [ -n "${3:-}" ] && extra+=(--es name "$3"); [ -n "${4:-}" ] && extra+=(--es branch "$4")
+        send --es cmd add-vault --es owner "${1:?owner}" --es repo "${2:?repo}" "${extra[@]}" ;;
+    remove-vault) send --es cmd remove-vault --es vault "${1:?vault}" ;;
+    transport) send --es cmd set-transport --es vault "${1:?vault}" --es transport "${2:?ssh|rest}" ;;
+    key) if [ "${2:-}" = "--replace" ]; then send --es cmd key --es vault "${1:?vault}" --es replace true; else send --es cmd key --es vault "${1:?vault}"; fi ;;
+    test-key) send --es cmd test-key --es vault "${1:?vault}" ;;
+    token) read -r -s token; send --es cmd set-token --es token "$token" ;;
+    author) send --es cmd set-author --es name "${1:?name}" --es email "${2:?email}" ;;
+    sync) send --es cmd sync ;;
+    *) sed -n '2,13p' "$0" >&2; exit 2 ;;
+esac

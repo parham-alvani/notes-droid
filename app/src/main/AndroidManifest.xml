@@ -240,6 +240,18 @@
             android:name=".feature.note.ReadAloud$StopReading"
             android:exported="false" />
 
+        <!-- The app driven from a terminal over adb. Exported because `am
+             broadcast` needs it to be; DUMP is a permission only the shell
+             and the system hold, so no installed app can reach it. -->
+        <receiver
+            android:name=".setup.AdbSetupReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="me.parham1995.notes.SETUP" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".reminder.ReminderReceiver"
             android:exported="false">
