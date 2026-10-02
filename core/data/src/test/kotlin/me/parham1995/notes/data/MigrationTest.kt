@@ -387,6 +387,29 @@ class MigrationTest {
         )
 
     @Test
+    fun `folds arrive empty, and two vaults' notes keep where they were left`() =
+        withData(
+            version = 14,
+            migration = NotesDatabase.MIGRATION_14_15,
+            seed = { connection ->
+                connection.execSQL(
+                    "INSERT INTO notes (id, vaultId, path, parent, name, slug, title, blobSha, size, " +
+                        "isFolderNote, isRtl, hasMermaid, hasMath, indexedAt, openedAt, scrollIndex, " +
+                        "readSha, changedAt) VALUES " +
+                        "(1, 1, 'README.md', '', 'README', 'readme', 'README', 'a', 1, 0, 0, 0, 0, 100, 7, 4, " +
+                        "'a', 100), " +
+                        "(2, 2, 'README.md', '', 'README', 'readme', 'README', 'b', 1, 0, 0, 0, 0, 200, NULL, 0, " +
+                        "NULL, 200)",
+                )
+            },
+            check = { connection ->
+                assertThat(texts(connection, "SELECT id || ':' || folds || ':' || scrollIndex FROM notes ORDER BY id"))
+                    .containsExactly("1::4", "2::0")
+                    .inOrder()
+            },
+        )
+
+    @Test
     fun `notes already opened count as read as they stand, in either vault`() =
         withData(
             version = 13,
@@ -521,6 +544,7 @@ class MigrationTest {
                 11..12 to NotesDatabase.MIGRATION_11_12,
                 12..13 to NotesDatabase.MIGRATION_12_13,
                 13..14 to NotesDatabase.MIGRATION_13_14,
+                14..15 to NotesDatabase.MIGRATION_14_15,
             )
 
         val CURRENT = MIGRATIONS.maxOf { (range, _) -> range.last }

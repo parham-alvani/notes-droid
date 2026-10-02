@@ -16,7 +16,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.markdown.HeadingFolds
 import me.parham1995.notes.markdown.MdBlock
@@ -55,6 +57,9 @@ fun MarkdownDocument(
     onToggleFold: ((Int) -> Unit)? = null,
 ) {
     val reading = LocalReading.current
+    // The size steps are coarse and snap once per gesture, so the snap is
+    // marked the way a detent is.
+    val haptics = LocalHapticFeedback.current
     // What is left once the folded sections are gone: positions in [blocks],
     // in order. The list is keyed by block id, so folding removes items rather
     // than re-composing everything under the fold.
@@ -77,6 +82,7 @@ fun MarkdownDocument(
                         if (!applied && event.changes.size >= 2) {
                             val zoom = event.calculateZoom()
                             if (zoom !in (1f - PINCH_SLOP)..(1f + PINCH_SLOP)) {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                 onPinch(zoom)
                                 applied = true
                             }

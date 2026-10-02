@@ -58,7 +58,8 @@ abstract class IndexDao {
      * forgetting -- see [writeBatch].
      */
     @Query(
-        "SELECT id, blobSha, openedAt, scrollIndex, readSha, changedAt FROM notes WHERE vaultId = :vaultId AND path = :path",
+        "SELECT id, blobSha, openedAt, scrollIndex, readSha, changedAt, folds FROM notes " +
+            "WHERE vaultId = :vaultId AND path = :path",
     )
     abstract suspend fun stateOf(
         vaultId: Long,
@@ -140,6 +141,7 @@ abstract class IndexDao {
                         scrollIndex = state.scrollIndex,
                         readSha = readShaAfter(state, write),
                         changedAt = if (state.blobSha == write.note.blobSha) state.changedAt else write.note.changedAt,
+                        folds = foldsAfter(state, write),
                     )
                 }
             val existing = state?.id ?: 0
@@ -217,6 +219,17 @@ abstract class IndexDao {
             state.readSha
         }
 
+    /**
+     * The folds a note keeps through a reindex: all of them while the file is
+     * as it was, and through the app's own edits, which only tick a line or
+     * add one at the end and move no block above it. Anything else may have
+     * moved every heading, and a fold is only a position.
+     */
+    private fun foldsAfter(
+        state: NoteState,
+        write: NoteWrite,
+    ): String = if (state.blobSha == write.note.blobSha || write.ownWrite) state.folds else ""
+
     @Query("UPDATE links SET targetId = NULL WHERE targetId = :noteId")
     abstract suspend fun detachInbound(noteId: Long)
 
@@ -235,4 +248,5 @@ data class NoteState(
     val scrollIndex: Int,
     val readSha: String?,
     val changedAt: Long,
+    val folds: String,
 )

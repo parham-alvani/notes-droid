@@ -77,6 +77,8 @@ data class RenderedNote(
     val headings: List<HeadingEntity>,
     /** The block this note was last left at, so reopening it resumes. */
     val scrollIndex: Int,
+    /** The headings folded shut when it was last read, by block position. */
+    val folded: Set<Int> = emptySet(),
     /** Raw wikilink target to note id, so a tap can navigate without re-resolving. */
     val linkTargets: Map<String, Long>,
     /**
@@ -325,6 +327,7 @@ class VaultRepository
                     isFolderNote = entity.isFolderNote,
                     headings = headings.byNote(entity.id),
                     scrollIndex = entity.scrollIndex,
+                    folded = Folds.parse(entity.folds),
                     linkTargets = targets,
                     brokenTargets = allTargets - targets.keys,
                     blockRefs = parsed.blockRefs,
@@ -346,6 +349,12 @@ class VaultRepository
             id: Long,
             block: Int,
         ) = notes.rememberScroll(id, block)
+
+        /** Records which headings a note is folded at, so opening it again keeps them. */
+        suspend fun rememberFolds(
+            id: Long,
+            folded: Set<Int>,
+        ) = notes.rememberFolds(id, Folds.format(folded))
 
         /** What one note is connected to, for the graph. */
         suspend fun neighbours(id: Long): Neighbours? {

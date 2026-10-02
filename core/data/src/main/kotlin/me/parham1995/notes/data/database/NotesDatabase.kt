@@ -21,7 +21,7 @@ import androidx.sqlite.execSQL
         TagEntity::class,
         AliasEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -517,6 +517,14 @@ abstract class NotesDatabase : RoomDatabase() {
                     connection.execSQL("ALTER TABLE `notes` ADD COLUMN `changedAt` INTEGER NOT NULL DEFAULT 0")
                     connection.execSQL("UPDATE `notes` SET `readSha` = `blobSha` WHERE `openedAt` IS NOT NULL")
                     connection.execSQL("UPDATE `notes` SET `changedAt` = `indexedAt`")
+                }
+            }
+
+        /** Which headings a note is folded at. Nothing starts folded. */
+        val MIGRATION_14_15 =
+            object : Migration(14, 15) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `notes` ADD COLUMN `folds` TEXT NOT NULL DEFAULT ''")
                 }
             }
 

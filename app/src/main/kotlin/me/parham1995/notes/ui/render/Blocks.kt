@@ -38,6 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -247,6 +249,9 @@ data class Fold(
 private fun FoldChevron(fold: Fold) {
     val label = stringResource(if (fold.folded) R.string.note_unfold else R.string.note_fold)
     val state = stringResource(if (fold.folded) R.string.state_collapsed else R.string.state_expanded)
+    // A section closing is felt as well as seen: the only other sign is a
+    // chevron turning, under the thumb that turned it.
+    val haptics = LocalHapticFeedback.current
     // A folded section points along the reading direction, the way a folded
     // tree node does; Lucide's chevrons are not mirrored for us.
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -262,8 +267,10 @@ private fun FoldChevron(fold: Fold) {
             // Small on the page; Compose extends the touch target to 48dp on
             // its own, without growing the heading's line.
             .size(FOLD_CHEVRON)
-            .clickable(role = Role.Button, onClickLabel = label, onClick = fold.toggle)
-            .semantics { stateDescription = state },
+            .clickable(role = Role.Button, onClickLabel = label) {
+                haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
+                fold.toggle()
+            }.semantics { stateDescription = state },
         contentAlignment = Alignment.Center,
     ) {
         LucideGlyph(
@@ -601,6 +608,9 @@ private fun ItemMarker(
     // container, where holding is how a word is selected.
     val reschedule = onReschedule?.takeIf { open && item.line >= 0 }
     val moveLabel = stringResource(R.string.reschedule_action)
+    // A tick is a commit. The box redraws only once the file has been
+    // re-read, so until then the tap is felt rather than seen.
+    val haptics = LocalHapticFeedback.current
     // A checkbox to a screen reader, with its state. No
     // minimumInteractiveComponentSize: Compose already extends a small
     // clickable's touch target to 48dp without growing its layout, and the
@@ -626,7 +636,12 @@ private fun ItemMarker(
                     role = Role.Checkbox,
                     onLongClickLabel = reschedule?.let { moveLabel },
                     onLongClick = reschedule?.let { { it(item.line) } },
-                    onClick = { complete?.invoke(item.line) },
+                    onClick = {
+                        complete?.let {
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            it(item.line)
+                        }
+                    },
                 ),
         contentAlignment = Alignment.Center,
     ) {

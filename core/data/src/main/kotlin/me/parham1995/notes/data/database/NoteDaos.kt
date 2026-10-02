@@ -124,6 +124,12 @@ interface NoteDao {
         block: Int,
     )
 
+    @Query("UPDATE notes SET folds = :folds WHERE id = :id")
+    suspend fun rememberFolds(
+        id: Long,
+        folds: String,
+    )
+
     /**
      * One note at random.
      *

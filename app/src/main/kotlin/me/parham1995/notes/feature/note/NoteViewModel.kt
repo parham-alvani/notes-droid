@@ -156,7 +156,20 @@ class NoteViewModel
         /** Folds the section under the heading at [block], or opens it again. */
         fun toggleFold(block: Int) {
             val folded = _state.value.folded
-            _state.value = _state.value.copy(folded = if (block in folded) folded - block else folded + block)
+            setFolds(if (block in folded) folded - block else folded + block)
+        }
+
+        /**
+         * Written through on every change rather than when the screen goes:
+         * a fold is a mark on the note, and the process can die before the
+         * screen does.
+         */
+        private fun setFolds(folded: Set<Int>) {
+            val current = _state.value
+            if (folded == current.folded) return
+            _state.value = current.copy(folded = folded)
+            val id = current.note?.id ?: return
+            viewModelScope.launch { repository.rememberFolds(id, folded) }
         }
 
         /**
@@ -173,7 +186,7 @@ class NoteViewModel
             val current = _state.value
             val blocks = current.note?.blocks ?: return block
             val opened = HeadingFolds.revealing(blocks, current.folded, block)
-            if (opened != current.folded) _state.value = current.copy(folded = opened)
+            setFolds(opened)
             return HeadingFolds.visible(blocks, opened).indexOf(block).takeIf { it >= 0 } ?: block
         }
 
@@ -268,6 +281,9 @@ class NoteViewModel
                             backlinks = repository.backlinks(id),
                             icon = assignments.forFile(note.vaultId, note.path),
                             writable = writable,
+                            // As it was left, less any fold the file has since
+                            // moved out from under.
+                            folded = HeadingFolds.kept(note.blocks, note.folded),
                             periodic = destinations.neighbours(note.vaultId, note.path),
                             contents =
                                 if (!note.isFolderNote) {

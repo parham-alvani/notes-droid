@@ -58,6 +58,19 @@ object HeadingFolds {
     }
 
     /**
+     * The folds in [folded] that still name a heading with a section under it.
+     *
+     * A stored fold is a position in the note as it was; after the file
+     * changes it may point at a paragraph, or past the end. Those are dropped
+     * rather than applied, because folding the wrong section is worse than
+     * folding none.
+     */
+    fun kept(
+        blocks: List<MdBlock>,
+        folded: Collection<Int>,
+    ): Set<Int> = folded.filterTo(LinkedHashSet()) { hasSection(blocks, it) }
+
+    /**
      * [folded] with every fold that hides the block at [target] undone, so the
      * block can be scrolled to. A heading that is itself folded is still on
      * screen, so asking for it opens nothing.

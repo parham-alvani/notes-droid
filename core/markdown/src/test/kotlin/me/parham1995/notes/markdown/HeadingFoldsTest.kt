@@ -89,6 +89,12 @@ class HeadingFoldsTest {
     }
 
     @Test
+    fun `a stored fold that no longer names a section is dropped`() {
+        // 1 is a paragraph, 6 is Second, 99 is off the end of the note.
+        assertThat(HeadingFolds.kept(note, listOf(2, 1, 6, 99))).containsExactly(2, 6).inOrder()
+    }
+
+    @Test
     fun `a position with folds above it moves up on screen`() {
         // Second is block 6, but with First folded it is the fourth thing drawn.
         assertThat(HeadingFolds.visible(note, setOf(2)).indexOf(6)).isEqualTo(3)

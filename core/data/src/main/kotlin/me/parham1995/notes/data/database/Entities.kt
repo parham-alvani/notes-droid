@@ -191,6 +191,17 @@ data class NoteEntity(
      * every note at once and would put the whole vault at "just now".
      */
     val changedAt: Long = 0,
+    /**
+     * The headings folded shut, as block positions joined by commas; empty
+     * when none are.
+     *
+     * Obsidian remembers folds per file, and a fold is worth the same here:
+     * a long note is read in pieces, and the pieces already read stay shut
+     * until asked for. Kept through a reindex the way [scrollIndex] is, and
+     * dropped when the file changes underneath, because the positions would
+     * then name the wrong blocks.
+     */
+    val folds: String = "",
 )
 
 /**
