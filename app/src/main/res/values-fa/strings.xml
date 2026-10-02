@@ -406,4 +406,5 @@
     <string name="note_unfold">باز کردن بخش</string>
     <string name="settings_keep_screen_on">روشن ماندن صفحه هنگام خواندن</string>
     <string name="help_keep_screen_on">تا نوشته‌ای باز است صفحه خاموش یا قفل نمی‌شود. بقیهٔ برنامه مثل همیشه رفتار می‌کند.</string>
+    <string name="pane_nothing_open">نوشته‌ای را از فهرست انتخاب کنید تا اینجا خوانده شود</string>
 </resources>

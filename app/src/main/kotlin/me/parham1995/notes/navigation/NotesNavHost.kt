@@ -4,16 +4,29 @@ import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.adaptive.layout.AnimatedPane
+import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
+import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
+import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
@@ -214,7 +227,7 @@ internal fun <T> tabInUse(
     onStack: (T) -> Boolean,
 ): T = tabs.firstOrNull { it != start && onStack(it) } ?: start
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun NotesNavHost(
     openScreen: StateFlow<String?> = MutableStateFlow(null),
@@ -242,13 +255,46 @@ fun NotesNavHost(
     val snackbar = remember { SnackbarHostState() }
     val jumps: JumpViewModel = hiltViewModel()
     val dailyPeriod by jumps.dailyPeriod.collectAsStateWithLifecycle()
+    val resume: ResumeViewModel = hiltViewModel()
+
+    // A note beside the list, or in place of it. An expanded window -- a
+    // tablet, a phone on its side -- holds the note next to whatever it was
+    // picked from; a phone upright navigates to it and back. The tabs are
+    // the same either way; what differs is whether opening one is a
+    // navigation.
+    val directive = calculatePaneScaffoldDirective(currentWindowAdaptiveInfoV2())
+    val twoPane = directive.maxHorizontalPartitions > 1
+    var paneHeading by remember { mutableStateOf<String?>(null) }
+    val open =
+        Opening { id, newTab, fresh, heading ->
+            if (twoPane) {
+                paneHeading = heading
+                resume.openInPane(id, inNewTab = newTab, fresh = fresh)
+            } else {
+                navController.openNote(id, newTab = newTab, fresh = fresh, heading = heading)
+            }
+        }
+
+    // Crossing the line between the two: a note being read stays on screen.
+    // Narrow to wide, the note route comes off the stack and the pane shows
+    // the same tab; wide to narrow, the tab being read is navigated to.
+    var wasTwoPane by rememberSaveable { mutableStateOf(twoPane) }
+    LaunchedEffect(twoPane) {
+        if (twoPane == wasTwoPane) return@LaunchedEffect
+        wasTwoPane = twoPane
+        if (twoPane) {
+            navController.popBackStack<NoteRoute>(inclusive = true)
+        } else {
+            resume.activeNote()?.let { navController.openNote(it) }
+        }
+    }
 
     // Today's daily note, found and never made: the app does not write notes,
     // so a day without one says where it would be and leaves it at that.
     fun openToday() =
         scope.launch {
             when (val found = jumps.today()) {
-                is Destination.Note -> navController.openNote(found.noteId, fresh = true)
+                is Destination.Note -> open.note(found.noteId, fresh = true)
                 is Destination.NoDailyNote ->
                     snackbar.showSnackbar(resources.getString(found.period.missingMessage(), found.path))
                 // A day is only ever a note or the lack of one.
@@ -289,7 +335,7 @@ fun NotesNavHost(
             // The resume below steps aside: the tabs finish restoring after
             // this, and reopening the last note then replaced the one tapped.
             resumed = true
-            navController.openNote(id, fresh = true)
+            open.note(id, fresh = true)
             (openNote as? MutableStateFlow)?.value = null
         }
     }
@@ -305,7 +351,7 @@ fun NotesNavHost(
         val message =
             when (val found = jumps.follow(uri)) {
                 is Destination.Note -> {
-                    navController.openNote(found.noteId, fresh = true, heading = found.heading)
+                    open.note(found.noteId, fresh = true, heading = found.heading)
                     null
                 }
                 is Destination.Search -> {
@@ -333,12 +379,11 @@ fun NotesNavHost(
     // that rather than guessing, and a saved flag keeps a rotation from
     // yanking someone back to a note they have since left. With nothing open
     // the start screen setting decides, as before.
-    val resume: ResumeViewModel = hiltViewModel()
     val restored by resume.restored.collectAsStateWithLifecycle()
     LaunchedEffect(restored) {
         if (!restored || resumed) return@LaunchedEffect
         resumed = true
-        resume.activeNote()?.let { navController.openNote(it) }
+        resume.activeNote()?.let { open.note(it) }
     }
 
     val tabs =
@@ -401,23 +446,87 @@ fun NotesNavHost(
         // One layout for every element shared across a navigation -- a note's
         // title moving from the row it was tapped in to the bar above the
         // page -- so a destination asks for the scope rather than being given
-        // it.
-        SharedTransitionLayout(placement) {
-            CompositionLocalProvider(LocalSharedTransitionScope provides this) {
-                NavHost(
-                    navController = navController,
-                    startDestination =
-                        when (start) {
-                            StartScreen.BROWSE -> BrowseRoute()
-                            StartScreen.TASKS -> TasksRoute
-                            StartScreen.SEARCH -> SearchRoute()
-                        },
-                ) {
-                    graph(navController, dailyPeriod) { openToday() }
+        // it. Movable, so that the window growing or shrinking moves the
+        // host between the pane and the whole screen without rebuilding it.
+        val host =
+            remember {
+                movableContentOf { modifier: Modifier ->
+                    SharedTransitionLayout(modifier) {
+                        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+                            NavHost(
+                                navController = navController,
+                                startDestination =
+                                    when (start) {
+                                        StartScreen.BROWSE -> BrowseRoute()
+                                        StartScreen.TASKS -> TasksRoute
+                                        StartScreen.SEARCH -> SearchRoute()
+                                    },
+                            ) {
+                                graph(navController, open, dailyPeriod) { openToday() }
+                            }
+                        }
+                    }
                 }
             }
+        if (!twoPane) {
+            host(placement)
+        } else {
+            val tabs by resume.open.collectAsStateWithLifecycle()
+            val navigator = rememberListDetailPaneScaffoldNavigator<Nothing>(scaffoldDirective = directive)
+            ListDetailPaneScaffold(
+                directive = navigator.scaffoldDirective,
+                value = navigator.scaffoldValue,
+                modifier = placement,
+                listPane = { AnimatedPane { host(Modifier) } },
+                detailPane = {
+                    AnimatedPane {
+                        val tab = tabs.current
+                        if (tab == null) {
+                            NothingOpen()
+                        } else {
+                            NoteScreen(
+                                noteId = tab.noteId,
+                                openInNewTab = false,
+                                heading = paneHeading,
+                                // Closing the last tab empties the pane; there
+                                // is nowhere to go back to from beside a list.
+                                onBack = {},
+                                onOpenGraph = { navController.navigate(GraphRoute(it)) },
+                                onOpenNote = { open.note(it) },
+                                onOpenFolder = { navController.navigate(BrowseRoute(it)) },
+                                onSearch = { navController.search(it) },
+                                onOpenTag = { vaultId, tag -> navController.navigate(TagsRoute(tag, vaultId)) },
+                            )
+                        }
+                    }
+                },
+            )
         }
     }
+}
+
+/** The detail pane with no tab open: the list beside it is what to do next. */
+@Composable
+private fun NothingOpen() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            stringResource(R.string.pane_nothing_open),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** How a note is opened from a list: by navigating to it, or into the pane beside the list. */
+private class Opening(
+    private val open: (id: Long, newTab: Boolean, fresh: Boolean, heading: String?) -> Unit,
+) {
+    fun note(
+        id: Long,
+        newTab: Boolean = false,
+        fresh: Boolean = false,
+        heading: String? = null,
+    ) = open(id, newTab, fresh, heading)
 }
 
 /**
@@ -433,20 +542,21 @@ private inline fun <reified T : Any> NavGraphBuilder.screen(
 /** Every destination, with what each needs from the host. */
 private fun NavGraphBuilder.graph(
     navController: NavController,
+    open: Opening,
     dailyPeriod: Period,
     openToday: () -> Unit,
 ) {
     screen<BrowseRoute> { entry ->
         BrowserScreen(
             initialPath = entry.toRoute<BrowseRoute>().path,
-            onOpenNote = { navController.openNote(it, fresh = true) },
-            onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
+            onOpenNote = { open.note(it, fresh = true) },
+            onOpenNoteInNewTab = { open.note(it, newTab = true) },
             onOpenAdvancedSettings = {
                 navController.navigate(
                     SettingsSectionRoute(SettingsSection.ADVANCED.name),
                 )
             },
-            onOpenHeading = { id, heading -> navController.openNote(id, fresh = true, heading = heading) },
+            onOpenHeading = { id, heading -> open.note(id, fresh = true, heading = heading) },
             onSearch = { navController.search(it) },
             onToday = { openToday() },
             todayPeriod = dailyPeriod,
@@ -459,17 +569,17 @@ private fun NavGraphBuilder.graph(
             tag = route.tag,
             vaultId = route.vaultId,
             onBack = { navController.popBackStack() },
-            onOpenNote = { navController.openNote(it, fresh = true) },
+            onOpenNote = { open.note(it, fresh = true) },
         )
     }
     screen<TasksRoute> {
-        TasksScreen(onOpenNote = { navController.openNote(it, fresh = true) })
+        TasksScreen(onOpenNote = { open.note(it, fresh = true) })
     }
     screen<SearchRoute> { entry ->
         SearchScreen(
             initialQuery = entry.toRoute<SearchRoute>().query,
-            onOpenNote = { navController.openNote(it, fresh = true) },
-            onOpenNoteInNewTab = { navController.openNote(it, newTab = true) },
+            onOpenNote = { open.note(it, fresh = true) },
+            onOpenNoteInNewTab = { open.note(it, newTab = true) },
         )
     }
     screen<SettingsRoute> {
@@ -492,7 +602,7 @@ private fun NavGraphBuilder.graph(
         GraphScreen(
             noteId = entry.toRoute<GraphRoute>().id,
             onBack = { navController.popBackStack() },
-            onOpenNote = { navController.openNote(it) },
+            onOpenNote = { open.note(it) },
         )
     }
     screen<SshRoute> {
@@ -507,7 +617,7 @@ private fun NavGraphBuilder.graph(
             heading = route.heading,
             onOpenGraph = { navController.navigate(GraphRoute(it)) },
             onBack = { navController.popBackStack() },
-            onOpenNote = { navController.openNote(it) },
+            onOpenNote = { open.note(it) },
             onOpenFolder = { navController.navigate(BrowseRoute(it)) },
             onSearch = { navController.search(it) },
             onOpenTag = { vaultId, tag -> navController.navigate(TagsRoute(tag, vaultId)) },

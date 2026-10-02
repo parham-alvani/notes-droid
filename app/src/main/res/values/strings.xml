@@ -407,4 +407,5 @@
     <string name="note_unfold">Unfold section</string>
     <string name="settings_keep_screen_on">Keep the screen on while reading</string>
     <string name="help_keep_screen_on">The screen does not dim or lock while a note is open. The rest of the app behaves as usual.</string>
+    <string name="pane_nothing_open">Pick a note from the list to read it here</string>
 </resources>
