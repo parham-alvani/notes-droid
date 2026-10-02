@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.roborazzi)
+    alias(libs.plugins.baselineprofile)
 }
 
 /**
@@ -134,6 +135,21 @@ android {
             // expensive choice it usually is.
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
+
+        // What the baseline profile is recorded from: the release build with
+        // R8 off, so the profile names the classes as they are written, and
+        // profileable, so the recorder may watch it. Signed as a release is,
+        // because it is installed over the copy on the phone and a different
+        // key would refuse to -- the plugin would otherwise sign it with the
+        // debug key.
+        create("nonMinifiedRelease") {
+            initWith(getByName("release"))
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isProfileable = true
+            matchingFallbacks += "release"
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
     }
 
     packaging {
@@ -172,6 +188,8 @@ dependencies {
     implementation(projects.core.dictionary)
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(projects.baselineprofile)
     implementation(libs.androidx.splashscreen)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

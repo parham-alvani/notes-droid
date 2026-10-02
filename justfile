@@ -112,6 +112,12 @@ ci: lint test build
 clean:
     ./gradlew clean
 
+# record the baseline profile from the connected phone and write it into the app
+[group('release')]
+baseline-profile:
+    ./gradlew :app:generateBaselineProfile
+    @echo "written: app/src/main/baseline-prof.txt -- commit it"
+
 # check a release apk still carries what R8 cannot see
 [group('release')]
 verify-apk apk="app/build/outputs/apk/release/app-release.apk":

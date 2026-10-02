@@ -94,6 +94,10 @@ Anything resolved reflectively or by name string gets renamed or removed in rele
 
 `tools/verify-apk.sh` checks the built APK still contains what it needs, including every class JGit and sshd name in `META-INF/services`. `just verify-apk` runs it. CI builds a debug-key-signed release APK on every push and runs it there too, so R8 trouble shows up before a tag rather than after one.
 
+## Baseline profile
+
+`app/src/main/baseline-prof.txt` is recorded, not written: `just baseline-profile` drives the installed app on the connected phone through `baselineprofile/` (a `com.android.test` module with UI Automator) and writes what ART compiled on the way. The build type it records from, `nonMinifiedRelease`, is signed with the release key on purpose, so it installs over the phone's copy instead of asking for an uninstall. CI never records; it ships the committed file, and R8 and ART compile those paths on install. Re-record when a release changes what happens in the first seconds -- a new renderer, a new start screen -- not for every release.
+
 ## Releasing
 
 ```bash
@@ -192,6 +196,9 @@ Do not solve this in `VaultFilter` instead. That decides what reaches the device
 - **JGit's `repository.resolve(sha)` does not look for the object.** A full 40-character sha resolves whether or not the commit is in the clone, and `parseCommit` then throws `MissingObjectException`. Ask `repository.objectDatabase.has(id)` first. A vault switched from REST carries exactly such a commit.
 - **A deploy key belongs to exactly one repository.** GitHub returns 422 "key is already in use" on the second. Hence one key per vault, generated on the device.
 - **A global gitignore can hide a whole directory.** A bare `Icon` pattern matched `ui/icon/` on a case-insensitive filesystem, so an entire package was never committed and CI had never run its tests. `!icon/` in `.gitignore` is the fix, and the symptom is a tree that builds locally and not in CI.
+- **Nothing is shared across a `Dialog`.** A dialog is another window, and a shared element transition lives inside one `SharedTransitionLayout` in one window. The image viewer was a dialog, and the picture could not grow out of its place in the note until the viewer became a layer over the page, with its own `BackHandler` and a tap sink on the black. The mermaid viewer is still a dialog and has no such transition.
+- **The pager shows one document.** Only the tab being read composes `MarkdownDocument`; the page sliding in beside it is a title and an opening line, and becomes the note when the swipe settles. Composing two long notes at once for the length of a swipe is what that avoids; the price is that the preview has to be good enough not to look like a placeholder.
+- **Two layouts, one set of tabs.** On an expanded window a note is not navigated to: it is opened into the tabs and the detail pane follows `NoteTabs`. Anything that opens a note from a list goes through `Opening` in `NotesNavHost`, which picks; a new `navController.openNote(...)` call site would show the note full-width beside an empty pane on a tablet.
 - **Compose `Text(style = …)` replaces `LocalTextStyle`, it does not merge with it.** Hence the `inScript()` helper.
 - **`TopAppBar`'s `navigationIcon` slot is a box too.** Two `IconButton`s put in it directly are drawn one on top of the other; the back arrow spent a build hidden underneath the drawer's. Wrap them in a `Row`.
 - **A `Scaffold` lays its content slot out as a box, not a column.** Two things emitted side by side there are drawn on top of each other: a tab strip and a full-height column came out with the strip behind the text and the column swallowing every tap meant for it. Put them in a `Column` and apply the bar's inset once.

@@ -24,7 +24,8 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Properties and aliases** — front matter shown as a foldable Properties block, and a note's `aliases` answer to `[[links]]` and the quick switcher
 - **Backlinks, unlinked mentions, an outline and a connections graph** for every note
 - **Find in note**, and notes that resume where you left them
-- **Made for reading** — fold a section shut from its heading, as Obsidian's reading view does; the bar slides away as you read down and back on the first scroll up; a hairline under it says how far through the note you are; and the screen can be kept on while a note is open
+- **Made for reading** — fold a section shut from its heading, as Obsidian's reading view does, and the note remembers its folds; the bar slides away as you read down and back on the first scroll up; a hairline under it says how far through the note you are; the screen can be kept on while a note is open; and folding, ticking and pinching are felt as well as seen
+- **Tabs you can swipe between**, and a note's title that travels from the row you tapped into the bar above the page, and pictures that grow out of their place in the note
 - **Updated since you read** — the notes that changed upstream since you last opened them, at the top of the browser and marked wherever they are listed; the phone's own edits do not count
 - **A files drawer** in the note screen — filter by name, the tabs already open, the last few notes, and the folder this one sits in
 - **Home screen widgets** — what is overdue and due today, and the notes you were last reading
@@ -47,7 +48,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **English dictionary** — hold a finger on a word in a note, or pick *Define* from the text-selection menu in any app, for its meanings, examples and synonyms; inflections find their word ("mice" is mouse). Open English WordNet, bundled, so it works with no signal and no word leaves the phone
 - **The vault's own bookmarks** — Obsidian's Bookmarks plugin, groups and all, at the top of the browser and in the files drawer: a note, a heading in one, a folder or a saved search
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
-- **Tablets and landscape** — the note held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar on a wide window
+- **Tablets and landscape** — the note beside the list it was picked from on an expanded window, held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
 - **A little writing** — tick a task off, add one, move one to another day, capture a thought — each a commit, and offered only where the credential can actually push
 
