@@ -26,6 +26,7 @@ import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.feature.tasks.describe
 import me.parham1995.notes.feature.tasks.describeMove
 import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.markdown.HeadingFolds
 import me.parham1995.notes.markdown.HeadingPath
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteMatch
@@ -62,8 +63,16 @@ data class NoteUiState(
     val message: UiText? = null,
     /** The journal either side, when this note is one of its vault's daily notes. */
     val periodic: PeriodNeighbours? = null,
+    /**
+     * Headings folded shut, by position in the note's blocks. Reset with the
+     * note: a fold is about this reading of this page.
+     */
+    val folded: Set<Int> = emptySet(),
 ) {
     val isFolderNote: Boolean get() = note?.isFolderNote == true
+
+    /** The positions on screen, once the folded sections are left out. */
+    val shownBlocks: List<Int> get() = HeadingFolds.visible(note?.blocks.orEmpty(), folded)
 
     /** Targets with no destination, so the renderer can style them as broken. */
     val brokenLinks: Set<String> get() = note?.brokenTargets.orEmpty()
@@ -142,6 +151,30 @@ class NoteViewModel
 
         fun dismissMessage() {
             _state.value = _state.value.copy(message = null)
+        }
+
+        /** Folds the section under the heading at [block], or opens it again. */
+        fun toggleFold(block: Int) {
+            val folded = _state.value.folded
+            _state.value = _state.value.copy(folded = if (block in folded) folded - block else folded + block)
+        }
+
+        /**
+         * Where the block at [block] is on screen, opening whatever fold hides
+         * it.
+         *
+         * Every scroll the reader makes -- to a heading from the outline or a
+         * link, to a find hit, to the paragraph being read aloud -- names a
+         * position in the full list, and the list on screen is shorter by what
+         * is folded. Going through here is what keeps "an id is not an index"
+         * from happening again one level up.
+         */
+        fun reveal(block: Int): Int {
+            val current = _state.value
+            val blocks = current.note?.blocks ?: return block
+            val opened = HeadingFolds.revealing(blocks, current.folded, block)
+            if (opened != current.folded) _state.value = current.copy(folded = opened)
+            return HeadingFolds.visible(blocks, opened).indexOf(block).takeIf { it >= 0 } ?: block
         }
 
         /**
@@ -283,10 +316,15 @@ class NoteViewModel
          * Records where the note was left.
          *
          * Called as the screen goes away rather than on every scroll: this is a
-         * write per note read, not one per frame.
+         * write per note read, not one per frame. [position] is the list's
+         * first visible item, which is translated to a block here.
          */
-        fun rememberScroll(block: Int) {
-            val id = _state.value.note?.id ?: return
+        fun rememberScroll(position: Int) {
+            val current = _state.value
+            val id = current.note?.id ?: return
+            // The list's first item is a position among what is shown, and
+            // with a section folded that is not the block's own position.
+            val block = current.shownBlocks.getOrElse(position) { position }
             viewModelScope.launch { repository.rememberScroll(id, block) }
         }
 

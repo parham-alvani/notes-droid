@@ -24,6 +24,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Properties and aliases** — front matter shown as a foldable Properties block, and a note's `aliases` answer to `[[links]]` and the quick switcher
 - **Backlinks, unlinked mentions, an outline and a connections graph** for every note
 - **Find in note**, and notes that resume where you left them
+- **Made for reading** — fold a section shut from its heading, as Obsidian's reading view does; the bar slides away as you read down and back on the first scroll up; a hairline under it says how far through the note you are; and the screen can be kept on while a note is open
 - **Updated since you read** — the notes that changed upstream since you last opened them, at the top of the browser and marked wherever they are listed; the phone's own edits do not count
 - **A files drawer** in the note screen — filter by name, the tabs already open, the last few notes, and the folder this one sits in
 - **Home screen widgets** — what is overdue and due today, and the notes you were last reading

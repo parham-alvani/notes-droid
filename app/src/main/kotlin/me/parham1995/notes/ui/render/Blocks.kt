@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -121,6 +122,11 @@ fun MdBlockView(
     actions: RenderActions,
     brokenLinks: Set<String>,
     modifier: Modifier = Modifier,
+    /**
+     * How a heading folds, when it is one and the page folds. Null everywhere
+     * else: an embed, a footnote, a widget show a note and do not fold it.
+     */
+    fold: Fold? = null,
 ) {
     // Direction is per block, so a Persian paragraph and the Latin code block
     // under it each read correctly in the same note.
@@ -135,7 +141,7 @@ fun MdBlockView(
             ),
     ) {
         when (block) {
-            is MdBlock.Heading -> HeadingView(block, actions, brokenLinks, modifier)
+            is MdBlock.Heading -> HeadingView(block, actions, brokenLinks, modifier, fold)
             is MdBlock.Paragraph ->
                 RichText(
                     inlines = block.inlines,
@@ -185,6 +191,7 @@ private fun HeadingView(
     actions: RenderActions,
     brokenLinks: Set<String>,
     modifier: Modifier,
+    fold: Fold?,
 ) {
     val style =
         when (block.level) {
@@ -198,17 +205,24 @@ private fun HeadingView(
         // More space above than below, so a heading belongs to what follows it
         // rather than floating between two sections.
         Spacer(Modifier.height(if (block.level <= 2) 18.dp else 12.dp))
-        RichText(
-            inlines = block.inlines,
-            // A heading to a screen reader too, so it can be jumped between
-            // the way the outline jumps between them.
-            modifier = Modifier.fillMaxWidth().semantics { heading() },
-            // naz gives @markup.heading.1 through .4 their own colours, and
-            // this follows them rather than picking a scale.
-            style = style.copy(color = Markup.heading(block.level)).inScript(),
-            actions = actions.inline,
-            brokenLinks = brokenLinks,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RichText(
+                inlines = block.inlines,
+                // A heading to a screen reader too, so it can be jumped between
+                // the way the outline jumps between them.
+                modifier = Modifier.weight(1f).semantics { heading() },
+                // naz gives @markup.heading.1 through .4 their own colours, and
+                // this follows them rather than picking a scale.
+                style = style.copy(color = Markup.heading(block.level)).inScript(),
+                actions = actions.inline,
+                brokenLinks = brokenLinks,
+            )
+            // Obsidian's reading view folds a section from a chevron beside
+            // its heading, and so does this. At the end of the line rather
+            // than in a gutter: the margin is where a thumb already is, and
+            // the heading keeps its left edge with the text under it.
+            if (fold != null) FoldChevron(fold)
+        }
         if (block.level <= 2) {
             HorizontalDivider(
                 Modifier.padding(top = 6.dp),
@@ -217,6 +231,59 @@ private fun HeadingView(
         }
     }
 }
+
+/**
+ * Whether the heading's section is folded, and how to change that.
+ *
+ * Handed to a heading by the page that holds the fold state; the heading
+ * itself remembers nothing, so the state survives it scrolling off and back.
+ */
+data class Fold(
+    val folded: Boolean,
+    val toggle: () -> Unit,
+)
+
+@Composable
+private fun FoldChevron(fold: Fold) {
+    val label = stringResource(if (fold.folded) R.string.note_unfold else R.string.note_fold)
+    val state = stringResource(if (fold.folded) R.string.state_collapsed else R.string.state_expanded)
+    // A folded section points along the reading direction, the way a folded
+    // tree node does; Lucide's chevrons are not mirrored for us.
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val glyph =
+        when {
+            !fold.folded -> "chevron-down"
+            rtl -> "chevron-left"
+            else -> "chevron-right"
+        }
+    Box(
+        Modifier
+            .padding(start = 8.dp)
+            // Small on the page; Compose extends the touch target to 48dp on
+            // its own, without growing the heading's line.
+            .size(FOLD_CHEVRON)
+            .clickable(role = Role.Button, onClickLabel = label, onClick = fold.toggle)
+            .semantics { stateDescription = state },
+        contentAlignment = Alignment.Center,
+    ) {
+        LucideGlyph(
+            glyph,
+            size = FOLD_CHEVRON,
+            // Louder when folded: the chevron is then the only sign that
+            // there is more here than the heading.
+            tint =
+                if (fold.folded) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = FOLD_CHEVRON_ALPHA)
+                },
+            contentDescription = label,
+        )
+    }
+}
+
+private val FOLD_CHEVRON = 20.dp
+private const val FOLD_CHEVRON_ALPHA = 0.6f
 
 @Composable
 private fun CodeBlockView(

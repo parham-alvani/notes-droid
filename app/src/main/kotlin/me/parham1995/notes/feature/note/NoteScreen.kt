@@ -2,8 +2,10 @@ package me.parham1995.notes.feature.note
 
 import android.content.ClipData
 import android.content.Intent
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +47,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -57,6 +60,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.toClipEntry
@@ -131,6 +135,20 @@ fun NoteScreen(
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    // The bar slides away as the note is read down and comes back on the
+    // first scroll up. On a phone it is a seventh of the screen, and nothing
+    // on it is needed mid-paragraph.
+    val topBar = TopAppBarDefaults.enterAlwaysScrollBehavior()
+
+    // Awake while a note is open, when asked for. The flag is the window's,
+    // so it is taken off again as this screen goes rather than left for the
+    // settings page that follows it.
+    val keepScreenOn = LocalReading.current.keepScreenOn
+    val window = LocalActivity.current?.window
+    DisposableEffect(keepScreenOn, window) {
+        if (keepScreenOn) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { if (keepScreenOn) window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
 
     var showOutline by remember { mutableStateOf(false) }
     var showBacklinks by remember { mutableStateOf(false) }
@@ -179,8 +197,10 @@ fun NoteScreen(
     // page does not jump under someone reading along.
     LaunchedEffect(spokenBlock) {
         val block = spokenBlock ?: return@LaunchedEffect
+        // A position on screen, not in the note: a fold above it moves it up.
+        val position = viewModel.reveal(block)
         val shown = listState.layoutInfo.visibleItemsInfo.map { it.index }
-        if (block !in shown.dropLast(1)) listState.animateScrollToItem(block)
+        if (position !in shown.dropLast(1)) listState.animateScrollToItem(position)
     }
 
     // Pinned to the home screen by vault and path, so the pin outlives the id.
@@ -286,11 +306,11 @@ fun NoteScreen(
         val target = blockForHeading(note.headings, pendingHeading, note.blockRefs)
         when {
             target != null -> {
-                listState.scrollToItem(target)
+                listState.scrollToItem(viewModel.reveal(target))
                 pendingHeading = null
             }
             pendingHeading != null -> pendingHeading = null // renamed since; stop asking
-            note.scrollIndex > 0 -> listState.scrollToItem(note.scrollIndex)
+            note.scrollIndex > 0 -> listState.scrollToItem(viewModel.reveal(note.scrollIndex))
         }
     }
     DisposableEffect(loadedId) {
@@ -298,6 +318,9 @@ fun NoteScreen(
             if (loadedId != null) viewModel.rememberScroll(listState.firstVisibleItemIndex)
         }
     }
+    // A new note starts with its title showing, however far down the last one
+    // had pushed the bar.
+    LaunchedEffect(loadedId) { topBar.state.heightOffset = 0f }
 
     val snackbar = remember { SnackbarHostState() }
     val message = state.message?.text()
@@ -516,9 +539,11 @@ fun NoteScreen(
         },
     ) {
         Scaffold(
+            modifier = Modifier.nestedScroll(topBar.nestedScrollConnection),
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
                 TopAppBar(
+                    scrollBehavior = topBar,
                     title = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -691,6 +716,9 @@ fun NoteScreen(
             // swallowed every tap meant for it, which reads as a tab bar that
             // collides with the text and does not work.
             Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
+                // How far down the note this is, as a hairline under the bar.
+                // Blank for a page that fits, and for the folder listing.
+                ReadingProgress(listState, enabled = !showContents && state.note != null)
                 // Only with something to switch between: one tab is a strip that
                 // says the same thing as the title above it.
                 if (tabs.tabs.size > 1) {
@@ -734,7 +762,9 @@ fun NoteScreen(
                             query = state.findQuery,
                             matches = state.matches.size,
                             onQueryChange = viewModel::find,
-                            onJump = { index -> scope.launch { listState.animateScrollToItem(index) } },
+                            onJump = { index ->
+                                scope.launch { listState.animateScrollToItem(viewModel.reveal(index)) }
+                            },
                             matchBlocks = state.matches.map { it.blockIndex },
                         )
                     }
@@ -764,6 +794,8 @@ fun NoteScreen(
                                             onPinch = viewModel::pinchTextScale,
                                             actions = noteActions ?: RenderActions(),
                                             spoken = spokenBlock,
+                                            folded = state.folded,
+                                            onToggleFold = viewModel::toggleFold,
                                         )
                                     }
                             }
@@ -886,7 +918,9 @@ fun NoteScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             showOutline = false
-                                            scope.launch { listState.animateScrollToItem(heading.blockIndex) }
+                                            scope.launch {
+                                                listState.animateScrollToItem(viewModel.reveal(heading.blockIndex))
+                                            }
                                         }
                                         // Indent by level so the outline reads as a
                                         // structure rather than a flat list.

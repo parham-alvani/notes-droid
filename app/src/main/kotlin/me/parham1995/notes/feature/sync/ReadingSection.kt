@@ -198,6 +198,18 @@ internal fun ReadingCard(
                 )
             }
         }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_keep_screen_on), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.help_keep_screen_on),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = reading.keepScreenOn, onCheckedChange = viewModel::setKeepScreenOn)
+        }
     }
 }
 

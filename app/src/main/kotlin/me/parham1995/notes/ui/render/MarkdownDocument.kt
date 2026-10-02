@@ -10,14 +10,15 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import me.parham1995.notes.markdown.HeadingFolds
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.StylusSpotlight
@@ -45,8 +46,19 @@ fun MarkdownDocument(
     onPinch: ((Float) -> Unit)? = null,
     /** The block being read aloud, by its position, tinted so it can be followed. */
     spoken: Int? = null,
+    /**
+     * Headings whose sections are folded away, by position in [blocks]. The
+     * page owns this, not the headings, so a fold survives scrolling off.
+     */
+    folded: Set<Int> = emptySet(),
+    /** Folds or unfolds the heading at a position. Null, and headings do not fold. */
+    onToggleFold: ((Int) -> Unit)? = null,
 ) {
     val reading = LocalReading.current
+    // What is left once the folded sections are gone: positions in [blocks],
+    // in order. The list is keyed by block id, so folding removes items rather
+    // than re-composing everything under the fold.
+    val shown = remember(blocks, folded) { HeadingFolds.visible(blocks, folded) }
     // Outside the SelectionContainer, so watching the pen cannot interfere
     // with the gesture that selects text.
     StylusSpotlight(
@@ -82,7 +94,8 @@ fun MarkdownDocument(
                 contentPadding = contentPadding,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                itemsIndexed(items = blocks, key = { _, block -> block.id }) { index, block ->
+                items(items = shown, key = { blocks[it].id }) { index ->
+                    val block = blocks[index]
                     val tint =
                         if (index == spoken) {
                             Modifier.background(
@@ -92,7 +105,15 @@ fun MarkdownDocument(
                         } else {
                             Modifier
                         }
-                    Box(tint) { MdBlockView(block, actions, brokenLinks) }
+                    // Only a heading with something under it gets a chevron:
+                    // one with nothing to hide would fold to no visible effect.
+                    val fold =
+                        if (onToggleFold != null && HeadingFolds.hasSection(blocks, index)) {
+                            Fold(folded = index in folded, toggle = { onToggleFold(index) })
+                        } else {
+                            null
+                        }
+                    Box(tint) { MdBlockView(block, actions, brokenLinks, fold = fold) }
                 }
             }
         }

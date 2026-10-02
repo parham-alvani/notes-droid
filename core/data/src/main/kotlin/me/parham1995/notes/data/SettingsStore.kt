@@ -176,6 +176,15 @@ data class ReadingSettings(
     val holdToDefine: Boolean = true,
     val browserSort: BrowserSort = BrowserSort.NAME,
     val lineWidth: LineWidth = LineWidth.COMFORTABLE,
+    /**
+     * Hold the screen awake while a note is open.
+     *
+     * Off by default: it costs battery, and most notes are read in less time
+     * than the screen takes to dim. For the ones that are followed rather than
+     * read -- a recipe, a checklist, a page open beside a keyboard -- it is the
+     * difference between a reader and a screen that keeps going dark.
+     */
+    val keepScreenOn: Boolean = false,
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
@@ -323,6 +332,7 @@ class SettingsStore
                             startScreen = StartScreen.parse(preferences[START_SCREEN]),
                             browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
                             lineWidth = LineWidth.parse(preferences[LINE_WIDTH]),
+                            keepScreenOn = preferences[KEEP_SCREEN_ON] ?: false,
                         ),
                 )
             }
@@ -429,6 +439,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[HOLD_TO_DEFINE] = enabled }
         }
 
+        suspend fun setKeepScreenOn(enabled: Boolean) {
+            context.settingsDataStore.edit { it[KEEP_SCREEN_ON] = enabled }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -494,6 +508,7 @@ class SettingsStore
             val SCRATCHPAD_VAULT = longPreferencesKey("scratchpad_vault")
             val HIDE_DONE_TASKS = booleanPreferencesKey("hide_completed_tasks")
             val HOLD_TO_DEFINE = booleanPreferencesKey("hold_to_define")
+            val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")
