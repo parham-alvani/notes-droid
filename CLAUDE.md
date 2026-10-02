@@ -96,7 +96,9 @@ Anything resolved reflectively or by name string gets renamed or removed in rele
 
 ## Baseline profile
 
-`app/src/main/baseline-prof.txt` is recorded, not written: `just baseline-profile` drives the installed app on the connected phone through `baselineprofile/` (a `com.android.test` module with UI Automator) and writes what ART compiled on the way. The build type it records from, `nonMinifiedRelease`, is signed with the release key on purpose, so it installs over the phone's copy instead of asking for an uninstall. CI never records; it ships the committed file, and R8 and ART compile those paths on install. Re-record when a release changes what happens in the first seconds -- a new renderer, a new start screen -- not for every release.
+`app/src/main/generated/baselineProfiles/baseline-prof.txt` and `startup-prof.txt` are recorded, not written: `just baseline-profile` drives the installed app on the connected phone through `baselineprofile/` (a `com.android.test` module with UI Automator) and writes what ART compiled on the way. The build type it records from, `nonMinifiedRelease`, is signed with the release key on purpose, so it installs over the phone's copy instead of asking for an uninstall. CI never records; it ships the committed file, and R8 and ART compile those paths on install. Re-record when a release changes what happens in the first seconds -- a new renderer, a new start screen -- not for every release.
+
+**Recording uninstalls the app on the device.** The connected-test task behind it removes the app under test around the run, data and all, whatever key it is signed with -- `firstInstallTime` on the phone moved to the minute the recording ran, and the vault, the token, the on-device SSH key and every setting went with it. The recipe refuses to run without `DAFTAR_WIPE_OK=1` for that reason. Record on an emulator, or on a device whose vault you are prepared to add again; never on the phone that is the only copy of a configured vault.
 
 ## Releasing
 

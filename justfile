@@ -112,11 +112,23 @@ ci: lint test build
 clean:
     ./gradlew clean
 
-# record the baseline profile from the connected phone and write it into the app
+# record the baseline profile from the connected device -- UNINSTALLS THE APP THERE, vault and SSH key included
 [group('release')]
 baseline-profile:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # The connected-test task that drives the recording uninstalls the app
+    # under test around the run. On the one phone this app lives on, that is
+    # the synced vault, the token, the on-device SSH key and every setting --
+    # which is exactly what happened the first time this ran. Only an
+    # emulator, or a device whose vault you are willing to set up again.
+    if [ "${DAFTAR_WIPE_OK:-}" != "1" ]; then
+        echo "baseline-profile uninstalls the app on the connected device, data and all." >&2
+        echo "Run it against an emulator, or set DAFTAR_WIPE_OK=1 if losing the vault there is fine." >&2
+        exit 1
+    fi
     ./gradlew :app:generateBaselineProfile
-    @echo "written: app/src/main/baseline-prof.txt -- commit it"
+    echo "written: app/src/main/generated/baselineProfiles/ -- commit both files"
 
 # check a release apk still carries what R8 cannot see
 [group('release')]

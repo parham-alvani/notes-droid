@@ -9,7 +9,8 @@ plugins {
  *
  * A test module rather than part of the app: the recorder drives the app
  * from outside, through UI Automator, and writes what the runtime compiled
- * on the way. The result is committed as `app/src/main/baseline-prof.txt`,
+ * on the way. The result is committed under
+ * `app/src/main/generated/baselineProfiles/`,
  * so CI never needs a device -- it only needs the file, which R8 and ART
  * then use to compile the hot paths ahead of time on install.
  *

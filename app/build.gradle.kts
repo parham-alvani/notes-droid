@@ -181,6 +181,13 @@ roborazzi {
     outputDir.set(file("src/test/screenshots"))
 }
 
+// Into src/main rather than src/release: the repository ignores every
+// `release/` directory as build output, and a profile that cannot be
+// committed is one CI cannot ship.
+baselineProfile {
+    mergeIntoMain = true
+}
+
 dependencies {
     implementation(projects.core.data)
     implementation(projects.core.sync)
