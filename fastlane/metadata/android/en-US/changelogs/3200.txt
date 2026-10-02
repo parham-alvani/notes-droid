@@ -1,0 +1,7 @@
+Made for reading.
+
+Fold a section shut from its heading: every heading with something under it has a chevron at the end of the line, as in Obsidian's reading view. The outline, a link to a heading, find in note and read aloud all open what they need on the way there.
+
+The bar at the top slides away as you read down and comes back on the first scroll up, and a hairline under it shows how far through the note you are.
+
+A new switch in Settings, Behaviour, keeps the screen on while a note is open, for a recipe or a checklist followed rather than read.
