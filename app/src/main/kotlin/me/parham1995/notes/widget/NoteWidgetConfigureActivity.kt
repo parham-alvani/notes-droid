@@ -29,9 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
 import me.parham1995.notes.data.SettingsStore
@@ -82,13 +85,15 @@ class NoteWidgetConfigureActivity : ComponentActivity() {
         note: NoteEntity,
     ) {
         NoteWidgetBindings(this)[widgetId] = Pin(note.vaultId, note.path)
-        sendBroadcast(
-            Intent(this, NoteWidget::class.java)
-                .setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(widgetId)),
-        )
-        setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
-        finish()
+        // The redraw is asked for before the result is given, so the launcher
+        // never shows the new widget empty. Asking only enqueues Glance's
+        // session; the composing happens in its worker.
+        lifecycleScope.launch {
+            val glanceId = GlanceAppWidgetManager(applicationContext).getGlanceIdBy(widgetId)
+            NoteAppWidget().update(applicationContext, glanceId)
+            setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
+            finish()
+        }
     }
 }
 

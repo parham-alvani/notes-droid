@@ -4,7 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * How a widget decides how much to show.
+ * How a widget decides how much to show, and which way each line reads.
  *
  * Both widgets drew a fixed four or five rows whatever size they were given,
  * so one resized to half a home screen showed the same four lines as a small
@@ -42,5 +42,35 @@ class WidgetRowsTest {
     @Test
     fun `a height too small for even one row still shows the minimum`() {
         assertThat(rowsForHeight(20)).isEqualTo(3)
+    }
+
+    // Glance draws every text view in the locale's direction, so a line has to
+    // carry its own: an isolate around the text, and the edge to align it to.
+
+    @Test
+    fun `a Persian line reads from the right`() {
+        val line = directed("سلام دنیا.")
+
+        assertThat(line.rtl).isTrue()
+        assertThat(line.text).isEqualTo("⁧سلام دنیا.⁩")
+    }
+
+    @Test
+    fun `a line takes its direction from its first strong character, not from what follows`() {
+        assertThat(directed("Call مامان").rtl).isFalse()
+        assertThat(directed("زنگ به Mum").rtl).isTrue()
+    }
+
+    @Test
+    fun `an English line is isolated too, so a Persian phone does not turn it round`() {
+        val line = directed("Gate: 1234")
+
+        assertThat(line.rtl).isFalse()
+        assertThat(line.text).isEqualTo("⁦Gate: 1234⁩")
+    }
+
+    @Test
+    fun `digits and punctuation alone read left to right`() {
+        assertThat(directed("1234.").rtl).isFalse()
     }
 }

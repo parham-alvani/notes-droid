@@ -22,10 +22,7 @@ import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.reminder.Reminders
-import me.parham1995.notes.widget.NoteWidget
-import me.parham1995.notes.widget.PinnedNotesWidget
-import me.parham1995.notes.widget.RecentNotesWidget
-import me.parham1995.notes.widget.TasksWidget
+import me.parham1995.notes.widget.Widgets
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -90,24 +87,23 @@ class NotesApplication :
         }
         scheduleBackgroundSync()
         scheduleTaskDigest()
-        SyncWorker.afterSync = {
-            TasksWidget.refresh(this)
-            RecentNotesWidget.refresh(this)
-            PinnedNotesWidget.refresh(this)
-            NoteWidget.refresh(this)
-        }
+        SyncWorker.afterSync = ::refreshWidgets
         // A task ticked in the app leaves the home screen a tick behind
         // otherwise, until whenever the next background refresh happens to run.
-        VaultWriteRepository.afterWrite = {
-            TasksWidget.refresh(this)
-            RecentNotesWidget.refresh(this)
-            PinnedNotesWidget.refresh(this)
-            NoteWidget.refresh(this)
-        }
+        VaultWriteRepository.afterWrite = ::refreshWidgets
         refreshPinsWhenTheyChange()
         // A force-stop forgets every alarm and leaves no broadcast to say so;
         // the next launch is the first chance to set them again.
         reminders.get().rearm(this)
+    }
+
+    /**
+     * Redraws every placed widget. Called from a worker's thread and a
+     * repository's, neither of which is a coroutine; the scope's handler
+     * records anything Glance throws rather than letting it take the app down.
+     */
+    private fun refreshWidgets() {
+        scope.launch { Widgets.refreshAll(this@NotesApplication) }
     }
 
     /**
@@ -124,7 +120,7 @@ class NotesApplication :
             combine(pins.get().pins, vaults.get().activeVaultId) { all, active -> all to active }
                 .distinctUntilChanged()
                 .drop(1)
-                .collect { PinnedNotesWidget.refresh(this@NotesApplication) }
+                .collect { Widgets.refreshPinned(this@NotesApplication) }
         }
     }
 
