@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -58,9 +60,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -179,6 +183,20 @@ fun NoteScreen(
     var headingIn by remember(noteId, heading) { mutableStateOf(heading?.let { noteId to it }) }
 
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
+
+    // The open notes as pages, so a swipe moves between them the way it does
+    // in a browser. The strip and the pager say the same thing: a tap on the
+    // strip, a link opened beside this one, a tab closed, and the page
+    // follows; a swipe that settles, and the tab follows.
+    val pager = rememberPagerState(initialPage = tabs.active) { tabs.tabs.size.coerceAtLeast(1) }
+    LaunchedEffect(tabs.active, tabs.tabs.size) {
+        if (pager.currentPage != tabs.active && tabs.active < pager.pageCount) {
+            pager.animateScrollToPage(tabs.active)
+        }
+    }
+    LaunchedEffect(pager) {
+        snapshotFlow { pager.settledPage }.collect { page -> if (page != tabs.active) viewModel.selectTab(page) }
+    }
 
     // Read aloud: one engine per note screen, shut down when it goes, so
     // leaving the note stops the voice rather than leaving it talking.
@@ -747,69 +765,93 @@ fun NoteScreen(
                     PeriodBar(periodic, onOpen = { id -> viewModel.openTab(id, inNewTab = false) })
                     HorizontalDivider()
                 }
-                Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-                    // A folder note is only half of what a folder is: the page someone
-                    // wrote, and the things actually in it. Obsidian shows both at
-                    // once, in the editor and the sidebar; on a phone there is only
-                    // one pane, so they take turns.
-                    if (state.isFolderNote) {
-                        PrimaryTabRow(selectedTabIndex = if (showContents) 1 else 0) {
-                            Tab(
-                                selected = !showContents,
-                                onClick = { showContents = false },
-                                text = { Text(stringResource(R.string.note_kind)) },
-                            )
-                            Tab(
-                                selected = showContents,
-                                onClick = { showContents = true },
-                                // The count is the useful part: it says whether the
-                                // folder holds anything the note does not mention.
-                                text = { Text(stringResource(R.string.note_contents, state.contents.size)) },
-                            )
-                        }
-                    }
-
-                    if (finding) {
-                        FindBar(
-                            query = state.findQuery,
-                            matches = state.matches.size,
-                            onQueryChange = viewModel::find,
-                            onJump = { index ->
-                                scope.launch { listState.animateScrollToItem(viewModel.reveal(index)) }
-                            },
-                            matchBlocks = state.matches.map { it.blockIndex },
-                        )
-                    }
-
-                    if (showContents) {
-                        FolderContents(state.contents, onOpenNote, onOpenFolder)
+                HorizontalPager(
+                    state = pager,
+                    modifier = Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()),
+                    // By note, so a page keeps its state while tabs open and
+                    // close around it, and a page that is new is new.
+                    key = { page -> tabs.tabs.getOrNull(page)?.noteId ?: (-1L - page) },
+                    beyondViewportPageCount = 0,
+                    userScrollEnabled = tabs.tabs.size > 1,
+                ) { page ->
+                    // Only the page being read is the note; the one sliding
+                    // in beside it is its title and opening line until the
+                    // swipe settles and it becomes the one being read. One
+                    // document at a time is what keeps a swipe between two
+                    // long notes from composing both.
+                    if (page != tabs.active && tabs.tabs.size > 1) {
+                        TabPreview(tabs.tabs[page], peek = viewModel::peek)
                     } else {
-                        // The column held to a reading width on a wide window.
-                        BoxWithConstraints(Modifier.fillMaxSize()) {
-                            val readingWidth = LocalReading.current.lineWidth
-                            when {
-                                state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                                state.missing ->
-                                    Text(
-                                        stringResource(R.string.note_not_on_device),
-                                        Modifier.align(Alignment.Center).padding(24.dp),
-                                        style = MaterialTheme.typography.bodyMedium,
+                        Column(Modifier.fillMaxSize()) {
+                            // A folder note is only half of what a folder is: the page someone
+                            // wrote, and the things actually in it. Obsidian shows both at
+                            // once, in the editor and the sidebar; on a phone there is only
+                            // one pane, so they take turns.
+                            if (state.isFolderNote) {
+                                PrimaryTabRow(selectedTabIndex = if (showContents) 1 else 0) {
+                                    Tab(
+                                        selected = !showContents,
+                                        onClick = { showContents = false },
+                                        text = { Text(stringResource(R.string.note_kind)) },
                                     )
+                                    Tab(
+                                        selected = showContents,
+                                        onClick = { showContents = true },
+                                        // The count is the useful part: it says whether the
+                                        // folder holds anything the note does not mention.
+                                        text = { Text(stringResource(R.string.note_contents, state.contents.size)) },
+                                    )
+                                }
+                            }
 
-                                else ->
-                                    state.note?.let { note ->
-                                        MarkdownDocument(
-                                            blocks = note.blocks,
-                                            brokenLinks = state.brokenLinks,
-                                            listState = listState,
-                                            contentPadding = readingPadding(maxWidth, readingWidth),
-                                            onPinch = viewModel::pinchTextScale,
-                                            actions = noteActions ?: RenderActions(),
-                                            spoken = spokenBlock,
-                                            folded = state.folded,
-                                            onToggleFold = viewModel::toggleFold,
-                                        )
+                            if (finding) {
+                                FindBar(
+                                    query = state.findQuery,
+                                    matches = state.matches.size,
+                                    onQueryChange = viewModel::find,
+                                    onJump = { index ->
+                                        scope.launch { listState.animateScrollToItem(viewModel.reveal(index)) }
+                                    },
+                                    matchBlocks = state.matches.map { it.blockIndex },
+                                )
+                            }
+
+                            if (showContents) {
+                                FolderContents(state.contents, onOpenNote, onOpenFolder)
+                            } else {
+                                // The column held to a reading width on a wide window.
+                                BoxWithConstraints(Modifier.fillMaxSize()) {
+                                    val readingWidth = LocalReading.current.lineWidth
+                                    when {
+                                        // The same page the swipe showed, rather than a
+                                        // spinner in its place for the moment the note
+                                        // takes to parse.
+                                        state.loading ->
+                                            tabs.current?.let { TabPreview(it, peek = viewModel::peek) }
+                                                ?: CircularProgressIndicator(Modifier.align(Alignment.Center))
+                                        state.missing ->
+                                            Text(
+                                                stringResource(R.string.note_not_on_device),
+                                                Modifier.align(Alignment.Center).padding(24.dp),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                            )
+
+                                        else ->
+                                            state.note?.let { note ->
+                                                MarkdownDocument(
+                                                    blocks = note.blocks,
+                                                    brokenLinks = state.brokenLinks,
+                                                    listState = listState,
+                                                    contentPadding = readingPadding(maxWidth, readingWidth),
+                                                    onPinch = viewModel::pinchTextScale,
+                                                    actions = noteActions ?: RenderActions(),
+                                                    spoken = spokenBlock,
+                                                    folded = state.folded,
+                                                    onToggleFold = viewModel::toggleFold,
+                                                )
+                                            }
                                     }
+                                }
                             }
                         }
                     }
@@ -1194,6 +1236,37 @@ private fun FindBar(
             ) {
                 LucideGlyph("chevron-down", size = 20.dp, contentDescription = stringResource(R.string.note_find_next))
             }
+        }
+    }
+}
+
+/**
+ * A tab as it looks while sliding in: its title and the note's opening line,
+ * set the way the page will set them, so the swipe shows a page and the note
+ * then arrives in it rather than replacing it.
+ */
+@Composable
+private fun TabPreview(
+    tab: NoteTab,
+    peek: suspend (Long) -> LinkTarget?,
+) {
+    val target by produceState<LinkTarget?>(initialValue = null, tab.noteId) { value = peek(tab.noteId) }
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = tab.title.ifBlank { target?.title.orEmpty() },
+            style = MaterialTheme.typography.headlineSmall.inScript(),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        target?.excerpt?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyLarge.inScript(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
