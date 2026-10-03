@@ -1,0 +1,3 @@
+The evening digest, by name.
+
+The daily task summary is two notifications now, one for what is due today and one for what is overdue. The first names the tasks, with the note each is in; the second stays a count. Each has its own channel, so either can be silenced or given a sound in the system's notification settings without touching the other, and one with nothing to say takes itself down. The digest can be set for 22:00, and it speaks Persian.
