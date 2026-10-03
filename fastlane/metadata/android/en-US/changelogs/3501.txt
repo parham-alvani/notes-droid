@@ -1,0 +1,3 @@
+The digest arrives at the hour you chose.
+
+Picking an hour for the daily task summary used to send it once, at that moment, and then every day at that minute; the chosen hour was never read again. It is now due at the hour on the dot, and choosing another moves it there.
