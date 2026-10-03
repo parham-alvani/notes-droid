@@ -14,7 +14,7 @@ import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import java.time.Duration
-import java.time.LocalDateTime
+import java.time.ZonedDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -114,18 +114,26 @@ class SyncScheduler
         /**
          * Arms the daily task digest for the next occurrence of [hour].
          *
-         * Periodic work with an initial delay rather than a worker that
-         * re-arms itself: enqueuing unique work with REPLACE from inside the
-         * job that *is* that unique work cancels the job doing the enqueuing.
-         * Periodic work drifts under Doze instead, which is the lesser
-         * problem -- and re-arming with UPDATE on every launch re-anchors it.
+         * Periodic work rather than a worker that re-arms itself: enqueuing
+         * unique work with REPLACE from inside the job that *is* that unique
+         * work cancels the job doing the enqueuing. Periodic work drifts
+         * under Doze instead, which is the lesser problem -- and re-arming
+         * on every launch and every change of hour puts it back.
+         *
+         * The next run is set outright, not as an initial delay. UPDATE keeps
+         * the work's original enqueue time, so a delay is measured from
+         * whenever the digest was first switched on, and once the work has
+         * run its first period the delay is never read again: choosing a new
+         * hour ran the digest on the spot and left it due a day later, at
+         * the minute of the tap. The override names the instant and works
+         * under UPDATE; the day after it, the period takes over from there.
          */
         fun scheduleDigest(hour: Int) {
             workManager.enqueueUniquePeriodicWork(
                 TaskDigestWorker.UNIQUE_WORK,
                 ExistingPeriodicWorkPolicy.UPDATE,
                 PeriodicWorkRequestBuilder<TaskDigestWorker>(Duration.ofDays(1))
-                    .setInitialDelay(untilNext(hour))
+                    .setNextScheduleTimeOverride(nextAt(hour))
                     .build(),
             )
         }
@@ -145,8 +153,9 @@ class SyncScheduler
             )
         }
 
-        private fun untilNext(hour: Int): Duration {
-            val now = LocalDateTime.now()
+        /** The next time the clock reads [hour] o'clock, in epoch milliseconds. */
+        private fun nextAt(hour: Int): Long {
+            val now = ZonedDateTime.now()
             val today =
                 now
                     .withHour(hour.coerceIn(0, LAST_HOUR))
@@ -154,7 +163,7 @@ class SyncScheduler
                     .withSecond(0)
                     .withNano(0)
             val next = if (today.isAfter(now)) today else today.plusDays(1)
-            return Duration.between(now, next)
+            return next.toInstant().toEpochMilli()
         }
 
         fun observe(): Flow<List<WorkInfo>> = workManager.getWorkInfosForUniqueWorkFlow(SyncWorker.UNIQUE_WORK)
