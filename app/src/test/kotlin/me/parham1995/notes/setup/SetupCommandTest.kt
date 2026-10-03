@@ -7,6 +7,11 @@ import org.junit.Test
 /** The extras `am broadcast` carries, read the way a person types them. */
 class SetupCommandTest {
     @Test
+    fun `digest takes nothing`() {
+        assertThat(SetupCommand.parse(mapOf("cmd" to "digest")).getOrThrow()).isEqualTo(SetupCommand.Digest)
+    }
+
+    @Test
     fun `no command is status`() {
         assertThat(SetupCommand.parse(emptyMap()).getOrThrow()).isEqualTo(SetupCommand.Status)
     }

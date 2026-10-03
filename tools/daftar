@@ -9,6 +9,7 @@
 #   tools/daftar token                      reads the token from stdin
 #   tools/daftar author NAME EMAIL
 #   tools/daftar sync
+#   tools/daftar digest                     switches the digest on and posts it now
 # VAULT is a vault's name, its repository name, or its id. The receiver only
 # answers the shell (android.permission.DUMP), so this needs adb, not a token.
 set -euo pipefail
@@ -48,5 +49,6 @@ case "$cmd" in
     token) read -r -s token; send --es cmd set-token --es token "$token" ;;
     author) send --es cmd set-author --es name "${1:?name}" --es email "${2:?email}" ;;
     sync) send --es cmd sync ;;
-    *) sed -n '2,13p' "$0" >&2; exit 2 ;;
+    digest) send --es cmd digest ;;
+    *) sed -n '2,14p' "$0" >&2; exit 2 ;;
 esac

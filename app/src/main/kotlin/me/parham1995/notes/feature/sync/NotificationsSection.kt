@@ -2,6 +2,7 @@ package me.parham1995.notes.feature.sync
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.FilterChip
@@ -28,9 +29,10 @@ import java.time.ZoneId
 /**
  * The daily task summary.
  *
- * A count, not a list. The vault this was built for has 120 overdue tasks, and
- * both a notification per task and a notification listing them are unreadable;
- * the number is the message, and the list is one tap away.
+ * Two notifications, on two channels, so the system settings can treat them
+ * differently. Overdue tasks are a count, not a list: the vault this was built
+ * for has 120 of them, and both a notification per task and a notification
+ * listing them are unreadable. The tasks due today are few enough to be named.
  */
 @Composable
 internal fun TaskDigestCard(
@@ -49,7 +51,7 @@ internal fun TaskDigestCard(
 
         if (state.settings.taskDigest) {
             Text(stringResource(R.string.digest_at), style = MaterialTheme.typography.labelMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 VaultSettings.DIGEST_HOUR_CHOICES.forEach { hour ->
                     FilterChip(
                         selected = state.settings.taskDigestHour == hour,

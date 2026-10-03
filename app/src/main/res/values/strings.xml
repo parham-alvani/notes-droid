@@ -114,7 +114,7 @@
     <string name="sync_retry_waiting">Waiting to retry (attempt %1$d)</string>
     <string name="sync_queued">Queued - waiting for the network</string>
     <string name="help_battery">Battery optimisation is on for this app, so Android may defer or skip a scheduled sync indefinitely. Pull to refresh always works.</string>
-    <string name="help_digest">Counts what is overdue and due today, from the last sync. Nothing is sent when there is nothing to report.</string>
+    <string name="help_digest">Two notifications from the last sync: what is due today, by name, and how many are overdue. Either can be silenced in the system\'s notification settings. Nothing is sent when there is nothing to report.</string>
     <string name="help_transport_rest">Markdown only. A refresh with nothing new costs one request.</string>
     <string name="help_transport_ssh">No token to rotate, but git cannot fetch a subset &#8212; full history and all attachments.</string>
     <string name="help_theme">naz is a dark colourscheme and defines no light palette, so light keeps its accents against paper rather than pretending to be it.</string>

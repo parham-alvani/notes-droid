@@ -165,6 +165,9 @@ class VaultRepository
 
         suspend fun dueTodayCount(today: String): Int = tasks.dueTodayCount(today)
 
+        /** The tasks due today in every vault, for the digest to name. */
+        suspend fun dueToday(today: String): List<TaskRow> = tasks.dueToday(today)
+
         /** Open tasks in every vault, keyed by vault. */
         fun openTaskCounts(): Flow<Map<Long, Int>> =
             tasks.openCountsByVault().map { rows -> rows.associate { it.vaultId to it.count } }

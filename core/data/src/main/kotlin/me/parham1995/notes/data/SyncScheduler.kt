@@ -132,6 +132,19 @@ class SyncScheduler
 
         fun cancelDigest() = workManager.cancelUniqueWork(TaskDigestWorker.UNIQUE_WORK)
 
+        /**
+         * The digest once, now, without touching the daily schedule. For
+         * seeing what it says from a terminal rather than waiting for the
+         * evening; the worker still checks the setting before posting.
+         */
+        fun digestNow() {
+            workManager.enqueueUniqueWork(
+                DIGEST_NOW_WORK,
+                ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<TaskDigestWorker>().build(),
+            )
+        }
+
         private fun untilNext(hour: Int): Duration {
             val now = LocalDateTime.now()
             val today =
@@ -155,6 +168,7 @@ class SyncScheduler
         private companion object {
             const val PERIODIC_WORK = "vault-sync-periodic"
             const val RESUME_WORK = "vault-sync-after-limit"
+            const val DIGEST_NOW_WORK = "task-digest-now"
             const val PERIOD_HOURS = 6L
             const val LAST_HOUR = 23
         }

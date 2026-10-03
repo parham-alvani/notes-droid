@@ -52,6 +52,9 @@ sealed interface SetupCommand {
 
     data object Sync : SetupCommand
 
+    /** Switches the daily digest on and posts it now, for seeing it without waiting for the hour. */
+    data object Digest : SetupCommand
+
     companion object {
         /** The command the extras describe, or an error naming what is missing. */
         fun parse(extras: Map<String, String?>): Result<SetupCommand> {
@@ -90,12 +93,13 @@ sealed interface SetupCommand {
                     "set-token" -> SetToken(need("token"))
                     "set-author" -> SetAuthor(need("name"), need("email"))
                     "sync" -> Sync
+                    "digest" -> Digest
                     else -> throw IllegalArgumentException("unknown cmd '$cmd'; one of $COMMANDS")
                 }
             }
         }
 
         const val COMMANDS =
-            "status, add-vault, remove-vault, set-transport, key, test-key, set-token, set-author, sync"
+            "status, add-vault, remove-vault, set-transport, key, test-key, set-token, set-author, sync, digest"
     }
 }

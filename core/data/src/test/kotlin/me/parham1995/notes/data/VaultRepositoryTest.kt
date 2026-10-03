@@ -411,6 +411,41 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `the digest names the open tasks due today from every vault`() =
+        runTest {
+            index(
+                "Work/Apollo.md" to
+                    "- [ ] late ⏳ 2026-01-01\n- [ ] today ⏳ 2026-09-23\n- [x] done today ⏳ 2026-09-23\n- [ ] later ⏳ 2026-12-01",
+            )
+            indexInto(second, "Home/Chores.md" to "- [ ] also today 📅 2026-09-23")
+            // A row for a note that no longer exists, as an older reindex left them.
+            database.indexDao().insertTasks(
+                listOf(
+                    me.parham1995.notes.data.database.TaskEntity(
+                        noteId = 999_999,
+                        text = "orphan",
+                        state = "OPEN",
+                        section = "",
+                        blockIndex = 0,
+                        ordinal = 0,
+                        open = true,
+                        actionableOn = "2026-09-23",
+                        scheduled = null,
+                        due = null,
+                        done = null,
+                        recurring = null,
+                    ),
+                ),
+            )
+
+            val due = repository.dueToday("2026-09-23")
+
+            assertThat(due.map { it.text }).containsExactly("today", "also today").inOrder()
+            assertThat(due.map { it.noteTitle }).containsExactly("Apollo", "Chores").inOrder()
+            assertThat(due.map { it.vaultId }).containsExactly(first, second).inOrder()
+        }
+
+    @Test
     fun `a note that goes away takes its tasks with it`() =
         runTest {
             index("Work/Apollo.md" to "- [ ] one ⏳ 2026-09-18")

@@ -233,6 +233,25 @@ interface TaskDao {
     suspend fun dueTodayCount(today: String): Int
 
     /**
+     * The tasks due today, named, across every vault -- the evening digest
+     * lists them. Grouped the way the open list is, by note and then in the
+     * order they are written, so two tasks from one note sit together.
+     * Joined to `notes` for the same reason the counts are.
+     */
+    @Query(
+        """
+        SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
+               t.actionableOn, t.recurring, n.path AS notePath, n.title AS noteTitle,
+               n.vaultId AS vaultId
+        FROM tasks t
+        JOIN notes n ON n.id = t.noteId
+        WHERE t.open = 1 AND t.actionableOn = :today
+        ORDER BY n.vaultId, n.path, t.ordinal
+        """,
+    )
+    suspend fun dueToday(today: String): List<TaskRow>
+
+    /**
      * Open tasks per vault, for telling someone their list is empty because
      * they are reading the wrong one.
      */

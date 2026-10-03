@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The daily task digest's notification. The worker that posts it lives in
+     this module, so its words do too: a string built in Kotlin passes lint and
+     shows English on a Persian phone. -->
+<resources>
+    <!-- Channel names, as the system's notification settings list them. -->
+    <string name="digest_channel_due">Tasks due today</string>
+    <string name="digest_channel_overdue">Overdue tasks</string>
+    <string name="digest_title">Tasks</string>
+    <plurals name="digest_overdue">
+        <item quantity="one">%1$d overdue</item>
+        <item quantity="other">%1$d overdue</item>
+    </plurals>
+    <plurals name="digest_due_today">
+        <item quantity="one">%1$d due today</item>
+        <item quantity="other">%1$d due today</item>
+    </plurals>
+    <!-- One task in the list: what it says, and the note it is in. -->
+    <string name="digest_line">%1$s · %2$s</string>
+    <!-- Under the list, when it was cut short. -->
+    <plurals name="digest_more">
+        <item quantity="one">and %1$d more</item>
+        <item quantity="other">and %1$d more</item>
+    </plurals>
+</resources>

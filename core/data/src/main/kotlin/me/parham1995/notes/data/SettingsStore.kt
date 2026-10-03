@@ -255,7 +255,7 @@ data class VaultSettings(
      */
     val syncIntervalHours: Int = DEFAULT_INTERVAL_HOURS,
     /**
-     * A once-a-day notification summarising what is overdue and what is due.
+     * Once a day, two notifications: what is due today by name, and how many are overdue.
      *
      * Off by default. A reader that starts posting notifications on its own is
      * a reader nobody asked for, and this one only earns its place once the
@@ -280,7 +280,7 @@ data class VaultSettings(
         val INTERVAL_CHOICES = listOf(1, 3, 6, 12, 24)
 
         const val DEFAULT_DIGEST_HOUR = 8
-        val DIGEST_HOUR_CHOICES = listOf(7, 9, 12, 18, 21)
+        val DIGEST_HOUR_CHOICES = listOf(7, 9, 12, 18, 21, 22)
     }
 }
 

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="digest_channel_due">کارهای امروز</string>
+    <string name="digest_channel_overdue">کارهای عقب‌افتاده</string>
+    <string name="digest_title">کارها</string>
+    <plurals name="digest_overdue">
+        <item quantity="one">%1$d عقب‌افتاده</item>
+        <item quantity="other">%1$d عقب‌افتاده</item>
+    </plurals>
+    <plurals name="digest_due_today">
+        <item quantity="one">%1$d برای امروز</item>
+        <item quantity="other">%1$d برای امروز</item>
+    </plurals>
+    <string name="digest_line">%1$s · %2$s</string>
+    <plurals name="digest_more">
+        <item quantity="one">و %1$d دیگر</item>
+        <item quantity="other">و %1$d دیگر</item>
+    </plurals>
+</resources>

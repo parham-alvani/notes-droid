@@ -116,6 +116,11 @@ class AdbSetupReceiver : BroadcastReceiver() {
                 scheduler.syncNow(settings.current().syncOnWifiOnly)
                 "sync requested"
             }
+            SetupCommand.Digest -> {
+                settings.setTaskDigest(true)
+                scheduler.digestNow()
+                "digest requested"
+            }
         }
 
     private suspend fun status(): String {
