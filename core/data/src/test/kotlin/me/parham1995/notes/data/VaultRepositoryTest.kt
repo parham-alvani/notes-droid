@@ -446,6 +446,22 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `a tasks query reads its own vault, finished tasks and dates included`() =
+        runTest {
+            index("Work/Apollo.md" to "- [ ] open 📅 2026-09-23 ⏳ 2026-09-20\n- [x] shipped ✅ 2026-09-21")
+            indexInto(second, "Work/Apollo.md" to "- [ ] the other vault's")
+
+            val rows = repository.queryableTasks(first).first()
+
+            assertThat(rows.map { it.text }).containsExactly("open", "shipped").inOrder()
+            assertThat(rows.map { it.vaultId }.toSet()).containsExactly(first)
+            assertThat(rows[0].due).isEqualTo("2026-09-23")
+            assertThat(rows[0].scheduled).isEqualTo("2026-09-20")
+            assertThat(rows[1].done).isEqualTo("2026-09-21")
+            assertThat(rows[1].state).isEqualTo("CHECKED")
+        }
+
+    @Test
     fun `a note that goes away takes its tasks with it`() =
         runTest {
             index("Work/Apollo.md" to "- [ ] one ⏳ 2026-09-18")

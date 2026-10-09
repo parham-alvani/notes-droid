@@ -13,6 +13,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import java.time.Duration
 import java.time.ZonedDateTime
 import javax.inject.Inject
@@ -167,6 +168,17 @@ class SyncScheduler
         }
 
         fun observe(): Flow<List<WorkInfo>> = workManager.getWorkInfosForUniqueWorkFlow(SyncWorker.UNIQUE_WORK)
+
+        /**
+         * Whether a sync is running now: one asked for, or the periodic one.
+         * [observe] sees only the first, so a background sync would show as
+         * idle to anything that asks it alone. RUNNING only, for the reason
+         * the screens give: a job waiting for the network is not syncing.
+         */
+        fun running(): Flow<Boolean> =
+            combine(observe(), workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK)) { asked, periodic ->
+                (asked + periodic).any { it.state == WorkInfo.State.RUNNING }
+            }
 
         private fun constraints(wifiOnly: Boolean) =
             Constraints

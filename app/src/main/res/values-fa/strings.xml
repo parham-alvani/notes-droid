@@ -289,11 +289,27 @@
     <string name="unsupported_dataview">پرس‌وجوی Dataview</string>
     <string name="unsupported_tasks_query">پرس‌وجوی Tasks</string>
     <string name="unsupported_excalidraw">نقاشی Excalidraw</string>
+    <string name="tasks_query_empty">هیچ کاری با این پرس‌وجو جور نیست.</string>
+    <string name="tasks_query_not_understood">فهمیده نشد و به کار نرفت: %1$s</string>
+    <plurals name="tasks_query_hidden">
+        <item quantity="one">%1$d مورد دیگر نشان داده نشده</item>
+        <item quantity="other">%1$d مورد دیگر نشان داده نشده</item>
+    </plurals>
     <string name="diagram_rendering">در حال کشیدن نمودار&#8230;</string>
     <string name="bookmarks_title">نشانک‌ها</string>
     <string name="today_action">یادداشت امروز</string>
     <string name="today_missing">هنوز یادداشتی برای امروز نیست؛ جایش %1$s است</string>
     <string name="shortcut_today_short">روزنگار</string>
+    <string name="tile_sync">همگام‌سازی دفتر</string>
+    <string name="tile_sync_running">در حال همگام‌سازی…</string>
+    <string name="tile_sync_no_vaults">هیچ دفتری تنظیم نشده</string>
+    <string name="tile_sync_never">هنوز همگام نشده</string>
+    <string name="tile_sync_just_now">همین حالا همگام شد</string>
+    <string name="tile_sync_failed">%1$s همگام نشد</string>
+    <plurals name="tile_sync_failed_count">
+        <item quantity="one">%1$d دفتر همگام نشد</item>
+        <item quantity="other">%1$d دفتر همگام نشد</item>
+    </plurals>
     <string name="shortcut_today_long">یادداشت امروز یا این هفته</string>
     <string name="link_unknown_vault">دفتری به نام %1$s اینجا نیست</string>
     <string name="link_unknown_note">یادداشتی به نام %1$s در این دفتر نیست</string>

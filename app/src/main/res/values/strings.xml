@@ -289,11 +289,27 @@
     <string name="unsupported_dataview">Dataview query</string>
     <string name="unsupported_tasks_query">Tasks query</string>
     <string name="unsupported_excalidraw">Excalidraw drawing</string>
+    <string name="tasks_query_empty">No tasks match this query.</string>
+    <string name="tasks_query_not_understood">Not understood, so not applied: %1$s</string>
+    <plurals name="tasks_query_hidden">
+        <item quantity="one">%1$d more not shown</item>
+        <item quantity="other">%1$d more not shown</item>
+    </plurals>
     <string name="diagram_rendering">Rendering diagram&#8230;</string>
     <string name="bookmarks_title">Bookmarks</string>
     <string name="today_action">Today\'s note</string>
     <string name="today_missing">No note for today yet - it would be %1$s</string>
     <string name="shortcut_today_short">Journal</string>
+    <string name="tile_sync">Vault sync</string>
+    <string name="tile_sync_running">Syncing…</string>
+    <string name="tile_sync_no_vaults">No vault set up</string>
+    <string name="tile_sync_never">Not synced yet</string>
+    <string name="tile_sync_just_now">Synced just now</string>
+    <string name="tile_sync_failed">%1$s failed</string>
+    <plurals name="tile_sync_failed_count">
+        <item quantity="one">%1$d vault failed</item>
+        <item quantity="other">%1$d vaults failed</item>
+    </plurals>
     <string name="shortcut_today_long">This day\'s or week\'s note</string>
     <string name="link_unknown_vault">No vault here is called %1$s</string>
     <string name="link_unknown_note">No note called %1$s in this vault</string>

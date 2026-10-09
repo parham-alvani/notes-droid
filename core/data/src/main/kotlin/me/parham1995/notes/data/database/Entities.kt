@@ -348,6 +348,45 @@ data class TaskRow(
 )
 
 /**
+ * A task as a ` ```tasks ` query reads it: a [TaskRow] and the dates a query
+ * can filter on, which the open list has no use for.
+ */
+data class QueryTaskRow(
+    val id: Long,
+    val noteId: Long,
+    val text: String,
+    val state: String,
+    val section: String,
+    val blockIndex: Int,
+    val line: Int,
+    val actionableOn: String?,
+    val recurring: String?,
+    val scheduled: String?,
+    val due: String?,
+    val done: String?,
+    val notePath: String,
+    val noteTitle: String,
+    val vaultId: Long,
+) {
+    /** The row the write path takes, to tick this task. */
+    fun toTaskRow(): TaskRow =
+        TaskRow(
+            id = id,
+            noteId = noteId,
+            text = text,
+            state = state,
+            section = section,
+            blockIndex = blockIndex,
+            line = line,
+            actionableOn = actionableOn,
+            recurring = recurring,
+            notePath = notePath,
+            noteTitle = noteTitle,
+            vaultId = vaultId,
+        )
+}
+
+/**
  * One line of the sync journal.
  *
  * A sync is long, runs in the background and fails in ways a single "last
