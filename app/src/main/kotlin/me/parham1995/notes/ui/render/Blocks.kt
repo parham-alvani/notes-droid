@@ -58,7 +58,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.Flow
 import me.parham1995.notes.R
+import me.parham1995.notes.data.database.QueryTaskRow
 import me.parham1995.notes.markdown.CalloutKind
 import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MdAlign
@@ -116,6 +118,17 @@ data class RenderActions(
      * embedded in it -- so each looks its own up and hands the entry here.
      */
     val showFootnote: (FootnoteEntry) -> Unit = {},
+    /**
+     * Answers a ` ```tasks ` query written in this note, and again whenever
+     * the index changes. Null where a query cannot be answered for the note
+     * it is in -- inside an embed -- and it is said so instead.
+     */
+    val queryTasks: ((query: String) -> Flow<TasksQueryResult>)? = null,
+    /**
+     * Tick a task a query listed, which may be written in another note.
+     * Null when this vault cannot be written to, as [onCompleteTask] is.
+     */
+    val onCompleteQueryTask: ((QueryTaskRow) -> Unit)? = null,
 )
 
 @Composable
@@ -180,6 +193,7 @@ fun MdBlockView(
             is MdBlock.Footnotes -> FootnotesView(block, actions, brokenLinks, modifier)
             is MdBlock.ThematicBreak -> HorizontalDivider(modifier.padding(vertical = 8.dp))
             is MdBlock.Unsupported -> UnsupportedView(block, modifier)
+            is MdBlock.TasksQuery -> TasksQueryView(block, actions, modifier)
             // Obsidian's Properties view: shown, folded on a tap, and a
             // tag in it is a tag.
             is MdBlock.FrontMatter -> PropertiesView(block, actions, modifier)
@@ -847,7 +861,6 @@ private fun UnsupportedView(
     val what =
         when (block.kind) {
             UnsupportedKind.DATAVIEW -> stringResource(R.string.unsupported_dataview)
-            UnsupportedKind.TASKS_QUERY -> stringResource(R.string.unsupported_tasks_query)
             UnsupportedKind.EXCALIDRAW -> stringResource(R.string.unsupported_excalidraw)
             UnsupportedKind.OTHER -> block.label
         }

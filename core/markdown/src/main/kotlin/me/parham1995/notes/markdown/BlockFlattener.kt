@@ -395,7 +395,8 @@ class BlockFlattener(
             // A reader gains nothing from the query source, and showing it
             // reads as a bug rather than as an unsupported feature.
             "dataview", "dataviewjs" -> MdBlock.Unsupported(id(), "Dataview query", UnsupportedKind.DATAVIEW)
-            "tasks" -> MdBlock.Unsupported(id(), "Tasks query", UnsupportedKind.TASKS_QUERY)
+            // Not text the reader wrote, so not searched or read aloud.
+            "tasks" -> MdBlock.TasksQuery(id(), node.literal.trimEnd('\n'))
             "compressed-json" -> MdBlock.Unsupported(id(), "Excalidraw drawing", UnsupportedKind.EXCALIDRAW)
             else -> {
                 plain.append(node.literal)

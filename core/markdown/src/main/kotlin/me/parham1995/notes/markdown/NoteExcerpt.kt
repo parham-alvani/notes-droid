@@ -141,6 +141,7 @@ object NoteExcerpt {
                 is MdBlock.NoteEmbed,
                 is MdBlock.ThematicBreak,
                 is MdBlock.Unsupported,
+                is MdBlock.TasksQuery,
                 is MdBlock.Footnotes,
                 -> Unit
             }

@@ -289,6 +289,12 @@
     <string name="unsupported_dataview">پرس‌وجوی Dataview</string>
     <string name="unsupported_tasks_query">پرس‌وجوی Tasks</string>
     <string name="unsupported_excalidraw">نقاشی Excalidraw</string>
+    <string name="tasks_query_empty">هیچ کاری با این پرس‌وجو جور نیست.</string>
+    <string name="tasks_query_not_understood">فهمیده نشد و به کار نرفت: %1$s</string>
+    <plurals name="tasks_query_hidden">
+        <item quantity="one">%1$d مورد دیگر نشان داده نشده</item>
+        <item quantity="other">%1$d مورد دیگر نشان داده نشده</item>
+    </plurals>
     <string name="diagram_rendering">در حال کشیدن نمودار&#8230;</string>
     <string name="bookmarks_title">نشانک‌ها</string>
     <string name="today_action">یادداشت امروز</string>

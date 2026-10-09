@@ -187,6 +187,24 @@ interface TaskDao {
     fun open(vaultId: Long): Flow<List<TaskRow>>
 
     /**
+     * Every task in one vault, finished ones too, for a ` ```tasks ` query to
+     * filter. A query in one vault lists that vault's tasks and no other's,
+     * as its links resolve there.
+     */
+    @Query(
+        """
+        SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
+               t.actionableOn, t.recurring, t.scheduled, t.due, t.done,
+               n.path AS notePath, n.title AS noteTitle, n.vaultId AS vaultId
+        FROM tasks t
+        JOIN notes n ON n.id = t.noteId
+        WHERE n.vaultId = :vaultId
+        ORDER BY n.path, t.ordinal
+        """,
+    )
+    fun inVault(vaultId: Long): Flow<List<QueryTaskRow>>
+
+    /**
      * The tasks in one note, for ticking one off where it is written rather
      * than only from the list.
      */

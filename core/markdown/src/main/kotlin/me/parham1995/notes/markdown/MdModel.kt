@@ -158,7 +158,7 @@ enum class CalloutKind {
 enum class MdAlign { START, CENTER, END }
 
 /** What an [MdBlock.Unsupported] block would have been. */
-enum class UnsupportedKind { DATAVIEW, TASKS_QUERY, EXCALIDRAW, OTHER }
+enum class UnsupportedKind { DATAVIEW, EXCALIDRAW, OTHER }
 
 /** Obsidian Tasks adds two states GFM does not have. */
 enum class TaskState { UNCHECKED, CHECKED, CANCELLED, IN_PROGRESS, NONE }
@@ -312,7 +312,16 @@ sealed interface MdBlock {
     ) : MdBlock
 
     /**
-     * A block deliberately not rendered -- a `dataview` or `tasks` query, or an
+     * A ` ```tasks ` fence: the Tasks plugin's query, answered from the index
+     * when the note is drawn. [query] is the body of the fence, as written.
+     */
+    data class TasksQuery(
+        override val id: Int,
+        val query: String,
+    ) : MdBlock
+
+    /**
+     * A block deliberately not rendered -- a `dataview` query, or an
      * Excalidraw payload. Showing the query text to a reader is worse than
      * saying plainly that it is not supported.
      */

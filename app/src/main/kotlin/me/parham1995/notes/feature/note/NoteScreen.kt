@@ -528,6 +528,13 @@ fun NoteScreen(
                     // than offered to an app that had
                     // nothing to open.
                     transclude = viewModel::transclusion,
+                    queryTasks = { source -> viewModel.tasksQuery(note.vaultId, note.path, source) },
+                    onCompleteQueryTask =
+                        if (state.writable) {
+                            { row -> viewModel.completeQueryTask(row) }
+                        } else {
+                            null
+                        },
                     onAttachment = { path -> openAttachment(path) },
                     showFootnote = { footnote = it },
                 )

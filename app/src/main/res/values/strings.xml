@@ -289,6 +289,12 @@
     <string name="unsupported_dataview">Dataview query</string>
     <string name="unsupported_tasks_query">Tasks query</string>
     <string name="unsupported_excalidraw">Excalidraw drawing</string>
+    <string name="tasks_query_empty">No tasks match this query.</string>
+    <string name="tasks_query_not_understood">Not understood, so not applied: %1$s</string>
+    <plurals name="tasks_query_hidden">
+        <item quantity="one">%1$d more not shown</item>
+        <item quantity="other">%1$d more not shown</item>
+    </plurals>
     <string name="diagram_rendering">Rendering diagram&#8230;</string>
     <string name="bookmarks_title">Bookmarks</string>
     <string name="today_action">Today\'s note</string>

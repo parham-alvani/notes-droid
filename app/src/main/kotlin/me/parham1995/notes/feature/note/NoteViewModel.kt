@@ -4,11 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
@@ -26,6 +30,7 @@ import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.HeadingEntity
+import me.parham1995.notes.data.database.QueryTaskRow
 import me.parham1995.notes.feature.tasks.describe
 import me.parham1995.notes.feature.tasks.describeMove
 import me.parham1995.notes.icons.IconSpec
@@ -34,13 +39,17 @@ import me.parham1995.notes.markdown.HeadingPath
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteMatch
 import me.parham1995.notes.markdown.NoteSearch
+import me.parham1995.notes.markdown.TasksQuery
 import me.parham1995.notes.markdown.Transclusion
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.markdown.plainText
 import me.parham1995.notes.ui.UiText
 import me.parham1995.notes.ui.VaultRowItem
+import me.parham1995.notes.ui.render.TasksQueryResult
 import me.parham1995.notes.ui.render.Transcluded
+import me.parham1995.notes.ui.render.toQueryTask
 import java.io.File
+import java.time.LocalDate
 import javax.inject.Inject
 
 data class NoteUiState(
@@ -482,6 +491,43 @@ class NoteViewModel
                 footnotes = note.blocks.footnotes(),
             )
         }
+
+        /**
+         * Answers a ` ```tasks ` query written in the note at [path] of
+         * [vaultId], from that vault's tasks alone, and again whenever the
+         * index changes -- a box ticked in the list comes back ticked.
+         */
+        fun tasksQuery(
+            vaultId: Long,
+            path: String,
+            source: String,
+        ): Flow<TasksQueryResult> {
+            val query = TasksQuery.parse(source, file = path)
+            return repository
+                .queryableTasks(vaultId)
+                .map { rows ->
+                    val answer = query.run(rows, LocalDate.now()) { it.toQueryTask() }
+                    TasksQueryResult(
+                        rows = answer,
+                        notUnderstood = query.notUnderstood,
+                        groups = answer.map { query.groupsOf(it.toQueryTask()) },
+                    )
+                }.flowOn(Dispatchers.Default)
+        }
+
+        /**
+         * Ticks a task a query listed. It may be written in another note, so
+         * it goes by the row the index gave rather than by a line of this one.
+         */
+        fun completeQueryTask(row: QueryTaskRow) =
+            viewModelScope.launch {
+                val result = writes.completeTask(row.toTaskRow())
+                _state.value = _state.value.copy(message = result.describe())
+                // Written in this note: the page under the list is now one
+                // edit out of date, as after a box ticked in the note itself.
+                val here = _state.value.note?.id == row.noteId
+                if (here && (result == WriteResult.Pushed || result is WriteResult.Queued)) reload()
+            }
 
         /** The note a wikilink points at, or null when it is broken. */
         fun targetOf(target: String): Long? =

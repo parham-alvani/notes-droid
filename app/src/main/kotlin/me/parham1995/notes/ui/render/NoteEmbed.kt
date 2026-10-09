@@ -143,6 +143,10 @@ internal fun NoteEmbedView(
                         // A box ticked here would be ticked in the note on screen,
                         // at the embedded note's line number -- a different task.
                         onCompleteTask = null,
+                        // Its placeholders name the embedded note, which this
+                        // does not know the path of; the note itself answers.
+                        queryTasks = null,
+                        onCompleteQueryTask = null,
                         inline =
                             actions.inline.copy(
                                 onWikiLink = { target, heading ->

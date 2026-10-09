@@ -358,6 +358,22 @@ class MarkdownParserTest {
         assertThat(unsupported.label).contains("Dataview")
     }
 
+    @Test
+    fun `a tasks fence in a callout is a query too`() {
+        val note = parse("> [!todo] This week\n>\n> ```tasks\n> not done\n> short mode\n> ```\n")
+        val callout = note.blocks.filterIsInstance<MdBlock.Callout>().single()
+        val query = callout.children.filterIsInstance<MdBlock.TasksQuery>().single()
+        assertThat(query.query).isEqualTo("not done\nshort mode")
+    }
+
+    @Test
+    fun `a tasks fence is kept as a query, not searched as text`() {
+        val note = parse("```tasks\nnot done\ndue today\n```")
+        val query = note.blocks.filterIsInstance<MdBlock.TasksQuery>().single()
+        assertThat(query.query).isEqualTo("not done\ndue today")
+        assertThat(note.plainText).doesNotContain("due today")
+    }
+
     // -- direction and front matter ---------------------------------------
 
     @Test

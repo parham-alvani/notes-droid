@@ -18,6 +18,7 @@ import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.data.database.LinkDao
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.NoteEntity
+import me.parham1995.notes.data.database.QueryTaskRow
 import me.parham1995.notes.data.database.TagDao
 import me.parham1995.notes.data.database.TaskDao
 import me.parham1995.notes.data.database.TaskRow
@@ -157,6 +158,9 @@ class VaultRepository
 
         /** Every open task in the vault, soonest first, undated last. */
         fun openTasks(): Flow<List<TaskRow>> = activeVaultId.flatMapLatest { tasks.open(it) }
+
+        /** Every task in [vaultId], for a ` ```tasks ` query to filter. */
+        fun queryableTasks(vaultId: Long): Flow<List<QueryTaskRow>> = tasks.inVault(vaultId)
 
         /** The tasks written in one note, so one can be ticked where it sits. */
         suspend fun tasksIn(noteId: Long): List<TaskRow> = tasks.byNote(noteId)
