@@ -1,0 +1,7 @@
+Tasks queries, answered.
+
+A ```tasks block in a note is now the list the Tasks plugin draws: not done, due and scheduled dates and their ranges, path, folder, heading, description and tags, AND/OR/NOT, sort by, group by, limit, and the everyday part of filter by function and group by function. Each task opens its note, and its box ticks it. A line the app cannot read is said under the list, not quietly dropped.
+
+A Quick Settings tile for the sync: it says when the vaults last synced or which one failed, lights up while a sync runs, and syncs on a tap. Add it from Settings, under Tiles.
+
+A note can be synced from where it is read, from its menu or by pulling down at the top, and it shows the new text when the sync ends.
