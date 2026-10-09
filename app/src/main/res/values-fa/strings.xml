@@ -337,6 +337,8 @@
     <string name="widget_pinned_empty">یادداشتی را از منوی خودش سنجاق کنید تا اینجا بیاید</string>
     <string name="widget_pinned_description">یادداشت‌هایی که سنجاق کرده‌اید، با چند خط اولشان</string>
     <string name="task_not_indexed">این کار هنوز در فهرست نیست</string>
+    <string name="note_synced">همگام شد. یادداشت به‌روز است.</string>
+    <string name="note_sync_failed">همگام‌سازی نشد. جزئیات در تنظیمات است.</string>
     <string name="settings_section_privacy">حریم خصوصی</string>
     <string name="settings_section_privacy_summary">قفل برنامه، و آنچه برنامه‌های دیگر می‌بینند</string>
     <string name="card_app_lock">قفل برنامه</string>

@@ -337,6 +337,8 @@
     <string name="widget_pinned_empty">Pin a note from its menu to see it here</string>
     <string name="widget_pinned_description">Notes you pinned, with their first lines</string>
     <string name="task_not_indexed">That task is not in the index yet</string>
+    <string name="note_synced">Synced. The note is up to date.</string>
+    <string name="note_sync_failed">Sync failed. Settings has the details.</string>
     <string name="settings_section_privacy">Privacy</string>
     <string name="settings_section_privacy_summary">Lock the app, and what other apps can see</string>
     <string name="card_app_lock">App lock</string>

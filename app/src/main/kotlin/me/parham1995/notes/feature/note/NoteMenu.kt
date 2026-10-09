@@ -49,6 +49,8 @@ fun NoteMenu(
     onAddWidget: () -> Unit = {},
     onSharePdf: () -> Unit = {},
     onPlaces: () -> Unit = {},
+    syncing: Boolean = false,
+    onSync: () -> Unit = {},
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -60,6 +62,18 @@ fun NoteMenu(
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // First, because it is the one reached for while reading something
+            // that was just changed elsewhere. Pull-to-refresh does the same,
+            // and is invisible until you already know it is there.
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.browse_sync_now)) },
+                leadingIcon = { LucideGlyph("refresh-cw", size = 18.dp) },
+                enabled = !syncing,
+                onClick = {
+                    open = false
+                    onSync()
+                },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(if (pinned) R.string.note_unpin else R.string.note_pin)) },
                 leadingIcon = { LucideGlyph(if (pinned) "pin-off" else "pin", size = 18.dp) },

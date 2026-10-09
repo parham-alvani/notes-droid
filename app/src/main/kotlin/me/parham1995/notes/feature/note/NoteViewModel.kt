@@ -2,12 +2,14 @@ package me.parham1995.notes.feature.note
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Destinations
@@ -17,6 +19,7 @@ import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.SearchHit
 import me.parham1995.notes.data.SettingsStore
+import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
@@ -68,6 +71,8 @@ data class NoteUiState(
      * note: a fold is about this reading of this page.
      */
     val folded: Set<Int> = emptySet(),
+    /** A sync is running, from this screen or from anywhere else. */
+    val syncing: Boolean = false,
 ) {
     val isFolderNote: Boolean get() = note?.isFolderNote == true
 
@@ -89,6 +94,7 @@ class NoteViewModel
         private val openTabs: NoteTabs,
         private val writes: VaultWriteRepository,
         private val destinations: Destinations,
+        private val scheduler: SyncScheduler,
     ) : ViewModel() {
         val tabs: StateFlow<TabsState> = openTabs.state
 
@@ -246,6 +252,81 @@ class NoteViewModel
             _state.value = _state.value.copy(note = note)
         }
 
+        /** Whether the sync now running was asked for here, so its end is worth a word. */
+        private var syncAsked = false
+
+        /**
+         * Pulls the vault from where the note is being read.
+         *
+         * The browser had the only button for it, so reading a note that had
+         * just been changed on a laptop meant leaving it, syncing, and finding
+         * it again. The note is re-read when the sync ends, from wherever it
+         * was started.
+         */
+        fun sync() =
+            viewModelScope.launch {
+                syncAsked = true
+                _state.update { it.copy(syncing = true) }
+                scheduler.syncNow(settings.current().syncOnWifiOnly)
+            }
+
+        init {
+            viewModelScope.launch {
+                scheduler.observe().collect { infos ->
+                    // Only RUNNING counts, as in the browser: a job backing
+                    // off between retries is not a sync in progress.
+                    // An ENQUEUED job has not started yet, so the spinner a
+                    // tap put up stays until it has run -- and the job a
+                    // REPLACE cancelled is still listed beside it, finished,
+                    // which is not the end of anything.
+                    val running = infos.any { it.state == WorkInfo.State.RUNNING }
+                    val waiting = infos.any { !it.state.isFinished }
+                    val was = _state.value.syncing
+                    when {
+                        running -> _state.update { it.copy(syncing = true) }
+                        waiting -> Unit
+                        else -> {
+                            _state.update { it.copy(syncing = false) }
+                            if (was) afterSync(infos.any { it.state == WorkInfo.State.SUCCEEDED })
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Re-reads the note on screen once a sync is over.
+         *
+         * `load` refuses the note it is already showing, so without this the
+         * page kept the text from before the sync until it was closed and
+         * opened again. Folds the new text moved out from under are dropped,
+         * and a find is run again over what the note now says.
+         */
+        private suspend fun afterSync(succeeded: Boolean) {
+            val asked = syncAsked
+            syncAsked = false
+            val current = _state.value
+            val id = current.note?.id
+            val note = id?.let { repository.note(it) }
+            if (id != null && note != null) {
+                _state.value =
+                    _state.value.copy(
+                        note = note,
+                        backlinks = repository.backlinks(id),
+                        writable = writes.canWrite(note.vaultId).first(),
+                        folded = HeadingFolds.kept(note.blocks, current.folded),
+                    )
+                if (current.findQuery.isNotBlank()) find(current.findQuery)
+            }
+            if (asked) {
+                _state.update {
+                    it.copy(
+                        message = UiText.Resource(if (succeeded) R.string.note_synced else R.string.note_sync_failed),
+                    )
+                }
+            }
+        }
+
         /** The note being loaded, so that asking for another stops it. */
         private var loading: Job? = null
 
@@ -263,12 +344,12 @@ class NoteViewModel
             loading?.cancel()
             // The journal strip is kept while the next note loads, so stepping
             // along a journal does not pull the page up and down under the finger.
-            _state.value = NoteUiState(loading = true, periodic = _state.value.periodic)
+            _state.value = NoteUiState(loading = true, periodic = _state.value.periodic, syncing = _state.value.syncing)
             loading =
                 viewModelScope.launch {
                     val note = repository.note(id)
                     if (note == null) {
-                        _state.value = NoteUiState(loading = false, missing = true)
+                        _state.value = NoteUiState(loading = false, missing = true, syncing = _state.value.syncing)
                         return@launch
                     }
                     repository.markOpened(id)
@@ -285,6 +366,7 @@ class NoteViewModel
                             // moved out from under.
                             folded = HeadingFolds.kept(note.blocks, note.folded),
                             periodic = destinations.neighbours(note.vaultId, note.path),
+                            syncing = _state.value.syncing,
                             contents =
                                 if (!note.isFolderNote) {
                                     emptyList()

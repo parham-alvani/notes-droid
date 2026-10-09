@@ -53,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -711,6 +712,8 @@ fun NoteScreen(
                                 }
                             },
                             onPlaces = { showPlaces = true },
+                            syncing = state.syncing,
+                            onSync = viewModel::sync,
                             onSharePdf = {
                                 state.note?.let { note ->
                                     scope.launch {
@@ -838,17 +841,27 @@ fun NoteScreen(
 
                                         else ->
                                             state.note?.let { note ->
-                                                MarkdownDocument(
-                                                    blocks = note.blocks,
-                                                    brokenLinks = state.brokenLinks,
-                                                    listState = listState,
-                                                    contentPadding = readingPadding(maxWidth, readingWidth),
-                                                    onPinch = viewModel::pinchTextScale,
-                                                    actions = noteActions ?: RenderActions(),
-                                                    spoken = spokenBlock,
-                                                    folded = state.folded,
-                                                    onToggleFold = viewModel::toggleFold,
-                                                )
+                                                val margins = readingPadding(maxWidth, readingWidth)
+                                                // Pulled down from the top of the note, the
+                                                // way the file list is; the note re-reads
+                                                // itself when the sync is over.
+                                                PullToRefreshBox(
+                                                    isRefreshing = state.syncing,
+                                                    onRefresh = viewModel::sync,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                ) {
+                                                    MarkdownDocument(
+                                                        blocks = note.blocks,
+                                                        brokenLinks = state.brokenLinks,
+                                                        listState = listState,
+                                                        contentPadding = margins,
+                                                        onPinch = viewModel::pinchTextScale,
+                                                        actions = noteActions ?: RenderActions(),
+                                                        spoken = spokenBlock,
+                                                        folded = state.folded,
+                                                        onToggleFold = viewModel::toggleFold,
+                                                    )
+                                                }
                                             }
                                     }
                                 }
