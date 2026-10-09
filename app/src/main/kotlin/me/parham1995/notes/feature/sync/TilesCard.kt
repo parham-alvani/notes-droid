@@ -20,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
 import me.parham1995.notes.tile.CaptureTile
+import me.parham1995.notes.tile.SyncTile
 import me.parham1995.notes.tile.TodayTile
 
 /**
@@ -55,6 +56,9 @@ internal fun TilesCard() {
                 OutlinedButton(onClick = {
                     ask(context, TodayTile::class.java, R.string.shortcut_today_short, R.drawable.ic_tile_today)
                 }) { Text(stringResource(R.string.shortcut_today_short)) }
+                OutlinedButton(onClick = {
+                    ask(context, SyncTile::class.java, R.string.tile_sync, R.drawable.ic_tile_sync)
+                }) { Text(stringResource(R.string.tile_sync)) }
             }
         }
     }
