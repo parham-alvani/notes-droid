@@ -1,0 +1,5 @@
+Highlight colours.
+
+A highlight that starts with a coloured circle -- ==🟡like this== -- is drawn in that colour, the way Obsidian now draws it: red, orange, yellow, green, blue or purple. The circle names the colour and is not shown.
+
+The index is rebuilt once after this update.
