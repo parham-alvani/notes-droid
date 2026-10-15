@@ -28,7 +28,7 @@ coroutines = "1.11.0"
 serialization = "1.11.0"
 
 okhttp = "5.5.0"
-commonmark = "0.30.0"
+commonmark = "0.30.1"
 coil = "3.6.3"
 jlatexmath = "0.2.0"
 webkit = "1.17.1"
