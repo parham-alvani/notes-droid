@@ -608,7 +608,10 @@ class BlockFlattener(
             is Emphasis -> MdInline.Emphasis(inlines(node))
             is StrongEmphasis -> MdInline.Strong(inlines(node))
             is Strikethrough -> MdInline.Strikethrough(inlines(node))
-            is HighlightNode -> MdInline.Highlight(inlines(node))
+            is HighlightNode -> {
+                val (color, children) = HighlightColor.of(inlines(node))
+                MdInline.Highlight(children, color)
+            }
             is TagNode -> {
                 inlineTags += node.name
                 MdInline.Tag(node.name)

@@ -7,6 +7,14 @@ class TaskExtractorTest {
     private fun tasks(markdown: String) = TaskExtractor.extract(MarkdownParser.parseNote(markdown))
 
     @Test
+    fun `a task keeps the words of a coloured highlight and drops the colour`() {
+        val line = "- [ ] Read ==🟠chapter two== tonight"
+        assertThat(tasks(line).single().text).isEqualTo("Read chapter two tonight")
+        // What a tick checks the line against, so the two must agree.
+        assertThat(TaskLine.indexedText(line)).isEqualTo("Read chapter two tonight")
+    }
+
+    @Test
     fun `finds an open task and its text without the metadata`() {
         val task = tasks("- [ ] Deploy the thing ➕ 2026-09-01 ⏳ 2026-09-18").single()
 

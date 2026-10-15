@@ -31,9 +31,10 @@ sealed interface MdInline {
         val children: List<MdInline>,
     ) : MdInline
 
-    /** Obsidian's `==highlight==`. */
+    /** Obsidian's `==highlight==`; [color] is null for the plain one. */
     data class Highlight(
         val children: List<MdInline>,
+        val color: HighlightColor? = null,
     ) : MdInline
 
     data class Link(

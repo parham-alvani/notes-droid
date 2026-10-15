@@ -17,9 +17,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.em
+import me.parham1995.notes.markdown.HighlightColor
 import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.ui.theme.Markup
+import me.parham1995.notes.ui.theme.Naz
 
 /** How a tapped link should be handled, decided by the screen rather than here. */
 data class InlineActions(
@@ -135,9 +137,9 @@ private fun appendInlines(
                 }
 
             is MdInline.Highlight ->
-                builder.withStyle(
-                    SpanStyle(background = colors.tertiaryContainer, color = colors.onTertiaryContainer),
-                ) { appendInlines(builder, node.children, colors, actions, brokenLinks, formulas) }
+                builder.withStyle(highlightStyle(node.color, colors)) {
+                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
+                }
 
             is MdInline.Link -> {
                 val link =
@@ -229,3 +231,28 @@ private fun appendInlines(
 internal const val MATH_TAG_PREFIX = "math:"
 private const val TAG_PREFIX = "tag:"
 private const val FOOTNOTE_PREFIX = "footnote:"
+
+/**
+ * The plain highlight keeps the theme's container colours. A coloured one is
+ * naz's colour laid thinly under text left as it was, the way Obsidian washes
+ * its highlights -- a translucent fill reads on the dark page and the light one
+ * alike, where a solid one would need a text colour picked for each.
+ */
+private fun highlightStyle(
+    color: HighlightColor?,
+    colors: ColorScheme,
+): SpanStyle {
+    val fill =
+        when (color) {
+            null -> return SpanStyle(background = colors.tertiaryContainer, color = colors.onTertiaryContainer)
+            HighlightColor.RED -> Naz.Red
+            HighlightColor.ORANGE -> Naz.Orange
+            HighlightColor.YELLOW -> Naz.VividYellow
+            HighlightColor.GREEN -> Naz.SpringGreen
+            HighlightColor.BLUE -> Naz.Blue
+            HighlightColor.PURPLE -> Naz.Purple
+        }
+    return SpanStyle(background = fill.copy(alpha = HIGHLIGHT_WASH))
+}
+
+private const val HIGHLIGHT_WASH = 0.35f

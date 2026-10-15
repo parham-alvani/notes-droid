@@ -118,6 +118,34 @@ class MarkdownParserTest {
     }
 
     @Test
+    fun `a colour emoji at the start of a highlight is its colour, not its text`() {
+        val inlines =
+            parse("==🟡yellow==, ==🔴 red==, ==🔵️blue== and ==plain==.")
+                .blocks
+                .filterIsInstance<MdBlock.Paragraph>()
+                .single()
+                .inlines
+                .filterIsInstance<MdInline.Highlight>()
+        assertThat(inlines.map { it.color })
+            .containsExactly(HighlightColor.YELLOW, HighlightColor.RED, HighlightColor.BLUE, null)
+            .inOrder()
+        assertThat(inlines.map { it.children.flat() }).containsExactly("yellow", "red", "blue", "plain").inOrder()
+    }
+
+    @Test
+    fun `a colour emoji anywhere but the start is text`() {
+        val highlight =
+            parse("==see 🟢 here== and ==🟣==")
+                .blocks
+                .filterIsInstance<MdBlock.Paragraph>()
+                .single()
+                .inlines
+                .filterIsInstance<MdInline.Highlight>()
+        assertThat(highlight.map { it.color }).containsExactly(null, null).inOrder()
+        assertThat(highlight.map { it.children.flat() }).containsExactly("see 🟢 here", "🟣").inOrder()
+    }
+
+    @Test
     fun `a callout carries its kind and title`() {
         val note = parse("> [!warning] Mind this\n>\n> The body text.")
         val callout = note.blocks.filterIsInstance<MdBlock.Callout>().single()

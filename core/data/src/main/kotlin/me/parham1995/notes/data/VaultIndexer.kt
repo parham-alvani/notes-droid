@@ -325,8 +325,11 @@ class VaultIndexer
              *    digits and half-spaces folded, plus each note's path, name
              *    and aliases. The index carried over from 9 still answers as
              *    it did; this rebuilds it so it answers the new way.
+             * 11: a highlight's colour emoji (`==🟡text==`) is no longer
+             *    part of its text, so a task holding one is stored without
+             *    it -- and has to be, to be found again when it is ticked.
              */
-            const val VERSION = 10
+            const val VERSION = 11
 
             /**
              * Files that are kept on the device but are not notes.

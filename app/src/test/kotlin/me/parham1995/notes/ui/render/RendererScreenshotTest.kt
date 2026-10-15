@@ -83,6 +83,8 @@ class RendererScreenshotTest {
 
         Plain prose with **bold**, *italic*, `code`, a [[Garden plan]] and a #tag.
 
+        Marked ==plain==, ==🟡yellow==, ==🔴 red== and ==🔵blue==.
+
         ## Open
 
         - [ ] Water the plants 📅 2026-10-03
