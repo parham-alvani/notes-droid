@@ -39,6 +39,7 @@ import me.parham1995.notes.ui.icon.ProvideLucide
 import me.parham1995.notes.ui.lock.LockScreen
 import me.parham1995.notes.ui.lock.Unlocker
 import me.parham1995.notes.ui.theme.NotesTheme
+import me.parham1995.notes.ui.theme.isDark
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -120,8 +121,8 @@ class MainActivity : ComponentActivity() {
         // A widget row on a cold start arrives here, not in onNewIntent. Only
         // a first creation acts on it; see launchRequest.
         answer(intent, restoring = savedInstanceState != null)
-        // naz is a dark colorscheme, so the system bars take light icons
-        // regardless of what the device is set to.
+        // Light icons until the settings are read: the splash is naz's dark
+        // background whatever the theme. The theme sets them again below.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(TRANSPARENT),
@@ -134,6 +135,20 @@ class MainActivity : ComponentActivity() {
             val loaded by settings.collectAsStateWithLifecycle()
             val current = loaded ?: return@setContent
 
+            // The bar icons follow the theme, not the device: white icons on
+            // the light theme's paper left the clock and battery unreadable.
+            val dark = current.reading.theme.isDark()
+            LaunchedEffect(dark) {
+                val bars =
+                    if (dark) {
+                        SystemBarStyle.dark(
+                            TRANSPARENT,
+                        )
+                    } else {
+                        SystemBarStyle.light(TRANSPARENT, TRANSPARENT)
+                    }
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+            }
             NotesTheme(theme = current.reading.theme) {
                 CompositionLocalProvider(LocalReading provides current.reading) {
                     ProvideLucide {

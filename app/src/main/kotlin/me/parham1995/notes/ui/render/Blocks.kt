@@ -75,8 +75,10 @@ import me.parham1995.notes.markdown.isFinishedAndEmpty
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
+import me.parham1995.notes.ui.theme.AccentColors
+import me.parham1995.notes.ui.theme.Accents
 import me.parham1995.notes.ui.theme.Markup
-import me.parham1995.notes.ui.theme.Naz
+import me.parham1995.notes.ui.theme.NazScheme
 import me.parham1995.notes.ui.theme.Vazirmatn
 
 /** Everything a rendered block might need to hand back to the screen. */
@@ -317,32 +319,37 @@ private fun CodeBlockView(
         highlighted = CodeHighlighter.highlight(block.code, block.language)
     }
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            CodeBlockHeader(
-                language = block.language,
-                known = block.language?.let { CodeHighlighter.isKnown(it) } == true,
-                onCopy = { actions.onCopyCode(block.code) },
-            )
-            // Code is left-to-right whatever the surrounding prose does, and
-            // scrolls on its own rather than wrapping mid-statement.
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Text(
-                    text = highlighted ?: AnnotatedString(block.code),
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    fontFamily = FontFamily.Monospace,
-                    // Code is text too: the reader's size reaches it, and
-                    // the fixed line height is scaled with it, or the
-                    // lines of a bigger font overlap.
-                    style =
-                        MaterialTheme.typography.bodySmall
-                            .copy(lineHeight = CODE_LINE_HEIGHT)
-                            .inScript(),
+    // Always naz's dark panel, in either theme: the highlighter's colours
+    // are the editor's, chosen for a dark background, and on the light
+    // scheme's paper the plain code came out white on off-white.
+    MaterialTheme(colorScheme = NazScheme) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(12.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                CodeBlockHeader(
+                    language = block.language,
+                    known = block.language?.let { CodeHighlighter.isKnown(it) } == true,
+                    onCopy = { actions.onCopyCode(block.code) },
                 )
+                // Code is left-to-right whatever the surrounding prose does, and
+                // scrolls on its own rather than wrapping mid-statement.
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Text(
+                        text = highlighted ?: AnnotatedString(block.code),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        fontFamily = FontFamily.Monospace,
+                        // Code is text too: the reader's size reaches it, and
+                        // the fixed line height is scaled with it, or the
+                        // lines of a bigger font overlap.
+                        style =
+                            MaterialTheme.typography.bodySmall
+                                .copy(lineHeight = CODE_LINE_HEIGHT)
+                                .inScript(),
+                    )
+                }
             }
         }
     }
@@ -395,7 +402,7 @@ private fun CalloutView(
     modifier: Modifier,
 ) {
     var expanded by remember(block.id) { mutableStateOf(!block.collapsed) }
-    val accent = block.kind.accent()
+    val accent = block.kind.accent(Accents)
     val scale = LocalReading.current.textScale
     val expandedLabel = stringResource(R.string.state_expanded)
     val collapsedLabel = stringResource(R.string.state_collapsed)
@@ -556,7 +563,7 @@ private fun ListBlockView(
                     LucideGlyph(
                         "bell",
                         size = 14.dp,
-                        tint = Naz.Orange,
+                        tint = Accents.orange,
                         modifier = Modifier.padding(top = 4.dp),
                         contentDescription = stringResource(R.string.task_reminder_set),
                     )
@@ -595,7 +602,7 @@ private fun ItemMarker(
     // with it -- a bullet the size of a full stop beside a line twice as tall
     // reads as a mistake.
     val scale = LocalReading.current.textScale
-    val custom = item.customStatus(Markup.ListMarker)
+    val custom = item.customStatus(Markup.ListMarker, Accents)
     val icon =
         when (item.task) {
             TaskState.UNCHECKED -> custom?.icon ?: "square"
@@ -683,7 +690,7 @@ private fun TaskChips(item: MdListItem) {
     val scale = LocalReading.current.textScale
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         item.taskMeta.forEach { meta ->
-            val (icon, tint, label) = meta.chip()
+            val (icon, tint, label) = meta.chip(Accents)
             Surface(
                 color = tint.copy(alpha = CHIP_ALPHA),
                 shape = RoundedCornerShape(8.dp),
@@ -706,18 +713,18 @@ private fun TaskChips(item: MdListItem) {
 }
 
 /** Icon, colour and a spoken label for one of the Tasks plugin's date fields. */
-private fun TaskMeta.chip(): Triple<String, Color, String> =
+private fun TaskMeta.chip(accents: AccentColors): Triple<String, Color, String> =
     when (emoji) {
-        "\u2705" -> Triple("check", Naz.SpringGreen, "done")
-        "\u274C" -> Triple("x", Naz.Red, "cancelled")
-        "\u23F3" -> Triple("hourglass", Naz.Blue, "scheduled")
-        "\uD83D\uDCC5" -> Triple("calendar", Naz.Orange, "due")
-        "\uD83D\uDD01" -> Triple("repeat", Naz.Purple, "repeats")
-        "\uD83D\uDEEB" -> Triple("plane-takeoff", Naz.Aqua, "starts")
+        "\u2705" -> Triple("check", accents.springGreen, "done")
+        "\u274C" -> Triple("x", accents.red, "cancelled")
+        "\u23F3" -> Triple("hourglass", accents.blue, "scheduled")
+        "\uD83D\uDCC5" -> Triple("calendar", accents.orange, "due")
+        "\uD83D\uDD01" -> Triple("repeat", accents.purple, "repeats")
+        "\uD83D\uDEEB" -> Triple("plane-takeoff", accents.aqua, "starts")
         // The one that is on almost every task in this vault, and the least
         // interesting of them, so it stays quiet.
-        "\u2795" -> Triple("plus", Naz.Grey, "added")
-        else -> Triple("info", Naz.Grey, "")
+        "\u2795" -> Triple("plus", accents.grey, "added")
+        else -> Triple("info", accents.grey, "")
     }
 
 @Composable
@@ -895,25 +902,28 @@ private class CustomStatus(
  * heard of is still a task: a dashed box, rather than `[k]` printed in front
  * of the text.
  */
-private fun MdListItem.customStatus(unknown: Color): CustomStatus? =
+private fun MdListItem.customStatus(
+    unknown: Color,
+    accents: AccentColors,
+): CustomStatus? =
     when (status) {
         ' ', 'x', 'X', '-', '/' -> null
-        '>' -> CustomStatus("square-arrow-right", Naz.Blue, "forwarded")
-        '<' -> CustomStatus("calendar-clock", Naz.Blue, "scheduled")
-        '!' -> CustomStatus("circle-alert", Naz.Red, "important")
-        '?' -> CustomStatus("circle-help", Naz.Yellow, "question")
-        '*' -> CustomStatus("star", Naz.VividYellow, "star")
-        '"' -> CustomStatus("quote", Naz.WarmGrey, "quote")
-        'i' -> CustomStatus("info", Naz.Blue, "information")
-        'b' -> CustomStatus("bookmark", Naz.Orange, "bookmark")
-        'l' -> CustomStatus("map-pin", Naz.Red, "location")
-        'I' -> CustomStatus("lightbulb", Naz.VividYellow, "idea")
-        'S' -> CustomStatus("piggy-bank", Naz.SpringGreen, "savings")
-        'f' -> CustomStatus("flame", Naz.Red, "fire")
-        'k' -> CustomStatus("key", Naz.VividYellow, "key")
-        'w' -> CustomStatus("trophy", Naz.VividYellow, "win")
-        'u', 'p' -> CustomStatus("thumbs-up", Naz.SpringGreen, if (status == 'p') "pro" else "up")
-        'd', 'c' -> CustomStatus("thumbs-down", Naz.Red, if (status == 'c') "con" else "down")
+        '>' -> CustomStatus("square-arrow-right", accents.blue, "forwarded")
+        '<' -> CustomStatus("calendar-clock", accents.blue, "scheduled")
+        '!' -> CustomStatus("circle-alert", accents.red, "important")
+        '?' -> CustomStatus("circle-help", accents.yellow, "question")
+        '*' -> CustomStatus("star", accents.vividYellow, "star")
+        '"' -> CustomStatus("quote", accents.warmGrey, "quote")
+        'i' -> CustomStatus("info", accents.blue, "information")
+        'b' -> CustomStatus("bookmark", accents.orange, "bookmark")
+        'l' -> CustomStatus("map-pin", accents.red, "location")
+        'I' -> CustomStatus("lightbulb", accents.vividYellow, "idea")
+        'S' -> CustomStatus("piggy-bank", accents.springGreen, "savings")
+        'f' -> CustomStatus("flame", accents.red, "fire")
+        'k' -> CustomStatus("key", accents.vividYellow, "key")
+        'w' -> CustomStatus("trophy", accents.vividYellow, "win")
+        'u', 'p' -> CustomStatus("thumbs-up", accents.springGreen, if (status == 'p') "pro" else "up")
+        'd', 'c' -> CustomStatus("thumbs-down", accents.red, if (status == 'c') "con" else "down")
         else -> CustomStatus("square-dashed", unknown, "status $status")
     }
 
@@ -933,20 +943,20 @@ private fun MdListItem.markerColor(): Color =
  * kinds are 93% of the 1,302 callouts in this vault, so telling those apart at
  * a glance is most of what a callout is for.
  */
-private fun CalloutKind.accent(): Color =
+private fun CalloutKind.accent(accents: AccentColors): Color =
     when (this) {
-        CalloutKind.WARNING -> Naz.Orange
-        CalloutKind.DANGER, CalloutKind.BUG, CalloutKind.FAILURE -> Naz.Red
-        CalloutKind.SUCCESS -> Naz.SpringGreen
-        CalloutKind.TIP -> Naz.Chartreuse
-        CalloutKind.TODO -> Naz.VividYellow
-        CalloutKind.QUESTION -> Naz.Yellow
-        CalloutKind.ABSTRACT -> Naz.LimeGreen
-        CalloutKind.EXAMPLE -> Naz.Purple
-        CalloutKind.QUOTE -> Naz.WarmGrey
-        CalloutKind.FIGURE -> Naz.Pink
-        CalloutKind.READ -> Naz.Aqua
-        CalloutKind.INFO, CalloutKind.NOTE -> Naz.Blue
+        CalloutKind.WARNING -> accents.orange
+        CalloutKind.DANGER, CalloutKind.BUG, CalloutKind.FAILURE -> accents.red
+        CalloutKind.SUCCESS -> accents.springGreen
+        CalloutKind.TIP -> accents.chartreuse
+        CalloutKind.TODO -> accents.vividYellow
+        CalloutKind.QUESTION -> accents.yellow
+        CalloutKind.ABSTRACT -> accents.limeGreen
+        CalloutKind.EXAMPLE -> accents.purple
+        CalloutKind.QUOTE -> accents.warmGrey
+        CalloutKind.FIGURE -> accents.pink
+        CalloutKind.READ -> accents.aqua
+        CalloutKind.INFO, CalloutKind.NOTE -> accents.blue
     }
 
 private fun CalloutKind.icon(): String =

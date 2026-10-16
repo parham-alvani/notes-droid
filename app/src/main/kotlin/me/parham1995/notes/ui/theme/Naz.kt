@@ -58,4 +58,7 @@ internal object Daylight {
     val Green = Color(0xFF0A7A48)
     val Teal = Color(0xFF00707A)
     val Purple = Color(0xFF8040A0)
+    val Olive = Color(0xFF5A7A00)
+    val Pink = Color(0xFFB02A70)
+    val Umber = Color(0xFF7A5A3A)
 }

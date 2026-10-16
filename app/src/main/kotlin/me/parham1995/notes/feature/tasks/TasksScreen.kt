@@ -59,7 +59,8 @@ import me.parham1995.notes.ui.RescheduleSheet
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.text
-import me.parham1995.notes.ui.theme.Naz
+import me.parham1995.notes.ui.theme.AccentColors
+import me.parham1995.notes.ui.theme.Accents
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -166,7 +167,7 @@ fun TasksScreen(
                                         state.waiting,
                                     ),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Naz.Orange,
+                                color = Accents.orange,
                             )
                         }
                     }
@@ -318,7 +319,7 @@ private fun BucketHeader(
                 text = bucket.label,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = bucket.accent(),
+                color = bucket.accent(Accents),
             )
             Text(
                 text = "$count",
@@ -364,7 +365,7 @@ private fun TaskRowView(
                             Modifier.clickable(onClick = complete).padding(CHECKBOX_TAP)
                         } ?: Modifier,
                     ),
-            tint = if (row.state == IN_PROGRESS) Naz.Blue else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (row.state == IN_PROGRESS) Accents.blue else MaterialTheme.colorScheme.onSurfaceVariant,
             contentDescription = if (row.state == IN_PROGRESS) "in progress" else "open",
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -391,14 +392,14 @@ private fun TaskRowView(
                     Text(
                         text = date,
                         style = MaterialTheme.typography.labelSmall,
-                        color = bucket.accent(),
+                        color = bucket.accent(Accents),
                     )
                 }
                 if (reminded) {
                     LucideGlyph(
                         "bell",
                         size = 12.dp,
-                        tint = Naz.Orange,
+                        tint = Accents.orange,
                         modifier = Modifier.align(Alignment.CenterVertically),
                         contentDescription = stringResource(R.string.task_reminder_set),
                     )
@@ -410,14 +411,14 @@ private fun TaskRowView(
 
 private const val IN_PROGRESS = "IN_PROGRESS"
 
-private fun TaskBucket.accent(): Color =
+private fun TaskBucket.accent(accents: AccentColors): Color =
     when (this) {
-        TaskBucket.OVERDUE -> Naz.Red
-        TaskBucket.TODAY -> Naz.Orange
-        TaskBucket.TOMORROW -> Naz.VividYellow
-        TaskBucket.THIS_WEEK -> Naz.SpringGreen
-        TaskBucket.LATER -> Naz.Blue
-        TaskBucket.UNDATED -> Naz.Grey
+        TaskBucket.OVERDUE -> accents.red
+        TaskBucket.TODAY -> accents.orange
+        TaskBucket.TOMORROW -> accents.vividYellow
+        TaskBucket.THIS_WEEK -> accents.springGreen
+        TaskBucket.LATER -> accents.blue
+        TaskBucket.UNDATED -> accents.grey
     }
 
 /**

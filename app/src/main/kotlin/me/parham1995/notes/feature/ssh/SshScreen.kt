@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.git.StoredKey
 import me.parham1995.notes.ui.icon.LucideGlyph
-import me.parham1995.notes.ui.theme.Naz
+import me.parham1995.notes.ui.theme.Accents
 import java.text.DateFormat
 import java.util.Date
 
@@ -244,8 +244,8 @@ private fun KeyCard(
             }
 
             when (val check = row.check) {
-                is KeyCheck.Passed -> Outcome(check.message, Naz.SpringGreen, "circle-check")
-                is KeyCheck.Failed -> Outcome(check.message, Naz.Red, "circle-x")
+                is KeyCheck.Passed -> Outcome(check.message, Accents.springGreen, "circle-check")
+                is KeyCheck.Failed -> Outcome(check.message, Accents.red, "circle-x")
                 else -> Unit
             }
         }

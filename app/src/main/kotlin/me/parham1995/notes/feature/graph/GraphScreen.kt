@@ -35,7 +35,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.ui.icon.LucideGlyph
-import me.parham1995.notes.ui.theme.Naz
+import me.parham1995.notes.ui.theme.AccentColors
+import me.parham1995.notes.ui.theme.Accents
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
@@ -109,6 +110,7 @@ fun GraphScreen(
                     // the drawing and the hit test so a tap cannot land on a
                     // node the picture does not show.
                     val ring = remember(state.nodes) { state.nodes }
+                    val accents = Accents
 
                     Canvas(
                         Modifier
@@ -132,7 +134,7 @@ fun GraphScreen(
 
                         ring.forEachIndexed { index, node ->
                             val at = positionOf(index, ring.size, centre, radius)
-                            val colour = node.direction.colour()
+                            val colour = node.direction.colour(accents)
 
                             drawLine(
                                 color = colour.copy(alpha = EDGE_ALPHA),
@@ -145,7 +147,7 @@ fun GraphScreen(
                         }
 
                         // Drawn last so the edges run underneath it.
-                        drawCircle(color = Naz.Orange, radius = CENTRE_RADIUS, center = centre)
+                        drawCircle(color = accents.orange, radius = CENTRE_RADIUS, center = centre)
                     }
 
                     if (state.hidden > 0) {
@@ -197,11 +199,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.label(
     drawText(measured, topLeft = Offset(x, y))
 }
 
-private fun Edge.colour(): Color =
+private fun Edge.colour(accents: AccentColors): Color =
     when (this) {
-        Edge.OUT -> Naz.Blue
-        Edge.IN -> Naz.SpringGreen
-        Edge.MUTUAL -> Naz.Purple
+        Edge.OUT -> accents.blue
+        Edge.IN -> accents.springGreen
+        Edge.MUTUAL -> accents.purple
     }
 
 private const val TAU = 6.2831855f

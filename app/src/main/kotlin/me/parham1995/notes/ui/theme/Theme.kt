@@ -149,19 +149,22 @@ internal val NazShapes =
         extraLarge = RoundedCornerShape(32.dp),
     )
 
+/** Whether this choice comes out dark, here and now. */
+@Composable
+fun ThemeChoice.isDark(): Boolean =
+    when (this) {
+        ThemeChoice.DARK -> true
+        ThemeChoice.LIGHT -> false
+        ThemeChoice.SYSTEM -> isSystemInDarkTheme()
+    }
+
 @Composable
 fun NotesTheme(
     theme: ThemeChoice = ThemeChoice.DARK,
     content: @Composable () -> Unit,
 ) {
-    val dark =
-        when (theme) {
-            ThemeChoice.DARK -> true
-            ThemeChoice.LIGHT -> false
-            ThemeChoice.SYSTEM -> isSystemInDarkTheme()
-        }
     MaterialTheme(
-        colorScheme = if (dark) NazScheme else DaylightScheme,
+        colorScheme = if (theme.isDark()) NazScheme else DaylightScheme,
         typography = NazTypography,
         shapes = NazShapes,
         content = content,
