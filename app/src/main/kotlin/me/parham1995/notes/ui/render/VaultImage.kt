@@ -82,14 +82,14 @@ fun VaultImage(
                             // The same picture the viewer shows, so opening it
                             // moves it rather than replacing it.
                             .sharedElementIn(imageKey(vaultId, path))
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable(onClick = onClick),
                 )
 
             else ->
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
                 ) {
                     Text(

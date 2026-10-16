@@ -68,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
@@ -1051,7 +1052,7 @@ fun NoteScreen(
                     items(state.mentions, key = { "mention-" + it.noteId }) { hit ->
                         ReferenceRow(
                             title = hit.title,
-                            context = hit.snippet.highlighted(),
+                            context = hit.snippet.highlighted(Markup.Strong),
                             path = hit.path,
                             onClick = {
                                 showBacklinks = false
@@ -1173,7 +1174,7 @@ private fun ReferenceRow(
  * than returning positions, so this is the only way to know where the match
  * was without searching the excerpt again.
  */
-private fun String.highlighted(): AnnotatedString =
+private fun String.highlighted(strong: Color): AnnotatedString =
     buildAnnotatedString {
         var rest = this@highlighted
         while (true) {
@@ -1181,7 +1182,7 @@ private fun String.highlighted(): AnnotatedString =
             val close = rest.indexOf(']', startIndex = open + 1)
             if (open < 0 || close < 0) break
             append(rest.substring(0, open))
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Markup.Strong)) {
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = strong)) {
                 append(rest.substring(open + 1, close))
             }
             rest = rest.substring(close + 1)

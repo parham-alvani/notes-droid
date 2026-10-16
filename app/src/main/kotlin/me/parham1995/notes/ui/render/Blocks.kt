@@ -320,7 +320,7 @@ private fun CodeBlockView(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             CodeBlockHeader(
@@ -408,7 +408,7 @@ private fun CalloutView(
     Row(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(accent.copy(alpha = CONTAINER_ALPHA))
             .height(IntrinsicSize.Min),
     ) {
@@ -595,7 +595,7 @@ private fun ItemMarker(
     // with it -- a bullet the size of a full stop beside a line twice as tall
     // reads as a mistake.
     val scale = LocalReading.current.textScale
-    val custom = item.customStatus()
+    val custom = item.customStatus(Markup.ListMarker)
     val icon =
         when (item.task) {
             TaskState.UNCHECKED -> custom?.icon ?: "square"
@@ -686,7 +686,7 @@ private fun TaskChips(item: MdListItem) {
             val (icon, tint, label) = meta.chip()
             Surface(
                 color = tint.copy(alpha = CHIP_ALPHA),
-                shape = RoundedCornerShape(6.dp),
+                shape = RoundedCornerShape(8.dp),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
@@ -748,7 +748,7 @@ private fun TableView(
         modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
     ) {
         if (block.header.isNotEmpty()) {
             TableRowView(block.header, block.alignments, widths, actions, brokenLinks, header = true)
@@ -829,7 +829,7 @@ private fun AttachmentView(
 ) {
     Card(
         modifier = modifier.fillMaxWidth().clickable { actions.onAttachment(block.path) },
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
     ) {
         Row(
             Modifier.padding(12.dp),
@@ -867,7 +867,7 @@ private fun UnsupportedView(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
     ) {
         Text(
             // Saying so plainly beats showing the reader the query source.
@@ -895,7 +895,7 @@ private class CustomStatus(
  * heard of is still a task: a dashed box, rather than `[k]` printed in front
  * of the text.
  */
-private fun MdListItem.customStatus(): CustomStatus? =
+private fun MdListItem.customStatus(unknown: Color): CustomStatus? =
     when (status) {
         ' ', 'x', 'X', '-', '/' -> null
         '>' -> CustomStatus("square-arrow-right", Naz.Blue, "forwarded")
@@ -914,7 +914,7 @@ private fun MdListItem.customStatus(): CustomStatus? =
         'w' -> CustomStatus("trophy", Naz.VividYellow, "win")
         'u', 'p' -> CustomStatus("thumbs-up", Naz.SpringGreen, if (status == 'p') "pro" else "up")
         'd', 'c' -> CustomStatus("thumbs-down", Naz.Red, if (status == 'c') "con" else "down")
-        else -> CustomStatus("square-dashed", Markup.ListMarker, "status $status")
+        else -> CustomStatus("square-dashed", unknown, "status $status")
     }
 
 @Composable

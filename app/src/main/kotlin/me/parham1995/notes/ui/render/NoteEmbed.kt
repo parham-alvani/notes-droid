@@ -90,8 +90,8 @@ internal fun NoteEmbedView(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, accent, RoundedCornerShape(8.dp)),
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, accent, RoundedCornerShape(12.dp)),
     ) {
         val loaded = (embedded as? EmbedState.Loaded)?.note
         Row(

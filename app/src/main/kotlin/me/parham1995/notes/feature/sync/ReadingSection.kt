@@ -92,7 +92,7 @@ internal fun ReadingCard(
         // it is made rather than two screens away.
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(

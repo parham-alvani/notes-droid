@@ -88,7 +88,7 @@ internal fun TasksQueryView(
         Surface(
             modifier = modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
         ) {
             Text(
                 text = stringResource(R.string.unsupported_block, stringResource(R.string.unsupported_tasks_query)),
@@ -107,8 +107,8 @@ internal fun TasksQueryView(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, outline, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, outline, RoundedCornerShape(12.dp))
             .testTag("tasks-query"),
     ) {
         Row(

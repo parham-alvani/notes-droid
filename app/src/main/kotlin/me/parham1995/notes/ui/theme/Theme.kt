@@ -1,10 +1,15 @@
 package me.parham1995.notes.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.unit.dp
 import me.parham1995.notes.data.ThemeChoice
 
 /**
@@ -20,6 +25,11 @@ import me.parham1995.notes.data.ThemeChoice
  * naz's accents, which are what carry meaning here, and darkens the ones that
  * were chosen to glow on black and would otherwise be invisible on paper. It
  * exists because a phone gets read outdoors; dark stays the default.
+ *
+ * The containers -- a selected tab, a chip, a property pill, an error banner --
+ * are the accent they belong to washed into the background, not a grey. A
+ * plain `DarkGrey` behind everything made the chrome around a note read as
+ * one flat panel; a container the colour of its role says which role it is.
  */
 internal val NazScheme =
     darkColorScheme(
@@ -31,20 +41,21 @@ internal val NazScheme =
         // Pmenu and code: the editor's darker panel
         surfaceVariant = Naz.DarkBlack,
         onSurfaceVariant = Naz.Grey,
+        // Stepped, so a sheet over a menu over the page each sit visibly apart.
         surfaceContainer = Naz.LightBlack,
-        surfaceContainerHigh = Naz.LightBlack,
-        surfaceContainerHighest = Naz.LightBlack,
+        surfaceContainerHigh = lerp(Naz.LightBlack, Naz.White, 0.04f),
+        surfaceContainerHighest = lerp(Naz.LightBlack, Naz.White, 0.08f),
         surfaceContainerLow = Naz.DarkBlack,
         surfaceContainerLowest = Naz.DarkBlack,
         // Directory / Identifier: folders, links, anything to act on
         primary = Naz.Orange,
         onPrimary = Naz.Black,
-        primaryContainer = Naz.DarkGrey,
+        primaryContainer = Naz.Orange.wash(Naz.Black),
         onPrimaryContainer = Naz.Orange,
         // Function
         secondary = Naz.Blue,
         onSecondary = Naz.Black,
-        secondaryContainer = Naz.DarkGrey,
+        secondaryContainer = Naz.Blue.wash(Naz.Black),
         onSecondaryContainer = Naz.Aqua,
         // Title / Search: headings, and the background behind ==highlight==
         tertiary = Naz.Yellow,
@@ -54,7 +65,7 @@ internal val NazScheme =
         // WarningMsg
         error = Naz.Red,
         onError = Naz.Black,
-        errorContainer = Naz.DarkGrey,
+        errorContainer = Naz.Red.wash(Naz.Black),
         onErrorContainer = Naz.Red,
         // Visual
         outline = Naz.LightGrey,
@@ -87,11 +98,11 @@ internal val DaylightScheme =
         surfaceContainerLowest = Daylight.Paper,
         primary = Daylight.Orange,
         onPrimary = Daylight.Paper,
-        primaryContainer = Daylight.Panel,
+        primaryContainer = Daylight.Orange.wash(Daylight.Paper, PAPER_WASH),
         onPrimaryContainer = Daylight.Orange,
         secondary = Daylight.Blue,
         onSecondary = Daylight.Paper,
-        secondaryContainer = Daylight.Panel,
+        secondaryContainer = Daylight.Blue.wash(Daylight.Paper, PAPER_WASH),
         onSecondaryContainer = Daylight.Blue,
         tertiary = Daylight.Amber,
         onTertiary = Daylight.Paper,
@@ -99,7 +110,7 @@ internal val DaylightScheme =
         onTertiaryContainer = Daylight.Ink,
         error = Daylight.Red,
         onError = Daylight.Paper,
-        errorContainer = Daylight.Panel,
+        errorContainer = Daylight.Red.wash(Daylight.Paper, PAPER_WASH),
         onErrorContainer = Daylight.Red,
         outline = Daylight.FadedInk,
         outlineVariant = Daylight.Rule,
@@ -107,6 +118,35 @@ internal val DaylightScheme =
         inverseOnSurface = Naz.White,
         inversePrimary = Daylight.Orange,
         scrim = Daylight.Rule,
+    )
+
+/**
+ * An accent mixed into a background, for the container behind that accent's
+ * own text. Enough to be read as the colour, little enough that the accent
+ * drawn on top keeps its contrast.
+ */
+internal fun Color.wash(
+    background: Color,
+    amount: Float = INK_WASH,
+): Color = lerp(background, this, amount)
+
+private const val INK_WASH = 0.24f
+
+/** Paper takes a tint more readily than dark grey does. */
+private const val PAPER_WASH = 0.14f
+
+/**
+ * Rounder than Material's defaults: menus, sheets, dialogs and chips all take
+ * their corners from here, and the softer ones are what a current Android app
+ * looks like next to the 4dp corners of a few years ago.
+ */
+internal val NazShapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(6.dp),
+        small = RoundedCornerShape(10.dp),
+        medium = RoundedCornerShape(16.dp),
+        large = RoundedCornerShape(24.dp),
+        extraLarge = RoundedCornerShape(32.dp),
     )
 
 @Composable
@@ -123,6 +163,7 @@ fun NotesTheme(
     MaterialTheme(
         colorScheme = if (dark) NazScheme else DaylightScheme,
         typography = NazTypography,
+        shapes = NazShapes,
         content = content,
     )
 }

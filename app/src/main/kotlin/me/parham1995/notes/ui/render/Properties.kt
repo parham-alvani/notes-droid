@@ -61,8 +61,8 @@ internal fun PropertiesView(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, outline, RoundedCornerShape(8.dp)),
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, outline, RoundedCornerShape(12.dp)),
     ) {
         Row(
             Modifier

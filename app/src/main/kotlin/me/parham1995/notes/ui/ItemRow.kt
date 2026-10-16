@@ -1,11 +1,14 @@
 package me.parham1995.notes.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.icon.VaultIcon
+import me.parham1995.notes.ui.theme.resolve
 
 /** A vault item with its Iconic assignment already resolved. */
 data class VaultRowItem(
@@ -53,11 +57,11 @@ fun ItemRow(
         modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        VaultIcon(spec = icon, default = defaultIcon, contentDescription = iconDescription)
+        IconTile(icon, defaultIcon, iconDescription)
         Column(Modifier.weight(1f)) {
             AutoDirection(title) {
                 Text(
@@ -82,3 +86,55 @@ fun ItemRow(
         trailing?.invoke()
     }
 }
+
+/**
+ * The row's icon on a tile washed in its colour.
+ *
+ * The colour says what kind of thing the row is before the title does, in the
+ * roles the theme already gives them: a folder is orange like everything
+ * structural, a note blue, an attachment yellow. An Iconic colour wins, because
+ * the person chose it; navigation glyphs -- the way up, a group's chevron --
+ * stay grey and untiled, since they are not things in the vault.
+ */
+@Composable
+private fun IconTile(
+    icon: IconSpec?,
+    defaultIcon: String,
+    description: String?,
+) {
+    val colors = MaterialTheme.colorScheme
+    val role =
+        when (defaultIcon) {
+            "folder" -> colors.primary
+            "file-text", "heading" -> colors.secondary
+            "corner-left-up", "chevron-down", "chevron-right" -> null
+            else -> colors.tertiary
+        }
+    val accent =
+        when (icon) {
+            is IconSpec.Glyph -> icon.color.resolve(role ?: colors.onSurfaceVariant)
+            is IconSpec.Emoji -> null
+            null -> role
+        }
+    if (role == null && icon !is IconSpec.Emoji) {
+        VaultIcon(spec = icon, default = defaultIcon, contentDescription = description)
+        return
+    }
+    Box(
+        Modifier
+            .size(TILE)
+            .background(accent?.copy(alpha = TILE_WASH) ?: colors.surfaceContainerHigh, MaterialTheme.shapes.small),
+        contentAlignment = Alignment.Center,
+    ) {
+        VaultIcon(
+            spec = icon,
+            default = defaultIcon,
+            size = 18.dp,
+            tint = accent ?: colors.onSurfaceVariant,
+            contentDescription = description,
+        )
+    }
+}
+
+private val TILE = 34.dp
+private const val TILE_WASH = 0.16f

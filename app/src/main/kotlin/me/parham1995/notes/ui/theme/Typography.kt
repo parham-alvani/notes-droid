@@ -11,7 +11,10 @@ import androidx.compose.ui.unit.sp
  *
  * Material's defaults are tuned for interface labels; long-form markdown needs
  * more room between lines and a heading scale with real separation between
- * levels, or a note reads as one undifferentiated block. Line heights sit near
+ * levels, or a note reads as one undifferentiated block. The sizes sit a step
+ * under Material's own -- 15sp body rather than 16 -- because a phone held at
+ * reading distance fits more of a note that way without anything feeling small,
+ * and the reader's text-size setting is there for anyone who wants it larger. Line heights sit near
  * 1.5x, which is the usual comfortable range for body text, and headings trim
  * the extra leading so they sit tight to the paragraph they introduce.
  */
@@ -26,37 +29,41 @@ internal val NazTypography =
         copy(
             headlineMedium =
                 headlineMedium.copy(
-                    fontSize = 26.sp,
-                    lineHeight = 32.sp,
+                    fontSize = 24.sp,
+                    lineHeight = 30.sp,
                     fontWeight = FontWeight.Bold,
                 ),
             headlineSmall =
                 headlineSmall.copy(
-                    fontSize = 22.sp,
-                    lineHeight = 28.sp,
+                    fontSize = 20.sp,
+                    lineHeight = 26.sp,
                     fontWeight = FontWeight.Bold,
                 ),
             titleLarge =
                 titleLarge.copy(
-                    fontSize = 19.sp,
-                    lineHeight = 25.sp,
+                    fontSize = 18.sp,
+                    lineHeight = 24.sp,
                     fontWeight = FontWeight.SemiBold,
                 ),
             titleMedium =
                 titleMedium.copy(
-                    fontSize = 17.sp,
-                    lineHeight = 23.sp,
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
                     fontWeight = FontWeight.SemiBold,
                 ),
             titleSmall =
                 titleSmall.copy(
-                    fontSize = 15.sp,
-                    lineHeight = 21.sp,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                 ),
-            bodyLarge = body(bodyLarge, 16.sp, 25.sp),
-            bodyMedium = body(bodyMedium, 15.sp, 23.sp),
-            bodySmall = body(bodySmall, 13.sp, 19.sp),
+            bodyLarge = body(bodyLarge, 15.sp, 23.sp),
+            bodyMedium = body(bodyMedium, 14.sp, 21.sp),
+            bodySmall = body(bodySmall, 12.sp, 18.sp),
+            // Material's labels, a half step down to sit with the body above.
+            labelLarge = labelLarge.copy(fontSize = 13.sp, lineHeight = 18.sp),
+            labelMedium = labelMedium.copy(fontSize = 11.5.sp, lineHeight = 16.sp),
+            labelSmall = labelSmall.copy(fontSize = 10.5.sp, lineHeight = 15.sp),
         )
     }
 
