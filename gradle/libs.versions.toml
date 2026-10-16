@@ -1,6 +1,6 @@
 [versions]
 agp = "9.4.1"
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 ksp = "2.3.12"
 ktlint = "14.2.0"
 
@@ -28,7 +28,7 @@ coroutines = "1.11.0"
 serialization = "1.11.0"
 
 okhttp = "5.5.0"
-commonmark = "0.30.0"
+commonmark = "0.30.1"
 coil = "3.6.3"
 jlatexmath = "0.2.0"
 webkit = "1.17.1"
