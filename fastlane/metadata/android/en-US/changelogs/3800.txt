@@ -1,0 +1,5 @@
+A smaller, more colourful app.
+
+Text is a step smaller throughout, so more of a note fits on the screen; the text size setting still makes it larger. Folders, notes and attachments in a list sit on a tile in their own colour -- or the one Iconic gives them -- and the selected tab, chips and buttons are tinted by their colour instead of grey. Corners are rounder.
+
+In the light theme, headings, italics, code and links are now drawn in colours made for paper. Headings used to be pale yellow on white and hard to read.
