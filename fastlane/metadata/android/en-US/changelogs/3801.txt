@@ -1,0 +1,3 @@
+The light theme, readable.
+
+The clock and battery at the top of the screen are dark on the light theme instead of white. Date chips, callout titles, task states, the task list's headings and the graph use colours made for paper, and a code block keeps its dark panel so its colours stay the editor's.
