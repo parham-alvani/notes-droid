@@ -1,0 +1,7 @@
+Material 3 Expressive, and sync failures that say why.
+
+The app moves to Material 3 Expressive: springier motion, a new loading indicator, and sheets whose navigation bar matches them instead of a pale band under a dark sheet.
+
+A sync you ask for now says when it fails and why. It also says when it is waiting: on a network with no internet, or on mobile data when sync is set to Wi-Fi only. A sync that Android paused because the network changed is no longer called a failure.
+
+A folder note opened from another vault lists its own folder. The backlinks sheet no longer crashes on a note that links twice on one line. The light theme's orange and the dark theme's error text are easier to read, and TalkBack reads a task's box as a checkbox.
