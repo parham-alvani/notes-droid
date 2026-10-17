@@ -143,18 +143,6 @@ interface NoteDao {
 
     @Query("SELECT COUNT(*) FROM notes WHERE vaultId = :vaultId")
     fun count(vaultId: Long): Flow<Int>
-
-    @Query("DELETE FROM notes WHERE vaultId = :vaultId AND path = :path")
-    suspend fun deleteByPath(
-        vaultId: Long,
-        path: String,
-    )
-
-    @Query("DELETE FROM notes")
-    suspend fun clear()
-
-    @Query("DELETE FROM notes WHERE vaultId = :vaultId")
-    suspend fun clearVault(vaultId: Long)
 }
 
 /** Makes text match itself under `LIKE ... ESCAPE '\'`, wildcards included. */
@@ -177,19 +165,13 @@ data class NoteRef(
 
 @Dao
 interface LinkDao {
-    @Insert
-    suspend fun insertAll(links: List<LinkEntity>)
-
-    @Query("DELETE FROM links WHERE srcId = :srcId")
-    suspend fun deleteBySource(srcId: Long)
-
     /**
      * Backlinks. This one indexed query is the whole feature, which is why the
      * context line is stored on the row rather than read back from the file.
      */
     @Query(
         """
-        SELECT notes.id AS noteId, notes.title AS title, notes.path AS path,
+        SELECT links.id AS linkId, notes.id AS noteId, notes.title AS title, notes.path AS path,
                links.context AS context
         FROM links JOIN notes ON notes.id = links.srcId
         WHERE links.targetId = :targetId
@@ -206,7 +188,7 @@ interface LinkDao {
      */
     @Query(
         """
-        SELECT DISTINCT notes.id AS noteId, notes.title AS title, notes.path AS path, '' AS context
+        SELECT DISTINCT 0 AS linkId, notes.id AS noteId, notes.title AS title, notes.path AS path, '' AS context
         FROM links
         JOIN notes ON notes.id = links.targetId
         WHERE links.srcId = :srcId AND links.targetId IS NOT NULL
@@ -234,12 +216,16 @@ interface LinkDao {
         """,
     )
     suspend fun unresolved(vaultId: Long): List<UnresolvedLink>
-
-    @Query("DELETE FROM links")
-    suspend fun clear()
 }
 
 data class BacklinkRow(
+    /**
+     * The link the row came from, and so the one thing that tells two rows
+     * apart: a note that links here twice on one line gives two rows with the
+     * same note and the same context. Zero from [LinkDao.outgoing], which has
+     * one row per note.
+     */
+    val linkId: Long,
     val noteId: Long,
     val title: String,
     val path: String,
@@ -254,17 +240,8 @@ data class UnresolvedLink(
 
 @Dao
 interface HeadingDao {
-    @Insert
-    suspend fun insertAll(headings: List<HeadingEntity>)
-
     @Query("SELECT * FROM headings WHERE noteId = :noteId ORDER BY ordinal")
     suspend fun byNote(noteId: Long): List<HeadingEntity>
-
-    @Query("DELETE FROM headings WHERE noteId = :noteId")
-    suspend fun deleteByNote(noteId: Long)
-
-    @Query("DELETE FROM headings")
-    suspend fun clear()
 }
 
 /**

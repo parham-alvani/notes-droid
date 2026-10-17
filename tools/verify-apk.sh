@@ -58,3 +58,40 @@ if [ ${#missing[@]} -ne 0 ]; then
 fi
 
 echo "$(basename "$apk"): all ${#required[@]} reflectively-loaded classes survived R8"
+
+# 16 KB pages. From Android 15 a device may use 16 KB memory pages, and a
+# native library that is not aligned to them does not load: the bundled
+# SQLite is one, and without it there is no database. Two things have to
+# hold, and a dependency bump can break either without a build error -- the
+# library's offset inside the zip, and the alignment of its own segments.
+zipalign=$(ls -d "${ANDROID_HOME:?ANDROID_HOME is not set}"/build-tools/*/zipalign | sort -V | tail -1)
+if ! "$zipalign" -c -P 16 4 "$apk"; then
+    echo "Native libraries are not 16 KB aligned inside $(basename "$apk")." >&2
+    "$zipalign" -c -P 16 -v 4 "$apk" | grep -F '.so' | grep -v '(OK' >&2 || true
+    exit 1
+fi
+
+unzip -oq "$apk" 'lib/arm64-v8a/*' 'lib/x86_64/*' -d "$work" 2>/dev/null || true
+python3 - "$work"/lib/*/*.so <<'PY'
+import struct, sys
+
+PAGE = 16 * 1024
+bad = []
+libs = [p for p in sys.argv[1:] if not p.endswith("*.so")]
+for path in libs:
+    data = open(path, "rb").read()
+    phoff, = struct.unpack_from("<Q", data, 0x20)
+    size, count = struct.unpack_from("<HH", data, 0x36)
+    for i in range(count):
+        entry = phoff + i * size
+        kind, = struct.unpack_from("<I", data, entry)
+        align, = struct.unpack_from("<Q", data, entry + 48)
+        if kind == 1 and align < PAGE:  # PT_LOAD
+            bad.append(f"{path.split('/lib/', 1)[1]}: segments aligned to {align}")
+            break
+if bad:
+    print("64-bit native libraries built for 4 KB pages:", file=sys.stderr)
+    print("\n".join("    " + b for b in bad), file=sys.stderr)
+    sys.exit(1)
+print(f"{len(libs)} 64-bit native libraries are 16 KB aligned")
+PY

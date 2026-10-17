@@ -282,12 +282,6 @@ interface TaskDao {
         """,
     )
     fun openCountsByVault(): Flow<List<VaultTaskCount>>
-
-    @Query("DELETE FROM tasks WHERE noteId = :noteId")
-    suspend fun deleteByNote(noteId: Long)
-
-    @Query("DELETE FROM tasks")
-    suspend fun clear()
 }
 
 @Dao

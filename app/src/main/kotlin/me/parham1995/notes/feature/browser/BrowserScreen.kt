@@ -28,6 +28,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,6 +68,7 @@ import me.parham1995.notes.ui.openLabel
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.render.Attachments
 import me.parham1995.notes.ui.sharedBoundsIn
+import me.parham1995.notes.ui.text
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,6 +89,19 @@ fun BrowserScreen(
     viewModel: BrowserViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    val syncMessage =
+        viewModel.syncMessage
+            .collectAsStateWithLifecycle()
+            .value
+            ?.text()
+    LaunchedEffect(syncMessage) {
+        syncMessage?.let {
+            // Long and dismissable: a reason is a sentence to read, not a toast.
+            snackbar.showSnackbar(it, withDismissAction = true, duration = SnackbarDuration.Long)
+            viewModel.dismissSyncMessage()
+        }
+    }
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     // Shut again on a vault switch: the keys are positions in one vault's tree.
     var openGroups by remember(bookmarks.vaultId) { mutableStateOf(emptySet<String>()) }
@@ -171,6 +188,7 @@ fun BrowserScreen(
     BackHandler(enabled = state.path.isNotEmpty()) { viewModel.up() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {

@@ -45,22 +45,8 @@ object DataModule {
             // everywhere and lets the queries be tested on the JVM.
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
-            .addMigrations(
-                NotesDatabase.MIGRATION_1_2,
-                NotesDatabase.MIGRATION_2_3,
-                NotesDatabase.MIGRATION_3_4,
-                NotesDatabase.MIGRATION_4_5,
-                NotesDatabase.MIGRATION_5_6,
-                NotesDatabase.MIGRATION_6_7,
-                NotesDatabase.MIGRATION_7_8,
-                NotesDatabase.MIGRATION_8_9,
-                NotesDatabase.MIGRATION_9_10,
-                NotesDatabase.MIGRATION_10_11,
-                NotesDatabase.MIGRATION_11_12,
-                NotesDatabase.MIGRATION_12_13,
-                NotesDatabase.MIGRATION_13_14,
-                NotesDatabase.MIGRATION_14_15,
-            ).addCallback(
+            .addMigrations(*NotesDatabase.MIGRATIONS.toTypedArray())
+            .addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(connection: SQLiteConnection) = NotesDatabase.ensureSearchIndex(connection)
 

@@ -2,7 +2,9 @@ package me.parham1995.notes.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -62,11 +64,12 @@ internal val NazScheme =
         onTertiary = Naz.Black,
         tertiaryContainer = Naz.Yellow,
         onTertiaryContainer = Naz.Black,
-        // WarningMsg
-        error = Naz.Red,
+        // WarningMsg, a shade lighter: naz's red is 4.0:1 on Black, and a
+        // sync failure is a sentence at body size, not a highlight.
+        error = Naz.ErrorText,
         onError = Naz.Black,
         errorContainer = Naz.Red.wash(Naz.Black),
-        onErrorContainer = Naz.Red,
+        onErrorContainer = Naz.ErrorText,
         // Visual
         outline = Naz.LightGrey,
         outlineVariant = Naz.DarkGrey,
@@ -158,13 +161,21 @@ fun ThemeChoice.isDark(): Boolean =
         ThemeChoice.SYSTEM -> isSystemInDarkTheme()
     }
 
+/**
+ * Material 3 Expressive: the same colours, type and shapes, with the
+ * spring-based motion scheme. Components read their animation specs from it,
+ * so sheets, menus, switches and indicators settle with one feel rather than
+ * the older fixed-duration easing.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NotesTheme(
     theme: ThemeChoice = ThemeChoice.DARK,
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
+    MaterialExpressiveTheme(
         colorScheme = if (theme.isDark()) NazScheme else DaylightScheme,
+        motionScheme = MotionScheme.expressive(),
         typography = NazTypography,
         shapes = NazShapes,
         content = content,

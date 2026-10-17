@@ -2,7 +2,6 @@ package me.parham1995.notes.feature.note
 
 import android.content.ClipData
 import android.content.Intent
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,6 +32,7 @@ import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.render.ContactLinks
+import me.parham1995.notes.ui.sheetProperties
 
 /**
  * The places a note mentions, gathered in one list, each a tap from the maps
@@ -64,7 +64,7 @@ fun PlacesSheet(
                 }.distinct()
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, properties = sheetProperties()) {
         Column(Modifier.fillMaxWidth().padding(bottom = 16.dp).verticalScroll(rememberScrollState())) {
             Text(
                 stringResource(R.string.places_title),
@@ -84,7 +84,11 @@ fun PlacesSheet(
                 else ->
                     found.forEach { place ->
                         ListItem(
-                            headlineContent = { Text(place) },
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Contacts.geo(place).toUri()))
+                                }
+                            },
                             leadingContent = { LucideGlyph("map-pin", size = 20.dp) },
                             trailingContent = {
                                 IconButton(onClick = {
@@ -101,13 +105,7 @@ fun PlacesSheet(
                                     )
                                 }
                             },
-                            modifier =
-                                Modifier.clickable {
-                                    runCatching {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Contacts.geo(place).toUri()))
-                                    }
-                                },
-                        )
+                        ) { Text(place) }
                     }
             }
         }

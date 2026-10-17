@@ -117,28 +117,10 @@ class SearchIndex
             }
         }
 
-        suspend fun clear() {
-            database.useWriterConnection { connection ->
-                connection.usePrepared("DELETE FROM $FTS") { it.step() }
-            }
-        }
-
         /** Merges the index's b-trees after a batch, keeping queries fast. */
         suspend fun optimize() {
             database.useWriterConnection { connection ->
                 connection.usePrepared("INSERT INTO $FTS($FTS) VALUES ('optimize')") { it.step() }
-            }
-        }
-
-        /** Drops one vault's rows, leaving the others searchable. */
-        suspend fun clearVault(vaultId: Long) {
-            database.useWriterConnection { connection ->
-                connection.usePrepared(
-                    "DELETE FROM $FTS WHERE rowid IN (SELECT id FROM notes WHERE vaultId = ?)",
-                ) { statement ->
-                    statement.bindLong(1, vaultId)
-                    statement.step()
-                }
             }
         }
 

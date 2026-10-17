@@ -48,6 +48,14 @@ class MigrationTest {
     }
 
     @Test
+    fun `the migrations run from the first version to the last without a gap`() {
+        // The app registers exactly this list, so a hole in it is a version
+        // an installed device cannot leave.
+        assertThat(migrations.map { (range, _) -> range.first }).isEqualTo((1 until CURRENT).toList())
+        migrations.forEach { (range, _) -> assertThat(range.last).isEqualTo(range.first + 1) }
+    }
+
+    @Test
     fun `the schemas are all checked in`() {
         for (version in 1..CURRENT) {
             assertThat(File(schemas, "$version.json").isFile).isTrue()
@@ -530,22 +538,7 @@ class MigrationTest {
          * arrived without a migration.
          */
         private val MIGRATIONS: List<Pair<IntRange, Migration>> =
-            listOf(
-                1..2 to NotesDatabase.MIGRATION_1_2,
-                2..3 to NotesDatabase.MIGRATION_2_3,
-                3..4 to NotesDatabase.MIGRATION_3_4,
-                4..5 to NotesDatabase.MIGRATION_4_5,
-                5..6 to NotesDatabase.MIGRATION_5_6,
-                6..7 to NotesDatabase.MIGRATION_6_7,
-                7..8 to NotesDatabase.MIGRATION_7_8,
-                8..9 to NotesDatabase.MIGRATION_8_9,
-                9..10 to NotesDatabase.MIGRATION_9_10,
-                10..11 to NotesDatabase.MIGRATION_10_11,
-                11..12 to NotesDatabase.MIGRATION_11_12,
-                12..13 to NotesDatabase.MIGRATION_12_13,
-                13..14 to NotesDatabase.MIGRATION_13_14,
-                14..15 to NotesDatabase.MIGRATION_14_15,
-            )
+            NotesDatabase.MIGRATIONS.map { it.startVersion..it.endVersion to it }
 
         val CURRENT = MIGRATIONS.maxOf { (range, _) -> range.last }
         const val TABLE_NAME = "\${TABLE_NAME}"

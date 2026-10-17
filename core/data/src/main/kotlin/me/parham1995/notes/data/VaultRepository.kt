@@ -210,9 +210,22 @@ class VaultRepository
                 }.distinctUntilChanged()
                 .flowOn(Dispatchers.Default)
 
-        suspend fun children(parent: String): List<VaultItem> =
+        /** One level of the active vault's tree. */
+        suspend fun children(parent: String): List<VaultItem> = children(active(), parent)
+
+        /**
+         * One level of [vaultId]'s tree.
+         *
+         * A folder note lists its own vault's folder, not the active one's: a
+         * note opened from a tab, the digest or an `obsidian://` link can be
+         * from any vault, and the same path in the active vault is another
+         * folder.
+         */
+        suspend fun children(
+            vaultId: Long,
+            parent: String,
+        ): List<VaultItem> =
             withContext(Dispatchers.Default) {
-                val vaultId = active()
                 buildChildren(
                     parent = parent,
                     parents = notes.allParents(vaultId),

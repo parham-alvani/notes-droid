@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +56,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.ui.Loading
 import me.parham1995.notes.ui.icon.LucideGlyph
 import java.io.File
 import kotlin.math.abs
@@ -155,7 +155,7 @@ fun PdfViewer(
 
                 document == null ->
                     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        Loading()
                     }
 
                 else -> PdfPager(document, Modifier.fillMaxSize().padding(padding))
@@ -270,7 +270,7 @@ private fun PdfPage(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
             )
-        } ?: CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        } ?: Loading()
     }
 }
 

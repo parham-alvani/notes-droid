@@ -3,6 +3,7 @@ package me.parham1995.notes.navigation
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -80,11 +81,17 @@ internal fun TabFrame(
                         }
                     }
                 }
+                // Consumed as well as applied: plain padding leaves the insets
+                // in place for a bar inside the screen to add a second time.
+                // With the rail there is no Scaffold padding, and the screen's
+                // own bars take the insets they need.
+                val applied = if (showTabs && !rail) padding else PaddingValues()
                 content(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .padding(if (showTabs && !rail) padding else PaddingValues()),
+                        .padding(applied)
+                        .consumeWindowInsets(applied),
                 )
             }
         }

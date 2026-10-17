@@ -24,6 +24,7 @@ import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.SearchHit
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
+import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
@@ -31,6 +32,10 @@ import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.data.database.QueryTaskRow
+import me.parham1995.notes.feature.browser.AttemptEnd
+import me.parham1995.notes.feature.browser.AttemptWatch
+import me.parham1995.notes.feature.browser.syncFailureMessage
+import me.parham1995.notes.feature.browser.syncWaitMessage
 import me.parham1995.notes.feature.tasks.describe
 import me.parham1995.notes.feature.tasks.describeMove
 import me.parham1995.notes.icons.IconSpec
@@ -165,7 +170,7 @@ class NoteViewModel
         val state: StateFlow<NoteUiState> = _state.asStateFlow()
 
         fun dismissMessage() {
-            _state.value = _state.value.copy(message = null)
+            _state.update { it.copy(message = null) }
         }
 
         /** Folds the section under the heading at [block], or opens it again. */
@@ -218,13 +223,13 @@ class NoteViewModel
                 val noteId = _state.value.note?.id ?: return@launch
                 val row = repository.tasksIn(noteId).firstOrNull { it.line == line }
                 if (row == null) {
-                    _state.value = _state.value.copy(message = UiText.Resource(R.string.task_not_indexed))
+                    _state.update { it.copy(message = UiText.Resource(R.string.task_not_indexed)) }
                     return@launch
                 }
                 val result = writes.completeTask(row)
                 // The task list's words for the same result, so the two say
                 // it alike and both in the phone's language.
-                _state.value = _state.value.copy(message = result.describe())
+                _state.update { it.copy(message = result.describe()) }
                 // The file on disk has changed, so what is on screen is one
                 // edit out of date. `load` refuses to reload the note it is
                 // already showing, which is what makes this necessary rather
@@ -247,22 +252,23 @@ class NoteViewModel
             val noteId = _state.value.note?.id ?: return@launch
             val row = repository.tasksIn(noteId).firstOrNull { it.line == line }
             if (row == null) {
-                _state.value = _state.value.copy(message = UiText.Resource(R.string.task_not_indexed))
+                _state.update { it.copy(message = UiText.Resource(R.string.task_not_indexed)) }
                 return@launch
             }
             val result = writes.rescheduleTask(row, date.toString()).result
-            _state.value = _state.value.copy(message = result.describeMove(date.toString()))
+            _state.update { it.copy(message = result.describeMove(date.toString())) }
             if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
         }
 
         private suspend fun reload() {
             val id = _state.value.note?.id ?: return
             val note = repository.note(id) ?: return
-            _state.value = _state.value.copy(note = note)
+            _state.update { it.copy(note = note) }
         }
 
         /** Whether the sync now running was asked for here, so its end is worth a word. */
         private var syncAsked = false
+        private val attempts = AttemptWatch()
 
         /**
          * Pulls the vault from where the note is being read.
@@ -276,7 +282,13 @@ class NoteViewModel
             viewModelScope.launch {
                 syncAsked = true
                 _state.update { it.copy(syncing = true) }
-                scheduler.syncNow(settings.current().syncOnWifiOnly)
+                val wifiOnly = settings.current().syncOnWifiOnly
+                scheduler.syncNow(wifiOnly)
+                // The spinner stays: the sync is queued and runs when it can,
+                // and the note is re-read then. This says why it has not yet.
+                syncWaitMessage(scheduler.network(), wifiOnly)?.let { wait ->
+                    _state.update { it.copy(message = wait) }
+                }
             }
 
         init {
@@ -291,12 +303,29 @@ class NoteViewModel
                     val running = infos.any { it.state == WorkInfo.State.RUNNING }
                     val waiting = infos.any { !it.state.isFinished }
                     val was = _state.value.syncing
+                    // Said when the run fails rather than when the job is
+                    // finished: a failed run is retried with backoff, and the
+                    // reason would otherwise arrive minutes later or never.
+                    val ended = attempts.next(infos)
+                    if (ended is AttemptEnd.Failed && syncAsked) {
+                        syncAsked = false
+                        _state.update { it.copy(message = failure(ended.workError)) }
+                    }
                     when {
                         running -> _state.update { it.copy(syncing = true) }
                         waiting -> Unit
                         else -> {
                             _state.update { it.copy(syncing = false) }
-                            if (was) afterSync(infos.any { it.state == WorkInfo.State.SUCCEEDED })
+                            if (was) {
+                                afterSync(
+                                    workError =
+                                        infos
+                                            .firstOrNull { it.state == WorkInfo.State.FAILED }
+                                            ?.outputData
+                                            ?.getString(SyncWorker.KEY_ERROR),
+                                    succeeded = infos.any { it.state == WorkInfo.State.SUCCEEDED },
+                                )
+                            }
                         }
                     }
                 }
@@ -311,30 +340,42 @@ class NoteViewModel
          * opened again. Folds the new text moved out from under are dropped,
          * and a find is run again over what the note now says.
          */
-        private suspend fun afterSync(succeeded: Boolean) {
+        private suspend fun afterSync(
+            workError: String?,
+            succeeded: Boolean,
+        ) {
             val asked = syncAsked
             syncAsked = false
             val current = _state.value
             val id = current.note?.id
             val note = id?.let { repository.note(it) }
             if (id != null && note != null) {
-                _state.value =
-                    _state.value.copy(
-                        note = note,
-                        backlinks = repository.backlinks(id),
-                        writable = writes.canWrite(note.vaultId).first(),
-                        folded = HeadingFolds.kept(note.blocks, current.folded),
-                    )
+                val backlinks = repository.backlinks(id)
+                val writable = writes.canWrite(note.vaultId).first()
+                _state.update {
+                    if (it.note?.id != id) {
+                        it
+                    } else {
+                        it.copy(
+                            note = note,
+                            backlinks = backlinks,
+                            writable = writable,
+                            folded = HeadingFolds.kept(note.blocks, current.folded),
+                        )
+                    }
+                }
                 if (current.findQuery.isNotBlank()) find(current.findQuery)
             }
             if (asked) {
                 _state.update {
                     it.copy(
-                        message = UiText.Resource(if (succeeded) R.string.note_synced else R.string.note_sync_failed),
+                        message = if (succeeded) UiText.Resource(R.string.note_synced) else failure(workError),
                     )
                 }
             }
         }
+
+        private suspend fun failure(workError: String?) = syncFailureMessage(repository.vaults().first(), workError)
 
         /** The note being loaded, so that asking for another stops it. */
         private var loading: Job? = null
@@ -384,7 +425,7 @@ class NoteViewModel
                                     // `children` already leaves the note itself
                                     // out of its own folder's listing.
                                     repository
-                                        .children(note.path.substringBeforeLast('/', ""))
+                                        .children(note.vaultId, note.path.substringBeforeLast('/', ""))
                                         .map {
                                             VaultRowItem(
                                                 it,
@@ -408,15 +449,16 @@ class NoteViewModel
                 _state.value.note
                     ?.blocks
                     .orEmpty()
-            _state.value =
-                _state.value.copy(
+            _state.update {
+                it.copy(
                     findQuery = query,
                     matches = if (query.isBlank()) emptyList() else NoteSearch.find(blocks, query),
                 )
+            }
         }
 
         fun clearFind() {
-            _state.value = _state.value.copy(findQuery = "", matches = emptyList())
+            _state.update { it.copy(findQuery = "", matches = emptyList()) }
         }
 
         /**
@@ -453,7 +495,9 @@ class NoteViewModel
             val id = _state.value.note?.id ?: return
             viewModelScope.launch {
                 val found = repository.unlinkedMentions(id)
-                _state.value = _state.value.copy(mentions = found, mentionsLoaded = true)
+                // Another note may have opened while the search ran, and these
+                // are not its mentions.
+                _state.update { if (it.note?.id == id) it.copy(mentions = found, mentionsLoaded = true) else it }
             }
         }
 
@@ -522,7 +566,7 @@ class NoteViewModel
         fun completeQueryTask(row: QueryTaskRow) =
             viewModelScope.launch {
                 val result = writes.completeTask(row.toTaskRow())
-                _state.value = _state.value.copy(message = result.describe())
+                _state.update { it.copy(message = result.describe()) }
                 // Written in this note: the page under the list is now one
                 // edit out of date, as after a box ticked in the note itself.
                 val here = _state.value.note?.id == row.noteId

@@ -78,7 +78,7 @@ A task is found again by the source line the indexer recorded (`tasks.line`, fro
 - **`BundledSQLiteDriver`**, so FTS5 ships with the app rather than depending on the device's SQLite. It also means the database tests are plain JVM tests.
 - **FTS5 is created by hand** in a `RoomDatabase.Callback`. Room only annotates FTS3/FTS4 and neither can rank. `note_fts` is not an `@Entity`, is not in the exported schema, and must be excluded from migration assertions.
 - **`@Transaction`, never `androidx.room.withTransaction`** — the latter throws under the driver API.
-- Migrations are hand-written and registered in **two** places: `DataModule` and `MigrationTest`. Miss the first and installed devices cannot move forward.
+- Migrations are hand-written and registered **once**, in `NotesDatabase.MIGRATIONS`. `DataModule` and `MigrationTest` both read that list; they used to keep a copy each, and a migration in the test's copy alone left installed devices with no way forward.
 
 ### Migration testing — read this before writing one
 

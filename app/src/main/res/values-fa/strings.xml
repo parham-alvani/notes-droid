@@ -43,6 +43,12 @@
     <string name="tags_empty">این دفتر هیچ برچسبی ندارد.</string>
     <string name="note_find_previous">مورد قبلی</string>
     <string name="note_find_next">مورد بعدی</string>
+    <string name="note_find_none">هیچ</string>
+    <string name="note_linked_from">پیوند از %1$d جا</string>
+    <string name="note_mentioned_in">نام‌برده در %1$d جا، بی‌پیوند</string>
+    <string name="task_state_open">باز</string>
+    <string name="task_state_in_progress">در حال انجام</string>
+    <string name="task_complete_action">انجام شد</string>
     <string name="note_contents">محتویات · %1$d</string>
     <string name="search_hint">جستجو در دفتر</string>
     <string name="tasks_title">کارها</string>
@@ -355,6 +361,9 @@
     <string name="task_not_indexed">این کار هنوز در فهرست نیست</string>
     <string name="note_synced">همگام شد. یادداشت به‌روز است.</string>
     <string name="note_sync_failed">همگام‌سازی نشد. جزئیات در تنظیمات است.</string>
+    <string name="sync_failed_because">همگام‌سازی نشد: %1$s</string>
+    <string name="sync_waiting_internet">این شبکه به اینترنت وصل نیست. همگام‌سازی وقتی وصل شد انجام می‌شود.</string>
+    <string name="sync_waiting_wifi">در انتظار وای‌فای. همگام‌سازی فقط با وای‌فای انجام می‌شود.</string>
     <string name="settings_section_privacy">حریم خصوصی</string>
     <string name="settings_section_privacy_summary">قفل برنامه، و آنچه برنامه‌های دیگر می‌بینند</string>
     <string name="card_app_lock">قفل برنامه</string>

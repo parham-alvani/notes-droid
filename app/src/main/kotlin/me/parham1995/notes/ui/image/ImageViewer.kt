@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,6 +34,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import me.parham1995.notes.R
+import me.parham1995.notes.ui.Loading
 import me.parham1995.notes.ui.icon.LucideGlyph
 import kotlin.math.abs
 
@@ -137,7 +137,7 @@ private fun ZoomableContent(
                 if (unavailable != null) {
                     Text(unavailable, color = Color.White, style = MaterialTheme.typography.bodyMedium)
                 } else {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Loading()
                 }
 
             else ->

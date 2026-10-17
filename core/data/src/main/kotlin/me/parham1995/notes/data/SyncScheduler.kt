@@ -1,6 +1,8 @@
 package me.parham1995.notes.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -26,6 +28,25 @@ class SyncScheduler
         @ApplicationContext context: Context,
     ) {
         private val workManager = WorkManager.getInstance(context)
+        private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+
+        /**
+         * The network the phone is on now, as the sync's constraints see it.
+         *
+         * WorkManager holds a sync until the network is validated -- one that
+         * has reached the internet, not one that is merely joined -- so a phone
+         * on Wi-Fi with no way out queues a sync and runs nothing. Asked here
+         * so the screen that asked for the sync can say it is waiting.
+         */
+        fun network(): NetworkNow {
+            val caps = connectivity?.activeNetwork?.let { connectivity.getNetworkCapabilities(it) }
+            return NetworkNow(
+                validated =
+                    caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+                        caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+                unmetered = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == true,
+            )
+        }
 
         /**
          * Starts a sync now, replacing anything already queued.
@@ -194,3 +215,9 @@ class SyncScheduler
             const val LAST_HOUR = 23
         }
     }
+
+/** The phone's network at one moment: whether it reaches the internet, and whether it is billed. */
+data class NetworkNow(
+    val validated: Boolean,
+    val unmetered: Boolean,
+)

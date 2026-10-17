@@ -21,6 +21,7 @@ import me.parham1995.notes.R
 import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.ui.inScript
+import me.parham1995.notes.ui.sheetProperties
 
 /**
  * The footnotes at the end of a note, numbered as the text cites them.
@@ -80,7 +81,7 @@ fun FootnoteSheet(
     brokenLinks: Set<String>,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, properties = sheetProperties()) {
         Column(
             Modifier
                 .fillMaxWidth()

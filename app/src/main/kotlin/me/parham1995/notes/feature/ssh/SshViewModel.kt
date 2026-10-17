@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncRepository
@@ -15,6 +16,7 @@ import me.parham1995.notes.data.SyncTransport
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.data.git.StoredKey
+import me.parham1995.notes.data.runCatchingUnlessCancelled
 import javax.inject.Inject
 
 /** How a repository's key last answered when it was tried. */
@@ -106,11 +108,11 @@ class SshViewModel
 
         fun generate(vaultId: Long) =
             viewModelScope.launch {
-                _state.value = _state.value.copy(busy = true)
-                runCatching { keys.generate(vaultId) }
+                _state.update { it.copy(busy = true) }
+                runCatchingUnlessCancelled { keys.generate(vaultId) }
                 // No refresh here: generating bumps the store's revision, and
                 // the collector above rebuilds from that.
-                _state.value = _state.value.copy(busy = false)
+                _state.update { it.copy(busy = false) }
             }
 
         /**
@@ -145,12 +147,13 @@ class SshViewModel
             vaultId: Long,
             check: KeyCheck,
         ) {
-            _state.value =
-                _state.value.copy(
+            _state.update { state ->
+                state.copy(
                     repositories =
-                        _state.value.repositories.map {
+                        state.repositories.map {
                             if (it.vault.id == vaultId) it.copy(check = check) else it
                         },
                 )
+            }
         }
     }

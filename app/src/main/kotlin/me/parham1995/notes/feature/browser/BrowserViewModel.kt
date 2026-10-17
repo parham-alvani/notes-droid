@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
@@ -30,6 +31,7 @@ import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.database.isUpdatedSinceRead
 import me.parham1995.notes.icons.IconSpec
+import me.parham1995.notes.ui.UiText
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.folderListing
 import java.io.File
@@ -184,6 +186,23 @@ class BrowserViewModel
             viewModelScope.launch { crashLog.acknowledge() }
         }
 
+        /**
+         * Why the sync asked for here failed, for a snackbar.
+         *
+         * Apart from [state] because it is said once and then gone, and the
+         * tree is rebuilt from the database far more often than that.
+         */
+        private val _syncMessage = MutableStateFlow<UiText?>(null)
+        val syncMessage: StateFlow<UiText?> = _syncMessage.asStateFlow()
+
+        fun dismissSyncMessage() {
+            _syncMessage.value = null
+        }
+
+        /** Whether the sync now running was asked for here, so its failure is worth a word. */
+        private var syncAsked = false
+        private val attempts = AttemptWatch()
+
         private val _state = MutableStateFlow(BrowserUiState())
         val state: StateFlow<BrowserUiState> = _state.asStateFlow()
 
@@ -210,8 +229,19 @@ class BrowserViewModel
                     // retries -- or one orphaned by a force-stop -- showed a
                     // spinner indefinitely.
                     val active = infos.firstOrNull { it.state == WorkInfo.State.RUNNING }
-                    _state.value =
-                        _state.value.copy(
+                    val ended = attempts.next(infos)
+                    // Interrupted is not an end worth a word: the run comes
+                    // back by itself, and its own end is reported instead.
+                    if (ended != null && ended != AttemptEnd.Interrupted && syncAsked) {
+                        // One word per pull: a retry that fails again is the
+                        // same news, and one that succeeds shows in the tree.
+                        syncAsked = false
+                        if (ended is AttemptEnd.Failed) {
+                            _syncMessage.value = syncFailureMessage(repository.vaults().first(), ended.workError)
+                        }
+                    }
+                    _state.update {
+                        it.copy(
                             syncing = active != null,
                             syncProgress =
                                 active?.progress?.let { data ->
@@ -219,6 +249,7 @@ class BrowserViewModel
                                     if (total > 0) data.getInt(SyncWorker.KEY_DONE, 0) to total else null
                                 },
                         )
+                    }
                 }
             }
         }
@@ -262,7 +293,10 @@ class BrowserViewModel
 
         fun refresh() =
             viewModelScope.launch {
-                scheduler.syncNow(settings.current().syncOnWifiOnly)
+                syncAsked = true
+                val wifiOnly = settings.current().syncOnWifiOnly
+                scheduler.syncNow(wifiOnly)
+                syncWaitMessage(scheduler.network(), wifiOnly)?.let { _syncMessage.value = it }
             }
     }
 

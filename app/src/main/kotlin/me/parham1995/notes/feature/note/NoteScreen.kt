@@ -6,13 +6,12 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,34 +19,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,16 +50,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
@@ -76,16 +66,12 @@ import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
@@ -98,16 +84,13 @@ import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
-import me.parham1995.notes.ui.AutoDirection
-import me.parham1995.notes.ui.ItemRow
+import me.parham1995.notes.ui.Loading
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.RescheduleSheet
-import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.icon.VaultIcon
 import me.parham1995.notes.ui.image.ImageViewer
 import me.parham1995.notes.ui.imageKey
-import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.noteTitleKey
 import me.parham1995.notes.ui.pdf.PdfViewer
 import me.parham1995.notes.ui.readingPadding
@@ -118,6 +101,7 @@ import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
 import me.parham1995.notes.ui.sharedBoundsIn
 import me.parham1995.notes.ui.sharedElementIn
+import me.parham1995.notes.ui.sheetProperties
 import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Markup
 import me.parham1995.notes.widget.NoteWidget
@@ -839,7 +823,7 @@ fun NoteScreen(
                                         // takes to parse.
                                         state.loading ->
                                             tabs.current?.let { TabPreview(it, peek = viewModel::peek) }
-                                                ?: CircularProgressIndicator(Modifier.align(Alignment.Center))
+                                                ?: Loading(Modifier.align(Alignment.Center))
                                         state.missing ->
                                             Text(
                                                 stringResource(R.string.note_not_on_device),
@@ -890,8 +874,32 @@ fun NoteScreen(
         // to animate away.
         var shownImage by remember { mutableStateOf<ZoomedImage?>(null) }
         zoomed?.let { shownImage = it }
-        BackHandler(enabled = zoomed != null) { zoomed = null }
-        AnimatedVisibility(visible = zoomed != null, enter = fadeIn(), exit = fadeOut()) {
+        // Predictive: the picture shrinks and fades with the back gesture, so
+        // what letting go will do is visible before it is done. Cancelling
+        // the gesture puts it back; finishing it hands over to the exit.
+        var backProgress by remember { mutableFloatStateOf(0f) }
+        LaunchedEffect(zoomed) { if (zoomed != null) backProgress = 0f }
+        PredictiveBackHandler(enabled = zoomed != null) { gesture ->
+            try {
+                gesture.collect { backProgress = it.progress }
+                zoomed = null
+            } catch (cancelled: CancellationException) {
+                backProgress = 0f
+                throw cancelled
+            }
+        }
+        AnimatedVisibility(
+            visible = zoomed != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier =
+                Modifier.graphicsLayer {
+                    val scale = 1f - BACK_SHRINK * backProgress
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = 1f - BACK_FADE * backProgress
+                },
+        ) {
             shownImage?.let { (vaultId, path, alt) ->
                 ImageViewer(
                     vaultId = vaultId,
@@ -984,7 +992,7 @@ fun NoteScreen(
         }
 
         if (showOutline) {
-            ModalBottomSheet(onDismissRequest = { showOutline = false }) {
+            ModalBottomSheet(onDismissRequest = { showOutline = false }, properties = sheetProperties()) {
                 val headings = state.note?.headings.orEmpty()
                 if (headings.isEmpty()) {
                     Text(
@@ -1019,16 +1027,16 @@ fun NoteScreen(
         }
 
         if (showBacklinks) {
-            ModalBottomSheet(onDismissRequest = { showBacklinks = false }) {
+            ModalBottomSheet(onDismissRequest = { showBacklinks = false }, properties = sheetProperties()) {
                 // Looked up when the sheet opens rather than with the note: it is a
                 // full-text search, and most notes are read without anyone asking.
                 LaunchedEffect(noteId) { viewModel.loadMentions() }
 
                 LazyColumn {
                     if (state.backlinks.isNotEmpty()) {
-                        item { SheetLabel("Linked from ${state.backlinks.size}") }
+                        item { SheetLabel(stringResource(R.string.note_linked_from, state.backlinks.size)) }
                     }
-                    items(state.backlinks, key = { "link-" + it.noteId + it.context }) { row ->
+                    items(state.backlinks, key = { "link-" + it.linkId }) { row ->
                         ReferenceRow(
                             title = row.title,
                             // The stored context line -- backlinks never re-read
@@ -1047,7 +1055,7 @@ fun NoteScreen(
                     // vault where every link is typed by hand, that is where the
                     // connections somebody meant to make actually are.
                     if (state.mentions.isNotEmpty()) {
-                        item { SheetLabel("Mentioned in ${state.mentions.size}, not linked") }
+                        item { SheetLabel(stringResource(R.string.note_mentioned_in, state.mentions.size)) }
                     }
                     items(state.mentions, key = { "mention-" + it.noteId }) { hit ->
                         ReferenceRow(
@@ -1077,375 +1085,9 @@ fun NoteScreen(
     }
 }
 
-/**
- * What the folder actually holds.
- *
- * A subfolder opens its own landing page when it has one, which is the same
- * rule the browser follows. When it has none there is no note to show, so it
- * hands off to the browser at that path rather than pretending otherwise.
- */
-@Composable
-private fun FolderContents(
-    rows: List<VaultRowItem>,
-    onOpenNote: (Long) -> Unit,
-    onOpenFolder: (String) -> Unit,
-    onOpenGraph: (Long) -> Unit = {},
-) {
-    if (rows.isEmpty()) {
-        Text(
-            stringResource(R.string.note_folder_empty),
-            Modifier.fillMaxWidth().padding(24.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(rows, key = { it.item.path }) { row ->
-            val item = row.item
-            ItemRow(
-                title = item.name,
-                icon = row.icon,
-                defaultIcon = if (item.isFolder) "folder" else "file-text",
-                iconDescription = if (item.isFolder) "Folder" else stringResource(R.string.note_kind),
-                underline = item.isFolder && item.noteId != null,
-                onClick = {
-                    val note = item.noteId
-                    when {
-                        note != null -> onOpenNote(note)
-                        else -> onOpenFolder(item.path)
-                    }
-                },
-            )
-        }
-    }
-}
-
-@Composable
-private fun SheetLabel(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
-
-/** One reference to this note: a link that points here, or a mention that does not. */
-@Composable
-private fun ReferenceRow(
-    title: String,
-    context: AnnotatedString,
-    path: String,
-    onClick: () -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(title, style = MaterialTheme.typography.bodyMedium)
-        AutoDirection(context.text) {
-            Text(
-                text = context,
-                style = MaterialTheme.typography.bodySmall.inScript(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Text(
-            text = path,
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.outline,
-        )
-    }
-    HorizontalDivider()
-}
-
-/**
- * The excerpt FTS5 hands back, with its markers turned into emphasis.
- *
- * `snippet()` wraps the matched terms in the delimiters it was given rather
- * than returning positions, so this is the only way to know where the match
- * was without searching the excerpt again.
- */
-private fun String.highlighted(strong: Color): AnnotatedString =
-    buildAnnotatedString {
-        var rest = this@highlighted
-        while (true) {
-            val open = rest.indexOf('[')
-            val close = rest.indexOf(']', startIndex = open + 1)
-            if (open < 0 || close < 0) break
-            append(rest.substring(0, open))
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = strong)) {
-                append(rest.substring(open + 1, close))
-            }
-            rest = rest.substring(close + 1)
-        }
-        append(rest)
-    }
-
-/**
- * Find inside the note that is open.
- *
- * Distinct from search, which answers "which note". 129 of this vault's notes
- * run past 20KB and the longest is 89KB, which is long enough that knowing a
- * word is in there is not the same as being able to reach it.
- *
- * The arrows step between hits rather than listing them: a list of forty
- * matches is another thing to read, and what is wanted is the next one.
- */
-@Composable
-private fun FindBar(
-    query: String,
-    matches: Int,
-    matchBlocks: List<Int>,
-    onQueryChange: (String) -> Unit,
-    onJump: (Int) -> Unit,
-) {
-    var at by remember(matchBlocks) { mutableIntStateOf(0) }
-
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(stringResource(R.string.note_find)) },
-                singleLine = true,
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        Text(
-                            text = if (matches == 0) "none" else "${at + 1}/$matches",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 12.dp),
-                        )
-                    }
-                },
-            )
-            IconButton(
-                onClick = {
-                    if (matchBlocks.isEmpty()) return@IconButton
-                    at = (at - 1 + matchBlocks.size) % matchBlocks.size
-                    onJump(matchBlocks[at])
-                },
-                enabled = matches > 0,
-            ) {
-                LucideGlyph(
-                    "chevron-up",
-                    size = 20.dp,
-                    contentDescription = stringResource(R.string.note_find_previous),
-                )
-            }
-            IconButton(
-                onClick = {
-                    if (matchBlocks.isEmpty()) return@IconButton
-                    at = (at + 1) % matchBlocks.size
-                    onJump(matchBlocks[at])
-                },
-                enabled = matches > 0,
-            ) {
-                LucideGlyph("chevron-down", size = 20.dp, contentDescription = stringResource(R.string.note_find_next))
-            }
-        }
-    }
-}
-
-/**
- * A tab as it looks while sliding in: its title and the note's opening line,
- * set the way the page will set them, so the swipe shows a page and the note
- * then arrives in it rather than replacing it.
- */
-@Composable
-private fun TabPreview(
-    tab: NoteTab,
-    peek: suspend (Long) -> LinkTarget?,
-) {
-    val target by produceState<LinkTarget?>(initialValue = null, tab.noteId) { value = peek(tab.noteId) }
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = tab.title.ifBlank { target?.title.orEmpty() },
-            style = MaterialTheme.typography.headlineSmall.inScript(),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        target?.excerpt?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodyLarge.inScript(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/**
- * The open notes, as a row you can move along.
- *
- * Titles rather than numbers, truncated rather than wrapped: the strip has to
- * stay one line high or it is competing with the note for the screen. The one
- * being read is filled in; the rest are outlines.
- */
-@Composable
-private fun TabStrip(
-    tabs: TabsState,
-    onSelect: (Int) -> Unit,
-    onClose: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        tabs.tabs.forEachIndexed { index, tab ->
-            val selected = index == tabs.active
-            FilterChip(
-                selected = selected,
-                onClick = { onSelect(index) },
-                label = {
-                    Text(
-                        text = tab.title.ifBlank { stringResource(R.string.note_kind) },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = TAB_LABEL_WIDTH),
-                    )
-                },
-                trailingIcon = {
-                    // Only on the one being read. A close button on every tab
-                    // in a row of six is a row of six things to hit by
-                    // accident.
-                    //
-                    // A clickable box rather than an IconButton: the button
-                    // insists on a 48dp minimum, which inside a chip is fought
-                    // down to something that clips, and its click has to
-                    // consume the event or the chip underneath also handles it
-                    // and reopens what was just closed.
-                    if (selected) {
-                        Box(
-                            Modifier
-                                .size(TAB_CLOSE_SIZE)
-                                .clickable { onClose(index) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            LucideGlyph(
-                                "x",
-                                size = 14.dp,
-                                contentDescription = stringResource(R.string.action_close),
-                            )
-                        }
-                    }
-                },
-            )
-        }
-    }
-}
-
-private val TAB_LABEL_WIDTH = 140.dp
-private val TAB_CLOSE_SIZE = 26.dp
-
-/**
- * What a link points at, and what to do with it.
- *
- * The title and where it lives answer "is this the one I meant"; the opening
- * words answer it when two notes share a name, which in this vault is 110
- * times over.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LinkPeek(
-    target: LinkTarget,
-    onDismiss: () -> Unit,
-    onOpenHere: () -> Unit,
-    onOpenInNewTab: () -> Unit,
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            AutoDirection(target.title) {
-                Text(target.title, style = MaterialTheme.typography.titleMedium.inScript())
-            }
-            target.heading?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    stringResource(R.string.link_at_heading, it),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                target.path,
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (target.excerpt.isNotBlank()) {
-                AutoDirection(target.excerpt) {
-                    Text(
-                        target.excerpt,
-                        style = MaterialTheme.typography.bodySmall.inScript(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onOpenHere) { Text(stringResource(R.string.link_open_here)) }
-                OutlinedButton(onClick = onOpenInNewTab) { Text(stringResource(R.string.link_open_new_tab)) }
-            }
-        }
-    }
-}
-
-/** A link that resolves to nothing, said plainly rather than ignored. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BrokenLinkPeek(
-    target: String,
-    onDismiss: () -> Unit,
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(stringResource(R.string.link_broken), style = MaterialTheme.typography.titleMedium)
-            Text(
-                target,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                stringResource(R.string.link_broken_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
+/** How far the image viewer shrinks and fades at the end of a back gesture. */
+private const val BACK_SHRINK = 0.1f
+private const val BACK_FADE = 0.3f
 
 /** A picture shown full screen, by the vault it is in and its path there. */
 private data class ZoomedImage(

@@ -36,6 +36,28 @@ class ContrastTest {
         NazMarkup.named().assertReadableOn(NazScheme.background)
     }
 
+    /**
+     * The scheme's text colours are drawn at body size too -- folder names
+     * and actionable rows in primary, captions in onSurfaceVariant -- so they
+     * are held to WCAG AA for normal text, not the large-text floor above.
+     */
+    @Test
+    fun `each scheme's text colours read as body text`() {
+        listOf("light" to DaylightScheme, "dark" to NazScheme).forEach { (name, scheme) ->
+            mapOf(
+                "primary" to scheme.primary,
+                "secondary" to scheme.secondary,
+                "error" to scheme.error,
+                "onSurface" to scheme.onSurface,
+                "onSurfaceVariant" to scheme.onSurfaceVariant,
+            ).forEach { (role, colour) ->
+                assertWithMessage("$name $role on background")
+                    .that(contrast(colour, scheme.background))
+                    .isAtLeast(BODY_TEXT)
+            }
+        }
+    }
+
     @Test
     fun `each scheme is handed its own palette`() {
         assertWithMessage("light accents").that(DaylightScheme.accents).isSameInstanceAs(DaylightAccents)
@@ -93,5 +115,6 @@ class ContrastTest {
 
     private companion object {
         const val MINIMUM = 3f
+        const val BODY_TEXT = 4.5f
     }
 }

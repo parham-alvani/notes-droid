@@ -42,6 +42,13 @@
     <string name="tags_empty">No tags in this vault.</string>
     <string name="note_find_previous">Previous match</string>
     <string name="note_find_next">Next match</string>
+    <string name="note_find_none">None</string>
+    <string name="note_find_position" translatable="false">%1$d/%2$d</string>
+    <string name="note_linked_from">Linked from %1$d</string>
+    <string name="note_mentioned_in">Mentioned in %1$d, not linked</string>
+    <string name="task_state_open">Open</string>
+    <string name="task_state_in_progress">In progress</string>
+    <string name="task_complete_action">Mark as done</string>
     <string name="note_contents">Contents · %1$d</string>
     <string name="search_hint">Search the vault</string>
     <string name="tasks_title">Tasks</string>
@@ -355,6 +362,9 @@
     <string name="task_not_indexed">That task is not in the index yet</string>
     <string name="note_synced">Synced. The note is up to date.</string>
     <string name="note_sync_failed">Sync failed. Settings has the details.</string>
+    <string name="sync_failed_because">Sync failed: %1$s</string>
+    <string name="sync_waiting_internet">No internet on this network. The sync will run once there is.</string>
+    <string name="sync_waiting_wifi">Waiting for Wi-Fi. Sync is set to use Wi-Fi only.</string>
     <string name="settings_section_privacy">Privacy</string>
     <string name="settings_section_privacy_summary">Lock the app, and what other apps can see</string>
     <string name="card_app_lock">App lock</string>

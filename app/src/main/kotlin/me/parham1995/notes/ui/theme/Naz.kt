@@ -27,6 +27,9 @@ internal object Naz {
     val Aqua = Color(0xFF80E5FF)
     val Pink = Color(0xFFFF69B4)
     val Red = Color(0xFFFF5070)
+
+    /** [Red] lightened to 4.8:1 on [Black], for error text at body size. */
+    val ErrorText = Color(0xFFFF7088)
     val Chartreuse = Color(0xFFA0FF40)
     val Purple = Color(0xFFF0A0F0)
     val SpringGreen = Color(0xFF20FFA0)
@@ -48,8 +51,13 @@ internal object Daylight {
     val FadedInk = Color(0xFF6A6A62)
     val Rule = Color(0xFFD8D5CC)
 
+    /**
+     * Darker than naz's own `#C06000`, which is 4.1:1 on paper: enough for a
+     * heading, not for the folder names and links drawn in it at body size.
+     */
+    val Orange = Color(0xFFA85200)
+
     /** naz's own, legible either way. */
-    val Orange = Color(0xFFC06000)
     val Red = Color(0xFFC01030)
 
     /** Darkened: the originals vanish on white. */

@@ -302,6 +302,22 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `two links on one line are two backlinks that can be told apart`() =
+        runTest {
+            index(
+                "Alpha.md" to "[[Target]] and again [[Target]]",
+                "Target.md" to "the target",
+            )
+            val targetId = database.noteDao().idOf(1L, "Target.md")!!
+
+            val backlinks = repository.backlinks(targetId)
+
+            // The sheet keys its rows on this; a repeated key crashes the list.
+            assertThat(backlinks).hasSize(2)
+            assertThat(backlinks.map { it.linkId }.toSet()).hasSize(2)
+        }
+
+    @Test
     fun `the quick switcher matches on name`() =
         runTest {
             index("Alpha/Kubernetes Networking.md" to "x", "Beta/Other.md" to "y")
@@ -710,6 +726,18 @@ class VaultRepositoryTest {
             indexInto(second, "Theirs/Yours.md" to "b")
 
             assertThat(repository.children("").map { it.name }).containsExactly("Only")
+        }
+
+    @Test
+    fun `a folder note lists its own vault's folder, not the active one's`() =
+        runTest {
+            indexInto(first, "Alpha/Mine.md" to "a")
+            indexInto(second, "Alpha/Alpha.md" to "the landing page", "Alpha/Theirs.md" to "b")
+
+            val landing = repository.note(database.noteDao().idOf(second, "Alpha/Alpha.md")!!)!!
+            val contents = repository.children(landing.vaultId, landing.path.substringBeforeLast('/', ""))
+
+            assertThat(contents.map { it.name }).containsExactly("Theirs")
         }
 
     @Test

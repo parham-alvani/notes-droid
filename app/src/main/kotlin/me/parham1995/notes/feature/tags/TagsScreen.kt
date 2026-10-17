@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.markdown.TagTreeNode
+import me.parham1995.notes.ui.Loading
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 
@@ -104,7 +104,7 @@ internal fun TagsContent(
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
                 selected != null && selected.loading || selected == null && rows == null ->
-                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    Loading(Modifier.align(Alignment.Center))
 
                 selected != null -> NoteList(selected.notes, onOpenNote)
 

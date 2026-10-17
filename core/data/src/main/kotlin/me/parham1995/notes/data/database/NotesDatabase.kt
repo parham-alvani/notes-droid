@@ -591,5 +591,32 @@ abstract class NotesDatabase : RoomDatabase() {
                     )
                 }
             }
+
+        /**
+         * Every migration, oldest first: what the app registers and what
+         * `MigrationTest` runs, from one list.
+         *
+         * They used to be listed twice, once in `DataModule` and once in the
+         * test, and a migration added to the test alone passes every check
+         * while installed devices have no way forward. A `val` declared after
+         * the migrations it lists, because a companion initialises top down.
+         */
+        val MIGRATIONS: List<Migration> =
+            listOf(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+                MIGRATION_8_9,
+                MIGRATION_9_10,
+                MIGRATION_10_11,
+                MIGRATION_11_12,
+                MIGRATION_12_13,
+                MIGRATION_13_14,
+                MIGRATION_14_15,
+            )
     }
 }

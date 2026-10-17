@@ -1,7 +1,6 @@
 package me.parham1995.notes.ui
 
 import android.text.format.DateFormat
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -114,7 +113,7 @@ fun RescheduleSheet(
         return
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, properties = sheetProperties()) {
         Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             if (canMove) {
                 Text(
@@ -206,7 +205,7 @@ private fun Choice(
     onClick: () -> Unit,
 ) {
     ListItem(
-        headlineContent = { Text(label) },
+        onClick = onClick,
         trailingContent =
             date?.let {
                 {
@@ -217,6 +216,5 @@ private fun Choice(
                     )
                 }
             },
-        modifier = Modifier.clickable(onClick = onClick),
-    )
+    ) { Text(label) }
 }

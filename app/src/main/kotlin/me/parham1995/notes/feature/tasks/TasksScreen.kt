@@ -43,6 +43,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -362,11 +366,26 @@ private fun TaskRowView(
                     // nobody trusts.
                     .then(
                         onComplete?.let { complete ->
-                            Modifier.clickable(onClick = complete).padding(CHECKBOX_TAP)
+                            Modifier
+                                .semantics { toggleableState = ToggleableState.Off }
+                                .clickable(
+                                    onClickLabel = stringResource(R.string.task_complete_action),
+                                    role = Role.Checkbox,
+                                    onClick = complete,
+                                ).padding(CHECKBOX_TAP)
                         } ?: Modifier,
                     ),
             tint = if (row.state == IN_PROGRESS) Accents.blue else MaterialTheme.colorScheme.onSurfaceVariant,
-            contentDescription = if (row.state == IN_PROGRESS) "in progress" else "open",
+            contentDescription =
+                stringResource(
+                    if (row.state ==
+                        IN_PROGRESS
+                    ) {
+                        R.string.task_state_in_progress
+                    } else {
+                        R.string.task_state_open
+                    },
+                ),
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             AutoDirection(row.text) {
