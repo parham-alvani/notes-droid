@@ -1,0 +1,3 @@
+A quote a day on the home screen.
+
+The new Quote widget draws from a note of quote callouts. It shows one quote, the same all day and a different one tomorrow, and every quote comes round once before any comes round twice. A closing line that starts with a dash, such as "— Marcus Aurelius", is shown smaller under the quote. Tap the quote to see the next one; tap the title to open the note. Choose the note when you place the widget, or change it later from the launcher.
