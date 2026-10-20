@@ -381,6 +381,10 @@
     <string name="widget_note_gone">This note is no longer in the vault. Tap to choose another.</string>
     <string name="widget_note_pick">Choose a note</string>
     <string name="widget_note_search">Find a note by name</string>
+    <string name="widget_quote_title">Quote</string>
+    <string name="widget_quote_description">A quote a day from a note of quote callouts</string>
+    <string name="widget_quote_choose">Tap to choose a note of quotes</string>
+    <string name="widget_quote_none">This note has no quote callouts. Tap to choose another.</string>
     <string name="note_add_widget">Add as a widget of its own</string>
     <string name="note_add_widget_unsupported">This launcher cannot place widgets for an app. Add Daftar\'s Note widget from the home screen instead.</string>
     <string name="note_read_aloud">Read aloud</string>

@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.markdown.NoteExcerpt
+import me.parham1995.notes.markdown.Quote
+import me.parham1995.notes.markdown.Quotes
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,6 +19,15 @@ data class PinnedNote(
     val title: String,
     /** The opening lines as plain text, one per line. */
     val excerpt: String,
+)
+
+/** A note a quote widget draws from: where it is, and the quotes it holds. */
+data class QuoteNote(
+    val vaultId: Long,
+    val path: String,
+    val title: String,
+    /** Its `[!quote]` callouts, in order; empty when it has none. */
+    val quotes: List<Quote>,
 )
 
 /**
@@ -95,6 +106,22 @@ class PinnedNotes
                     }.getOrNull()
                 }
             return PinnedNote(note.id, note.vaultId, note.path, title, body.orEmpty())
+        }
+
+        /**
+         * The quotes in one note, for the quote widget. Null when the note is
+         * not there, as [whole] is; reads the same [WHOLE_BYTES] of it.
+         */
+        suspend fun quotes(
+            vaultId: Long,
+            path: String,
+        ): QuoteNote? {
+            val note = notes.byPath(vaultId, path) ?: return null
+            val text =
+                runCatchingUnlessCancelled { readHead(files.fileFor(note.vaultId, note.path), WHOLE_BYTES) }
+                    .getOrNull()
+            val quotes = text?.let { runCatchingUnlessCancelled { Quotes.parse(it) }.getOrNull() }
+            return QuoteNote(note.vaultId, note.path, note.title.ifBlank { note.name }, quotes.orEmpty())
         }
 
         companion object {

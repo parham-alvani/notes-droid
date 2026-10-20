@@ -15,6 +15,7 @@ object Widgets {
         RecentNotesAppWidget().updateAll(context)
         PinnedNotesAppWidget().updateAll(context)
         NoteAppWidget().updateAll(context)
+        QuoteAppWidget().updateAll(context)
     }
 
     /** The pinned notes widget alone, for a pin added or removed. */

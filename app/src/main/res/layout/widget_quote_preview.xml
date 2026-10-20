@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    What the picker shows for the quote widget on Android 12 and up: a title,
+    longer bars for the quote and a short one for who said it, so it shows
+    nobody's quotes.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="@string/widget_quote_title"
+        android:textColor="@color/naz_white"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <FrameLayout
+        android:layout_width="190dp"
+        android:layout_height="8dp"
+        android:layout_marginTop="10dp"
+        android:alpha="0.8"
+        android:background="@drawable/widget_preview_line" />
+
+    <FrameLayout
+        android:layout_width="170dp"
+        android:layout_height="8dp"
+        android:layout_marginTop="8dp"
+        android:alpha="0.8"
+        android:background="@drawable/widget_preview_line" />
+
+    <FrameLayout
+        android:layout_width="80dp"
+        android:layout_height="6dp"
+        android:layout_marginTop="12dp"
+        android:alpha="0.5"
+        android:background="@drawable/widget_preview_line" />
+</LinearLayout>

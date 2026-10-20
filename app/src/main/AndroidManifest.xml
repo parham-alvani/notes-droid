@@ -172,6 +172,18 @@
                 android:resource="@xml/note_widget_info" />
         </receiver>
 
+        <!-- A quote a day from one note; bound with the note widget's picker. -->
+        <receiver
+            android:name=".widget.QuoteWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quote_widget_info" />
+        </receiver>
+
         <!-- Exported because the launcher starts it; it checks the widget is this app's. -->
         <activity
             android:name=".widget.NoteWidgetConfigureActivity"

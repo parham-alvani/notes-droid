@@ -44,7 +44,8 @@ import me.parham1995.notes.ui.theme.NotesTheme
 import javax.inject.Inject
 
 /**
- * Which note a note widget shows: the notes read lately, or any note by name.
+ * Which note a note widget shows, or a quote widget draws its quotes from:
+ * the notes read lately, or any note by name.
  *
  * Reached from the launcher when the widget is placed or reconfigured, and
  * from the widget itself while it has no note. Only a widget of this app's own
@@ -66,7 +67,8 @@ class NoteWidgetConfigureActivity : ComponentActivity() {
         // leaving an empty one behind.
         setResult(RESULT_CANCELED, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
         val provider = AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId)?.provider
-        if (provider != ComponentName(this, NoteWidget::class.java)) {
+        val quotes = provider == ComponentName(this, QuoteWidget::class.java)
+        if (!quotes && provider != ComponentName(this, NoteWidget::class.java)) {
             finish()
             return
         }
@@ -75,7 +77,7 @@ class NoteWidgetConfigureActivity : ComponentActivity() {
         setContent {
             val chosen by theme.collectAsStateWithLifecycle(initialValue = null)
             NotesTheme(theme = chosen ?: return@setContent) {
-                NotePicker(repository) { note -> bind(widgetId, note) }
+                NotePicker(repository) { note -> bind(widgetId, note, quotes) }
             }
         }
     }
@@ -83,14 +85,16 @@ class NoteWidgetConfigureActivity : ComponentActivity() {
     private fun bind(
         widgetId: Int,
         note: NoteEntity,
+        quotes: Boolean,
     ) {
-        NoteWidgetBindings(this)[widgetId] = Pin(note.vaultId, note.path)
+        val pin = Pin(note.vaultId, note.path)
+        if (quotes) QuoteWidgetBindings(this)[widgetId] = pin else NoteWidgetBindings(this)[widgetId] = pin
         // The redraw is asked for before the result is given, so the launcher
         // never shows the new widget empty. Asking only enqueues Glance's
         // session; the composing happens in its worker.
         lifecycleScope.launch {
             val glanceId = GlanceAppWidgetManager(applicationContext).getGlanceIdBy(widgetId)
-            NoteAppWidget().update(applicationContext, glanceId)
+            (if (quotes) QuoteAppWidget() else NoteAppWidget()).update(applicationContext, glanceId)
             setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
             finish()
         }

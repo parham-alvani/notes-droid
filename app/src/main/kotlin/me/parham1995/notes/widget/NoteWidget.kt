@@ -200,8 +200,10 @@ private const val LINE_GAP_DP = 6
  */
 class NoteWidgetBindings(
     context: Context,
+    /** The file the bindings live in: the quote widget keeps its own. */
+    name: String = "note_widgets",
 ) {
-    private val preferences = context.getSharedPreferences("note_widgets", Context.MODE_PRIVATE)
+    private val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)
 
     operator fun get(widgetId: Int): Pin? {
         val stored = preferences.getString(key(widgetId), null) ?: return null

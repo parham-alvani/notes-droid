@@ -31,6 +31,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Home screen widgets** — what is overdue and due today, and the notes you were last reading
 - **Pinned notes on the home screen** — pin a note from its menu and it sits in a widget as a card, its first lines as plain text, a tap away; a list, or two columns when the widget is wide
 - **One note as a widget of its own** — a sticky note: the whole of one note, scrolling, from any vault; placed from the note's menu or picked from the launcher's widget list
+- **A quote a day** — a widget bound to a note of `[!quote]` callouts shows one of them, the same all day and a different one tomorrow, with the closing `— Author` line set under it; a tap shows the next, and the title opens the note
 - **Quick Settings tiles** — capture a thought, or open the journal, from the panel you swipe down
 - **Full-text search** over the whole vault with ranked results and highlighted excerpts, and Obsidian's operators: `"an exact phrase"`, `-word` to leave notes out, `path:Folder` to look in one folder. Persian is found whichever keyboard wrote it: Arabic and Persian forms of the same letter, Persian and ASCII digits, and the zero-width non-joiner all match, and results are shown in the note's own letters
 - **Folder notes** — a folder's `X/X.md` is its landing page, with the folder's contents beside it

@@ -31,3 +31,9 @@
 # understood. Only release builds are affected, because only they run R8.
 -keep class net.i2p.crypto.eddsa.** { *; }
 -dontwarn net.i2p.crypto.eddsa.**
+
+# Glance starts a widget's ActionCallback by class name when its tap arrives,
+# and creates it through the no-argument constructor. Glance's own rule keeps
+# the class; this keeps the constructor too, which nothing calls by symbol, so
+# a tap on the quote widget does not fail in release builds only.
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }

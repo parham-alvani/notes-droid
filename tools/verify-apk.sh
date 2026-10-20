@@ -28,6 +28,8 @@ required=(
     "Lnet/i2p/crypto/eddsa/EdDSAPrivateKey;"
     "Lorg/apache/sshd/client/ClientBuilder;"
     "Lorg/eclipse/jgit/api/Git;"
+    # Glance starts it by name on a tap on the quote widget.
+    "Lme/parham1995/notes/widget/NextQuote;"
 )
 
 # Every implementation JGit or sshd registers through ServiceLoader is named in

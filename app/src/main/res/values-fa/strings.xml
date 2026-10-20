@@ -380,6 +380,10 @@
     <string name="widget_note_gone">این یادداشت دیگر در دفتر نیست. برای انتخاب یادداشت دیگر ضربه بزنید.</string>
     <string name="widget_note_pick">انتخاب یادداشت</string>
     <string name="widget_note_search">جستجوی یادداشت با نام</string>
+    <string name="widget_quote_title">نقل‌قول</string>
+    <string name="widget_quote_description">هر روز یک نقل‌قول از یادداشتی از کال‌اوت‌های نقل‌قول</string>
+    <string name="widget_quote_choose">برای انتخاب یادداشت نقل‌قول‌ها ضربه بزنید</string>
+    <string name="widget_quote_none">این یادداشت کال‌اوت نقل‌قول ندارد. برای انتخاب یادداشت دیگر ضربه بزنید.</string>
     <string name="note_add_widget">افزودن به‌صورت ویجت جدا</string>
     <string name="note_add_widget_unsupported">این لانچر نمی‌تواند برای برنامه‌ها ویجت بگذارد. ویجت یادداشتِ دفتر را از صفحه اصلی اضافه کنید.</string>
     <string name="note_read_aloud">خواندن با صدا</string>
