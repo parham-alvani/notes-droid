@@ -1,0 +1,1 @@
+Every tap on the Quote widget now moves to the next quote. Before, only the first tap did.
