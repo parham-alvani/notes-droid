@@ -4,7 +4,11 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.edit
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -18,9 +22,12 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.currentState
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontStyle
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -42,8 +49,16 @@ import java.time.LocalDate
  *
  * A tap on the quote shows the next one, for the rest of today; a tap on the
  * title opens the note.
+ *
+ * The taps are counted in the widget's Glance state ([QuoteSkips]) and the
+ * quote is picked inside the composition, not before it. Glance keeps a
+ * session alive for a while after drawing, and an update to a live session
+ * recomposes it without calling [provideGlance] again -- so a count read up
+ * there moved the quote on the first tap and on none of the ones after it.
  */
 class QuoteAppWidget : GlanceAppWidget() {
+    override val stateDefinition = PreferencesGlanceStateDefinition
+
     override suspend fun provideGlance(
         context: Context,
         id: GlanceId,
@@ -51,18 +66,17 @@ class QuoteAppWidget : GlanceAppWidget() {
         val entry = context.widgetEntryPoint()
         val colors = entry.widgetColors()
         val widgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-        val bindings = QuoteWidgetBindings(context)
-        val pin = bindings[widgetId]
+        val pin = QuoteWidgetBindings(context)[widgetId]
         val note =
             pin?.let {
                 runCatchingUnlessCancelled { entry.pinnedNotes().quotes(it.vaultId, it.path) }.getOrNull()
             }
         val vault = pin?.let { runCatchingUnlessCancelled { entry.vaultRepository().vault(it.vaultId) }.getOrNull() }
-        val today = LocalDate.now().toEpochDay()
-        val quote = note?.let { Quotes.forDay(it.quotes, today, bindings.skipped(widgetId, today)) }
-        val model = QuoteModel(widgetId, pin, note, quote, vault?.label)
         provideContent {
-            GlanceTheme(colors) { QuoteContent(model) }
+            val today = LocalDate.now().toEpochDay()
+            val skipped = QuoteSkips.read(currentState(), today, pin?.path)
+            val quote = note?.let { Quotes.forDay(it.quotes, today, skipped) }
+            GlanceTheme(colors) { QuoteContent(QuoteModel(widgetId, pin, note, quote, vault?.label)) }
         }
     }
 
@@ -87,7 +101,8 @@ class NextQuote : ActionCallback {
         parameters: ActionParameters,
     ) {
         val widgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
-        QuoteWidgetBindings(context).skip(widgetId, LocalDate.now().toEpochDay())
+        val path = QuoteWidgetBindings(context)[widgetId]?.path
+        updateAppWidgetState(context, glanceId) { QuoteSkips.next(it, LocalDate.now().toEpochDay(), path) }
         QuoteAppWidget().update(context, glanceId)
     }
 }
@@ -170,14 +185,41 @@ private const val QUOTE_GAP_DP = 8
 private const val SOURCE_ITEM = -1L
 
 /**
- * Which note each placed quote widget draws from, and how many times it has
- * been tapped on to the next quote today.
+ * How many times a quote widget has been tapped on to the next quote, kept in
+ * its Glance state. The count is for one day and one note: a new day, or the
+ * widget pointed at another note, starts again at that day's quote.
+ */
+internal object QuoteSkips {
+    private val DAY = longPreferencesKey("quote_day")
+    private val PATH = stringPreferencesKey("quote_path")
+    private val COUNT = intPreferencesKey("quote_skips")
+
+    fun read(
+        state: Preferences,
+        epochDay: Long,
+        path: String?,
+    ): Int = if (state[DAY] == epochDay && state[PATH] == path) state[COUNT] ?: 0 else 0
+
+    fun next(
+        state: MutablePreferences,
+        epochDay: Long,
+        path: String?,
+    ) {
+        val count = read(state, epochDay, path) + 1
+        state[DAY] = epochDay
+        state[COUNT] = count
+        if (path == null) state.remove(PATH) else state[PATH] = path
+    }
+}
+
+/**
+ * Which note each placed quote widget draws from: the note widget's bindings,
+ * in a file of their own so the two kinds never read each other's.
  */
 class QuoteWidgetBindings(
     context: Context,
 ) {
-    private val notes = NoteWidgetBindings(context, PREFERENCES)
-    private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+    private val notes = NoteWidgetBindings(context, "quote_widgets")
 
     operator fun get(widgetId: Int): Pin? = notes[widgetId]
 
@@ -186,33 +228,7 @@ class QuoteWidgetBindings(
         pin: Pin,
     ) {
         notes[widgetId] = pin
-        // Another note, another list: start it at today's quote.
-        preferences.edit { remove(skipKey(widgetId)) }
     }
 
-    /** Taps on to the next quote made on [epochDay]; a new day starts at none. */
-    fun skipped(
-        widgetId: Int,
-        epochDay: Long,
-    ): Int {
-        val stored = preferences.getString(skipKey(widgetId), null) ?: return 0
-        if (stored.substringBefore(':').toLongOrNull() != epochDay) return 0
-        return stored.substringAfter(':').toIntOrNull() ?: 0
-    }
-
-    fun skip(
-        widgetId: Int,
-        epochDay: Long,
-    ) = preferences.edit { putString(skipKey(widgetId), "$epochDay:${skipped(widgetId, epochDay) + 1}") }
-
-    fun forget(widgetIds: IntArray) {
-        notes.forget(widgetIds)
-        preferences.edit { widgetIds.forEach { remove(skipKey(it)) } }
-    }
-
-    private fun skipKey(widgetId: Int) = "skip_$widgetId"
-
-    private companion object {
-        const val PREFERENCES = "quote_widgets"
-    }
+    fun forget(widgetIds: IntArray) = notes.forget(widgetIds)
 }

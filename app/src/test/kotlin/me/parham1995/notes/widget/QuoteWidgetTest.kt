@@ -3,6 +3,7 @@ package me.parham1995.notes.widget
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.glance.GlanceTheme
 import androidx.glance.appwidget.testing.unit.GlanceAppWidgetUnitTest
 import androidx.glance.appwidget.testing.unit.assertHasRunCallbackClickAction
@@ -94,16 +95,17 @@ class QuoteWidgetTest {
         }
 
     @Test
-    fun `taps count for today only, and a new note starts again`() {
-        val bindings = QuoteWidgetBindings(context)
-        bindings[WIDGET] = pin
-        bindings.skip(WIDGET, DAY)
-        bindings.skip(WIDGET, DAY)
+    fun `taps count for today and this note only`() {
+        val state = mutablePreferencesOf()
+        QuoteSkips.next(state, DAY, pin.path)
+        QuoteSkips.next(state, DAY, pin.path)
 
-        assertThat(bindings.skipped(WIDGET, DAY)).isEqualTo(2)
-        assertThat(bindings.skipped(WIDGET, DAY + 1)).isEqualTo(0)
-        bindings[WIDGET] = Pin(3L, "Other.md")
-        assertThat(bindings.skipped(WIDGET, DAY)).isEqualTo(0)
+        assertThat(QuoteSkips.read(state, DAY, pin.path)).isEqualTo(2)
+        assertThat(QuoteSkips.read(state, DAY + 1, pin.path)).isEqualTo(0)
+        assertThat(QuoteSkips.read(state, DAY, "Other.md")).isEqualTo(0)
+        // The first tap of a new day starts that day's count, not yesterday's.
+        QuoteSkips.next(state, DAY + 1, pin.path)
+        assertThat(QuoteSkips.read(state, DAY + 1, pin.path)).isEqualTo(1)
     }
 
     @Test
