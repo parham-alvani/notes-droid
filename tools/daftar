@@ -48,7 +48,14 @@ case "$cmd" in
     test-key) send --es cmd test-key --es vault "${1:?vault}" ;;
     token) read -r -s token; send --es cmd set-token --es token "$token" ;;
     author) send --es cmd set-author --es name "${1:?name}" --es email "${2:?email}" ;;
-    sync) send --es cmd sync ;;
+    sync)
+        # The sync asks to run as a foreground service, and Android only allows
+        # that while the app is on screen. Started from a backgrounded app it
+        # ran as a plain job, and a first clone had its connection cut a few
+        # seconds in ("Short read of block"). Bringing the app up first lets
+        # the notification start, and the sync then survives leaving the app.
+        "$ADB" shell am start -W -n "$PKG/.MainActivity" >/dev/null
+        send --es cmd sync ;;
     digest) send --es cmd digest ;;
     *) sed -n '2,14p' "$0" >&2; exit 2 ;;
 esac
