@@ -43,7 +43,7 @@ import javax.inject.Singleton
  * person would pick.
  *
  * Nothing here can write. The roots advertise no create, rename or delete, and
- * [open] only ever hands out a read-only descriptor; the four edits the app
+ * [open] only ever hands out a read-only descriptor; the few edits the app
  * does make go through [VaultWriteRepository] and nowhere else.
  */
 @Singleton

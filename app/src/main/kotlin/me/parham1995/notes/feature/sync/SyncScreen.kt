@@ -24,6 +24,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.SyncTransport
+import me.parham1995.notes.feature.calendar.CalendarCards
 import me.parham1995.notes.ui.icon.LucideGlyph
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,6 +106,8 @@ fun SyncScreen(
                     TaskDigestCard(state, viewModel)
                     RemindersCard()
                 }
+
+                SettingsSection.CALENDAR -> CalendarCards()
 
                 SettingsSection.PRIVACY -> PrivacyCard(state, viewModel)
 

@@ -41,6 +41,9 @@ enum class EditKind {
      * which takes off a scheduled date an earlier move added.
      */
     RESCHEDULE,
+
+    /** Write a generated note whole. The text is the note; there is no anchor. */
+    REPLACE_FILE,
     ;
 
     companion object {
@@ -303,6 +306,32 @@ class VaultWriteRepository
         }
 
         /**
+         * Writes a note the app generates, such as a calendar week, whole.
+         *
+         * Queued and sent the way every edit is. A newer copy of the same note
+         * makes any older one still in the queue pointless, so that one is
+         * dropped first; sending both would be two commits for one change.
+         * [WriteResult.Unchanged] when the note already reads [text].
+         */
+        suspend fun writeGenerated(
+            vaultId: Long,
+            path: String,
+            text: String,
+            summary: String,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            pending.deleteFor(vault.id, path, EditKind.REPLACE_FILE.name)
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.REPLACE_FILE,
+                anchor = "",
+                replacement = text,
+                summary = summary,
+            )
+        }
+
+        /**
          * Sends everything queued, oldest first.
          *
          * Called at the start of a sync rather than at the end: the pull that
@@ -489,6 +518,7 @@ class VaultWriteRepository
                     val (line, date) = edit.text.split(' ', limit = 2).let { it[0] to it.getOrNull(1) }
                     VaultEdits.reschedule(line.toInt(), edit.anchor, date?.takeIf { it.isNotBlank() })
                 }
+                EditKind.REPLACE_FILE -> VaultEdits.replaceFile(edit.text)
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
 

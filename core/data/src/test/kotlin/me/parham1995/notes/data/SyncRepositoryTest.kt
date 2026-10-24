@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import me.parham1995.notes.data.calendar.CalendarExport
+import me.parham1995.notes.data.calendar.PhoneCalendars
 import me.parham1995.notes.data.database.BlobEntity
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
@@ -147,6 +149,7 @@ class SyncRepositoryTest {
                 transports = transports,
                 writes = writes,
                 gate = gate,
+                calendarExport = { CalendarExport(settings, PhoneCalendars(context), writes, log) },
                 documents =
                     VaultDocuments(
                         context,

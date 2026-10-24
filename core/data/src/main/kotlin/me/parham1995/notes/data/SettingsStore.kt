@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -220,6 +221,24 @@ data class WriteSettings(
 }
 
 /**
+ * The phone's own calendars: which of them the calendar screen shows, and
+ * where their week notes are written.
+ *
+ * Off until a calendar is chosen, because the export puts other people's
+ * meetings into a repository, and that is a thing a person asks for.
+ */
+data class CalendarSettings(
+    /** The calendars shown and exported, by the provider's calendar ID. */
+    val calendars: Set<Long> = emptySet(),
+    /** Calendars whose week notes say "Busy" and nothing else. */
+    val busyOnly: Set<Long> = emptySet(),
+    /** The vault the week notes go to. Zero means they are not written. */
+    val exportVaultId: Long = 0,
+) {
+    val exports: Boolean get() = exportVaultId != 0L && calendars.isNotEmpty()
+}
+
+/**
  * Who may read the vault on this phone.
  *
  * Off by default: a lock is a thing a person asks for, and one that appears
@@ -272,6 +291,7 @@ data class VaultSettings(
     val activeVaultId: Long = 0,
     val write: WriteSettings = WriteSettings(),
     val privacy: PrivacySettings = PrivacySettings(),
+    val calendar: CalendarSettings = CalendarSettings(),
 ) {
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
 
@@ -314,6 +334,12 @@ class SettingsStore
                                 preferences[SCRATCHPAD_PATH]?.takeIf { it.isNotBlank() }
                                     ?: WriteSettings.DEFAULT_SCRATCHPAD,
                             scratchpadVaultId = preferences[SCRATCHPAD_VAULT] ?: 0L,
+                        ),
+                    calendar =
+                        CalendarSettings(
+                            calendars = preferences[CALENDARS].toIds(),
+                            busyOnly = preferences[CALENDARS_BUSY].toIds(),
+                            exportVaultId = preferences[CALENDAR_EXPORT_VAULT] ?: 0L,
                         ),
                     privacy =
                         PrivacySettings(
@@ -370,6 +396,36 @@ class SettingsStore
                 it[SCRATCHPAD_VAULT] = vaultId
             }
         }
+
+        /** Shows [id] on the calendar screen and in the week notes, or stops. */
+        suspend fun setCalendarShown(
+            id: Long,
+            shown: Boolean,
+        ) {
+            context.settingsDataStore.edit {
+                val ids = it[CALENDARS].toIds()
+                it[CALENDARS] = (if (shown) ids + id else ids - id).fromIds()
+            }
+        }
+
+        suspend fun setCalendarBusyOnly(
+            id: Long,
+            busyOnly: Boolean,
+        ) {
+            context.settingsDataStore.edit {
+                val ids = it[CALENDARS_BUSY].toIds()
+                it[CALENDARS_BUSY] = (if (busyOnly) ids + id else ids - id).fromIds()
+            }
+        }
+
+        /** Zero stops the export. */
+        suspend fun setCalendarExportVault(vaultId: Long) {
+            context.settingsDataStore.edit { it[CALENDAR_EXPORT_VAULT] = vaultId }
+        }
+
+        private fun Set<String>?.toIds(): Set<Long> = this?.mapNotNullTo(mutableSetOf()) { it.toLongOrNull() }.orEmpty()
+
+        private fun Set<Long>.fromIds(): Set<String> = mapTo(mutableSetOf()) { it.toString() }
 
         suspend fun setImagePolicy(policy: ImagePolicy) {
             context.settingsDataStore.edit { it[IMAGE_POLICY] = policy.name }
@@ -512,5 +568,8 @@ class SettingsStore
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")
+            val CALENDARS = stringSetPreferencesKey("calendar_ids")
+            val CALENDARS_BUSY = stringSetPreferencesKey("calendar_busy_ids")
+            val CALENDAR_EXPORT_VAULT = longPreferencesKey("calendar_export_vault")
         }
     }

@@ -6,6 +6,9 @@
          them, and merge in from there. This one is the app lock's, which is
          a screen and so lives here. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- The calendar screen and the week notes. Read only: nothing here
+         writes to a calendar. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Task reminders: an alarm at the minute asked for, and set again after
          a reboot. USE_EXACT_ALARM is granted on install from Android 13;
          before that SCHEDULE_EXACT_ALARM is, and was all there was. -->

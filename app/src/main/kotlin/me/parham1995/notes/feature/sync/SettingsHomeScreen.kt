@@ -44,6 +44,7 @@ enum class SettingsSection(
     REPOSITORIES(R.string.settings_section_vaults, R.string.settings_section_vaults_summary, "library"),
     READING(R.string.settings_section_reading, R.string.settings_section_reading_summary, "book-open-text"),
     WRITING(R.string.settings_section_writing, R.string.settings_section_writing_summary, "pencil"),
+    CALENDAR(R.string.settings_section_calendar, R.string.settings_section_calendar_summary, "calendar-days"),
     SYNC(R.string.settings_section_sync, R.string.settings_section_sync_summary, "refresh-cw"),
     NOTIFICATIONS(
         R.string.settings_section_notifications,
