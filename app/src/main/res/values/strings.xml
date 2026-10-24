@@ -218,7 +218,9 @@
     <string name="card_calendar_export">Week notes</string>
     <string name="calendar_export_off">Off</string>
     <string name="calendar_export_needs_write">Week notes need a vault this phone can push to, and an author in Writing.</string>
-    <string name="help_calendar_export">Each sync writes the chosen calendars into the vault as one note per week, Calendar/2026-W43.md, from last week to eight weeks out. A busy-only calendar gives the time and nothing else.</string>
+    <string name="help_calendar_export">The chosen calendars are written into the vault as one note per week, Calendar/2026-W43.md, from last week to eight weeks out: a minute after a calendar changes, and at each sync. Each day says when it is free inside the working day, and which meetings overlap. A busy-only calendar gives the time and nothing else.</string>
+    <string name="calendar_work_start">Working day starts</string>
+    <string name="calendar_work_end">Working day ends</string>
     <string name="settings_section_advanced">Advanced</string>
     <string name="settings_section_advanced_summary">The journal, storage, and what this build is</string>
     <string name="card_status">Status</string>

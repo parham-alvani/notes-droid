@@ -101,6 +101,11 @@ class CalendarSettingsViewModel
 
         fun setExportVault(vaultId: Long) = viewModelScope.launch { store.setCalendarExportVault(vaultId) }
 
+        fun setWorkingHours(
+            start: Int,
+            end: Int,
+        ) = viewModelScope.launch { store.setCalendarWorkingHours(start, end) }
+
         private companion object {
             const val STOP_MS = 5_000L
         }
@@ -188,6 +193,28 @@ internal fun CalendarCards(viewModel: CalendarSettingsViewModel = hiltViewModel(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        // Only the hours that keep the day the right way round are offered,
+        // so there is no choice that would be refused.
+        Text(stringResource(R.string.calendar_work_start), style = MaterialTheme.typography.labelMedium)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CalendarSettings.START_CHOICES.filter { it < state.settings.workEnd }.forEach { hour ->
+                FilterChip(
+                    selected = state.settings.workStart == hour,
+                    onClick = { viewModel.setWorkingHours(hour, state.settings.workEnd) },
+                    label = { Text(stringResource(R.string.settings_hour, hour)) },
+                )
+            }
+        }
+        Text(stringResource(R.string.calendar_work_end), style = MaterialTheme.typography.labelMedium)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CalendarSettings.END_CHOICES.filter { it > state.settings.workStart }.forEach { hour ->
+                FilterChip(
+                    selected = state.settings.workEnd == hour,
+                    onClick = { viewModel.setWorkingHours(state.settings.workStart, hour) },
+                    label = { Text(stringResource(R.string.settings_hour, hour)) },
+                )
+            }
         }
         Text(
             stringResource(R.string.help_calendar_export),

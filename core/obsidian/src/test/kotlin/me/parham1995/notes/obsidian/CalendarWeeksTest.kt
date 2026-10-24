@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -43,10 +44,17 @@ class CalendarWeeksTest {
         title: String = "Holiday",
     ) = Occurrence("h1", utcDay(first), utcDay(after), true, title, null, "Personal")
 
+    /** What a day lists, after its free-time line. */
     private fun daySection(
         note: String,
         heading: String,
-    ): String = note.substringAfter("## $heading\n\n").substringBefore("\n## ")
+    ): String = note.substringAfter("## $heading\n\n").substringBefore("\n## ").substringAfter(".\n\n")
+
+    /** A day's free-time line. */
+    private fun freeLine(
+        note: String,
+        heading: String,
+    ): String = note.substringAfter("## $heading\n\n").substringBefore("\n")
 
     @Test
     fun `a week note is named by its ISO week`() {
@@ -69,7 +77,8 @@ class CalendarWeeksTest {
     fun `every day of the week has a heading, and a free day says so`() {
         val note = CalendarWeeks.render(monday, emptyList(), zone)
         assertThat(note).startsWith("# 2026-W43\n")
-        assertThat(note).contains("Times are Europe/Madrid.")
+        assertThat(note).contains("Times are Europe/Madrid, and free time is counted from 09:00 to 18:00 every day.")
+        assertThat(freeLine(note, "Sunday 25 October")).isEqualTo("Free: 09:00–18:00.")
         assertThat(Regex("(?m)^## ").findAll(note).count()).isEqualTo(7)
         assertThat(daySection(note, "Sunday 25 October")).isEqualTo("No events.\n")
     }
@@ -306,6 +315,80 @@ class CalendarWeeksTest {
             assertThat("https://example.com/a/very/long/path".ellipsized(10)).isEqualTo("…")
             assertThat("short".ellipsized(10)).isEqualTo("short")
         }
+    }
+
+    @Test
+    fun `free time is what the working day leaves between meetings`() {
+        val note =
+            CalendarWeeks.render(
+                monday,
+                listOf(
+                    meeting("2026-10-20T08:30", "2026-10-20T09:30", uid = "a"),
+                    meeting("2026-10-20T10:00", "2026-10-20T12:00", uid = "b", calendar = "other@example.com"),
+                    // Ten minutes is not free time: nothing fits in it.
+                    meeting("2026-10-20T12:10", "2026-10-20T13:00", uid = "c"),
+                    meeting("2026-10-20T17:00", "2026-10-20T19:00", uid = "d"),
+                ),
+                zone,
+            )
+        assertThat(freeLine(note, "Tuesday 20 October")).isEqualTo("Free: 09:30–10:00, 13:00–17:00.")
+    }
+
+    @Test
+    fun `a free event takes no time, a tentative one does, and an all-day absence takes the day`() {
+        val free = meeting("2026-10-20T09:00", "2026-10-20T18:00", uid = "f").copy(free = true)
+        val maybe = meeting("2026-10-21T09:00", "2026-10-21T18:00", uid = "m").copy(tentative = true)
+        val away = allDay("2026-10-22", "2026-10-23", title = "Out of office")
+        val holiday = allDay("2026-10-23", "2026-10-24", title = "Holiday").copy(uid = "h2", free = true)
+        val note = CalendarWeeks.render(monday, listOf(free, maybe, away, holiday), zone)
+        assertThat(freeLine(note, "Tuesday 20 October")).isEqualTo("Free: 09:00–18:00.")
+        assertThat(freeLine(note, "Wednesday 21 October")).isEqualTo("Free: none.")
+        assertThat(freeLine(note, "Thursday 22 October")).isEqualTo("Free: none.")
+        assertThat(freeLine(note, "Friday 23 October")).isEqualTo("Free: 09:00–18:00.")
+        assertThat(daySection(note, "Wednesday 21 October")).startsWith("- 09:00–18:00 Standup (maybe) (")
+    }
+
+    @Test
+    fun `the working day is the one chosen`() {
+        val hours = WorkingHours(LocalTime.of(10, 0), LocalTime.of(16, 0))
+        val note = CalendarWeeks.render(monday, listOf(meeting("2026-10-20T09:00", "2026-10-20T11:00")), zone, hours)
+        assertThat(note).contains("free time is counted from 10:00 to 16:00 every day.")
+        assertThat(freeLine(note, "Tuesday 20 October")).isEqualTo("Free: 11:00–16:00.")
+    }
+
+    @Test
+    fun `meetings that take the same time say so, on both`() {
+        val note =
+            CalendarWeeks.render(
+                monday,
+                listOf(
+                    meeting("2026-10-20T09:00", "2026-10-20T10:00", title = "Planning", uid = "a"),
+                    meeting("2026-10-20T09:30", "2026-10-20T10:30", uid = "b", calendar = "b", busyOnly = true),
+                    // Back to back is not a clash.
+                    meeting("2026-10-20T10:30", "2026-10-20T11:00", title = "Review", uid = "c"),
+                    // Neither is a meeting marked free.
+                    meeting("2026-10-20T09:15", "2026-10-20T09:45", title = "Lunch run", uid = "d").copy(free = true),
+                ),
+                zone,
+            )
+        val section = daySection(note, "Tuesday 20 October")
+        assertThat(section).contains("- 09:00–10:00 Planning (<work@example.com>)\n    - Overlaps: 09:30 Busy\n")
+        assertThat(section).contains("- 09:30–10:30 Busy (b)\n    - Overlaps: 09:00 Planning\n")
+        assertThat(section).endsWith("- 10:30–11:00 Review (<work@example.com>)\n")
+        assertThat(section).doesNotContain("Overlaps: 09:15")
+    }
+
+    @Test
+    fun `Google's own Meet link wins, and a meeting of mine says so`() {
+        val event =
+            meeting("2026-10-20T09:00", "2026-10-20T09:30").copy(
+                description = "See https://zoom.us/j/1",
+                conference = "https://meet.google.com/abc-defg-hij",
+                organizer = "work@example.com",
+                mine = true,
+            )
+        val section = daySection(CalendarWeeks.render(monday, listOf(event), zone), "Tuesday 20 October")
+        assertThat(section).contains("    - Join: <https://meet.google.com/abc-defg-hij>\n    - Organizer: me\n")
     }
 
     @Test
