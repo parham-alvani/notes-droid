@@ -83,7 +83,7 @@ class CalendarWeeksTest {
                 zone,
             )
         assertThat(daySection(note, "Tuesday 20 October"))
-            .isEqualTo("- 09:00–09:30 Standup · Room 4 (work@example.com)\n")
+            .isEqualTo("- 09:00–09:30 Standup · Room 4 (<work@example.com>)\n")
         assertThat(daySection(note, "Monday 19 October")).isEqualTo("No events.\n")
     }
 
@@ -96,7 +96,7 @@ class CalendarWeeksTest {
                 zone,
             )
         assertThat(daySection(note, "Wednesday 21 October"))
-            .isEqualTo("- All day Holiday (Personal)\n- 08:00–09:00 Standup (work@example.com)\n")
+            .isEqualTo("- All day Holiday (Personal)\n- 08:00–09:00 Standup (<work@example.com>)\n")
         assertThat(daySection(note, "Thursday 22 October")).isEqualTo("- All day Holiday (Personal)\n")
         assertThat(daySection(note, "Friday 23 October")).isEqualTo("No events.\n")
     }
@@ -148,7 +148,7 @@ class CalendarWeeksTest {
                 ),
                 zone,
             )
-        assertThat(daySection(note, "Tuesday 20 October")).isEqualTo("- 09:00–10:00 Busy (work@example.com)\n")
+        assertThat(daySection(note, "Tuesday 20 October")).isEqualTo("- 09:00–10:00 Busy (<work@example.com>)\n")
         assertThat(note).doesNotContain("Acquisition")
         assertThat(note).doesNotContain("HQ")
     }
@@ -175,7 +175,7 @@ class CalendarWeeksTest {
             )
         assertThat(
             daySection(note, "Tuesday 20 October"),
-        ).isEqualTo("- 09:00–09:30 Plan \\#q4 review (work@example.com)\n")
+        ).isEqualTo("- 09:00–09:30 Plan \\#q4 review (<work@example.com>)\n")
     }
 
     @Test
@@ -210,12 +210,12 @@ class CalendarWeeksTest {
         val note = CalendarWeeks.render(monday, listOf(event), zone)
         assertThat(daySection(note, "Friday 23 October"))
             .isEqualTo(
-                "- 14:45–15:45 Backend catchup (work@example.com)\n" +
-                    "  - Join: https://meet.google.com/abc-defg-hij\n" +
-                    "  - Organizer: lead@example.com\n" +
-                    "  - With: A. Lovelace, C. Gauss\n" +
-                    "  - Notes: Agenda: the ledger & booking Docs: https://docs.example.com/x " +
-                    "Join with Google Meet: https://meet.google.com/abc-defg-hij\n",
+                "- 14:45–15:45 Backend catchup (<work@example.com>)\n" +
+                    "    - Join: <https://meet.google.com/abc-defg-hij>\n" +
+                    "    - Organizer: <lead@example.com>\n" +
+                    "    - With: A. Lovelace, C. Gauss\n" +
+                    "    - Notes: Agenda: the ledger & booking Docs: <https://docs.example.com/x> " +
+                    "Join with Google Meet: <https://meet.google.com/abc-defg-hij>\n",
             )
     }
 
@@ -228,7 +228,7 @@ class CalendarWeeksTest {
                 attendees = listOf("A. Lovelace"),
             )
         val note = CalendarWeeks.render(monday, listOf(event), zone)
-        assertThat(daySection(note, "Tuesday 20 October")).isEqualTo("- 09:00–10:00 Busy (work@example.com)\n")
+        assertThat(daySection(note, "Tuesday 20 October")).isEqualTo("- 09:00–10:00 Busy (<work@example.com>)\n")
     }
 
     @Test
@@ -241,7 +241,7 @@ class CalendarWeeksTest {
         val section = daySection(CalendarWeeks.render(monday, listOf(event), zone), "Tuesday 20 October")
         assertThat(section).contains("Person 08, +4 more")
         assertThat(section).doesNotContain("Person 09")
-        val notes = section.lines().single { it.startsWith("  - Notes: ") }
+        val notes = section.lines().single { it.startsWith("    - Notes: ") }
         assertThat(notes).endsWith("…")
         assertThat(notes.length).isLessThan(CalendarWeeks.NOTES_LIMIT + 20)
     }
@@ -263,6 +263,19 @@ class CalendarWeeksTest {
         assertThat(
             CalendarWeeks.render(monday, listOf(a, b), zone),
         ).isEqualTo(CalendarWeeks.render(monday, listOf(b, a), zone))
+    }
+
+    @Test
+    fun `markdown in calendar text is escaped, and an address or a link is an autolink`() {
+        assertThat(CalendarWeeks.clean("*Plan* for _q4_ #okr, `x` [[Link]] \$5"))
+            .isEqualTo("\\*Plan\\* for \\_q4\\_ \\#okr, \\`x\\` \\[\\[Link\\]\\] \\\$5")
+        assertThat(
+            CalendarWeeks.clean("%% hidden %% and ==mark=="),
+        ).isEqualTo("\\%\\% hidden \\%\\% and \\=\\=mark\\=\\=")
+        // Kept whole: an underscore inside an address or a link is part of it.
+        assertThat(CalendarWeeks.clean("mail lead_one@example.com or see https://example.com/a_b."))
+            .isEqualTo("mail <lead_one@example.com> or see <https://example.com/a_b>.")
+        assertThat(CalendarWeeks.clean("  ")).isNull()
     }
 
     @Test

@@ -231,9 +231,10 @@ object CalendarWeeks {
                 .append(' ')
                 .append(what)
                 .append(" (")
-                .append(calendar)
+                .append(clean(calendar))
                 .append(")\n")
-            if (!busyOnly) details().forEach { append("  - ").append(it).append('\n') }
+            // Four spaces: the vault's lint (MD007) and Prettier both indent a sub-list by four.
+            if (!busyOnly) details().forEach { append("    - ").append(it).append('\n') }
         }
     }
 
@@ -256,9 +257,9 @@ object CalendarWeeks {
             people.take(PEOPLE_LIMIT).joinToString(", ") +
                 (if (people.size > PEOPLE_LIMIT) ", +${people.size - PEOPLE_LIMIT} more" else "")
         return listOfNotNull(
-            link?.let { "Join: $it" },
+            link?.let { "Join: <$it>" },
             clean(organizer)?.let { "Organizer: $it" },
-            with.takeIf { it.isNotEmpty() }?.let { "With: ${clean(it)}" },
+            clean(with)?.let { "With: $it" },
             text?.let { "Notes: ${clean(it.ellipsized(NOTES_LIMIT))}" },
         )
     }
@@ -290,14 +291,43 @@ object CalendarWeeks {
     private fun String.ellipsized(limit: Int): String = if (length <= limit) this else take(limit).trimEnd() + "…"
 
     /**
-     * One line of plain text. A title can hold a line break, which would end
-     * the list item, and a `#`, which Obsidian would read as a tag and put in
-     * the tag list of the whole vault.
+     * Text from a calendar as one line of markdown that reads as plain text
+     * and passes the vault's lint.
+     *
+     * A title can hold a line break, which would end the list item; a `#`,
+     * which Obsidian reads as a tag for the whole vault; `*` or `_`, which
+     * make emphasis that Prettier then rewrites; `%%`, which hides the rest
+     * of the line as an Obsidian comment; `$`, which starts math. All of those
+     * are escaped. An address or a link is made an autolink, `<...>`, because
+     * the vault's lint refuses a bare one (MD034) -- and escaping inside it
+     * would break it, so it is kept whole.
      */
-    private fun clean(text: String?): String? =
-        text
-            ?.replace(WHITESPACE, " ")
-            ?.trim()
-            ?.replace("#", "\\#")
-            ?.takeIf { it.isNotEmpty() }
+    internal fun clean(text: String?): String? {
+        val line = text?.replace(WHITESPACE, " ")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return buildString {
+            var at = 0
+            for (match in LINKABLE.findAll(line)) {
+                append(escape(line.substring(at, match.range.first)))
+                val link = match.value.trimEnd('.', ',', ';', ':')
+                append('<').append(link).append('>')
+                append(escape(match.value.substring(link.length)))
+                at = match.range.last + 1
+            }
+            append(escape(line.substring(at)))
+        }
+    }
+
+    private fun escape(text: String): String =
+        buildString {
+            for (char in text) {
+                if (char in MARKUP) append('\\')
+                append(char)
+            }
+        }.replace("==", "\\=\\=")
+            .replace("%%", "\\%\\%")
+
+    /** Characters that mean something to markdown or Obsidian anywhere in a line. */
+    private const val MARKUP = "\\`*_[]<>#$~^|"
+
+    private val LINKABLE = Regex("""https?://[^\s<>"'`]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""")
 }
