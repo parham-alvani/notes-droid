@@ -3,6 +3,7 @@ package me.parham1995.notes.data
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.provider.CalendarContract
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -16,6 +17,7 @@ import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import me.parham1995.notes.data.calendar.CalendarWatchWorker
 import java.time.Duration
 import java.time.ZonedDateTime
 import javax.inject.Inject
@@ -134,6 +136,36 @@ class SyncScheduler
         fun cancelPeriodic() = workManager.cancelUniqueWork(PERIODIC_WORK)
 
         /**
+         * Runs the calendar export once, a minute after the next change to
+         * any event on the phone -- see [CalendarWatchWorker], which arms the
+         * one after. The minute batches: a Google sync that touches fifty
+         * events is one run. Ten minutes at most, so a calendar that never
+         * stops changing is still written.
+         *
+         * KEEP from the app, so a launch does not cancel a run under way.
+         */
+        fun watchCalendar(
+            wifiOnly: Boolean,
+            policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP,
+        ) {
+            val constraints =
+                Constraints
+                    .Builder()
+                    .addContentUriTrigger(CalendarContract.Events.CONTENT_URI, true)
+                    .setTriggerContentUpdateDelay(Duration.ofMinutes(1))
+                    .setTriggerContentMaxDelay(Duration.ofMinutes(CALENDAR_MAX_DELAY_MINUTES))
+                    .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+                    .build()
+            workManager.enqueueUniqueWork(
+                CalendarWatchWorker.UNIQUE_WORK,
+                policy,
+                OneTimeWorkRequestBuilder<CalendarWatchWorker>().setConstraints(constraints).build(),
+            )
+        }
+
+        fun stopWatchingCalendar() = workManager.cancelUniqueWork(CalendarWatchWorker.UNIQUE_WORK)
+
+        /**
          * Arms the daily task digest for the next occurrence of [hour].
          *
          * Periodic work rather than a worker that re-arms itself: enqueuing
@@ -212,6 +244,7 @@ class SyncScheduler
             const val RESUME_WORK = "vault-sync-after-limit"
             const val DIGEST_NOW_WORK = "task-digest-now"
             const val PERIOD_HOURS = 6L
+            const val CALENDAR_MAX_DELAY_MINUTES = 10L
             const val LAST_HOUR = 23
         }
     }

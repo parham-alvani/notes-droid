@@ -41,7 +41,14 @@ class CalendarExport
             }
             val weeks = CalendarWeeks.weeks(today)
             val events = calendars.events(current.calendars, current.busyOnly, CalendarWeeks.span(weeks, zone))
-            val notes = CalendarWeeks.export(CalendarWeeks.DEFAULT_FOLDER, today, events.map { it.occurrence }, zone)
+            val notes =
+                CalendarWeeks.export(
+                    CalendarWeeks.DEFAULT_FOLDER,
+                    today,
+                    events.map { it.occurrence },
+                    zone,
+                    current.hours,
+                )
             var changed = 0
             for ((path, text) in notes) {
                 val week = path.substringAfterLast('/').removeSuffix(".md")

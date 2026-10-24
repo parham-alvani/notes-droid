@@ -17,7 +17,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import me.parham1995.notes.obsidian.WorkingHours
 import me.parham1995.notes.sync.Author
+import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -234,8 +236,19 @@ data class CalendarSettings(
     val busyOnly: Set<Long> = emptySet(),
     /** The vault the week notes go to. Zero means they are not written. */
     val exportVaultId: Long = 0,
+    /** The hour the working day starts, for the free time in the week notes. */
+    val workStart: Int = WorkingHours.DEFAULT_START,
+    /** The hour it ends. Always after [workStart]; the store refuses anything else. */
+    val workEnd: Int = WorkingHours.DEFAULT_END,
 ) {
     val exports: Boolean get() = exportVaultId != 0L && calendars.isNotEmpty()
+
+    val hours: WorkingHours get() = WorkingHours(LocalTime.of(workStart, 0), LocalTime.of(workEnd, 0))
+
+    companion object {
+        val START_CHOICES = listOf(7, 8, 9, 10, 11)
+        val END_CHOICES = listOf(16, 17, 18, 19, 20, 21)
+    }
 }
 
 /**
@@ -340,6 +353,8 @@ class SettingsStore
                             calendars = preferences[CALENDARS].toIds(),
                             busyOnly = preferences[CALENDARS_BUSY].toIds(),
                             exportVaultId = preferences[CALENDAR_EXPORT_VAULT] ?: 0L,
+                            workStart = preferences.workingDay().first,
+                            workEnd = preferences.workingDay().second,
                         ),
                     privacy =
                         PrivacySettings(
@@ -421,6 +436,25 @@ class SettingsStore
         /** Zero stops the export. */
         suspend fun setCalendarExportVault(vaultId: Long) {
             context.settingsDataStore.edit { it[CALENDAR_EXPORT_VAULT] = vaultId }
+        }
+
+        /** The stored working day, or the default one if what is stored ends before it starts. */
+        private fun Preferences.workingDay(): Pair<Int, Int> {
+            val start = this[CALENDAR_WORK_START] ?: WorkingHours.DEFAULT_START
+            val end = this[CALENDAR_WORK_END] ?: WorkingHours.DEFAULT_END
+            return if (start < end) start to end else WorkingHours.DEFAULT_START to WorkingHours.DEFAULT_END
+        }
+
+        /** Ignored unless [start] is before [end]: a working day that ends before it starts has no free time to count. */
+        suspend fun setCalendarWorkingHours(
+            start: Int,
+            end: Int,
+        ) {
+            if (start >= end) return
+            context.settingsDataStore.edit {
+                it[CALENDAR_WORK_START] = start
+                it[CALENDAR_WORK_END] = end
+            }
         }
 
         private fun Set<String>?.toIds(): Set<Long> = this?.mapNotNullTo(mutableSetOf()) { it.toLongOrNull() }.orEmpty()
@@ -571,5 +605,7 @@ class SettingsStore
             val CALENDARS = stringSetPreferencesKey("calendar_ids")
             val CALENDARS_BUSY = stringSetPreferencesKey("calendar_busy_ids")
             val CALENDAR_EXPORT_VAULT = longPreferencesKey("calendar_export_vault")
+            val CALENDAR_WORK_START = intPreferencesKey("calendar_work_start")
+            val CALENDAR_WORK_END = intPreferencesKey("calendar_work_end")
         }
     }

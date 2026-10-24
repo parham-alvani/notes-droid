@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import androidx.work.ExistingWorkPolicy
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -92,6 +93,7 @@ class NotesApplication :
         }
         scheduleBackgroundSync()
         scheduleTaskDigest()
+        watchCalendar()
         SyncWorker.afterSync = ::refreshWidgets
         // A task ticked in the app leaves the home screen a tick behind
         // otherwise, until whenever the next background refresh happens to run.
@@ -172,6 +174,32 @@ class NotesApplication :
                 .distinctUntilChanged()
                 .collect { (enabled, hour) ->
                     if (enabled) scheduler.get().scheduleDigest(hour) else scheduler.get().cancelDigest()
+                }
+        }
+    }
+
+    /**
+     * Keeps the calendar watch in step with the export setting: armed while
+     * week notes are written, cancelled when they are not. KEEP on the first
+     * value, which is every launch, so opening the app does not cancel a run
+     * under way; REPLACE after that, because only a change of the Wi-Fi rule
+     * changes what the watch waits for.
+     */
+    private fun watchCalendar() {
+        scope.launch {
+            var first = true
+            settings
+                .get()
+                .settings
+                .map { it.calendar.exports to it.syncOnWifiOnly }
+                .distinctUntilChanged()
+                .collect { (exports, wifiOnly) ->
+                    when {
+                        !exports -> scheduler.get().stopWatchingCalendar()
+                        first -> scheduler.get().watchCalendar(wifiOnly)
+                        else -> scheduler.get().watchCalendar(wifiOnly, ExistingWorkPolicy.REPLACE)
+                    }
+                    first = false
                 }
         }
     }
