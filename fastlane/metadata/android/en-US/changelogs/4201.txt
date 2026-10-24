@@ -1,0 +1,1 @@
+Week notes no longer copy the dial-in numbers and PINs that Google adds to every Meet event, and a long description is no longer cut through the middle of a link.
