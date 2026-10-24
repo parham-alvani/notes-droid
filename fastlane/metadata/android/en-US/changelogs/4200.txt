@@ -1,0 +1,3 @@
+Week notes now show how to join each meeting, the organizer, the people invited, and a short line from its description. A "Busy only" calendar still gives the time and nothing else.
+
+Week notes now pass the vault's markdownlint and Prettier checks, and a meeting on two calendars no longer makes a commit when nothing changed. In Settings > Calendar, the rows no longer move when a calendar is ticked.
