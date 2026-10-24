@@ -198,6 +198,74 @@ class CalendarWeeksTest {
     }
 
     @Test
+    fun `a meeting carries how to join it, who is in it and what it is for`() {
+        val event =
+            meeting("2026-10-23T14:45", "2026-10-23T15:45", title = "Backend catchup").copy(
+                description =
+                    "<p>Agenda: the <b>ledger</b> &amp; booking</p><br>Docs: https://docs.example.com/x<br>" +
+                        "Join with Google Meet: https://meet.google.com/abc-defg-hij",
+                organizer = "lead@example.com",
+                attendees = listOf("C. Gauss", "A. Lovelace", "A. Lovelace"),
+            )
+        val note = CalendarWeeks.render(monday, listOf(event), zone)
+        assertThat(daySection(note, "Friday 23 October"))
+            .isEqualTo(
+                "- 14:45–15:45 Backend catchup (work@example.com)\n" +
+                    "  - Join: https://meet.google.com/abc-defg-hij\n" +
+                    "  - Organizer: lead@example.com\n" +
+                    "  - With: A. Lovelace, C. Gauss\n" +
+                    "  - Notes: Agenda: the ledger & booking Docs: https://docs.example.com/x " +
+                    "Join with Google Meet: https://meet.google.com/abc-defg-hij\n",
+            )
+    }
+
+    @Test
+    fun `a busy-only meeting keeps its details on the phone`() {
+        val event =
+            meeting("2026-10-20T09:00", "2026-10-20T10:00", busyOnly = true).copy(
+                description = "https://meet.google.com/abc-defg-hij",
+                organizer = "lead@example.com",
+                attendees = listOf("A. Lovelace"),
+            )
+        val note = CalendarWeeks.render(monday, listOf(event), zone)
+        assertThat(daySection(note, "Tuesday 20 October")).isEqualTo("- 09:00–10:00 Busy (work@example.com)\n")
+    }
+
+    @Test
+    fun `a long description and a long guest list are cut short`() {
+        val event =
+            meeting("2026-10-20T09:00", "2026-10-20T10:00").copy(
+                description = "word ".repeat(200),
+                attendees = (1..12).map { "Person %02d".format(it) },
+            )
+        val section = daySection(CalendarWeeks.render(monday, listOf(event), zone), "Tuesday 20 October")
+        assertThat(section).contains("Person 08, +4 more")
+        assertThat(section).doesNotContain("Person 09")
+        val notes = section.lines().single { it.startsWith("  - Notes: ") }
+        assertThat(notes).endsWith("…")
+        assertThat(notes.length).isLessThan(CalendarWeeks.NOTES_LIMIT + 20)
+    }
+
+    @Test
+    fun `the call link is the meeting, not a document`() {
+        assertThat(
+            CalendarWeeks.callLink(
+                listOf("Room 4", "See https://docs.example.com/a, then https://acme.zoom.us/j/123."),
+            ),
+        ).isEqualTo("https://acme.zoom.us/j/123")
+        assertThat(CalendarWeeks.callLink(listOf("https://docs.example.com/a"))).isNull()
+    }
+
+    @Test
+    fun `a meeting on two calendars reads the same whichever the provider gives first`() {
+        val a = meeting("2026-10-20T09:00", "2026-10-20T09:30", title = "Sync", calendar = "a@one.example")
+        val b = a.copy(calendar = "b@two.example", title = "Sync (copy)", attendees = listOf("Someone"))
+        assertThat(
+            CalendarWeeks.render(monday, listOf(a, b), zone),
+        ).isEqualTo(CalendarWeeks.render(monday, listOf(b, a), zone))
+    }
+
+    @Test
     fun `the span covers every week with a day to spare`() {
         val weeks = CalendarWeeks.weeks(LocalDate.of(2026, 10, 24))
         val span = CalendarWeeks.span(weeks, zone)

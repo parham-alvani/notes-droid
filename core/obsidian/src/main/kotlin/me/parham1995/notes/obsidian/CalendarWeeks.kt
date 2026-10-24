@@ -30,6 +30,11 @@ data class Occurrence(
     val calendar: String,
     /** Its calendar copies only the time: the title and the place stay on the phone. */
     val busyOnly: Boolean = false,
+    /** The event's description, often HTML when Google wrote it. */
+    val description: String? = null,
+    val organizer: String? = null,
+    /** Everyone invited, by name where the provider has one and by address otherwise. */
+    val attendees: List<String> = emptyList(),
 )
 
 /**
@@ -57,6 +62,19 @@ object CalendarWeeks {
     private val TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
     private val SHORT_DAY = DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)
     private val WHITESPACE = Regex("""\s+""")
+    private val TAG = Regex("""<[^>]*>""")
+    private val BREAK = Regex("""(?i)<br\s*/?>|</p>|</div>|</li>""")
+    private val URL = Regex("""https?://[^\s<>"')\]]+""")
+
+    /** Hosts a meeting is joined on, so the link worth naming is the call, not a document. */
+    private val CALL_HOSTS =
+        listOf("meet.google.com", "zoom.us", "teams.microsoft.com", "teams.live.com", "whereby.com", "calendly.com")
+
+    /** How much of a description a week note keeps: enough to know what the meeting is for. */
+    const val NOTES_LIMIT = 300
+
+    /** How many people a line names before it counts the rest. */
+    const val PEOPLE_LIMIT = 8
 
     /** The Mondays of the weeks written around [today]. */
     fun weeks(
@@ -138,7 +156,7 @@ object CalendarWeeks {
                 if (lines.isEmpty()) {
                     append("No events.\n")
                 } else {
-                    lines.forEach { append("- ").append(it).append('\n') }
+                    lines.forEach { append(it) }
                 }
             }
         }
@@ -153,7 +171,11 @@ object CalendarWeeks {
     fun distinct(occurrences: List<Occurrence>): List<Occurrence> {
         val (keyed, loose) = occurrences.partition { !it.uid.isNullOrBlank() }
         val merged =
-            keyed.groupBy { it.uid to it.begin }.values.map { same ->
+            keyed.groupBy { it.uid to it.begin }.values.map { unordered ->
+                // The provider gives the copies in no set order, and the one
+                // that names the line has to be the same every sync, or the
+                // note changes -- and commits -- with nothing changed.
+                val same = unordered.sortedBy { it.calendar }
                 val first = same.first()
                 first.copy(
                     calendar = same.map { it.calendar }.distinct().joinToString(", "),
@@ -203,8 +225,69 @@ object CalendarWeeks {
                     }
                 "${start.format(TIME)}–$endText"
             }
-        return "$`when` $what ($calendar)"
+        return buildString {
+            append("- ")
+                .append(`when`)
+                .append(' ')
+                .append(what)
+                .append(" (")
+                .append(calendar)
+                .append(")\n")
+            if (!busyOnly) details().forEach { append("  - ").append(it).append('\n') }
+        }
     }
+
+    /**
+     * The lines under a meeting: how to join it, who is in it, and what it is
+     * for -- what a person, or anything else reading the vault, needs to plan
+     * around it. Each is one line, in a set order, and only when it says
+     * something.
+     */
+    private fun Occurrence.details(): List<String> {
+        val text = plain(description)
+        val link = callLink(listOfNotNull(location, description))
+        val people =
+            attendees
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .sorted()
+        val with =
+            people.take(PEOPLE_LIMIT).joinToString(", ") +
+                (if (people.size > PEOPLE_LIMIT) ", +${people.size - PEOPLE_LIMIT} more" else "")
+        return listOfNotNull(
+            link?.let { "Join: $it" },
+            clean(organizer)?.let { "Organizer: $it" },
+            with.takeIf { it.isNotEmpty() }?.let { "With: ${clean(it)}" },
+            text?.let { "Notes: ${clean(it.ellipsized(NOTES_LIMIT))}" },
+        )
+    }
+
+    /** The first link to a call, out of the location and then the description. */
+    internal fun callLink(texts: List<String>): String? =
+        texts
+            .asSequence()
+            .flatMap { URL.findAll(it).map { m -> m.value.trimEnd('.', ',', ';') } }
+            .firstOrNull { url ->
+                CALL_HOSTS.any { host -> url.substringAfter("://").substringBefore('/').endsWith(host) }
+            }
+
+    /** A description as plain text: tags gone, the common entities read, blank when it said nothing. */
+    internal fun plain(html: String?): String? =
+        html
+            ?.replace(BREAK, " ")
+            ?.replace(TAG, "")
+            ?.replace("&nbsp;", " ")
+            ?.replace("&lt;", "<")
+            ?.replace("&gt;", ">")
+            ?.replace("&quot;", "\"")
+            ?.replace("&#39;", "'")
+            ?.replace("&amp;", "&")
+            ?.replace(WHITESPACE, " ")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+
+    private fun String.ellipsized(limit: Int): String = if (length <= limit) this else take(limit).trimEnd() + "…"
 
     /**
      * One line of plain text. A title can hold a line break, which would end

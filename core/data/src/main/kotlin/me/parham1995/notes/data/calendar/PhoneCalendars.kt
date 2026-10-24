@@ -128,35 +128,60 @@ class PhoneCalendars
                         Instances.DISPLAY_COLOR,
                         Instances.STATUS,
                         Instances.SELF_ATTENDEE_STATUS,
+                        Instances.DESCRIPTION,
+                        Instances.ORGANIZER,
                     )
                 // IDs are numbers from the settings, never text from outside,
                 // so they go into the selection as they are.
                 val selection = "${Instances.CALENDAR_ID} IN (${calendars.joinToString()})"
-                resolver
-                    .query(uri, columns, selection, null, "${Instances.BEGIN} ASC")
-                    .rows { c ->
-                        val cancelled = c.getInt(10) == Events.STATUS_CANCELED
-                        val declined = c.getInt(11) == Attendees.ATTENDEE_STATUS_DECLINED
-                        if (cancelled || declined) return@rows null
-                        val calendar = c.getLong(1)
-                        PhoneEvent(
-                            eventId = c.getLong(0),
-                            calendarId = calendar,
-                            color = c.getInt(9),
-                            occurrence =
-                                Occurrence(
-                                    uid = c.stringOrNull(7),
-                                    begin = c.getLong(2),
-                                    end = c.getLong(3),
-                                    allDay = c.getInt(4) == 1,
-                                    title = c.stringOrNull(5),
-                                    location = c.stringOrNull(6),
-                                    calendar = c.getString(8).orEmpty(),
-                                    busyOnly = calendar in busyOnly,
-                                ),
-                        )
-                    }
+                val found =
+                    resolver
+                        .query(uri, columns, selection, null, "${Instances.BEGIN} ASC")
+                        .rows { c ->
+                            val cancelled = c.getInt(10) == Events.STATUS_CANCELED
+                            val declined = c.getInt(11) == Attendees.ATTENDEE_STATUS_DECLINED
+                            if (cancelled || declined) return@rows null
+                            val calendar = c.getLong(1)
+                            PhoneEvent(
+                                eventId = c.getLong(0),
+                                calendarId = calendar,
+                                color = c.getInt(9),
+                                occurrence =
+                                    Occurrence(
+                                        uid = c.stringOrNull(7),
+                                        begin = c.getLong(2),
+                                        end = c.getLong(3),
+                                        allDay = c.getInt(4) == 1,
+                                        title = c.stringOrNull(5),
+                                        location = c.stringOrNull(6),
+                                        calendar = c.getString(8).orEmpty(),
+                                        busyOnly = calendar in busyOnly,
+                                        description = c.stringOrNull(12),
+                                        organizer = c.stringOrNull(13),
+                                    ),
+                            )
+                        }
+                val people = attendees(found.mapTo(mutableSetOf()) { it.eventId })
+                found.map { it.copy(occurrence = it.occurrence.copy(attendees = people[it.eventId].orEmpty())) }
             }
+
+        /**
+         * Who is invited to each of [events], by name where the provider has
+         * one and by address otherwise. One query for all of them: a week of
+         * meetings is a few dozen events, and a query each would be a few
+         * dozen round trips to the provider.
+         */
+        private fun attendees(events: Set<Long>): Map<Long, List<String>> {
+            if (events.isEmpty()) return emptyMap()
+            val columns = arrayOf(Attendees.EVENT_ID, Attendees.ATTENDEE_NAME, Attendees.ATTENDEE_EMAIL)
+            val selection = "${Attendees.EVENT_ID} IN (${events.joinToString()})"
+            return resolver
+                .query(Attendees.CONTENT_URI, columns, selection, null, null)
+                .rows { c ->
+                    val who = c.stringOrNull(1)?.takeIf { it.isNotBlank() } ?: c.stringOrNull(2) ?: return@rows null
+                    c.getLong(0) to who
+                }.groupBy({ it.first }, { it.second })
+        }
 
         private fun Cursor.stringOrNull(index: Int): String? = if (isNull(index)) null else getString(index)
 

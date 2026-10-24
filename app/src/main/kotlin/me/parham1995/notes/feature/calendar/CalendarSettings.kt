@@ -153,13 +153,15 @@ internal fun CalendarCards(viewModel: CalendarSettingsViewModel = hiltViewModel(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (shown) {
-                        FilterChip(
-                            selected = calendar.id in state.settings.busyOnly,
-                            onClick = { viewModel.setBusyOnly(calendar.id, calendar.id !in state.settings.busyOnly) },
-                            label = { Text(stringResource(R.string.calendar_busy_only)) },
-                        )
-                    }
+                    // Always there, and off until the calendar is: a chip that
+                    // appeared on a tick made the row taller and moved every
+                    // row under it while the next one was being tapped.
+                    FilterChip(
+                        selected = calendar.id in state.settings.busyOnly,
+                        onClick = { viewModel.setBusyOnly(calendar.id, calendar.id !in state.settings.busyOnly) },
+                        label = { Text(stringResource(R.string.calendar_busy_only)) },
+                        enabled = shown,
+                    )
                 }
             }
         }
