@@ -1,0 +1,1 @@
+SVG figures with arrows at both ends of a line, or with their own dark-mode colours, are drawn again. Before, such a figure showed only its caption.
