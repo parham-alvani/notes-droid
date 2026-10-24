@@ -245,7 +245,8 @@ object CalendarWeeks {
      * something.
      */
     private fun Occurrence.details(): List<String> {
-        val text = plain(description)
+        val text = plain(withoutConference(description))
+        // From the whole description: the call is in the block the notes leave out.
         val link = callLink(listOfNotNull(location, description))
         val people =
             attendees
@@ -273,6 +274,15 @@ object CalendarWeeks {
                 CALL_HOSTS.any { host -> url.substringAfter("://").substringBefore('/').endsWith(host) }
             }
 
+    /**
+     * The description without the block Google adds to every Meet event --
+     * the join link again, dial-in numbers with their PINs, "Learn more about
+     * Meet" -- between two `-::~:~::...::~:~::-` lines. It is not what the
+     * meeting is for, and the link is already on its own line. A block whose
+     * closing line is missing runs to the end.
+     */
+    internal fun withoutConference(text: String?): String? = text?.replace(CONFERENCE, " ")
+
     /** A description as plain text: tags gone, the common entities read, blank when it said nothing. */
     internal fun plain(html: String?): String? =
         html
@@ -288,7 +298,19 @@ object CalendarWeeks {
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
 
-    private fun String.ellipsized(limit: Int): String = if (length <= limit) this else take(limit).trimEnd() + "…"
+    /**
+     * At most [limit] characters, cut at a space. A link or an address the
+     * cut would split is dropped whole: half a link is a link to nowhere.
+     */
+    internal fun String.ellipsized(limit: Int): String {
+        if (length <= limit) return this
+        var cut = take(limit + 1).substringBeforeLast(' ', take(limit)).trimEnd()
+        val last = cut.substringAfterLast(' ')
+        if (length > cut.length && this[cut.length] != ' ' && LINKABLE.containsMatchIn(last)) {
+            cut = cut.dropLast(last.length).trimEnd()
+        }
+        return "$cut…"
+    }
 
     /**
      * Text from a calendar as one line of markdown that reads as plain text
@@ -328,6 +350,8 @@ object CalendarWeeks {
 
     /** Characters that mean something to markdown or Obsidian anywhere in a line. */
     private const val MARKUP = "\\`*_[]<>#$~^|"
+
+    private val CONFERENCE = Regex("""-::~[:~]*::-.*?(?:-::~[:~]*::-|$)""", RegexOption.DOT_MATCHES_ALL)
 
     private val LINKABLE = Regex("""https?://[^\s<>"'`]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""")
 }
