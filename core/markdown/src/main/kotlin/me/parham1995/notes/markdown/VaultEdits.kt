@@ -1,8 +1,8 @@
 package me.parham1995.notes.markdown
 
 /**
- * The four edits the app is allowed to make to a note, as pure functions of
- * the file's current text.
+ * The edits the app is allowed to make to a note, as pure functions of the
+ * file's current text.
  *
  * Writing from a phone is safe here only because none of these is a patch. Each
  * one is re-run against whatever the file says at the moment of the write, so a
@@ -136,6 +136,15 @@ object VaultEdits {
             }
         }
     }
+
+    /**
+     * Makes the file read [text], whatever it said before.
+     *
+     * Only for a note the app generates and owns, such as a calendar week:
+     * there is nothing in it a person wrote, so there is nothing to keep. Null
+     * when the file already reads [text], so an unchanged week is no commit.
+     */
+    fun replaceFile(text: String): (String?) -> String? = { current -> text.takeIf { it != current } }
 
     /**
      * Moves the task written on [line] -- reading [task] to the index -- to

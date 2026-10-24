@@ -50,6 +50,7 @@ import me.parham1995.notes.R
 import me.parham1995.notes.data.Destination
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.feature.browser.BrowserScreen
+import me.parham1995.notes.feature.calendar.CalendarScreen
 import me.parham1995.notes.feature.graph.GraphScreen
 import me.parham1995.notes.feature.note.NoteScreen
 import me.parham1995.notes.feature.search.SearchScreen
@@ -83,6 +84,9 @@ data class BrowseRoute(
 
 @Serializable
 object TasksRoute
+
+@Serializable
+object CalendarRoute
 
 @Serializable
 data class SearchRoute(
@@ -315,6 +319,7 @@ fun NotesNavHost(
         val destination =
             when (requested) {
                 "tasks" -> TasksRoute
+                "calendar" -> CalendarRoute
                 "search" -> SearchRoute()
                 else -> null
             }
@@ -390,6 +395,7 @@ fun NotesNavHost(
         listOf(
             Tab(BrowseRoute(), R.string.nav_browse, "folder-tree"),
             Tab(TasksRoute, R.string.tasks_title, "list-todo"),
+            Tab(CalendarRoute, R.string.calendar_title, "calendar-days"),
             Tab(SearchRoute(), R.string.nav_search, "search"),
             Tab(SettingsRoute, R.string.settings_title, "settings"),
         )
@@ -574,6 +580,12 @@ private fun NavGraphBuilder.graph(
     }
     screen<TasksRoute> {
         TasksScreen(onOpenNote = { open.note(it, fresh = true) })
+    }
+    screen<CalendarRoute> {
+        CalendarScreen(
+            onOpenNote = { open.note(it, fresh = true) },
+            onOpenSettings = { navController.navigate(SettingsSectionRoute(SettingsSection.CALENDAR.name)) },
+        )
     }
     screen<SearchRoute> { entry ->
         SearchScreen(

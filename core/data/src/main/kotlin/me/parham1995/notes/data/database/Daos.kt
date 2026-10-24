@@ -335,6 +335,14 @@ interface PendingEditDao {
     @Query("DELETE FROM pending_edits WHERE id = :id")
     suspend fun delete(id: Long)
 
+    /** Drops the queued edits of one [kind] to one file -- a newer one makes them pointless. */
+    @Query("DELETE FROM pending_edits WHERE vaultId = :vaultId AND path = :path AND kind = :kind")
+    suspend fun deleteFor(
+        vaultId: Long,
+        path: String,
+        kind: String,
+    )
+
     @Query("DELETE FROM pending_edits WHERE vaultId = :vaultId")
     suspend fun clearVault(vaultId: Long)
 }

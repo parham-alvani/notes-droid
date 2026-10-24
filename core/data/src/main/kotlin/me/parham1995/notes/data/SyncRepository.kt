@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.calendar.CalendarExport
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.PendingEditDao
@@ -68,6 +69,7 @@ class SyncRepository
         private val transports: VaultTransports,
         private val writes: VaultWriteRepository,
         private val gate: VaultGate,
+        private val calendarExport: Provider<CalendarExport>,
         private val documents: VaultDocuments,
     ) {
         val status: Flow<SyncStatus> =
@@ -371,7 +373,17 @@ class SyncRepository
          * letting an unreachable one block the rest would make adding a second
          * repository a liability.
          */
-        suspend fun sync(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): SyncPlan =
+        suspend fun sync(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): SyncPlan {
+            // Before the gate, not inside it: the export writes through
+            // VaultWriteRepository, which takes the gate itself, and the gate
+            // is not reentrant. A failed export is a line in the journal, not
+            // a failed sync.
+            runCatchingUnlessCancelled { calendarExport.get().run() }
+                .onFailure { log.warn("calendar export failed: " + it.describeChain()) }
+            return syncHoldingGate(onProgress)
+        }
+
+        private suspend fun syncHoldingGate(onProgress: (done: Int, total: Int) -> Unit): SyncPlan =
             // Held for the whole sync. A write that arrives while this is
             // running drives the same working tree, and the two interleaved
             // produce a commit of a half-checked-out tree or an edit lost in

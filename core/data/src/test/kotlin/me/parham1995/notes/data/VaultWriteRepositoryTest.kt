@@ -295,6 +295,47 @@ class VaultWriteRepositoryTest {
             assertThat(database.pendingEditDao().all()).isEmpty()
         }
 
+    @Test
+    fun `a generated note is written whole, and the same text again is no commit`() =
+        runTest {
+            transport.content = "# 2026-W43\n\nan old week\n"
+
+            val first =
+                writes.writeGenerated(
+                    vaultId,
+                    WEEK,
+                    "# 2026-W43\n\n- 09:00 Standup\n",
+                    "docs(calendar): update 2026-W43",
+                )
+            assertThat(first).isEqualTo(WriteResult.Pushed)
+            assertThat(transport.content).isEqualTo("# 2026-W43\n\n- 09:00 Standup\n")
+            assertThat(files.readText(vaultId, WEEK)).isEqualTo(transport.content)
+
+            val again =
+                writes.writeGenerated(
+                    vaultId,
+                    WEEK,
+                    "# 2026-W43\n\n- 09:00 Standup\n",
+                    "docs(calendar): update 2026-W43",
+                )
+            assertThat(again).isEqualTo(WriteResult.Unchanged)
+            assertThat(transport.messages).hasSize(1)
+        }
+
+    @Test
+    fun `a newer copy of a generated note replaces the one still queued`() =
+        runTest {
+            transport.offline = true
+            writes.writeGenerated(vaultId, WEEK, "first copy\n", "docs(calendar): update 2026-W43")
+            writes.writeGenerated(vaultId, WEEK, "second copy\n", "docs(calendar): update 2026-W43")
+            assertThat(database.pendingEditDao().all()).hasSize(1)
+
+            transport.offline = false
+            assertThat(writes.flush()).isEqualTo(1)
+            assertThat(transport.content).isEqualTo("second copy\n")
+            assertThat(transport.messages).hasSize(1)
+        }
+
     /** Seeds [path] with [text], indexes it, and hands back its one open task. */
     private suspend fun seedTask(
         path: String,
@@ -375,5 +416,6 @@ class VaultWriteRepositoryTest {
 
     private companion object {
         const val SCRATCHPAD = "Scratchpad.md"
+        const val WEEK = "Calendar/2026-W43.md"
     }
 }
