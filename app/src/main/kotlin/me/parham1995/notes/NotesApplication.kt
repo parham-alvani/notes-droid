@@ -4,6 +4,9 @@ import android.app.Application
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +25,7 @@ import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.reminder.Reminders
+import me.parham1995.notes.ui.image.VaultSvg
 import me.parham1995.notes.widget.Widgets
 import javax.inject.Inject
 import javax.inject.Provider
@@ -29,7 +33,8 @@ import javax.inject.Provider
 @HiltAndroidApp
 class NotesApplication :
     Application(),
-    Configuration.Provider {
+    Configuration.Provider,
+    SingletonImageLoader.Factory {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
@@ -174,6 +179,17 @@ class NotesApplication :
     private companion object {
         const val TAG = "Daftar"
     }
+
+    /**
+     * Coil's defaults, plus the SVG decoder that reads the vault's figures.
+     * Components added here are tried before the ones Coil finds by itself,
+     * so it takes over from the plain one `coil-svg` installs.
+     */
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader
+            .Builder(context)
+            .components { add(VaultSvg.factory) }
+            .build()
 
     override val workManagerConfiguration: Configuration
         get() =

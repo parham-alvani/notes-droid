@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import me.parham1995.notes.R
+import me.parham1995.notes.ui.image.onPage
+import me.parham1995.notes.ui.image.pageIsDark
 import me.parham1995.notes.ui.image.rememberVaultImage
 import me.parham1995.notes.ui.imageKey
 import me.parham1995.notes.ui.inScript
@@ -47,6 +49,7 @@ fun VaultImage(
     onClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val dark = pageIsDark()
     val image by rememberVaultImage(vaultId, path)
     val file = image.file
     val failed = image.failed
@@ -74,6 +77,7 @@ fun VaultImage(
                         ImageRequest
                             .Builder(context)
                             .data(file)
+                            .onPage(dark)
                             .build(),
                     contentDescription = alt,
                     contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,

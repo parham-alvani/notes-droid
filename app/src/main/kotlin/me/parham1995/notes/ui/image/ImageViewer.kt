@@ -112,6 +112,7 @@ private fun ZoomableContent(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val dark = pageIsDark()
 
     var scale by remember(model) { mutableFloatStateOf(1f) }
     var offsetX by remember(model) { mutableFloatStateOf(0f) }
@@ -142,7 +143,15 @@ private fun ZoomableContent(
 
             else ->
                 AsyncImage(
-                    model = ImageRequest.Builder(context).data(loaded).build(),
+                    // The page's theme, not the black behind the viewer: the
+                    // picture grows out of the page and must not change colour
+                    // on the way.
+                    model =
+                        ImageRequest
+                            .Builder(context)
+                            .data(loaded)
+                            .onPage(dark)
+                            .build(),
                     contentDescription = contentDescription,
                     contentScale = ContentScale.Fit,
                     modifier =
