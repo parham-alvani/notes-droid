@@ -1,0 +1,3 @@
+Each day in the week notes now starts with its free time inside your working day, which you set in Settings > Calendar, and a meeting that clashes with another says so.
+
+Week notes are now written about a minute after a calendar changes, not only at a sync. Google's "Home" working-location events are left out, a tentative meeting says "(maybe)", and you are no longer listed among your own attendees.
