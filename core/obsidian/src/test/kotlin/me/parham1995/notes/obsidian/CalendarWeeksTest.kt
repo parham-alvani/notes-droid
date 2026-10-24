@@ -279,6 +279,36 @@ class CalendarWeeksTest {
     }
 
     @Test
+    fun `the block Google adds to a Meet event is not in the notes, but its link is`() {
+        val block =
+            "-::~:~::~:~:~:~:~:~:~::~:~::-<br>Join with Google Meet: https://meet.google.com/abc-defg-hij<br>" +
+                "Or dial: (ES) +34 955 25 66 30 PIN: 988520855#<br>Please do not edit this section.<br>-::~:~::~:~:~:~:~:~:~::~:~::-"
+        val event =
+            meeting("2026-10-20T09:00", "2026-10-20T09:30").copy(description = "Weekly ledger review.<br>$block")
+        val section = daySection(CalendarWeeks.render(monday, listOf(event), zone), "Tuesday 20 October")
+        assertThat(section).contains("    - Join: <https://meet.google.com/abc-defg-hij>\n")
+        assertThat(section).contains("    - Notes: Weekly ledger review.\n")
+        assertThat(section).doesNotContain("PIN")
+
+        // A description that is only the block has no notes at all.
+        val bare = event.copy(description = block)
+        assertThat(daySection(CalendarWeeks.render(monday, listOf(bare), zone), "Tuesday 20 October"))
+            .doesNotContain("Notes:")
+        // A block cut off before its closing line runs to the end.
+        assertThat(CalendarWeeks.withoutConference("Agenda -::~:~::~:~::-\nOr dial: 123")?.trim()).isEqualTo("Agenda")
+    }
+
+    @Test
+    fun `a description is cut at a space, never through a link`() {
+        with(CalendarWeeks) {
+            assertThat("one two three".ellipsized(9)).isEqualTo("one two…")
+            assertThat("read https://example.com/a/very/long/path please".ellipsized(20)).isEqualTo("read…")
+            assertThat("https://example.com/a/very/long/path".ellipsized(10)).isEqualTo("…")
+            assertThat("short".ellipsized(10)).isEqualTo("short")
+        }
+    }
+
+    @Test
     fun `the span covers every week with a day to spare`() {
         val weeks = CalendarWeeks.weeks(LocalDate.of(2026, 10, 24))
         val span = CalendarWeeks.span(weeks, zone)
