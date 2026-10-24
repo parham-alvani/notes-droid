@@ -30,6 +30,11 @@ data class Occurrence(
     val calendar: String,
     /** Its calendar copies only the time: the title and the place stay on the phone. */
     val busyOnly: Boolean = false,
+    /** The event's description, often HTML when Google wrote it. */
+    val description: String? = null,
+    val organizer: String? = null,
+    /** Everyone invited, by name where the provider has one and by address otherwise. */
+    val attendees: List<String> = emptyList(),
 )
 
 /**
@@ -57,6 +62,19 @@ object CalendarWeeks {
     private val TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
     private val SHORT_DAY = DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)
     private val WHITESPACE = Regex("""\s+""")
+    private val TAG = Regex("""<[^>]*>""")
+    private val BREAK = Regex("""(?i)<br\s*/?>|</p>|</div>|</li>""")
+    private val URL = Regex("""https?://[^\s<>"')\]]+""")
+
+    /** Hosts a meeting is joined on, so the link worth naming is the call, not a document. */
+    private val CALL_HOSTS =
+        listOf("meet.google.com", "zoom.us", "teams.microsoft.com", "teams.live.com", "whereby.com", "calendly.com")
+
+    /** How much of a description a week note keeps: enough to know what the meeting is for. */
+    const val NOTES_LIMIT = 300
+
+    /** How many people a line names before it counts the rest. */
+    const val PEOPLE_LIMIT = 8
 
     /** The Mondays of the weeks written around [today]. */
     fun weeks(
@@ -138,7 +156,7 @@ object CalendarWeeks {
                 if (lines.isEmpty()) {
                     append("No events.\n")
                 } else {
-                    lines.forEach { append("- ").append(it).append('\n') }
+                    lines.forEach { append(it) }
                 }
             }
         }
@@ -153,7 +171,11 @@ object CalendarWeeks {
     fun distinct(occurrences: List<Occurrence>): List<Occurrence> {
         val (keyed, loose) = occurrences.partition { !it.uid.isNullOrBlank() }
         val merged =
-            keyed.groupBy { it.uid to it.begin }.values.map { same ->
+            keyed.groupBy { it.uid to it.begin }.values.map { unordered ->
+                // The provider gives the copies in no set order, and the one
+                // that names the line has to be the same every sync, or the
+                // note changes -- and commits -- with nothing changed.
+                val same = unordered.sortedBy { it.calendar }
                 val first = same.first()
                 first.copy(
                     calendar = same.map { it.calendar }.distinct().joinToString(", "),
@@ -203,18 +225,109 @@ object CalendarWeeks {
                     }
                 "${start.format(TIME)}–$endText"
             }
-        return "$`when` $what ($calendar)"
+        return buildString {
+            append("- ")
+                .append(`when`)
+                .append(' ')
+                .append(what)
+                .append(" (")
+                .append(clean(calendar))
+                .append(")\n")
+            // Four spaces: the vault's lint (MD007) and Prettier both indent a sub-list by four.
+            if (!busyOnly) details().forEach { append("    - ").append(it).append('\n') }
+        }
     }
 
     /**
-     * One line of plain text. A title can hold a line break, which would end
-     * the list item, and a `#`, which Obsidian would read as a tag and put in
-     * the tag list of the whole vault.
+     * The lines under a meeting: how to join it, who is in it, and what it is
+     * for -- what a person, or anything else reading the vault, needs to plan
+     * around it. Each is one line, in a set order, and only when it says
+     * something.
      */
-    private fun clean(text: String?): String? =
-        text
+    private fun Occurrence.details(): List<String> {
+        val text = plain(description)
+        val link = callLink(listOfNotNull(location, description))
+        val people =
+            attendees
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .sorted()
+        val with =
+            people.take(PEOPLE_LIMIT).joinToString(", ") +
+                (if (people.size > PEOPLE_LIMIT) ", +${people.size - PEOPLE_LIMIT} more" else "")
+        return listOfNotNull(
+            link?.let { "Join: <$it>" },
+            clean(organizer)?.let { "Organizer: $it" },
+            clean(with)?.let { "With: $it" },
+            text?.let { "Notes: ${clean(it.ellipsized(NOTES_LIMIT))}" },
+        )
+    }
+
+    /** The first link to a call, out of the location and then the description. */
+    internal fun callLink(texts: List<String>): String? =
+        texts
+            .asSequence()
+            .flatMap { URL.findAll(it).map { m -> m.value.trimEnd('.', ',', ';') } }
+            .firstOrNull { url ->
+                CALL_HOSTS.any { host -> url.substringAfter("://").substringBefore('/').endsWith(host) }
+            }
+
+    /** A description as plain text: tags gone, the common entities read, blank when it said nothing. */
+    internal fun plain(html: String?): String? =
+        html
+            ?.replace(BREAK, " ")
+            ?.replace(TAG, "")
+            ?.replace("&nbsp;", " ")
+            ?.replace("&lt;", "<")
+            ?.replace("&gt;", ">")
+            ?.replace("&quot;", "\"")
+            ?.replace("&#39;", "'")
+            ?.replace("&amp;", "&")
             ?.replace(WHITESPACE, " ")
             ?.trim()
-            ?.replace("#", "\\#")
             ?.takeIf { it.isNotEmpty() }
+
+    private fun String.ellipsized(limit: Int): String = if (length <= limit) this else take(limit).trimEnd() + "…"
+
+    /**
+     * Text from a calendar as one line of markdown that reads as plain text
+     * and passes the vault's lint.
+     *
+     * A title can hold a line break, which would end the list item; a `#`,
+     * which Obsidian reads as a tag for the whole vault; `*` or `_`, which
+     * make emphasis that Prettier then rewrites; `%%`, which hides the rest
+     * of the line as an Obsidian comment; `$`, which starts math. All of those
+     * are escaped. An address or a link is made an autolink, `<...>`, because
+     * the vault's lint refuses a bare one (MD034) -- and escaping inside it
+     * would break it, so it is kept whole.
+     */
+    internal fun clean(text: String?): String? {
+        val line = text?.replace(WHITESPACE, " ")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return buildString {
+            var at = 0
+            for (match in LINKABLE.findAll(line)) {
+                append(escape(line.substring(at, match.range.first)))
+                val link = match.value.trimEnd('.', ',', ';', ':')
+                append('<').append(link).append('>')
+                append(escape(match.value.substring(link.length)))
+                at = match.range.last + 1
+            }
+            append(escape(line.substring(at)))
+        }
+    }
+
+    private fun escape(text: String): String =
+        buildString {
+            for (char in text) {
+                if (char in MARKUP) append('\\')
+                append(char)
+            }
+        }.replace("==", "\\=\\=")
+            .replace("%%", "\\%\\%")
+
+    /** Characters that mean something to markdown or Obsidian anywhere in a line. */
+    private const val MARKUP = "\\`*_[]<>#$~^|"
+
+    private val LINKABLE = Regex("""https?://[^\s<>"'`]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}""")
 }
