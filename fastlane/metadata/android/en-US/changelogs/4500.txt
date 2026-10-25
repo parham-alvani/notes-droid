@@ -1,0 +1,1 @@
+A new task board, from the Tasks screen: your tasks in columns by status, by day or by note. Hold a card to move it to another column; the task's line changes in its note, as the Tasks plugin writes it. Daftar on the Mac has the same board.
