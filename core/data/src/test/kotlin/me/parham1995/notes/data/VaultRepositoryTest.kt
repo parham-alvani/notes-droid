@@ -142,6 +142,24 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `a folder's logo is its icon and not a file in it`() =
+        runTest {
+            index(
+                "Companies/Acme/Acme.md" to "the company",
+                "Companies/Acme/Notes.md" to "n",
+                "Companies/Beta/b.md" to "b",
+            )
+            attachment("Companies/Acme/logo.png")
+            attachment("Companies/Acme/Logo.svg")
+            attachment("Companies/Acme/chart.png")
+
+            val companies = repository.children("Companies")
+            assertThat(companies.single { it.name == "Acme" }.logo).isEqualTo("Companies/Acme/Logo.svg")
+            assertThat(companies.single { it.name == "Beta" }.logo).isNull()
+            assertThat(repository.children("Companies/Acme").map { it.name }).containsExactly("Notes", "chart.png")
+        }
+
+    @Test
     fun `descending shows that folder's own children`() =
         runTest {
             index("Alpha/One.md" to "a", "Alpha/Deep/Two.md" to "b")

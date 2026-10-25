@@ -34,6 +34,7 @@ import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.Slugs
 import me.parham1995.notes.markdown.TagTree
 import me.parham1995.notes.markdown.TagTreeNode
+import me.parham1995.notes.obsidian.FolderLogos
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,6 +60,8 @@ data class VaultItem(
     val changedAt: Long = 0,
     /** Opened before, and changed upstream since. */
     val updatedSinceRead: Boolean = false,
+    /** For a folder, its `logo.svg` or picture, drawn as its icon. */
+    val logo: String? = null,
 )
 
 /** A note prepared for display. */
@@ -249,6 +252,7 @@ class VaultRepository
             val prefix = if (parent.isEmpty()) "" else "$parent/"
             val landingPages = folderNotes.associateBy { it.path }
             val under = attachmentPaths.filter { it.startsWith(prefix) }
+            val logos = FolderLogos.byFolder(under)
             // Folders come from the attachments as well as the notes: a
             // repository of scanned documents has directories full of PDFs and
             // not one note to imply them.
@@ -272,6 +276,7 @@ class VaultRepository
                         isFolder = true,
                         noteId = own?.id,
                         isRtl = own?.isRtl ?: false,
+                        logo = logos["$prefix$name"],
                     )
                 }
 
@@ -294,6 +299,9 @@ class VaultRepository
             val attachmentItems =
                 under
                     .filter { !it.removePrefix(prefix).contains('/') }
+                    // The folder's logo is the folder's icon, not a file in it;
+                    // the top of the vault has no icon, so its logo stays a file.
+                    .filterNot { parent.isNotEmpty() && FolderLogos.isLogo(it) }
                     .map { path ->
                         VaultItem(
                             path = path,

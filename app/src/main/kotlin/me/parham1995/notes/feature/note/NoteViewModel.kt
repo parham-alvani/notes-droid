@@ -430,6 +430,7 @@ class NoteViewModel
                                             VaultRowItem(
                                                 it,
                                                 assignments.forPath(note.vaultId, it.path, it.isFolder),
+                                                note.vaultId,
                                             )
                                         }
                                 },

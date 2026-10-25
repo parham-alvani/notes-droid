@@ -62,6 +62,7 @@ internal fun FolderContents(
             ItemRow(
                 title = item.name,
                 icon = row.icon,
+                logo = row.logo,
                 defaultIcon = if (item.isFolder) "folder" else "file-text",
                 iconDescription = if (item.isFolder) "Folder" else stringResource(R.string.note_kind),
                 underline = item.isFolder && item.noteId != null,

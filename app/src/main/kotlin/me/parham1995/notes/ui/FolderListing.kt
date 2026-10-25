@@ -36,6 +36,6 @@ fun VaultRepository.folderListing(
     folder.flatMapLatest { at ->
         combine(childrenFlow(at), icons, activeVaultId, order) { children, config, vaultId, comparator ->
             val sorted = comparator?.let(children::sortedWith) ?: children
-            FolderListing(at, sorted.map { VaultRowItem(it, config.forPath(vaultId, it.path, it.isFolder)) })
+            FolderListing(at, sorted.map { VaultRowItem(it, config.forPath(vaultId, it.path, it.isFolder), vaultId) })
         }
     }

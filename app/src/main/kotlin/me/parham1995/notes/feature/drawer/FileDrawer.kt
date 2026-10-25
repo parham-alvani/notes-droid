@@ -153,6 +153,7 @@ fun FileDrawerSheet(
                 ItemRow(
                     title = item.name,
                     icon = row.icon,
+                    logo = row.logo,
                     defaultIcon =
                         when {
                             item.isFolder -> "folder"

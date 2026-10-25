@@ -12,21 +12,33 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.icon.VaultIcon
+import me.parham1995.notes.ui.image.rememberVaultImage
 import me.parham1995.notes.ui.theme.resolve
 
 /** A vault item with its Iconic assignment already resolved. */
 data class VaultRowItem(
     val item: VaultItem,
     val icon: IconSpec? = null,
-)
+    /** The vault it is in, which a folder's logo is read from. */
+    val vaultId: Long = 0,
+) {
+    /** A folder's logo, with the vault it is read from. */
+    val logo: Pair<Long, String>? get() = item.logo?.let { vaultId to it }
+}
 
 /**
  * One line of a vault listing: icon, label, and an optional action on the end.
@@ -51,6 +63,8 @@ fun ItemRow(
     underline: Boolean = false,
     /** On the title alone: how a row shares it with the screen it opens. */
     titleModifier: Modifier = Modifier,
+    /** A folder's logo (vault, path), drawn in place of its icon. */
+    logo: Pair<Long, String>? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
     Row(
@@ -61,7 +75,13 @@ fun ItemRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        IconTile(icon, defaultIcon, iconDescription)
+        if (logo ==
+            null
+        ) {
+            IconTile(icon, defaultIcon, iconDescription)
+        } else {
+            LogoTile(logo, icon, defaultIcon, iconDescription)
+        }
         Column(Modifier.weight(1f)) {
             AutoDirection(title) {
                 Text(
@@ -134,6 +154,33 @@ private fun IconTile(
             contentDescription = description,
         )
     }
+}
+
+/**
+ * A folder's logo in the tile's place: a company's logo on its folder. The
+ * file may not be on the phone yet, so until it is -- or if it never comes,
+ * under the "never download images" setting -- the folder keeps its ordinary
+ * icon.
+ */
+@Composable
+private fun LogoTile(
+    logo: Pair<Long, String>,
+    icon: IconSpec?,
+    defaultIcon: String,
+    description: String?,
+) {
+    val image by rememberVaultImage(logo.first, logo.second)
+    val file = image.file
+    if (file == null) {
+        IconTile(icon, defaultIcon, description)
+        return
+    }
+    AsyncImage(
+        model = ImageRequest.Builder(LocalContext.current).data(file).build(),
+        contentDescription = description,
+        contentScale = ContentScale.Fit,
+        modifier = Modifier.size(TILE).clip(MaterialTheme.shapes.small),
+    )
 }
 
 private val TILE = 34.dp
