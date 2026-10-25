@@ -195,7 +195,8 @@ interface TaskDao {
         """
         SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
                t.actionableOn, t.recurring, t.scheduled, t.due, t.done,
-               n.path AS notePath, n.title AS noteTitle, n.vaultId AS vaultId
+               n.path AS notePath, n.title AS noteTitle, n.vaultId AS vaultId,
+               t.priority, t.cancelled
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
         WHERE n.vaultId = :vaultId

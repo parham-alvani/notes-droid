@@ -165,13 +165,73 @@ object VaultEdits {
         line: Int,
         task: String,
         date: String?,
+        undated: Boolean = false,
     ): (String?) -> String? {
         date?.let { require(DATE.matches(it)) { "not a date: $it" } }
         return { current ->
             val lines = current?.lines() ?: throw TaskNotFound(task)
             val at = TaskLine.locate(lines, line, task) ?: throw TaskNotFound(task)
-            val moved = if (date == null) TaskLine.unschedule(lines[at]) else TaskLine.reschedule(lines[at], date)?.line
+            val moved =
+                when {
+                    date != null -> TaskLine.reschedule(lines[at], date)?.line
+                    // The board's No Date: every date it is filed by comes off.
+                    undated -> TaskLine.undate(lines[at])
+                    else -> TaskLine.unschedule(lines[at])
+                }
             moved?.let { lines.toMutableList().apply { set(at, it) }.joinToString("\n") }
+        }
+    }
+
+    /**
+     * Sets the status of the task written on [line] -- reading [task] to the
+     * index -- to [status], as the board does to a card dropped on another
+     * column; the rule is [TaskLine.withStatus]. To done from open is the
+     * tick a tap makes, the next occurrence of a repeat and all.
+     *
+     * Found by [TaskLine.locate], and a task that is not there throws
+     * [TaskNotFound], as [reschedule] does. A repeat whose rule the app does
+     * not work out throws [RepeatNotWorkedOut] rather than being ticked into
+     * a one-off.
+     *
+     * Run twice, it changes nothing the second time. That is free for every
+     * status but a repeat ticked done, whose next occurrence reads the same
+     * as the task and sits where it was: that one is recognised by the
+     * finished copy, dated [today], on the line under it.
+     */
+    fun setStatus(
+        line: Int,
+        task: String,
+        status: Char,
+        today: String,
+    ): (String?) -> String? {
+        require(status in STATUSES) { "not a board status: '$status'" }
+        require(DATE.matches(today)) { "not a date: $today" }
+        return { current ->
+            val lines = current?.lines() ?: throw TaskNotFound(task)
+            val at = TaskLine.locate(lines, line, task) ?: throw TaskNotFound(task)
+            val raw = lines[at]
+            val repeat = status == 'x' && TaskLine.isOpen(raw) && TaskLine.isRecurring(raw)
+            val finished = lines.getOrNull(at + 1)
+            when {
+                repeat &&
+                    finished != null &&
+                    !TaskLine.isOpen(finished) &&
+                    TaskLine.indexedText(finished.trim()) == task &&
+                    finished.contains("✅ $today") -> null
+                else -> {
+                    val becomes =
+                        TaskLine.withStatus(raw, status, today)
+                            ?: if (repeat) throw RepeatNotWorkedOut(task) else null
+                    becomes?.let {
+                        lines
+                            .toMutableList()
+                            .apply {
+                                removeAt(at)
+                                addAll(at, it)
+                            }.joinToString("\n")
+                    }
+                }
+            }
         }
     }
 
@@ -254,6 +314,9 @@ object VaultEdits {
 
     private val DATE = Regex("""\d{4}-\d{2}-\d{2}""")
 
+    /** What a board column can set: to do, under way, done, cancelled. */
+    private val STATUSES = setOf(' ', '/', 'x', '-')
+
     private const val FENCE_MIN = 3
     private const val MAX_HEADING_LEVEL = 6
 }
@@ -262,5 +325,16 @@ object VaultEdits {
 class TaskNotFound(
     val task: String,
 ) : IllegalStateException("\"${task.take(TASK_IN_MESSAGE)}\" is not in that note any more - refresh and try again")
+
+/**
+ * A repeating task asked to be done, on a rule the app will not work out for
+ * itself -- ticking it here would drop the repeat.
+ */
+class RepeatNotWorkedOut(
+    val task: String,
+) : IllegalStateException(
+        "\"${task.take(TASK_IN_MESSAGE)}\" repeats on a rule the app will not work out for itself - " +
+            "ticking it here could drop the repeat. Obsidian does that part",
+    )
 
 private const val TASK_IN_MESSAGE = 60

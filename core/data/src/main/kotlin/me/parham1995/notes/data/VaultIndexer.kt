@@ -239,6 +239,8 @@ class VaultIndexer
                                     due = task.due,
                                     done = task.done,
                                     recurring = task.recurring,
+                                    priority = task.priority,
+                                    cancelled = task.cancelled,
                                 )
                             },
                         tags =
@@ -328,8 +330,10 @@ class VaultIndexer
              * 11: a highlight's colour emoji (`==🟡text==`) is no longer
              *    part of its text, so a task holding one is stored without
              *    it -- and has to be, to be found again when it is ticked.
+             * 12: a task's priority and cancelled date are stored, for the
+             *    board; the rows already there have neither until reparsed.
              */
-            const val VERSION = 11
+            const val VERSION = 12
 
             /**
              * Files that are kept on the device but are not notes.

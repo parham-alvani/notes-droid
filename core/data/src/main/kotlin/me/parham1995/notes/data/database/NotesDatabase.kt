@@ -21,7 +21,7 @@ import androidx.sqlite.execSQL
         TagEntity::class,
         AliasEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -528,6 +528,20 @@ abstract class NotesDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * A task's priority and its cancelled date, for the board's order and
+         * for how long a cancelled task stays on it. Both start empty -- they
+         * come from parsing markdown -- and the indexer's version moves with
+         * this, so the next sync reparses every note and fills them.
+         */
+        val MIGRATION_15_16 =
+            object : Migration(15, 16) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `tasks` ADD COLUMN `priority` TEXT")
+                    connection.execSQL("ALTER TABLE `tasks` ADD COLUMN `cancelled` TEXT")
+                }
+            }
+
         /** The tables derived from a note, exactly as the entities declare them. */
         private fun createNotes(connection: SQLiteConnection) {
             connection.execSQL(
@@ -617,6 +631,7 @@ abstract class NotesDatabase : RoomDatabase() {
                 MIGRATION_12_13,
                 MIGRATION_13_14,
                 MIGRATION_14_15,
+                MIGRATION_15_16,
             )
     }
 }

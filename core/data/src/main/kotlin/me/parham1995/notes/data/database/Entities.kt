@@ -329,6 +329,10 @@ data class TaskEntity(
     val due: String?,
     val done: String?,
     val recurring: String?,
+    /** The priority mark as written (`🔺 ⏫ 🔼 🔽 ⏬`), for the board's order. */
+    val priority: String? = null,
+    /** The `❌` date, which is how long a cancelled task stays on the board. */
+    val cancelled: String? = null,
 )
 
 /** A task with the note it lives in, which is what a list actually shows. */
@@ -367,6 +371,8 @@ data class QueryTaskRow(
     val notePath: String,
     val noteTitle: String,
     val vaultId: Long,
+    val priority: String? = null,
+    val cancelled: String? = null,
 ) {
     /** The row the write path takes, to tick this task. */
     fun toTaskRow(): TaskRow =

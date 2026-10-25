@@ -459,4 +459,23 @@
     <string name="settings_keep_screen_on">روشن ماندن صفحه هنگام خواندن</string>
     <string name="help_keep_screen_on">تا نوشته‌ای باز است صفحه خاموش یا قفل نمی‌شود. بقیهٔ برنامه مثل همیشه رفتار می‌کند.</string>
     <string name="pane_nothing_open">نوشته‌ای را از فهرست انتخاب کنید تا اینجا خوانده شود</string>
+    <string name="board_title">تابلو</string>
+    <string name="board_group_status">وضعیت</string>
+    <string name="board_group_day">روز</string>
+    <string name="board_group_file">فایل</string>
+    <string name="board_all_closed">همهٔ بسته‌ها</string>
+    <string name="board_column_todo">برای انجام</string>
+    <string name="board_column_doing">در حال انجام</string>
+    <string name="board_column_done">انجام‌شده</string>
+    <string name="board_column_cancelled">لغوشده</string>
+    <string name="board_column_overdue">عقب‌افتاده</string>
+    <string name="board_column_today">امروز</string>
+    <string name="board_column_tomorrow">فردا</string>
+    <string name="board_column_week">هفت روز آینده</string>
+    <string name="board_column_later">بعداً</string>
+    <string name="board_column_none">بی‌تاریخ</string>
+    <string name="board_move_to">انتقال به %1$s</string>
+    <string name="board_move_action">انتقال به ستونی دیگر</string>
+    <string name="board_column_empty">اینجا چیزی نیست</string>
+    <string name="board_reopen_action">باز کردن دوباره</string>
 </resources>

@@ -11,6 +11,7 @@ import me.parham1995.notes.data.database.PendingEditEntity
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.markdown.RepeatNotWorkedOut
 import me.parham1995.notes.markdown.TaskLine
 import me.parham1995.notes.markdown.TaskNotFound
 import me.parham1995.notes.markdown.VaultEdits
@@ -38,9 +39,19 @@ enum class EditKind {
     /**
      * Move a task to another day. The anchor is the task as the index read
      * it, and the text is its recorded line and the date -- or the line alone,
-     * which takes off a scheduled date an earlier move added.
+     * which takes off a scheduled date an earlier move added, or the line and
+     * [UNDATED], which takes off every date it is filed by (the board's No
+     * Date).
      */
     RESCHEDULE,
+
+    /**
+     * Set a task's status, as the board moves it between columns. The anchor
+     * is the task as the index read it, and the text is its recorded line,
+     * the day it was asked on, and the status character last -- which can be
+     * a space, so it is the one field not split on.
+     */
+    SET_STATUS,
 
     /** Write a generated note whole. The text is the note; there is no anchor. */
     REPLACE_FILE,
@@ -48,6 +59,9 @@ enum class EditKind {
 
     companion object {
         fun parse(raw: String?): EditKind? = entries.firstOrNull { it.name == raw }
+
+        /** A [RESCHEDULE] to no day at all. Not a date, so it cannot be read as one. */
+        const val UNDATED = "-"
     }
 }
 
@@ -214,6 +228,7 @@ class VaultWriteRepository
         suspend fun rescheduleTask(
             task: TaskRow,
             date: String?,
+            undated: Boolean = false,
         ): Rescheduling {
             val vault = writableVault(task.vaultId) ?: return Rescheduling(refusal(task.vaultId))
             val text =
@@ -238,16 +253,54 @@ class VaultWriteRepository
                     path = task.notePath,
                     kind = EditKind.RESCHEDULE,
                     anchor = task.text,
-                    replacement = listOfNotNull("$at", date).joinToString(" "),
+                    replacement = listOfNotNull("$at", date ?: EditKind.UNDATED.takeIf { undated }).joinToString(" "),
                     summary =
                         if (date == null) {
-                            "docs(tasks): unschedule \"${task.text.take(SUBJECT)}\""
+                            "docs(tasks): ${if (undated) "undate" else "unschedule"} \"${task.text.take(SUBJECT)}\""
                         } else {
                             "docs(tasks): move \"${task.text.take(SUBJECT)}\" to $date"
                         },
                 )
             val landed = result == WriteResult.Pushed || result is WriteResult.Queued
             return Rescheduling(result, back.takeIf { landed })
+        }
+
+        /**
+         * Sets [task]'s status to [status] -- ` `, `/`, `x` or `-` -- as the
+         * board does to a card moved to another column. To done from open is
+         * the tick [completeTask] makes, a repeat's next occurrence and all;
+         * the rule is [VaultEdits.setStatus].
+         *
+         * Found the way a tick finds it and queued the same way, as the task
+         * and the status rather than the line to write, so a move made
+         * offline still lands on the task after the note changed around it.
+         */
+        suspend fun setTaskStatus(
+            task: TaskRow,
+            status: Char,
+        ): WriteResult {
+            val vault = writableVault(task.vaultId) ?: return refusal(task.vaultId)
+            val text =
+                files.readText(vault.id, task.notePath)
+                    ?: return WriteResult.Refused("${task.notePath} is not on the device")
+            val at =
+                TaskLine.locate(text.lines(), task.line, task.text)
+                    ?: return WriteResult.Refused(TaskNotFound(task.text).message.orEmpty())
+            val verb =
+                when (status) {
+                    'x' -> "complete"
+                    '-' -> "cancel"
+                    '/' -> "start"
+                    else -> "reopen"
+                }
+            return apply(
+                vault = vault,
+                path = task.notePath,
+                kind = EditKind.SET_STATUS,
+                anchor = task.text,
+                replacement = "$at ${today()} $status",
+                summary = "docs(tasks): $verb \"${task.text.take(SUBJECT)}\"",
+            )
         }
 
         private fun isDate(value: String?): Boolean = value != null && runCatching { LocalDate.parse(value) }.isSuccess
@@ -425,6 +478,8 @@ class VaultWriteRepository
                         // Said now, while the person is looking, rather than
                         // queued to fail five times out of sight.
                         return@tryWithVault WriteResult.Refused(gone.message.orEmpty())
+                    } catch (repeat: RepeatNotWorkedOut) {
+                        return@tryWithVault WriteResult.Refused(repeat.message.orEmpty())
                     } ?: return@tryWithVault WriteResult.Unchanged
 
                 val id = pending.insert(edit)
@@ -516,7 +571,17 @@ class VaultWriteRepository
                 EditKind.ADD_UNDER -> VaultEdits.addUnder(edit.anchor, edit.text)
                 EditKind.RESCHEDULE -> {
                     val (line, date) = edit.text.split(' ', limit = 2).let { it[0] to it.getOrNull(1) }
-                    VaultEdits.reschedule(line.toInt(), edit.anchor, date?.takeIf { it.isNotBlank() })
+                    val undated = date == EditKind.UNDATED
+                    VaultEdits.reschedule(
+                        line.toInt(),
+                        edit.anchor,
+                        date?.takeIf { it.isNotBlank() && !undated },
+                        undated,
+                    )
+                }
+                EditKind.SET_STATUS -> {
+                    val (line, day, status) = edit.text.split(' ', limit = 3)
+                    VaultEdits.setStatus(line.toInt(), edit.anchor, status.single(), day)
                 }
                 EditKind.REPLACE_FILE -> VaultEdits.replaceFile(edit.text)
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)

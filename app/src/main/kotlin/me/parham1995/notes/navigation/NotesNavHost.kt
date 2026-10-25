@@ -49,6 +49,7 @@ import kotlinx.serialization.Serializable
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Destination
 import me.parham1995.notes.data.StartScreen
+import me.parham1995.notes.feature.board.BoardScreen
 import me.parham1995.notes.feature.browser.BrowserScreen
 import me.parham1995.notes.feature.calendar.CalendarScreen
 import me.parham1995.notes.feature.graph.GraphScreen
@@ -84,6 +85,10 @@ data class BrowseRoute(
 
 @Serializable
 object TasksRoute
+
+/** The tasks as a board, pushed over the Tasks tab the way Tags is over Browse. */
+@Serializable
+object BoardRoute
 
 @Serializable
 object CalendarRoute
@@ -579,7 +584,18 @@ private fun NavGraphBuilder.graph(
         )
     }
     screen<TasksRoute> {
-        TasksScreen(onOpenNote = { open.note(it, fresh = true) })
+        TasksScreen(
+            onOpenNote = { open.note(it, fresh = true) },
+            onOpenBoard = { navController.navigate(BoardRoute) { launchSingleTop = true } },
+        )
+    }
+    screen<BoardRoute> {
+        BoardScreen(
+            onBack = { navController.popBackStack() },
+            // At the task's own heading: the nearest place in the note the
+            // reader can be sent to by name.
+            onOpenNote = { id, heading -> open.note(id, fresh = true, heading = heading) },
+        )
     }
     screen<CalendarRoute> {
         CalendarScreen(

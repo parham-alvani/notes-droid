@@ -395,6 +395,32 @@ class MigrationTest {
         )
 
     @Test
+    fun `tasks gain an empty priority and cancelled date, and keep everything they had`() =
+        withData(
+            version = 15,
+            migration = NotesDatabase.MIGRATION_15_16,
+            seed = { connection ->
+                connection.execSQL(
+                    "INSERT INTO tasks (id, noteId, text, state, section, blockIndex, line, ordinal, open, " +
+                        "actionableOn, scheduled, due, done, recurring) VALUES " +
+                        "(1, 1, 'water the plants', 'UNCHECKED', 'Home', 0, 4, 0, 1, " +
+                        "'2026-10-25', '2026-10-25', NULL, NULL, NULL), " +
+                        "(2, 2, 'water the plants', 'CANCELLED', 'Home', 0, 4, 0, 0, " +
+                        "NULL, NULL, NULL, NULL, NULL)",
+                )
+            },
+            check = { connection ->
+                assertThat(
+                    texts(
+                        connection,
+                        "SELECT id || ':' || state || ':' || line || ':' || IFNULL(priority, '-') || ':' || " +
+                            "IFNULL(cancelled, '-') FROM tasks ORDER BY id",
+                    ),
+                ).containsExactly("1:UNCHECKED:4:-:-", "2:CANCELLED:4:-:-").inOrder()
+            },
+        )
+
+    @Test
     fun `folds arrive empty, and two vaults' notes keep where they were left`() =
         withData(
             version = 14,

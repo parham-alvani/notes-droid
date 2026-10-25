@@ -414,6 +414,104 @@ class VaultWriteRepositoryTest {
             assertThat(database.pendingEditDao().all()).isEmpty()
         }
 
+    /** Every task in the vault, closed ones too, as the board reads them. */
+    private suspend fun everyTask() =
+        database
+            .taskDao()
+            .inVault(vaultId)
+            .first()
+
+    @Test
+    fun `a card moved on the board changes its status, is indexed at once, and leaves the queue`() =
+        runTest {
+            val path = "Tasks/Home.md"
+            val task = seedTask(path, "## Home\n\n- [ ] call the bank ⏫ ^bank\n")
+            assertThat(everyTask().single().priority).isEqualTo("⏫")
+
+            assertThat(writes.setTaskStatus(task, '/')).isEqualTo(WriteResult.Pushed)
+            assertThat(transport.content).isEqualTo("## Home\n\n- [/] call the bank ⏫ ^bank\n")
+            assertThat(everyTask().single().state).isEqualTo("IN_PROGRESS")
+
+            val doing = everyTask().single().toTaskRow()
+            assertThat(writes.setTaskStatus(doing, '-')).isEqualTo(WriteResult.Pushed)
+            val today =
+                java.time.LocalDate
+                    .now()
+                    .toString()
+            assertThat(transport.content).isEqualTo("## Home\n\n- [-] call the bank ⏫ ❌ $today ^bank\n")
+            assertThat(everyTask().single().cancelled).isEqualTo(today)
+            assertThat(transport.messages.last()).isEqualTo("docs(tasks): cancel \"call the bank\"")
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun `a status move made offline is queued as itself, and lands after the note grew above it`() =
+        runTest {
+            val path = "Tasks/Home.md"
+            val task = seedTask(path, "## Home\n\n- [ ] call the bank\n")
+            transport.offline = true
+
+            assertThat(writes.setTaskStatus(task, '/')).isInstanceOf(WriteResult.Queued::class.java)
+            assertThat(files.readText(vaultId, path)).isEqualTo("## Home\n\n- [/] call the bank\n")
+            val queued = database.pendingEditDao().all().single()
+            assertThat(queued.kind).isEqualTo(EditKind.SET_STATUS.name)
+            assertThat(queued.anchor).isEqualTo("call the bank")
+
+            transport.offline = false
+            transport.content = "## Home\n\nA paragraph written at the desk.\n\n- [ ] call the bank\n"
+
+            assertThat(writes.flush()).isEqualTo(1)
+            assertThat(
+                transport.content,
+            ).isEqualTo("## Home\n\nA paragraph written at the desk.\n\n- [/] call the bank\n")
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun `a repeat moved to done is ticked as a tap ticks it, and a rule the app cannot follow is refused`() =
+        runTest {
+            val path = "Tasks/Home.md"
+            val task = seedTask(path, "- [ ] water the plants 🔁 every week 📅 2026-10-25\n")
+            val today =
+                java.time.LocalDate
+                    .now()
+                    .toString()
+
+            assertThat(writes.setTaskStatus(task, 'x')).isEqualTo(WriteResult.Pushed)
+            assertThat(transport.content!!.lines().first()).startsWith("- [ ] water the plants 🔁 every week 📅 ")
+            assertThat(transport.content!!.lines()[1])
+                .isEqualTo("- [x] water the plants 🔁 every week 📅 2026-10-25 ✅ $today")
+
+            files.clear()
+            val odd = seedTask("Tasks/Odd.md", "- [ ] water the fern 🔁 when the soil is dry 📅 2026-10-25\n")
+            assertThat(writes.setTaskStatus(odd, 'x')).isInstanceOf(WriteResult.Refused::class.java)
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun `no date takes every day off the task, through the queue too`() =
+        runTest {
+            val path = "Tasks/Home.md"
+            val task = seedTask(path, "- [ ] call the bank ⏳ 2026-10-20 📅 2026-10-27\n")
+            transport.offline = true
+
+            val moved = writes.rescheduleTask(task, null, undated = true)
+
+            assertThat(moved.result).isInstanceOf(WriteResult.Queued::class.java)
+            assertThat(files.readText(vaultId, path)).isEqualTo("- [ ] call the bank\n")
+            assertThat(
+                database
+                    .pendingEditDao()
+                    .all()
+                    .single()
+                    .text,
+            ).isEqualTo("0 ${EditKind.UNDATED}")
+
+            transport.offline = false
+            assertThat(writes.flush()).isEqualTo(1)
+            assertThat(transport.content).isEqualTo("- [ ] call the bank\n")
+        }
+
     private companion object {
         const val SCRATCHPAD = "Scratchpad.md"
         const val WEEK = "Calendar/2026-W43.md"

@@ -20,6 +20,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -80,6 +81,7 @@ import java.time.LocalDateTime
 @Composable
 fun TasksScreen(
     onOpenNote: (Long) -> Unit,
+    onOpenBoard: () -> Unit = {},
     viewModel: TasksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -182,6 +184,14 @@ fun TasksScreen(
                     // so the file is the project.
                     if (state.sources.size > 1) {
                         SourceFilter(state, viewModel)
+                    }
+                    // The same tasks as columns, closed ones included.
+                    IconButton(onClick = onOpenBoard) {
+                        LucideGlyph(
+                            "square-kanban",
+                            size = 22.dp,
+                            contentDescription = stringResource(R.string.board_title),
+                        )
                     }
                 },
             )

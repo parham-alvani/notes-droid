@@ -54,10 +54,12 @@ object TaskLine {
         today: String,
     ): String? {
         val match = LINE.find(raw) ?: return null
-        val (prefix, state, body) = match.destructured
+        val (prefix, state, whole) = match.destructured
         if (!isOpenStatus(state)) return null
-        if (body.contains(DONE)) return null
-        return "$prefix[x] ${body.trimEnd()} $DONE $today"
+        if (whole.contains(DONE)) return null
+        // A block id stays the line's last word: that is what makes it one.
+        val (body, id) = splitBlockId(whole)
+        return "$prefix[x] ${body.trimEnd()} $DONE $today$id"
     }
 
     /**
@@ -82,8 +84,12 @@ object TaskLine {
         today: String,
     ): List<String>? {
         val match = LINE.find(raw) ?: return null
-        val (prefix, state, body) = match.destructured
+        val (prefix, state, whole) = match.destructured
         if (!isOpenStatus(state)) return null
+        // The block id names the line that was there, which is the one being
+        // finished; the next occurrence is a new line and gets none, since
+        // two lines cannot answer to one id.
+        val (body, id) = splitBlockId(whole)
 
         val split = TaskMetadata.split(body)
         val rule = split.meta.firstOrNull { it.emoji == RECUR }?.value ?: return null
@@ -102,8 +108,52 @@ object TaskLine {
                 if (meta.emoji in MOVED && date != null) meta.copy(value = date.plusDays(shift).toString()) else meta
             }
         val next = prefix + "[ ] " + rebuild(split.text, moved)
-        val done = prefix + "[x] " + body.trimEnd() + " " + DONE + " " + today
+        val done = prefix + "[x] " + body.trimEnd() + " " + DONE + " " + today + id
         return listOf(next, done)
+    }
+
+    /**
+     * The line with its status set to [status], as the board writes a task
+     * dropped on another column; null when it already has that status or is
+     * not a task.
+     *
+     * To done from open is the tick, exactly as a tap makes it -- [complete],
+     * or [completeRecurring] for a repeat, which is null here when the rule is
+     * not one the app works out (the caller says so rather than dropping the
+     * repeat). Otherwise the status changes and the closing dates follow it:
+     * `✅` and `❌` come off, and a task done or cancelled from another closed
+     * state, or cancelled at all, is dated [today]. A block id stays last.
+     */
+    fun withStatus(
+        raw: String,
+        status: Char,
+        today: String,
+    ): List<String>? {
+        val match = LINE.find(raw) ?: return null
+        val current = match.groupValues[2].single()
+        if (current == status || (status == 'x' && current == 'X')) return null
+        if (status == 'x' && isOpenStatus(current.toString())) {
+            return if (isRecurring(raw)) completeRecurring(raw, today) else complete(raw, today)?.let(::listOf)
+        }
+        val parts = parts(raw) ?: return null
+        val at = match.groups[2]!!.range.first
+        val head = parts.head.replaceRange(at, at + 1, status.toString())
+        var rest = parts.rest
+        for (emoji in listOf(DONE, CANCELLED)) rest = withoutField(rest, emoji) ?: rest
+        val closing =
+            when (status) {
+                'x', 'X' -> DONE
+                '-' -> CANCELLED
+                else -> null
+            }
+        if (closing != null) rest = rest.trimEnd() + " " + closing + " " + today
+        return listOf(head + rest + parts.tail)
+    }
+
+    /** The task's text and metadata, and its trailing ` ^block-id` or nothing. */
+    private fun splitBlockId(body: String): Pair<String, String> {
+        val tail = BLOCK_TAIL.find(body)?.value.orEmpty()
+        return body.substring(0, body.length - tail.length) to tail.trimEnd()
     }
 
     /**
@@ -201,12 +251,39 @@ object TaskLine {
      */
     fun unschedule(raw: String): String? {
         val parts = parts(raw) ?: return null
-        val (_, range) = parts.find(SCHEDULED) ?: return null
-        val symbol = parts.rest.lastIndexOf(SCHEDULED, range.first)
-        var start = symbol
-        while (start > 0 && parts.rest[start - 1].isWhitespace()) start--
-        val rest = parts.rest.removeRange(start, range.last + 1)
+        val rest = withoutField(parts.rest, SCHEDULED) ?: return null
         return parts.head + rest + parts.tail
+    }
+
+    /**
+     * Takes every date the task is filed by off the line -- due and
+     * scheduled -- so that it has no day at all; null when it has neither.
+     *
+     * What the board's No Date column writes. [unschedule] is not enough
+     * there: a task with a due date keeps its day without its scheduled one.
+     * The start date and the history (created, done) stay.
+     */
+    fun undate(raw: String): String? {
+        val parts = parts(raw) ?: return null
+        var rest = parts.rest
+        FILED_BY.forEach { emoji -> rest = withoutField(rest, emoji) ?: rest }
+        if (rest == parts.rest) return null
+        return parts.head + rest + parts.tail
+    }
+
+    /**
+     * [rest] without its [emoji] field, the space before it and its value,
+     * or null when it has no such field.
+     */
+    private fun withoutField(
+        rest: String,
+        emoji: String,
+    ): String? {
+        val (_, range) = Parts("", rest, "").find(emoji) ?: return null
+        val symbol = rest.lastIndexOf(emoji, range.first)
+        var start = symbol
+        while (start > 0 && rest[start - 1].isWhitespace()) start--
+        return rest.removeRange(start, maxOf(range.last + 1, symbol + emoji.length))
     }
 
     /**
@@ -284,6 +361,7 @@ object TaskLine {
     private val CLOSED = setOf("x", "X", "-")
 
     private const val DONE = "✅"
+    private const val CANCELLED = "❌"
     private const val RECUR = "🔁"
     private const val SCHEDULED = "⏳"
     private const val DUE = "📅"
