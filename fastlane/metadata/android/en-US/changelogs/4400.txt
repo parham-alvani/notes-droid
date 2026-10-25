@@ -1,0 +1,1 @@
+A folder with a logo.svg (or logo.png) inside it now shows that logo as its icon, for example a company's logo on its folder. Daftar on the Mac shows the same logos.
