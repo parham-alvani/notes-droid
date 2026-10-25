@@ -4,6 +4,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -93,6 +94,12 @@ internal fun annotate(
     return text to formulas
 }
 
+/**
+ * [marked] is true inside a highlight: there bold, italic, strike, code and
+ * links keep their weight, slant and lines but take the highlight's text
+ * colour, because their own colours were picked for the page, not for the
+ * highlight's fill, and did not read on it.
+ */
 private fun appendInlines(
     builder: AnnotatedString.Builder,
     nodes: List<MdInline>,
@@ -100,7 +107,10 @@ private fun appendInlines(
     actions: InlineActions,
     brokenLinks: Set<String>,
     formulas: MutableList<String>,
+    marked: Boolean = false,
 ) {
+    fun own(color: Color): Color = if (marked) Color.Unspecified else color
+
     nodes.forEach { node ->
         when (node) {
             is MdInline.Text -> builder.append(node.text)
@@ -111,34 +121,34 @@ private fun appendInlines(
                     SpanStyle(
                         fontFamily = FontFamily.Monospace,
                         background = colors.surfaceVariant,
-                        color = colors.markup.Raw,
+                        color = own(colors.markup.Raw),
                         fontStyle = FontStyle.Italic,
                     ),
                 ) { append(node.code) }
 
             // @markup.italic
             is MdInline.Emphasis ->
-                builder.withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = colors.markup.Italic)) {
-                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
+                builder.withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = own(colors.markup.Italic))) {
+                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked)
                 }
 
             // @markup.strong
             is MdInline.Strong ->
-                builder.withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = colors.markup.Strong)) {
-                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
+                builder.withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = own(colors.markup.Strong))) {
+                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked)
                 }
 
             // @markup.strike
             is MdInline.Strikethrough ->
                 builder.withStyle(
-                    SpanStyle(textDecoration = TextDecoration.LineThrough, color = colors.markup.Strike),
+                    SpanStyle(textDecoration = TextDecoration.LineThrough, color = own(colors.markup.Strike)),
                 ) {
-                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
+                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked)
                 }
 
             is MdInline.Highlight ->
                 builder.withStyle(highlightStyle(node.color, colors)) {
-                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
+                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked = true)
                 }
 
             is MdInline.Link -> {
@@ -147,7 +157,7 @@ private fun appendInlines(
                         tag = node.destination,
                         styles =
                             TextLinkStyles(
-                                SpanStyle(color = colors.primary, textDecoration = TextDecoration.Underline),
+                                SpanStyle(color = own(colors.primary), textDecoration = TextDecoration.Underline),
                             ),
                     ) {
                         // Only a scheme makes it the web. Everything else was
@@ -159,7 +169,7 @@ private fun appendInlines(
                         }
                     }
                 builder.withLink(link) {
-                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas)
+                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked)
                 }
             }
 
@@ -172,8 +182,13 @@ private fun appendInlines(
                         // point.
                         SpanStyle(color = colors.outline, textDecoration = TextDecoration.LineThrough)
                     } else {
-                        // @markup.link.label
-                        SpanStyle(color = colors.markup.Link)
+                        // @markup.link.label; underlined on a highlight, where
+                        // it takes the highlight's colour.
+                        if (marked) {
+                            SpanStyle(textDecoration = TextDecoration.Underline)
+                        } else {
+                            SpanStyle(color = colors.markup.Link)
+                        }
                     }
                 val link =
                     LinkAnnotation.Clickable(tag = node.target, styles = TextLinkStyles(style)) {

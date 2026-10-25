@@ -133,6 +133,23 @@ class MarkdownParserTest {
     }
 
     @Test
+    fun `bold and italic nest inside and around a highlight`() {
+        val inlines =
+            parse("==a **bold** and *it* word== then ***==both==***")
+                .blocks
+                .filterIsInstance<MdBlock.Paragraph>()
+                .single()
+                .inlines
+        val highlight = inlines.first() as MdInline.Highlight
+        assertThat(highlight.children.map { it::class.simpleName })
+            .containsExactly("Text", "Strong", "Text", "Emphasis", "Text")
+            .inOrder()
+        val both = inlines.last() as MdInline.Emphasis
+        val strong = both.children.single() as MdInline.Strong
+        assertThat(strong.children.single()).isInstanceOf(MdInline.Highlight::class.java)
+    }
+
+    @Test
     fun `a colour emoji anywhere but the start is text`() {
         val highlight =
             parse("==see 🟢 here== and ==🟣==")
