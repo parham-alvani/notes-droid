@@ -172,6 +172,36 @@ class RendererScreenshotTest {
         }
     }
 
+    private val finding =
+        """
+        ## Pond
+
+        The heron came back to the pond, and the pond was still.
+
+        ```yaml
+        pond: still
+        ```
+        """.trimIndent()
+
+    /**
+     * Find in the note: every hit tinted, the one the bar is on solid, in
+     * prose and on the code panel alike.
+     */
+    @Test
+    fun `find marks every hit and the current one`() {
+        val parsed = MarkdownParser.parseNote(finding).blocks
+        val paragraph = parsed.indexOfFirst { it is MdBlock.Paragraph }
+        page {
+            MarkdownDocument(
+                blocks = parsed,
+                actions = RenderActions(),
+                find = FindTarget("pond", block = paragraph, ordinal = 1),
+            )
+        }
+        awaitHighlight("pond: still")
+        capture("find")
+    }
+
     @Test
     fun `persian prose reads right to left`() {
         page { Note(persian) }

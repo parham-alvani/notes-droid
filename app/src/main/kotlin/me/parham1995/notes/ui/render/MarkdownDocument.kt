@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -55,6 +56,12 @@ fun MarkdownDocument(
     folded: Set<Int> = emptySet(),
     /** Folds or unfolds the heading at a position. Null, and headings do not fold. */
     onToggleFold: ((Int) -> Unit)? = null,
+    /**
+     * What find in the note is looking for and which hit it is on. Every hit
+     * is marked on the page and the current one stands out; null while find
+     * is closed.
+     */
+    find: FindTarget? = null,
 ) {
     val reading = LocalReading.current
     // The size steps are coarse and snap once per gesture, so the snap is
@@ -119,7 +126,9 @@ fun MarkdownDocument(
                         } else {
                             null
                         }
-                    Box(tint) { MdBlockView(block, actions, brokenLinks, fold = fold) }
+                    CompositionLocalProvider(LocalFind provides FindMarks.forBlock(find, index, block)) {
+                        Box(tint) { MdBlockView(block, actions, brokenLinks, fold = fold) }
+                    }
                 }
             }
         }

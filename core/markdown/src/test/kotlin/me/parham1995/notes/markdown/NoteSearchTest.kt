@@ -116,4 +116,42 @@ class NoteSearchTest {
         assertThat(hit.preview.substring(hit.previewStart, hit.previewEnd))
             .isEqualTo("\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645")
     }
+
+    @Test
+    fun `ranges are in the text's own offsets, every one of them`() {
+        val text = "Rate here, rate there"
+        val ranges = NoteSearch.ranges(text, "rate")
+
+        assertThat(ranges.map { text.substring(it) }).containsExactly("Rate", "rate").inOrder()
+    }
+
+    @Test
+    fun `ranges carry a folded match back over a joiner the query left out`() {
+        val text = "a \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645 b"
+        val range = NoteSearch.ranges(text, "\u0645\u06CC\u062E\u0648\u0627\u0647\u0645").single()
+
+        assertThat(text.substring(range)).isEqualTo("\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645")
+    }
+
+    @Test
+    fun `a blank query marks nothing`() {
+        assertThat(NoteSearch.ranges("anything at all", "  ")).isEmpty()
+    }
+
+    @Test
+    fun `the page marks as many hits as the bar counts`() {
+        val markdown = "one needle, two needle\n\nand a third needle\n"
+        val blocks = MarkdownParser.parseNote(markdown).blocks
+        val counted = NoteSearch.find(blocks, "needle")
+        val marked =
+            blocks.filterIsInstance<MdBlock.Paragraph>().sumOf {
+                NoteSearch
+                    .ranges(
+                        plainText(it.inlines),
+                        "needle",
+                    ).size
+            }
+
+        assertThat(marked).isEqualTo(counted.size)
+    }
 }

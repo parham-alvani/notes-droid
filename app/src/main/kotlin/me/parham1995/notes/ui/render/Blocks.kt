@@ -337,8 +337,11 @@ private fun CodeBlockView(
                 // Code is left-to-right whatever the surrounding prose does, and
                 // scrolls on its own rather than wrapping mid-statement.
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    val find = LocalFind.current
+                    val findColors = findColors()
+                    val code = highlighted ?: AnnotatedString(block.code)
                     Text(
-                        text = highlighted ?: AnnotatedString(block.code),
+                        text = remember(code, find, findColors) { code.withFindMarks(find, findColors) },
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         fontFamily = FontFamily.Monospace,
                         // Code is text too: the reader's size reaches it, and

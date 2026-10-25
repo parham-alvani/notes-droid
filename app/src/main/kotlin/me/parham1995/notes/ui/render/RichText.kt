@@ -72,6 +72,11 @@ fun RichText(
         remember(annotated, contacts, actions) {
             annotated.withContacts(contacts, colors) { actions.onExternalLink(it) }
         }
+    // Find's marks go on last, over everything the text already carries, and
+    // only while find is open: outside it this is the string above, as it was.
+    val find = LocalFind.current
+    val findColors = findColors()
+    val marked = remember(linked, find, findColors) { linked.withFindMarks(find, findColors) }
     val color = colors.onSurface
     val density = LocalDensity.current
     val sizePx = with(density) { style.fontSize.takeIf { it.isSpecified() }?.toPx() ?: DEFAULT_SIZE_PX }
@@ -118,8 +123,8 @@ fun RichText(
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val onDefine = actions.onDefine.takeIf { LocalReading.current.holdToDefine }
     Text(
-        text = linked,
-        modifier = modifier.holdToDefine(linked.text, { layout }, onDefine),
+        text = marked,
+        modifier = modifier.holdToDefine(marked.text, { layout }, onDefine),
         style = style,
         textAlign = textAlign,
         inlineContent = inlineContent,

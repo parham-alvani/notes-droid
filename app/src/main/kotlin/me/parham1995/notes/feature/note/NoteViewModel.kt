@@ -463,19 +463,29 @@ class NoteViewModel
         }
 
         /**
-         * Records where the note was left.
+         * Records where note [noteId] was left.
          *
-         * Called as the screen goes away rather than on every scroll: this is a
-         * write per note read, not one per frame. [position] is the list's
-         * first visible item, which is translated to a block here.
+         * Called each time a scroll settles, not on every frame, and only for
+         * the note on screen: the screen's list is shared by every note it
+         * shows, so a position reported once another note has started loading
+         * is that note's list, not this one's. [position] is the list's first
+         * visible item, which is translated to a block here.
+         *
+         * It used to be written only as the screen went away, and by then a
+         * tab switch or a followed link had already emptied the state, so the
+         * place was dropped -- as it was whenever the app was swept away
+         * mid-note, because nothing is disposed in a process that is killed.
          */
-        fun rememberScroll(position: Int) {
+        fun rememberScroll(
+            noteId: Long,
+            position: Int,
+        ) {
             val current = _state.value
-            val id = current.note?.id ?: return
+            if (current.note?.id != noteId) return
             // The list's first item is a position among what is shown, and
             // with a section folded that is not the block's own position.
             val block = current.shownBlocks.getOrElse(position) { position }
-            viewModelScope.launch { repository.rememberScroll(id, block) }
+            viewModelScope.launch { repository.rememberScroll(noteId, block) }
         }
 
         /** The note's own markdown, for handing to another app. */

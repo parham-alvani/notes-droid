@@ -176,7 +176,9 @@ internal fun NoteEmbedView(
                             ),
                     )
                 }
-            CompositionLocalProvider(LocalEmbedDepth provides depth + 1) {
+            // Find counts the note on screen, not the ones drawn inside it,
+            // so an embed's text is not marked with hits the bar never counted.
+            CompositionLocalProvider(LocalEmbedDepth provides depth + 1, LocalFind provides null) {
                 Column(
                     Modifier.padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),

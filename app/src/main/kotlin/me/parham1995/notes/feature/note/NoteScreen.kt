@@ -10,7 +10,6 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -51,6 +50,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,6 +72,8 @@ import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
@@ -159,6 +161,9 @@ fun NoteScreen(
     // shows, which need not be the note's.
     var zoomed by remember(noteId) { mutableStateOf<ZoomedImage?>(null) }
     var finding by remember(noteId) { mutableStateOf(false) }
+    // Which hit the find bar is on. The screen's rather than the bar's, so the
+    // page can draw that one apart from the rest.
+    var findAt by remember(noteId) { mutableIntStateOf(0) }
     var peeking by remember { mutableStateOf<LinkTarget?>(null) }
     var peekBroken by remember { mutableStateOf<String?>(null) }
     // A heading to land on once the note it belongs to has loaded.
@@ -310,28 +315,54 @@ fun NoteScreen(
             headingIn = null
         }
     }
+    // Whether this note has had its first landing: where it was left is for
+    // arriving, not for every heading asked for once it is being read.
+    var landed by remember(loadedId) { mutableStateOf(false) }
     LaunchedEffect(loadedId, pendingHeading) {
         val note = state.note ?: return@LaunchedEffect
-        // A heading asked for wins over where the note was left: it is the
-        // reason the note was opened at all.
-        val target = blockForHeading(note.headings, pendingHeading, note.blockRefs)
-        when {
-            target != null -> {
-                listState.scrollToItem(viewModel.reveal(target))
-                pendingHeading = null
-            }
-            pendingHeading != null -> pendingHeading = null // renamed since; stop asking
-            note.scrollIndex > 0 -> listState.scrollToItem(viewModel.reveal(note.scrollIndex))
-        }
+        if (note.id != loadedId) return@LaunchedEffect
+        val go = landing(note.headings, pendingHeading, note.blockRefs, note.scrollIndex, firstLanding = !landed)
+        if (go is Landing.To) listState.scrollToItem(viewModel.reveal(go.block))
+        pendingHeading = null
+        landed = true
     }
-    DisposableEffect(loadedId) {
-        onDispose {
-            if (loadedId != null) viewModel.rememberScroll(listState.firstVisibleItemIndex)
-        }
+    // Where the note is left, each time a scroll comes to rest on another
+    // block -- not once as the screen goes, which a followed link, a tab
+    // switch or the app being swept away never reached. Only after the first
+    // landing, so the place the last note was left is not written to this one.
+    LaunchedEffect(loadedId, landed) {
+        val id = loadedId ?: return@LaunchedEffect
+        if (!landed) return@LaunchedEffect
+        snapshotFlow { if (listState.isScrollInProgress) null else listState.firstVisibleItemIndex }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { viewModel.rememberScroll(id, it) }
     }
     // A new note starts with its title showing, however far down the last one
     // had pushed the bar.
     LaunchedEffect(loadedId) { topBar.state.heightOffset = 0f }
+
+    // The block at the top of the screen, by its position in the note.
+    fun topBlock(): Int = state.shownBlocks.getOrElse(listState.firstVisibleItemIndex) { 0 }
+
+    // A find hit brought on screen -- unless it already is, so stepping through
+    // three hits in one paragraph does not jerk the page under them.
+    suspend fun bringToFind(block: Int) {
+        val position = viewModel.reveal(block)
+        val info = listState.layoutInfo
+        val top = info.visibleItemsInfo.firstOrNull { it.index == position }?.offset
+        if (findNeedsScroll(top, info.viewportStartOffset, info.viewportEndOffset)) {
+            listState.animateScrollToItem(position)
+        }
+    }
+
+    // A new word, or the note's text changed under it: start from the first
+    // hit at or below the top of the screen, the way the Mac reader does.
+    LaunchedEffect(state.matches) {
+        val blocks = state.matches.map { it.blockIndex }
+        findAt = findStart(blocks, topBlock())
+        blocks.getOrNull(findAt)?.let { bringToFind(it) }
+    }
 
     val snackbar = remember { SnackbarHostState() }
     val message = state.message?.text()
@@ -803,11 +834,14 @@ fun NoteScreen(
                                 FindBar(
                                     query = state.findQuery,
                                     matches = state.matches.size,
+                                    at = findAt,
                                     onQueryChange = viewModel::find,
-                                    onJump = { index ->
-                                        scope.launch { listState.animateScrollToItem(viewModel.reveal(index)) }
+                                    onStep = { direction ->
+                                        findAt = stepFind(findAt, state.matches.size, direction)
+                                        state.matches.getOrNull(findAt)?.let { hit ->
+                                            scope.launch { bringToFind(hit.blockIndex) }
+                                        }
                                     },
-                                    matchBlocks = state.matches.map { it.blockIndex },
                                 )
                             }
 
@@ -852,6 +886,16 @@ fun NoteScreen(
                                                         spoken = spokenBlock,
                                                         folded = state.folded,
                                                         onToggleFold = viewModel::toggleFold,
+                                                        find =
+                                                            if (finding) {
+                                                                findTarget(
+                                                                    state.findQuery,
+                                                                    state.matches.map { it.blockIndex },
+                                                                    findAt,
+                                                                )
+                                                            } else {
+                                                                null
+                                                            },
                                                     )
                                                 }
                                             }
@@ -992,38 +1036,18 @@ fun NoteScreen(
         }
 
         if (showOutline) {
-            ModalBottomSheet(onDismissRequest = { showOutline = false }, properties = sheetProperties()) {
-                val headings = state.note?.headings.orEmpty()
-                if (headings.isEmpty()) {
-                    Text(
-                        stringResource(R.string.note_no_headings),
-                        Modifier.padding(24.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                } else {
-                    LazyColumn {
-                        items(headings, key = { it.id }) { heading ->
-                            Text(
-                                text = heading.text,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            showOutline = false
-                                            scope.launch {
-                                                listState.animateScrollToItem(viewModel.reveal(heading.blockIndex))
-                                            }
-                                        }
-                                        // Indent by level so the outline reads as a
-                                        // structure rather than a flat list.
-                                        .padding(start = (12 + (heading.level - 1) * 12).dp, end = 16.dp)
-                                        .padding(vertical = 10.dp),
-                            )
-                        }
-                    }
-                }
-            }
+            val headings = state.note?.headings.orEmpty()
+            OutlineSheet(
+                headings = headings,
+                // Read once, as the sheet opens: the page is behind it and
+                // does not move while it is up.
+                current = remember(headings) { currentHeading(headings, topBlock()) },
+                onDismiss = { showOutline = false },
+                onJump = { heading ->
+                    showOutline = false
+                    scope.launch { listState.animateScrollToItem(viewModel.reveal(heading.blockIndex)) }
+                },
+            )
         }
 
         if (showBacklinks) {

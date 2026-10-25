@@ -28,39 +28,54 @@ object NoteSearch {
         blocks: List<MdBlock>,
         query: String,
     ): List<NoteMatch> {
+        val matches = mutableListOf<NoteMatch>()
+        blocks.forEachIndexed { index, block ->
+            val text = block.searchableText()
+            for (hit in ranges(text, query)) {
+                val start = (hit.first - CONTEXT).coerceAtLeast(0)
+                val end = (hit.last + 1 + CONTEXT).coerceAtMost(text.length)
+                matches +=
+                    NoteMatch(
+                        blockIndex = index,
+                        preview = text.substring(start, end),
+                        previewStart = hit.first - start,
+                        previewEnd = hit.last + 1 - start,
+                    )
+            }
+        }
+        return matches
+    }
+
+    /**
+     * Where [query] appears in [text], in [text]'s own offsets.
+     *
+     * The same matching [find] counts with, so the reader can mark on the
+     * page exactly the hits the find bar numbers -- a word typed on a Persian
+     * keyboard is marked where the note wrote it with Arabic letters.
+     */
+    fun ranges(
+        text: String,
+        query: String,
+    ): List<IntRange> {
         // Folded the way search across the vault folds it, so a word typed on
         // a Persian keyboard is found where the note wrote it with Arabic
         // letters, or with a zero-width joiner the query left out. The match
         // is made on the folded text and carried back, so the preview and its
         // highlight are in the note's own letters.
         val term = SearchText.normalize(query.trim())
-        if (term.isEmpty()) return emptyList()
-
-        val matches = mutableListOf<NoteMatch>()
-        blocks.forEachIndexed { index, block ->
-            val text = block.searchableText()
-            if (text.isEmpty()) return@forEachIndexed
-            val folded = SearchText.mapped(text)
-
-            var from = 0
-            while (true) {
-                val found = folded.text.indexOf(term, from, ignoreCase = true)
-                if (found < 0) break
-                val at = folded.originOf(found)
-                val until = folded.originOf(found + term.length)
-                val start = (at - CONTEXT).coerceAtLeast(0)
-                val end = (until + CONTEXT).coerceAtMost(text.length)
-                matches +=
-                    NoteMatch(
-                        blockIndex = index,
-                        preview = text.substring(start, end),
-                        previewStart = at - start,
-                        previewEnd = until - start,
-                    )
-                from = found + term.length
-            }
+        if (term.isEmpty() || text.isEmpty()) return emptyList()
+        val folded = SearchText.mapped(text)
+        val hits = mutableListOf<IntRange>()
+        var from = 0
+        while (true) {
+            val found = folded.text.indexOf(term, from, ignoreCase = true)
+            if (found < 0) break
+            val at = folded.originOf(found)
+            val until = folded.originOf(found + term.length)
+            if (until > at) hits += at until until
+            from = found + term.length
         }
-        return matches
+        return hits
     }
 
     /**
