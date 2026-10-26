@@ -248,7 +248,7 @@ class TasksQuery private constructor(
             // did not understand rather than a filter that matches nothing.
             if (DateRange.of(groups[3], LocalDate.of(2000, 1, 1)) == null) return null
             return Filter { t, today ->
-                val range = DateRange.of(groups[3], today)!!
+                val range = DateRange.of(groups[3], today) ?: return@Filter false
                 field(t)
                     ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                     ?.let { range.relation(relation, it) }
@@ -479,10 +479,13 @@ internal data class DateRange(
                 text == "this month" -> DateRange(firstOfMonth, firstOfMonth.plusMonths(1).minusDays(1))
                 text == "next month" -> firstOfMonth.plusMonths(1).let { DateRange(it, it.plusMonths(1).minusDays(1)) }
                 text == "last month" -> firstOfMonth.minusMonths(1).let { DateRange(it, it.plusMonths(1).minusDays(1)) }
-                IN_DAYS.matches(text) -> day(today.plusDays(IN_DAYS.find(text)!!.groupValues[1].toLong()))
-                DAYS_AGO.matches(text) -> day(today.minusDays(DAYS_AGO.find(text)!!.groupValues[1].toLong()))
+                // A count past what a date can reach is a phrase not
+                // understood, not a NumberFormatException or a
+                // DateTimeException out of the note being drawn.
+                IN_DAYS.matches(text) -> days(IN_DAYS, text)?.let { n -> shifted { today.plusDays(n) } }?.let(::day)
+                DAYS_AGO.matches(text) -> days(DAYS_AGO, text)?.let { n -> shifted { today.minusDays(n) } }?.let(::day)
                 RANGE.matches(text) ->
-                    RANGE.find(text)!!.groupValues.let { g ->
+                    RANGE.find(text)?.groupValues?.let { g ->
                         val a = parse(g[1]) ?: return null
                         val b = parse(g[2]) ?: return null
                         if (b.isBefore(a)) null else DateRange(a, b)
@@ -492,6 +495,18 @@ internal data class DateRange(
         }
 
         private fun parse(text: String): LocalDate? = runCatching { LocalDate.parse(text) }.getOrNull()
+
+        private fun days(
+            pattern: Regex,
+            text: String,
+        ): Long? =
+            pattern
+                .find(text)
+                ?.groupValues
+                ?.get(1)
+                ?.toLongOrNull()
+
+        private fun shifted(move: () -> LocalDate): LocalDate? = runCatching(move).getOrNull()
 
         private val IN_DAYS = Regex("""^in (\d+) days?$""")
         private val DAYS_AGO = Regex("""^(\d+) days? ago$""")

@@ -245,4 +245,12 @@ class TasksQueryTest {
         assertThat(query.limit).isNull()
         assertThat(query.notUnderstood).isEmpty()
     }
+
+    @Test
+    fun `a count of days no date can reach is not understood rather than thrown`() {
+        listOf("due in 99999999999999999999 days", "due in 999999999999 days", "done 999999999999 days ago").forEach {
+            val query = TasksQuery.parse(it)
+            assertThat(query.notUnderstood).containsExactly(it)
+        }
+    }
 }

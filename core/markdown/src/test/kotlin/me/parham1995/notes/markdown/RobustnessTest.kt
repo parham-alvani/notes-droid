@@ -170,6 +170,8 @@ class RobustnessTest {
                 "due before",
                 "due before tomorrow",
                 "due in 3",
+                "due in 99999999999999999999 days",
+                "scheduled 999999999999 days ago",
                 "happens in 2026-10-01 2026-10-31",
                 "path includes",
                 "(due today) OR",
