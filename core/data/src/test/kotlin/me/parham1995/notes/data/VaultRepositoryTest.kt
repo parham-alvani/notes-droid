@@ -346,6 +346,30 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `the quick switcher finds a note by its folders, in any order`() =
+        runTest {
+            index("Companies/Acme/Interview.md" to "x", "Companies/Docker/Interview.md" to "y", "Notes/Inbox.md" to "z")
+
+            assertThat(
+                repository.quickSwitch("acme/interview").map { it.path },
+            ).containsExactly("Companies/Acme/Interview.md")
+            assertThat(
+                repository
+                    .quickSwitch("interview docker")
+                    .map {
+                        it.path
+                    }.first(),
+            ).isEqualTo("Companies/Docker/Interview.md")
+            assertThat(repository.quickSwitch("companies/").map { it.path })
+                .containsExactly("Companies/Acme/Interview.md", "Companies/Docker/Interview.md")
+            // A note indexed later is offered too: the cached list follows the vault.
+            index("Companies/Acme/Contract.md" to "w")
+            assertThat(
+                repository.quickSwitch("acme/contract").map { it.path },
+            ).containsExactly("Companies/Acme/Contract.md")
+        }
+
+    @Test
     fun `the quick switcher reads a wildcard as the character it is`() =
         runTest {
             // `%` and `_` mean "anything" to LIKE and are ordinary in a name.

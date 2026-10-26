@@ -31,6 +31,7 @@ import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
 import me.parham1995.notes.markdown.MdBlock
+import me.parham1995.notes.markdown.QuickSwitcher
 import me.parham1995.notes.markdown.Slugs
 import me.parham1995.notes.markdown.TagTree
 import me.parham1995.notes.markdown.TagTreeNode
@@ -479,14 +480,29 @@ class VaultRepository
         /** Full-text results, ranked with the title weighted above the body. */
         suspend fun search(query: String): List<SearchHit> = search.search(active(), query)
 
-        /** Name-only matches, for jumping straight to a note while typing. */
+        /**
+         * Name matches, for jumping straight to a note while typing: every
+         * word in any order in the name, an alias or the folders, and a word
+         * with a `/` in the path (`QuickSwitcher`).
+         */
         suspend fun quickSwitch(query: String): List<NoteEntity> {
             if (query.isBlank()) return emptyList()
-            val ids = search.names(active(), query, QUICK_LIMIT)
+            val vaultId = active()
+            val candidates = switcherCandidates(vaultId)
+            val ids = withContext(Dispatchers.Default) { QuickSwitcher.rank(query, candidates, QUICK_LIMIT) }
             if (ids.isEmpty()) return emptyList()
             // The index says which and in what order; `notes` says what they are.
             val byId = notes.byIds(ids).associateBy { it.id }
             return ids.mapNotNull(byId::get)
+        }
+
+        /** The switcher's notes, read again only when the vault's notes change. */
+        @Volatile private var candidates: Triple<Long, String, List<QuickSwitcher.Candidate>>? = null
+
+        private suspend fun switcherCandidates(vaultId: Long): List<QuickSwitcher.Candidate> {
+            val version = search.notesVersion(vaultId)
+            candidates?.let { (vault, seen, list) -> if (vault == vaultId && seen == version) return list }
+            return search.switcherCandidates(vaultId).also { candidates = Triple(vaultId, version, it) }
         }
 
         private companion object {

@@ -6,6 +6,7 @@ import androidx.room.useWriterConnection
 import androidx.sqlite.SQLiteStatement
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.escapeLike
+import me.parham1995.notes.markdown.QuickSwitcher
 import me.parham1995.notes.markdown.SearchText
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -150,39 +151,38 @@ class SearchIndex
         }
 
         /**
-         * Notes whose name or alias contains [typed], for the quick switcher,
-         * as ids in the order to offer them.
-         *
-         * Compared as [SearchText.foldName] leaves both sides, so a name
-         * written with Arabic letters answers to a Persian keyboard. That
-         * needs the folded names somewhere to compare against, and they are
-         * kept in the search index rather than in a new column of `notes`:
-         * that would be a Room migration for what is only ever search's
-         * business.
-         *
-         * A name that starts with it first, then an alias that does, then
-         * anything containing it -- as Obsidian's switcher does. Scoped to
-         * one vault like everything else: this was the last query in the app
-         * that was not, and typing a name reached across every repository.
+         * Every note of one vault, with its name and aliases, for the quick
+         * switcher to rank in memory (`QuickSwitcher`): words in any order
+         * and folder paths are more than `LIKE` can rank.
          */
-        suspend fun names(
-            vaultId: Long,
-            typed: String,
-            limit: Int,
-        ): List<Long> {
-            // `%` and `_` are wildcards to LIKE and ordinary characters in a
-            // file name, so typing "100%" offered every note starting "100".
-            val folded = escapeLike(SearchText.foldName(typed.trim()))
-            if (folded.isEmpty()) return emptyList()
-            return database.useReaderConnection { connection ->
-                connection.usePrepared(NAMES_SQL) { statement ->
+        suspend fun switcherCandidates(vaultId: Long): List<QuickSwitcher.Candidate> =
+            database.useReaderConnection { connection ->
+                connection.usePrepared(CANDIDATES_SQL) { statement ->
                     statement.bindLong(1, vaultId)
-                    statement.bindText(2, folded)
-                    statement.bindLong(3, limit.toLong())
-                    buildList { while (statement.step()) add(statement.getLong(0)) }
+                    buildList {
+                        while (statement.step()) {
+                            val aliases = if (statement.isNull(3)) "" else statement.getText(3)
+                            add(
+                                QuickSwitcher.Candidate(
+                                    id = statement.getLong(0),
+                                    path = statement.getText(1),
+                                    title = statement.getText(2),
+                                    aliases = aliases.split('\n').filter { it.isNotBlank() },
+                                ),
+                            )
+                        }
+                    }
                 }
             }
-        }
+
+        /** What changes whenever a note of the vault does: its count and the last index time. */
+        suspend fun notesVersion(vaultId: Long): String =
+            database.useReaderConnection { connection ->
+                connection.usePrepared(VERSION_SQL) { statement ->
+                    statement.bindLong(1, vaultId)
+                    if (statement.step()) "${statement.getLong(0)}:${statement.getLong(1)}" else ""
+                }
+            }
 
         /**
          * Notes that say this note's name without linking to it.
@@ -233,19 +233,14 @@ class SearchIndex
                 LIMIT ?
                 """.trimIndent()
 
-            val NAMES_SQL =
+            val CANDIDATES_SQL =
                 """
-                SELECT notes.id FROM notes JOIN note_fts ON note_fts.rowid = notes.id
+                SELECT notes.id, notes.path, notes.name, note_fts.aliases
+                FROM notes LEFT JOIN note_fts ON note_fts.rowid = notes.id
                 WHERE notes.vaultId = ?1
-                  AND (note_fts.name LIKE '%' || ?2 || '%' ESCAPE '\'
-                       OR note_fts.aliases LIKE '%' || ?2 || '%' ESCAPE '\')
-                ORDER BY (CASE WHEN note_fts.name LIKE ?2 || '%' ESCAPE '\' THEN 0
-                               WHEN note_fts.aliases LIKE '%' || char(10) || ?2 || '%' ESCAPE '\' THEN 1
-                               WHEN note_fts.name LIKE '%' || ?2 || '%' ESCAPE '\' THEN 2
-                               ELSE 3 END),
-                         length(notes.name), notes.name COLLATE NOCASE
-                LIMIT ?3
                 """.trimIndent()
+
+            val VERSION_SQL = "SELECT COUNT(*), COALESCE(MAX(indexedAt), 0) FROM notes WHERE vaultId = ?1"
 
             /** One alias to a line, with a newline either side, so "starts with" can be asked of it. */
             fun aliasLines(aliases: List<String>): String =
