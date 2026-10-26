@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.SyncStateDao
+import me.parham1995.notes.obsidian.Beautitab
 import me.parham1995.notes.obsidian.Bookmark
 import me.parham1995.notes.obsidian.Bookmarks
 import me.parham1995.notes.obsidian.DailyNotes
@@ -81,6 +82,17 @@ class ObsidianConfigStore
         /** Where [vaultId] keeps its daily notes; the plugin's defaults when it has not said. */
         suspend fun dailyNotes(vaultId: Long): DailyNotes =
             read(vaultId, VaultFilter.DAILY_NOTES, "daily notes settings", DailyNotes::parse) ?: DailyNotes()
+
+        /** The Beautitab plugin's settings of whichever vault [vault] names, kept current across syncs. */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        fun beautitab(vault: Flow<Long>): Flow<Beautitab> =
+            combine(vault, synced) { id, _ -> id }
+                .mapLatest { beautitab(it) }
+                .flowOn(Dispatchers.IO)
+
+        /** What the home page shows for [vaultId]; the plugin's defaults when it has no settings. */
+        suspend fun beautitab(vaultId: Long): Beautitab =
+            read(vaultId, VaultFilter.BEAUTITAB, "Beautitab settings", Beautitab::parse) ?: Beautitab()
 
         /** The Templates plugin's settings for [vaultId]; its defaults, with no folder, when it has none. */
         suspend fun templates(vaultId: Long): Templates =

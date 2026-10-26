@@ -79,6 +79,9 @@ class VaultFilterTest {
         assertThat(filter.kindOf(".obsidian/daily-notes.json")).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/types.json")).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/templates.json")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.kindOf(".obsidian/plugins/beautitab/data.json")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.kindOf(".obsidian/plugins/beautitab/main.js")).isNull()
+        assertThat(filter.kindOf(".obsidian/plugins/other/data.json")).isNull()
         // And nothing beside them: the rest of the editor's settings stay out.
         assertThat(filter.kindOf(".obsidian/workspace.json")).isNull()
         assertThat(filter.kindOf(".obsidian/bookmarks.json.bak")).isNull()

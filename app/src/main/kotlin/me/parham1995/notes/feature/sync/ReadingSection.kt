@@ -3,6 +3,7 @@ package me.parham1995.notes.feature.sync
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -178,7 +179,8 @@ internal fun ReadingCard(
 
     SectionCard(stringResource(R.string.card_behaviour)) {
         Text(stringResource(R.string.settings_open_on), style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Wrapped: four choices are wider than a phone's card.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StartScreen.entries.forEach { screen ->
                 FilterChip(
                     selected = reading.startScreen == screen,
@@ -252,6 +254,7 @@ private val LineWidth.label: Int
 private val StartScreen.label: Int
     get() =
         when (this) {
+            StartScreen.HOME -> R.string.nav_home
             StartScreen.BROWSE -> R.string.nav_browse
             StartScreen.TASKS -> R.string.tasks_title
             StartScreen.SEARCH -> R.string.nav_search

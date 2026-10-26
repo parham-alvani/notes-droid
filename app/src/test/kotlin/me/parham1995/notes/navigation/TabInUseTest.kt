@@ -31,4 +31,12 @@ class TabInUseTest {
         // presence says nothing about which tab is being used.
         assertThat(tabInUse(tabs, start = "tasks") { it == "tasks" || it == "search" }).isEqualTo("search")
     }
+
+    @Test
+    fun `the home page is no tab's`() {
+        // Home is the start destination and no tab: nothing is lit on it, and
+        // a tab opened from it is lit as usual.
+        assertThat(tabInUse(tabs, start = null) { false }).isNull()
+        assertThat(tabInUse(tabs, start = null) { it == "tasks" }).isEqualTo("tasks")
+    }
 }

@@ -78,15 +78,21 @@ enum class SyncTransport {
     }
 }
 
-/** Where the app opens. */
+/**
+ * Where the app opens, and where back from a tab's root lands.
+ *
+ * [HOME] is the default: it is the phone's page for no note open, as the Mac
+ * shows one in a window with no tabs, and Obsidian's Beautitab tab before it.
+ */
 enum class StartScreen {
+    HOME,
     BROWSE,
     TASKS,
     SEARCH,
     ;
 
     companion object {
-        fun parse(raw: String?): StartScreen = entries.firstOrNull { it.name == raw } ?: BROWSE
+        fun parse(raw: String?): StartScreen = entries.firstOrNull { it.name == raw } ?: HOME
     }
 }
 
@@ -154,7 +160,7 @@ data class ReadingSettings(
      * default, because that is why it is bundled.
      */
     val persianFont: Boolean = true,
-    val startScreen: StartScreen = StartScreen.BROWSE,
+    val startScreen: StartScreen = StartScreen.HOME,
     /**
      * Mark where the pen is hovering while reading.
      *
@@ -203,6 +209,12 @@ data class ReadingSettings(
      * brings it back, and the choice stays across launches.
      */
     val hideRail: Boolean = false,
+    /**
+     * The home page's picture: a file's name in the app's own storage
+     * ([HomePictureStore]), or empty for none -- and then the Beautitab
+     * plugin's own background, when that is a picture in the vault.
+     */
+    val homePicture: String = "",
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
@@ -391,6 +403,7 @@ class SettingsStore
                             keepScreenOn = preferences[KEEP_SCREEN_ON] ?: false,
                             tapForFullScreen = preferences[TAP_FULL_SCREEN] ?: true,
                             hideRail = preferences[HIDE_RAIL] ?: false,
+                            homePicture = preferences[HOME_PICTURE].orEmpty(),
                         ),
                 )
             }
@@ -595,6 +608,13 @@ class SettingsStore
             context.settingsDataStore.edit { it[HIDE_RAIL] = hidden }
         }
 
+        /** Empty for none. Set by [HomePictureStore], which owns the file it names. */
+        suspend fun setHomePicture(name: String) {
+            context.settingsDataStore.edit {
+                if (name.isEmpty()) it.remove(HOME_PICTURE) else it[HOME_PICTURE] = name
+            }
+        }
+
         private companion object {
             val OWNER = stringPreferencesKey("repo_owner")
             val REPO = stringPreferencesKey("repo_name")
@@ -626,6 +646,7 @@ class SettingsStore
             val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
             val TAP_FULL_SCREEN = booleanPreferencesKey("reading_tap_full_screen")
             val HIDE_RAIL = booleanPreferencesKey("hide_rail")
+            val HOME_PICTURE = stringPreferencesKey("home_picture")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")

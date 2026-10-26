@@ -4,11 +4,7 @@ import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.AnimatedPane
@@ -23,9 +19,9 @@ import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
@@ -53,6 +49,7 @@ import me.parham1995.notes.feature.board.BoardScreen
 import me.parham1995.notes.feature.browser.BrowserScreen
 import me.parham1995.notes.feature.calendar.CalendarScreen
 import me.parham1995.notes.feature.graph.GraphScreen
+import me.parham1995.notes.feature.home.HomeScreen
 import me.parham1995.notes.feature.note.NoteScreen
 import me.parham1995.notes.feature.search.SearchScreen
 import me.parham1995.notes.feature.ssh.SshScreen
@@ -85,6 +82,15 @@ data class BrowseRoute(
      */
     val path: String = "",
 )
+
+/**
+ * The page for no note open, as the Mac shows one in a window with no tabs:
+ * the start destination on a phone, and no tab's own. On an expanded window
+ * the pane beside the list is the home page instead, so here the list pane
+ * shows the browser rather than a second home.
+ */
+@Serializable
+object HomeRoute
 
 @Serializable
 object TasksRoute
@@ -235,9 +241,9 @@ private data class Tab(
  */
 internal fun <T> tabInUse(
     tabs: List<T>,
-    start: T,
+    start: T?,
     onStack: (T) -> Boolean,
-): T = tabs.firstOrNull { it != start && onStack(it) } ?: start
+): T? = tabs.firstOrNull { it != start && onStack(it) } ?: start
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -245,7 +251,7 @@ fun NotesNavHost(
     openScreen: StateFlow<String?> = MutableStateFlow(null),
     openNote: StateFlow<Long?> = MutableStateFlow(null),
     openLink: StateFlow<String?> = MutableStateFlow(null),
-    startScreen: StartScreen = StartScreen.BROWSE,
+    startScreen: StartScreen = StartScreen.HOME,
 ) {
     val navController = rememberNavController()
 
@@ -276,6 +282,9 @@ fun NotesNavHost(
     // navigation.
     val directive = calculatePaneScaffoldDirective(currentWindowAdaptiveInfoV2())
     val twoPane = directive.maxHorizontalPartitions > 1
+    // Read by the graph, which is built once and would otherwise keep the
+    // value it was first composed with.
+    val inTwoPanes = rememberUpdatedState(twoPane)
     var paneHeading by remember { mutableStateOf<String?>(null) }
     val open =
         Opening { id, newTab, fresh, heading ->
@@ -423,12 +432,17 @@ fun NotesNavHost(
     // until the NavHost below has set its graph: reading the graph before that
     // throws, and did, on every launch.
     val inUse =
-        remember(backStackEntry) {
+        remember(backStackEntry, twoPane) {
             if (backStackEntry == null) return@remember null
             val start = navController.graph.findStartDestination()
+            // The home page is no tab's: nothing is lit on it, unless the list
+            // pane is showing the browser in its place.
+            val startTab =
+                tabs.firstOrNull { start.hasRoute(it.route::class) }
+                    ?: tabs.first().takeIf { !start.hasRoute(HomeRoute::class) || twoPane }
             tabInUse(
                 tabs = tabs,
-                start = tabs.firstOrNull { start.hasRoute(it.route::class) } ?: tabs.first(),
+                start = startTab,
             ) { tab -> runCatching { navController.getBackStackEntry(tab.route::class) }.isSuccess }
         }
 
@@ -477,12 +491,13 @@ fun NotesNavHost(
                                     navController = navController,
                                     startDestination =
                                         when (start) {
+                                            StartScreen.HOME -> HomeRoute
                                             StartScreen.BROWSE -> BrowseRoute()
                                             StartScreen.TASKS -> TasksRoute
                                             StartScreen.SEARCH -> SearchRoute()
                                         },
                                 ) {
-                                    graph(navController, open, dailyPeriod) { openToday() }
+                                    graph(navController, open, dailyPeriod, { inTwoPanes.value }) { openToday() }
                                 }
                             }
                         }
@@ -502,7 +517,11 @@ fun NotesNavHost(
                         AnimatedPane {
                             val tab = tabs.current
                             if (tab == null) {
-                                NothingOpen()
+                                // No tab open: the home page, as an empty window is on the Mac.
+                                HomeScreen(
+                                    onOpenNote = { id, heading -> open.note(id, fresh = true, heading = heading) },
+                                    onSearch = { navController.search(it) },
+                                )
                             } else {
                                 NoteScreen(
                                     noteId = tab.noteId,
@@ -523,18 +542,6 @@ fun NotesNavHost(
                 )
             }
         }
-    }
-}
-
-/** The detail pane with no tab open: the list beside it is what to do next. */
-@Composable
-private fun NothingOpen() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            stringResource(R.string.pane_nothing_open),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -565,11 +572,13 @@ private fun NavGraphBuilder.graph(
     navController: NavController,
     open: Opening,
     dailyPeriod: Period,
+    twoPane: () -> Boolean,
     openToday: () -> Unit,
 ) {
-    screen<BrowseRoute> { entry ->
+    @Composable
+    fun browser(initialPath: String) =
         BrowserScreen(
-            initialPath = entry.toRoute<BrowseRoute>().path,
+            initialPath = initialPath,
             onOpenNote = { open.note(it, fresh = true) },
             onOpenNoteInNewTab = { open.note(it, newTab = true) },
             onOpenAdvancedSettings = {
@@ -583,7 +592,17 @@ private fun NavGraphBuilder.graph(
             todayPeriod = dailyPeriod,
             onOpenTags = { navController.navigate(TagsRoute()) },
         )
+    screen<HomeRoute> {
+        if (twoPane()) {
+            browser("")
+        } else {
+            HomeScreen(
+                onOpenNote = { id, heading -> open.note(id, fresh = true, heading = heading) },
+                onSearch = { navController.search(it) },
+            )
+        }
     }
+    screen<BrowseRoute> { entry -> browser(entry.toRoute<BrowseRoute>().path) }
     screen<TagsRoute> { entry ->
         val route = entry.toRoute<TagsRoute>()
         TagsScreen(

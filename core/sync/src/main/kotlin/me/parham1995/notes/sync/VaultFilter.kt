@@ -85,8 +85,9 @@ class VaultFilter(
          * 4: Obsidian's bookmarks and daily-notes settings.
          * 5: Obsidian bases (`.base`) and the property types they read.
          * 6: the Templates plugin's settings.
+         * 7: the Beautitab plugin's settings, for the home page.
          */
-        const val VERSION = 6
+        const val VERSION = 7
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -126,7 +127,15 @@ class VaultFilter(
         /** The core Templates plugin's folder and date and time formats, for a new note from a template. */
         const val TEMPLATES = ".obsidian/templates.json"
 
-        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES)
+        /**
+         * The Beautitab plugin's new-tab page settings, which the home page
+         * follows: what it shows, the greeting, the person's own quotes. The
+         * one plugin file beside Iconic's; every other plugin's settings stay
+         * on the desk.
+         */
+        const val BEAUTITAB = ".obsidian/plugins/beautitab/data.json"
+
+        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES, BEAUTITAB)
 
         /**
          * Formats the reader draws itself. Everything else it can offer is in

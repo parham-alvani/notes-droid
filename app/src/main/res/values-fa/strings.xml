@@ -525,7 +525,6 @@
     <string name="help_tap_full_screen">روی تبلت یا گوشی افقی، یک ضربه روی یادداشت نوارها را پنهان می‌کند و ضربهٔ دوم آن‌ها را برمی‌گرداند. ضربه روی پیوند، جعبه یا تصویر همان کار همیشگی را می‌کند.</string>
     <string name="settings_keep_screen_on">روشن ماندن صفحه هنگام خواندن</string>
     <string name="help_keep_screen_on">تا نوشته‌ای باز است صفحه خاموش یا قفل نمی‌شود. بقیهٔ برنامه مثل همیشه رفتار می‌کند.</string>
-    <string name="pane_nothing_open">نوشته‌ای را از فهرست انتخاب کنید تا اینجا خوانده شود</string>
     <string name="board_title">تابلو</string>
     <string name="board_group_status">وضعیت</string>
     <string name="board_group_day">روز</string>
@@ -545,4 +544,16 @@
     <string name="board_move_action">انتقال به ستونی دیگر</string>
     <string name="board_column_empty">اینجا چیزی نیست</string>
     <string name="board_reopen_action">باز کردن دوباره</string>
+    <string name="nav_home">خانه</string>
+    <string name="home_search_hint">یافتن نوشته</string>
+    <string name="home_good_morning">صبح بخیر</string>
+    <string name="home_good_afternoon">عصر بخیر</string>
+    <string name="home_good_evening">شب بخیر</string>
+    <string name="home_morning">صبح</string>
+    <string name="home_afternoon">عصر</string>
+    <string name="home_evening">شب</string>
+    <string name="card_home">صفحهٔ خانه</string>
+    <string name="home_picture_choose">انتخاب تصویر</string>
+    <string name="home_picture_failed">این تصویر خوانده نشد</string>
+    <string name="help_home_picture">پس‌زمینهٔ صفحهٔ خانه، صفحه‌ای که وقتی نوشته‌ای باز نیست دیده می‌شود، به اندازهٔ صفحه بریده می‌شود. اگر تصویری انتخاب نشده باشد، پس‌زمینهٔ افزونهٔ Beautitab به کار می‌رود اگر تصویری در دفتر باشد. آنچه صفحه نشان می‌دهد از تنظیمات افزونه پیروی می‌کند.</string>
 </resources>

@@ -106,10 +106,18 @@ class RobustnessTest {
                 "{\"items\": [{\"type\": \"group\", \"items\": [{\"type\": \"group\", \"items\": [{}]}]}]}",
                 "{\"folder\": 5, \"format\": null, \"template\": []}",
                 "{\"types\": {\"a\": 1, \"b\": {}}}",
+                "{\"customQuotes\": [null, 1, {\"text\": {}}], \"localBackgrounds\": [[], {\"path\": 1}, null]}",
+                "{\"showQuote\": true, \"quoteSource\": [], \"timeFormat\": {}, \"customBackground\": \"../..\"}",
             )
         val inputs = json + List(ROUNDS) { json.random(random).dropLast(random.nextInt(0, 3)) }
         inputs.forEach { text ->
-            listOf(Bookmarks::parse, DailyNotes::parse, Templates::parse, PropertyTypes::parse).forEach { parse ->
+            listOf(
+                Bookmarks::parse,
+                DailyNotes::parse,
+                Templates::parse,
+                PropertyTypes::parse,
+                Beautitab::parse,
+            ).forEach { parse ->
                 try {
                     parse(text)
                 } catch (_: SerializationException) {

@@ -527,7 +527,6 @@
     <string name="help_tap_full_screen">On a tablet or a phone on its side, a tap on a note hides the bars and a second tap brings them back. A tap on a link, a box or a picture still does what it did.</string>
     <string name="settings_keep_screen_on">Keep the screen on while reading</string>
     <string name="help_keep_screen_on">The screen does not dim or lock while a note is open. The rest of the app behaves as usual.</string>
-    <string name="pane_nothing_open">Pick a note from the list to read it here</string>
     <string name="board_title">Board</string>
     <string name="board_group_status">Status</string>
     <string name="board_group_day">Day</string>
@@ -547,4 +546,16 @@
     <string name="board_move_action">Move to another column</string>
     <string name="board_column_empty">Nothing here</string>
     <string name="board_reopen_action">Open again</string>
+    <string name="nav_home">Home</string>
+    <string name="home_search_hint">Find a note</string>
+    <string name="home_good_morning">Good morning</string>
+    <string name="home_good_afternoon">Good afternoon</string>
+    <string name="home_good_evening">Good evening</string>
+    <string name="home_morning">morning</string>
+    <string name="home_afternoon">afternoon</string>
+    <string name="home_evening">evening</string>
+    <string name="card_home">Home page</string>
+    <string name="home_picture_choose">Choose picture</string>
+    <string name="home_picture_failed">That picture could not be read</string>
+    <string name="help_home_picture">Fills the home page, the page shown with no note open, cropped to the screen. Without one, the Beautitab plugin\'s background is used when it is a picture in the vault. What the page shows follows the plugin\'s settings.</string>
 </resources>

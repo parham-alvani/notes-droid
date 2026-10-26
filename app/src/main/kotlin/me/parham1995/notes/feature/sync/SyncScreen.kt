@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.SyncTransport
 import me.parham1995.notes.feature.calendar.CalendarCards
+import me.parham1995.notes.feature.home.HomePictureCard
 import me.parham1995.notes.ui.icon.LucideGlyph
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,6 +88,11 @@ fun SyncScreen(
 
                 SettingsSection.READING -> {
                     ReadingCard(state, viewModel)
+                    HomePictureCard(
+                        chosen =
+                            state.settings.reading.homePicture
+                                .isNotEmpty(),
+                    )
                     TilesCard()
                 }
 
