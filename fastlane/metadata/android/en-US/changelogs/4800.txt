@@ -1,0 +1,1 @@
+The quick switcher now finds notes by folder as well as by name. Type the words in any order, such as "interview acme", or a path such as "Companies/Acme" or "Companies/" to list a folder's notes. Results that only hold the letters you typed, spread out, no longer push the right note down.
