@@ -1,0 +1,1 @@
+A home page where no note is open: the time, a greeting, search, recent notes, bookmarks and a quote from the vault's Beautitab settings, over a picture you choose in Settings. Search lists the notes with your words side by side first, then near each other, then anywhere.
