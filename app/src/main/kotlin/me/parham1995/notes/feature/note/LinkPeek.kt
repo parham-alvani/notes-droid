@@ -180,12 +180,17 @@ internal fun BaseSheet(
     }
 }
 
-/** A link that resolves to nothing, said plainly rather than ignored. */
+/**
+ * A link that resolves to nothing, said plainly rather than ignored, with a
+ * button that makes the note it names -- as a click on one does on the Mac.
+ * [onCreate] is null where the vault cannot be written, which hides it.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BrokenLinkPeek(
     target: String,
     onDismiss: () -> Unit,
+    onCreate: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, properties = sheetProperties()) {
         Column(
@@ -204,6 +209,9 @@ internal fun BrokenLinkPeek(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            onCreate?.let { create ->
+                Button(onClick = create) { Text(stringResource(R.string.link_create_note)) }
+            }
         }
     }
 }

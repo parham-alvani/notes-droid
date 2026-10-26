@@ -578,6 +578,18 @@ class VaultWriteRepositoryTest {
         }
 
     @Test
+    fun `an empty note, as a link to nothing makes, is made and indexed`() =
+        runTest {
+            assertThat(writes.createNote(vaultId, "Work/Plan.md", "")).isEqualTo(WriteResult.Pushed)
+
+            assertThat(transport.content).isEmpty()
+            assertThat(files.readText(vaultId, "Work/Plan.md")).isEmpty()
+            assertThat(database.noteDao().byPath(vaultId, "Work/Plan.md")).isNotNull()
+            // Asked again, it is the same note having landed, not a refusal.
+            assertThat(writes.createNote(vaultId, "Work/Plan.md", "")).isEqualTo(WriteResult.Unchanged)
+        }
+
+    @Test
     fun `no note is made where the vault cannot be written`() =
         runTest {
             database.vaultDao().update(database.vaultDao().byId(vaultId)!!.copy(canWrite = false))

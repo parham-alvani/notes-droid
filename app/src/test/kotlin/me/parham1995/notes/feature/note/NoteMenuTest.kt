@@ -27,10 +27,12 @@ class NoteMenuTest {
 
     private var pins = 0
     private var shares = 0
+    private var sorts = 0
 
     private fun menu(
         pinned: Boolean = false,
         enabled: Boolean = true,
+        writable: Boolean = false,
     ) {
         compose.setContent {
             NoteMenu(
@@ -38,6 +40,7 @@ class NoteMenuTest {
                 pinned = pinned,
                 onShare = { shares++ },
                 onTogglePin = { pins++ },
+                onSortTasks = if (writable) ({ sorts++ }) else null,
             )
         }
     }
@@ -80,5 +83,23 @@ class NoteMenuTest {
         menu(enabled = false)
 
         compose.onNodeWithContentDescription("More").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `sort tasks reaches its handler where the note can be written`() {
+        menu(writable = true)
+
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Sort tasks").performClick()
+
+        assertThat(sorts).isEqualTo(1)
+    }
+
+    @Test
+    fun `a note that cannot be written offers no sort`() {
+        menu(writable = false)
+
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Sort tasks").assertDoesNotExist()
     }
 }

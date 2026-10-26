@@ -23,6 +23,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Tags** — inline `#tags` and nested `#parent/child` ones, and those in front matter; tap one for every note carrying it, or browse the vault's tag tree
 - **Properties and aliases** — front matter shown as a foldable Properties block, and a note's `aliases` answer to `[[links]]` and the quick switcher
 - **Backlinks, unlinked mentions, an outline and a connections graph** for every note — the graph is one hop as a ring, or two to four hops or the whole vault laid out by force, each top folder in its own colour and each note sized by its links; pinch, drag, and tap a dot to open its note
+- **A link to a note not there yet** makes it — the sheet a tap on such a link opens has a button that creates the note, empty, in the folder the link names or beside the note that holds it, as a click does on the Mac, and opens it
 - **Link previews** — tap a `[[link]]` to see where it goes before going; hold one to read the note it points at — or just the section its heading names, or the block its `^id` names — in a sheet, with buttons to open it here or in a new tab. A hold anywhere else still looks the word up in the dictionary
 - **Find in note**, and notes that resume where you left them
 - **How long it reads** — the outline sheet opens with the note's words and its reading time at 220 words a minute, counted over what is read rather than its front matter or code, as the Mac's bar above a note says it

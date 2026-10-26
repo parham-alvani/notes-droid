@@ -50,6 +50,7 @@ import me.parham1995.notes.markdown.TasksQuery
 import me.parham1995.notes.markdown.Transclusion
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.markdown.plainText
+import me.parham1995.notes.obsidian.Templates
 import me.parham1995.notes.ui.UiText
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.render.TasksQueryResult
@@ -283,6 +284,30 @@ class NoteViewModel
                 }
                 if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
             }
+
+        /**
+         * Makes the note a link to nothing names, empty, where
+         * [Templates.pathForLink] puts it, and opens it once it is there.
+         * The page it was linked from is read again, so the link stops
+         * being drawn as broken.
+         */
+        fun createLinked(
+            target: String,
+            onOpen: (Long) -> Unit,
+        ) = viewModelScope.launch {
+            val note = _state.value.note ?: return@launch
+            val path = Templates.pathForLink(target, note.path)
+            if (path == null) {
+                _state.update { it.copy(message = UiText.Resource(R.string.link_cannot_create)) }
+                return@launch
+            }
+            val result = writes.createNote(note.vaultId, path, "")
+            val made = result == WriteResult.Pushed || result is WriteResult.Queued
+            if (made) reload()
+            val opened = path.takeIf { made }?.let { repository.resolve(note.vaultId, it) }
+            opened?.let { onOpen(it.first) }
+            if (opened == null || result is WriteResult.Queued) _state.update { it.copy(message = result.describe()) }
+        }
 
         private suspend fun reload() {
             val id = _state.value.note?.id ?: return

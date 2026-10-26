@@ -46,4 +46,22 @@ class TemplatesTest {
         assertThat(Templates.fileName("  Q3: plans / ideas? ")).isEqualTo("Q3 plans ideas")
         assertThat(Templates.fileName("...")).isEmpty()
     }
+
+    @Test
+    fun `a link to nothing names a note beside the one that links, or in the folder it gives`() {
+        assertThat(Templates.pathForLink("Plan", "Work/Today.md")).isEqualTo("Work/Plan.md")
+        assertThat(Templates.pathForLink("Plan", "Today.md")).isEqualTo("Plan.md")
+        assertThat(Templates.pathForLink("Projects/Plan", "Work/Today.md")).isEqualTo("Projects/Plan.md")
+        assertThat(Templates.pathForLink("Projects/Plan.md", "Today.md")).isEqualTo("Projects/Plan.md")
+        assertThat(Templates.pathForLink("/Projects//Plan ", "Today.md")).isEqualTo("Projects/Plan.md")
+    }
+
+    @Test
+    fun `a link that names no note that could be made is refused`() {
+        assertThat(Templates.pathForLink("", "Today.md")).isNull()
+        assertThat(Templates.pathForLink(" / ", "Today.md")).isNull()
+        assertThat(Templates.pathForLink("../../outside", "Work/Today.md")).isNull()
+        assertThat(Templates.pathForLink("?*:", "Today.md")).isNull()
+        assertThat(Templates.pathForLink("What: now?", "Today.md")).isEqualTo("What now.md")
+    }
 }

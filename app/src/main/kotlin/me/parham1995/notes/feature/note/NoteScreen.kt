@@ -1123,7 +1123,19 @@ fun NoteScreen(
         }
 
         peekBroken?.let { target ->
-            BrokenLinkPeek(target = target, onDismiss = { peekBroken = null })
+            BrokenLinkPeek(
+                target = target,
+                onDismiss = { peekBroken = null },
+                onCreate =
+                    if (state.writable) {
+                        {
+                            peekBroken = null
+                            viewModel.createLinked(target) { id -> viewModel.openTab(id, inNewTab = false) }
+                        }
+                    } else {
+                        null
+                    },
+            )
         }
 
         footnote?.let { entry ->

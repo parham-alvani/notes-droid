@@ -80,6 +80,34 @@ data class Templates(
                 .trim('.')
                 .trim()
 
+        /**
+         * Where the note a link to nothing names is made, as the Mac makes it:
+         * `[[Folder/Name]]` in that folder, a bare `[[Name]]` beside the note
+         * [from] that holds the link. Null when the link names no note that
+         * could be made -- an empty name, or a `..` that climbs out of the vault.
+         */
+        fun pathForLink(
+            target: String,
+            from: String,
+        ): String? {
+            val parts =
+                target
+                    .trim()
+                    .trim('/')
+                    .split('/')
+                    .map { it.trim() }
+            if (parts.any { it == ".." || it == "." }) return null
+            val name = fileName(parts.last().removeSuffix(".md"))
+            if (name.isEmpty()) return null
+            val folder =
+                if (parts.size > 1) {
+                    parts.dropLast(1).filter { it.isNotEmpty() }.joinToString("/")
+                } else {
+                    from.substringBeforeLast('/', "")
+                }
+            return if (folder.isEmpty()) "$name.md" else "$folder/$name.md"
+        }
+
         private val FORBIDDEN = Regex("""[\\/:*?"<>|#^\[\]]""")
     }
 }
