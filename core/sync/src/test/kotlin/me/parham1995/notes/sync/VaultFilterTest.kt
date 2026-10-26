@@ -77,6 +77,7 @@ class VaultFilterTest {
     fun `so do the bookmarks and the daily notes settings`() {
         assertThat(filter.kindOf(".obsidian/bookmarks.json")).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/daily-notes.json")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.kindOf(".obsidian/types.json")).isEqualTo(BlobKind.CONFIG)
         // And nothing beside them: the rest of the editor's settings stay out.
         assertThat(filter.kindOf(".obsidian/workspace.json")).isNull()
         assertThat(filter.kindOf(".obsidian/bookmarks.json.bak")).isNull()
@@ -113,5 +114,11 @@ class VaultFilterTest {
         assertThat(filter.kindOf("some-plugin/esbuild.config.mjs")).isNull()
         assertThat(filter.kindOf("package.json")).isNull()
         assertThat(filter.kindOf("justfile")).isNull()
+    }
+
+    @Test
+    fun `a base is fetched with the notes but is not one`() {
+        assertThat(filter.kindOf("Shops/Shops.base")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.kindOf(".obsidian/Hidden.base")).isNull()
     }
 }

@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.Flow
 import me.parham1995.notes.R
+import me.parham1995.notes.data.BaseAnswer
 import me.parham1995.notes.data.database.QueryTaskRow
 import me.parham1995.notes.markdown.CalloutKind
 import me.parham1995.notes.markdown.FootnoteEntry
@@ -131,6 +132,12 @@ data class RenderActions(
      * Null when this vault cannot be written to, as [onCompleteTask] is.
      */
     val onCompleteQueryTask: ((QueryTaskRow) -> Unit)? = null,
+    /**
+     * Runs a base this note embeds or writes as a ` ```base ` block; null when
+     * there is no file of that name. Null as a whole inside an embed, where
+     * `this` would name the wrong note, and it is said so instead.
+     */
+    val runBase: (suspend (MdBlock.BaseView) -> BaseAnswer?)? = null,
 )
 
 @Composable
@@ -196,6 +203,7 @@ fun MdBlockView(
             is MdBlock.ThematicBreak -> HorizontalDivider(modifier.padding(vertical = 8.dp))
             is MdBlock.Unsupported -> UnsupportedView(block, modifier)
             is MdBlock.TasksQuery -> TasksQueryView(block, actions, modifier)
+            is MdBlock.BaseView -> BaseBlockView(block, actions, modifier)
             // Obsidian's Properties view: shown, folded on a tap, and a
             // tag in it is a tag.
             is MdBlock.FrontMatter -> PropertiesView(block, actions, modifier)

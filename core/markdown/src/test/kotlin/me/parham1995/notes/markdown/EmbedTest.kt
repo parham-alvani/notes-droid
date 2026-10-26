@@ -114,4 +114,19 @@ class EmbedTest {
         assertThat(Transclusion.section(note, null)).isEqualTo(note)
         assertThat(Transclusion.section(note, "Renamed long ago")).isNull()
     }
+
+    @Test
+    fun `a base embed is a base, and the part after the hash is its view`() {
+        assertThat(single("![[Shops/Shops.base]]")).isEqualTo(MdBlock.BaseView(0, target = "Shops/Shops.base"))
+        val view = single("![[Shops.base#Open shops]]") as MdBlock.BaseView
+        assertThat(view.target).isEqualTo("Shops.base")
+        assertThat(view.view).isEqualTo("Open shops")
+    }
+
+    @Test
+    fun `a base fence carries its own yaml`() {
+        val block = single("```base\nfilters: file.ext == \"md\"\n```") as MdBlock.BaseView
+        assertThat(block.source).isEqualTo("filters: file.ext == \"md\"")
+        assertThat(block.target).isNull()
+    }
 }

@@ -322,6 +322,18 @@ sealed interface MdBlock {
     ) : MdBlock
 
     /**
+     * An Obsidian base drawn as tables: `![[x.base]]` or `![[x.base#View]]`
+     * names a `.base` file and maybe one of its views, and a ` ```base `
+     * fence carries the same YAML itself in [source].
+     */
+    data class BaseView(
+        override val id: Int,
+        val target: String? = null,
+        val view: String? = null,
+        val source: String? = null,
+    ) : MdBlock
+
+    /**
      * A block deliberately not rendered -- a `dataview` query, or an
      * Excalidraw payload. Showing the query text to a reader is worse than
      * saying plainly that it is not supported.

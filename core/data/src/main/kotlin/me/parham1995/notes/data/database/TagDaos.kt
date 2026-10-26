@@ -29,6 +29,15 @@ interface TagDao {
     )
     fun uses(vaultId: Long): Flow<List<TagUse>>
 
+    @Query(
+        """
+        SELECT tags.name AS name, tags.noteId AS noteId
+        FROM tags JOIN notes ON notes.id = tags.noteId
+        WHERE notes.vaultId = :vaultId
+        """,
+    )
+    suspend fun usesNow(vaultId: Long): List<TagUse>
+
     /**
      * The notes carrying [folded] or anything nested under it, once each.
      *

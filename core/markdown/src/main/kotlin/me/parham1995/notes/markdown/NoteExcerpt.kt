@@ -142,6 +142,7 @@ object NoteExcerpt {
                 is MdBlock.ThematicBreak,
                 is MdBlock.Unsupported,
                 is MdBlock.TasksQuery,
+                is MdBlock.BaseView,
                 is MdBlock.Footnotes,
                 -> Unit
             }

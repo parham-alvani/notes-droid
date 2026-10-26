@@ -110,6 +110,10 @@ interface BlobDao {
         kinds: List<BlobKind> = BROWSABLE_KINDS,
     ): Flow<List<String>>
 
+    /** Every file one vault holds, for a base to list. */
+    @Query("SELECT path, kind, size FROM blobs WHERE vaultId = :vaultId")
+    suspend fun files(vaultId: Long): List<BlobFileRow>
+
     @Query("DELETE FROM blobs")
     suspend fun clear()
 
@@ -347,3 +351,9 @@ interface PendingEditDao {
     @Query("DELETE FROM pending_edits WHERE vaultId = :vaultId")
     suspend fun clearVault(vaultId: Long)
 }
+
+data class BlobFileRow(
+    val path: String,
+    val kind: BlobKind,
+    val size: Long,
+)

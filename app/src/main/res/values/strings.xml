@@ -319,6 +319,9 @@
     <string name="unsupported_dataview">Dataview query</string>
     <string name="unsupported_tasks_query">Tasks query</string>
     <string name="unsupported_excalidraw">Excalidraw drawing</string>
+    <string name="base_title">Base</string>
+    <string name="base_empty">No files match this view.</string>
+    <string name="base_missing">This base is not in the vault.</string>
     <string name="tasks_query_empty">No tasks match this query.</string>
     <string name="tasks_query_not_understood">Not understood, so not applied: %1$s</string>
     <plurals name="tasks_query_hidden">

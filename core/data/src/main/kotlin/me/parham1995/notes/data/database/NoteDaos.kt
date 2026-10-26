@@ -143,6 +143,10 @@ interface NoteDao {
 
     @Query("SELECT COUNT(*) FROM notes WHERE vaultId = :vaultId")
     fun count(vaultId: Long): Flow<Int>
+
+    /** What a base knows of each note without reading it: its path, when it changed and its size. */
+    @Query("SELECT id, path, changedAt, size FROM notes WHERE vaultId = :vaultId")
+    suspend fun stats(vaultId: Long): List<NoteStatRow>
 }
 
 /** Makes text match itself under `LIKE ... ESCAPE '\'`, wildcards included. */
@@ -156,6 +160,13 @@ data class FolderNoteRow(
     val id: Long,
     val path: String,
     val isRtl: Boolean,
+)
+
+data class NoteStatRow(
+    val id: Long,
+    val path: String,
+    val changedAt: Long,
+    val size: Long,
 )
 
 data class NoteRef(
@@ -197,6 +208,16 @@ interface LinkDao {
     )
     suspend fun outgoing(srcId: Long): List<BacklinkRow>
 
+    /** Every link written in one vault, for a base and the graph to read at once. */
+    @Query(
+        """
+        SELECT links.srcId AS srcId, links.kind AS kind, links.rawTarget AS rawTarget, links.targetId AS targetId
+        FROM links JOIN notes ON notes.id = links.srcId
+        WHERE notes.vaultId = :vaultId
+        """,
+    )
+    suspend fun inVault(vaultId: Long): List<LinkRow>
+
     @Query("SELECT COUNT(*) FROM links WHERE targetId = :targetId")
     suspend fun backlinkCount(targetId: Long): Int
 
@@ -230,6 +251,13 @@ data class BacklinkRow(
     val title: String,
     val path: String,
     val context: String,
+)
+
+data class LinkRow(
+    val srcId: Long,
+    val kind: String,
+    val rawTarget: String,
+    val targetId: Long?,
 )
 
 data class UnresolvedLink(

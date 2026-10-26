@@ -318,6 +318,9 @@
     <string name="unsupported_dataview">پرس‌وجوی Dataview</string>
     <string name="unsupported_tasks_query">پرس‌وجوی Tasks</string>
     <string name="unsupported_excalidraw">نقاشی Excalidraw</string>
+    <string name="base_title">پایگاه</string>
+    <string name="base_empty">هیچ پرونده‌ای با این نما جور نیست.</string>
+    <string name="base_missing">این پایگاه در این دفتر نیست.</string>
     <string name="tasks_query_empty">هیچ کاری با این پرس‌وجو جور نیست.</string>
     <string name="tasks_query_not_understood">فهمیده نشد و به کار نرفت: %1$s</string>
     <plurals name="tasks_query_hidden">

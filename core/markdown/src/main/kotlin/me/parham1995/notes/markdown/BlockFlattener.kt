@@ -324,6 +324,9 @@ class BlockFlattener(
         links += ParsedLink(LinkKind.WIKI_EMBED, node.target, node.alias)
         val extension = node.target.substringAfterLast('.', "").lowercase()
         return when {
+            // A base is a query, drawn as its tables; `#View` picks one view.
+            extension == "base" -> MdBlock.BaseView(id(), target = node.target, view = node.heading)
+
             extension in RENDERABLE_IMAGES -> {
                 val sized = Sized.of(node.alias.orEmpty())
                 MdBlock.Image(id(), imageResolver(node.target), sized.alt, sized.width, sized.height)
@@ -397,6 +400,7 @@ class BlockFlattener(
             "dataview", "dataviewjs" -> MdBlock.Unsupported(id(), "Dataview query", UnsupportedKind.DATAVIEW)
             // Not text the reader wrote, so not searched or read aloud.
             "tasks" -> MdBlock.TasksQuery(id(), node.literal.trimEnd('\n'))
+            "base" -> MdBlock.BaseView(id(), source = node.literal.trimEnd('\n'))
             "compressed-json" -> MdBlock.Unsupported(id(), "Excalidraw drawing", UnsupportedKind.EXCALIDRAW)
             else -> {
                 plain.append(node.literal)

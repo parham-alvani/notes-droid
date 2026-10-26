@@ -147,6 +147,7 @@ internal fun NoteEmbedView(
                         // does not know the path of; the note itself answers.
                         queryTasks = null,
                         onCompleteQueryTask = null,
+                        runBase = null,
                         inline =
                             actions.inline.copy(
                                 onWikiLink = { target, heading ->

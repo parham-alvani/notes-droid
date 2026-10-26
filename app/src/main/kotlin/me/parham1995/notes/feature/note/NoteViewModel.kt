@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.data.BaseAnswer
+import me.parham1995.notes.data.BaseRepository
 import me.parham1995.notes.data.Destinations
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.PeriodNeighbours
@@ -109,6 +111,7 @@ class NoteViewModel
         private val writes: VaultWriteRepository,
         private val destinations: Destinations,
         private val scheduler: SyncScheduler,
+        private val bases: BaseRepository,
     ) : ViewModel() {
         val tabs: StateFlow<TabsState> = openTabs.state
 
@@ -583,6 +586,18 @@ class NoteViewModel
                 val here = _state.value.note?.id == row.noteId
                 if (here && (result == WriteResult.Pushed || result is WriteResult.Queued)) reload()
             }
+
+        /**
+         * Runs a base the note at [path] embeds or writes out, in that note's
+         * vault; `this` is the note.
+         */
+        suspend fun runBase(
+            vaultId: Long,
+            path: String,
+            block: MdBlock.BaseView,
+        ): BaseAnswer? =
+            block.source?.let { bases.run(vaultId, it, path) }
+                ?: block.target?.let { bases.runFile(vaultId, it, path) }
 
         /** The note a wikilink points at, or null when it is broken. */
         fun targetOf(target: String): Long? =

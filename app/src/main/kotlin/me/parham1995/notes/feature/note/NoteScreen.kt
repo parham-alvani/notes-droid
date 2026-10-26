@@ -545,6 +545,7 @@ fun NoteScreen(
                     // nothing to open.
                     transclude = viewModel::transclusion,
                     queryTasks = { source -> viewModel.tasksQuery(note.vaultId, note.path, source) },
+                    runBase = { block -> viewModel.runBase(note.vaultId, note.path, block) },
                     onCompleteQueryTask =
                         if (state.writable) {
                             { row -> viewModel.completeQueryTask(row) }

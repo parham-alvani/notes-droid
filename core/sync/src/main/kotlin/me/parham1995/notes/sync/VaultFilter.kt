@@ -45,6 +45,9 @@ class VaultFilter(
         val extension = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
         return when {
             extension == "md" -> BlobKind.MARKDOWN
+            // An Obsidian base: a few lines of YAML a note embeds, so it is
+            // fetched with the markdown rather than on demand.
+            extension == "base" -> BlobKind.CONFIG
             includeImages && extension in IMAGE_EXTENSIONS -> BlobKind.IMAGE
             extension in ATTACHMENT_EXTENSIONS -> BlobKind.OTHER
             else -> null
@@ -80,8 +83,9 @@ class VaultFilter(
          * 2: the Iconic plugin's icon assignments.
          * 3: attachments -- PDFs, video, audio, archives, office documents.
          * 4: Obsidian's bookmarks and daily-notes settings.
+         * 5: Obsidian bases (`.base`) and the property types they read.
          */
-        const val VERSION = 4
+        const val VERSION = 5
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -112,7 +116,13 @@ class VaultFilter(
          */
         const val DAILY_NOTES = ".obsidian/daily-notes.json"
 
-        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES)
+        /**
+         * The type of each property -- number, date, list -- which a base needs
+         * to know whether `2026` is a number and whether one value is a list.
+         */
+        const val PROPERTY_TYPES = ".obsidian/types.json"
+
+        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES)
 
         /**
          * Formats the reader draws itself. Everything else it can offer is in
