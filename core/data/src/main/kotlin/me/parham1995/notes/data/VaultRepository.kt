@@ -31,6 +31,7 @@ import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
 import me.parham1995.notes.markdown.MdBlock
+import me.parham1995.notes.markdown.NoteGraph
 import me.parham1995.notes.markdown.QuickSwitcher
 import me.parham1995.notes.markdown.Slugs
 import me.parham1995.notes.markdown.TagTree
@@ -394,6 +395,26 @@ class VaultRepository
                 incoming = links.backlinks(id).distinctBy { it.noteId },
             )
         }
+
+        /**
+         * Every note in the vault [id] is in and every link between them, for
+         * the graph drawn deeper than one hop or whole; null when [id] is gone.
+         */
+        suspend fun linkGraph(id: Long): Pair<NoteGraph, Int>? =
+            withContext(Dispatchers.Default) {
+                val centre = notes.byId(id) ?: return@withContext null
+                val all = notes.stats(centre.vaultId)
+                val graph =
+                    NoteGraph.of(
+                        ids = all.map { it.id },
+                        paths = all.map { it.path },
+                        links =
+                            links.inVault(centre.vaultId).mapNotNull { link ->
+                                link.targetId?.let { link.srcId to it }
+                            },
+                    )
+                graph to graph.ids.indexOf(id)
+            }
 
         /**
          * Every tag in [vaultId] as a tree, each counting the notes under it.

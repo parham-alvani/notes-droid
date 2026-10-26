@@ -180,6 +180,11 @@
         <item quantity="one">%1$d waiting to go up</item>
         <item quantity="other">%1$d waiting to go up</item>
     </plurals>
+    <plurals name="graph_hops">
+        <item quantity="one">%1$d hop</item>
+        <item quantity="other">%1$d hops</item>
+    </plurals>
+    <string name="graph_vault">Whole vault</string>
     <plurals name="graph_hidden">
         <item quantity="one">%1$d more not shown</item>
         <item quantity="other">%1$d more not shown</item>

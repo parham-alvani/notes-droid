@@ -2,10 +2,18 @@ package me.parham1995.notes.feature.graph
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -45,15 +53,18 @@ import kotlin.math.sin
 /**
  * What this note is connected to.
  *
- * One hop, drawn as a ring. A force-directed layout of 2,407 notes and 9,593
- * links is a screensaver -- it looks like the vault and answers nothing about
- * it. A ring around whatever is open answers the question people actually have,
- * which is "what did I connect this to", and it is deterministic: the same note
- * draws the same picture every time, so the shape becomes recognisable.
+ * One hop by default, drawn as a ring: it answers the question people usually
+ * have, which is "what did I connect this to", and it is deterministic -- the
+ * same note draws the same picture every time, so the shape becomes
+ * recognisable. Direction is in the colour, because in a vault where every
+ * link was typed by hand it is the interesting part: something linking *to*
+ * this note is someone else's reference to it, and a mutual link is one
+ * somebody meant twice.
  *
- * Direction is in the colour, because in a vault where every link was typed by
- * hand it is the interesting part: something linking *to* this note is someone
- * else's reference to it, and a mutual link is one somebody meant twice.
+ * Two to four hops, or the whole vault, are a force layout instead
+ * ([NetworkView]) -- asked for, not the default, because 2,407 notes and 9,593
+ * links drawn at once look like the vault more than they answer anything
+ * about it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,10 +76,6 @@ fun GraphScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(noteId) { viewModel.load(noteId) }
-
-    val measurer = rememberTextMeasurer()
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
 
     Scaffold(
         topBar = {
@@ -92,73 +99,118 @@ fun GraphScreen(
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                state.loading -> Loading(Modifier.align(Alignment.Center))
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            ReachChips(state.reach, viewModel::reach)
+            Box(Modifier.fillMaxSize()) {
+                Graph(state, onOpenNote)
+            }
+        }
+    }
+}
 
-                state.nodes.isEmpty() ->
+/** One hop, two, three, four, or the whole vault. */
+@Composable
+private fun ReachChips(
+    reach: GraphReach,
+    onReach: (GraphReach) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        GraphReach.CHOICES.forEach { choice ->
+            FilterChip(
+                selected = choice == reach,
+                onClick = { onReach(choice) },
+                label = {
                     Text(
-                        stringResource(R.string.graph_no_links),
-                        Modifier.align(Alignment.Center).padding(32.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = muted,
-                        textAlign = TextAlign.Center,
+                        when (choice) {
+                            is GraphReach.Hops -> pluralStringResource(R.plurals.graph_hops, choice.depth, choice.depth)
+                            GraphReach.Vault -> stringResource(R.string.graph_vault)
+                        },
                     )
+                },
+            )
+        }
+    }
+}
 
-                else -> {
-                    // Recomputed only when the ring changes, and reused by both
-                    // the drawing and the hit test so a tap cannot land on a
-                    // node the picture does not show.
-                    val ring = remember(state.nodes) { state.nodes }
-                    val accents = Accents
+@Composable
+private fun BoxScope.Graph(
+    state: GraphUiState,
+    onOpenNote: (Long) -> Unit,
+) {
+    val measurer = rememberTextMeasurer()
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val network = state.network
+    when {
+        state.loading -> Loading(Modifier.align(Alignment.Center))
 
-                    Canvas(
-                        Modifier
-                            .fillMaxSize()
-                            .pointerInput(ring) {
-                                detectTapGestures { tap ->
-                                    val centre = Offset(size.width / 2f, size.height / 2f)
-                                    val radius = min(size.width, size.height) / 2f - EDGE_INSET
-                                    ring.forEachIndexed { index, node ->
-                                        val at = positionOf(index, ring.size, centre, radius)
-                                        if (hypot(tap.x - at.x, tap.y - at.y) <= TOUCH_RADIUS) {
-                                            onOpenNote(node.id)
-                                            return@detectTapGestures
-                                        }
-                                    }
+        network != null && network.nodes.size > 1 ->
+            NetworkView(network, onOpenNote, Modifier.fillMaxSize())
+
+        state.nodes.isEmpty() ->
+            Text(
+                stringResource(R.string.graph_no_links),
+                Modifier.align(Alignment.Center).padding(32.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = muted,
+                textAlign = TextAlign.Center,
+            )
+
+        else -> {
+            // Recomputed only when the ring changes, and reused by both
+            // the drawing and the hit test so a tap cannot land on a
+            // node the picture does not show.
+            val ring = remember(state.nodes) { state.nodes }
+            val accents = Accents
+
+            Canvas(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(ring) {
+                        detectTapGestures { tap ->
+                            val centre = Offset(size.width / 2f, size.height / 2f)
+                            val radius = min(size.width, size.height) / 2f - EDGE_INSET
+                            ring.forEachIndexed { index, node ->
+                                val at = positionOf(index, ring.size, centre, radius)
+                                if (hypot(tap.x - at.x, tap.y - at.y) <= TOUCH_RADIUS) {
+                                    onOpenNote(node.id)
+                                    return@detectTapGestures
                                 }
-                            },
-                    ) {
-                        val centre = Offset(size.width / 2f, size.height / 2f)
-                        val radius = min(size.width, size.height) / 2f - EDGE_INSET
-
-                        ring.forEachIndexed { index, node ->
-                            val at = positionOf(index, ring.size, centre, radius)
-                            val colour = node.direction.colour(accents)
-
-                            drawLine(
-                                color = colour.copy(alpha = EDGE_ALPHA),
-                                start = centre,
-                                end = at,
-                                strokeWidth = if (node.direction == Edge.MUTUAL) MUTUAL_STROKE else EDGE_STROKE,
-                            )
-                            drawCircle(color = colour, radius = NODE_RADIUS, center = at)
-                            label(measurer, node.label, at, radius, onSurface)
+                            }
                         }
+                    },
+            ) {
+                val centre = Offset(size.width / 2f, size.height / 2f)
+                val radius = min(size.width, size.height) / 2f - EDGE_INSET
 
-                        // Drawn last so the edges run underneath it.
-                        drawCircle(color = accents.orange, radius = CENTRE_RADIUS, center = centre)
-                    }
+                ring.forEachIndexed { index, node ->
+                    val at = positionOf(index, ring.size, centre, radius)
+                    val colour = node.direction.colour(accents)
 
-                    if (state.hidden > 0) {
-                        Text(
-                            pluralStringResource(R.plurals.graph_hidden, state.hidden, state.hidden),
-                            Modifier.align(Alignment.BottomCenter).padding(16.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = muted,
-                        )
-                    }
+                    drawLine(
+                        color = colour.copy(alpha = EDGE_ALPHA),
+                        start = centre,
+                        end = at,
+                        strokeWidth = if (node.direction == Edge.MUTUAL) MUTUAL_STROKE else EDGE_STROKE,
+                    )
+                    drawCircle(color = colour, radius = NODE_RADIUS, center = at)
+                    label(measurer, node.label, at, radius, onSurface)
                 }
+
+                // Drawn last so the edges run underneath it.
+                drawCircle(color = accents.orange, radius = CENTRE_RADIUS, center = centre)
+            }
+
+            if (state.hidden > 0) {
+                Text(
+                    pluralStringResource(R.plurals.graph_hidden, state.hidden, state.hidden),
+                    Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = muted,
+                )
             }
         }
     }

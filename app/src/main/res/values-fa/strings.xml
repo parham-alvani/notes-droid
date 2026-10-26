@@ -179,6 +179,11 @@
         <item quantity="one">%1$d تا منتظر ارسال</item>
         <item quantity="other">%1$d تا منتظر ارسال</item>
     </plurals>
+    <plurals name="graph_hops">
+        <item quantity="one">%1$d گام</item>
+        <item quantity="other">%1$d گام</item>
+    </plurals>
+    <string name="graph_vault">همهٔ دفتر</string>
     <plurals name="graph_hidden">
         <item quantity="one">%1$d تای دیگر نشان داده نشده</item>
         <item quantity="other">%1$d تای دیگر نشان داده نشده</item>
