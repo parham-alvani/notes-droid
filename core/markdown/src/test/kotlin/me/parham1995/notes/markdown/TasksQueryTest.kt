@@ -237,4 +237,12 @@ class TasksQueryTest {
     fun `an empty query lists everything`() {
         assertThat(run("")).hasSize(tasks.size)
     }
+
+    @Test
+    fun `a limit too large for a number limits nothing rather than throwing`() {
+        val query = TasksQuery.parse("limit 99999999999999")
+
+        assertThat(query.limit).isNull()
+        assertThat(query.notUnderstood).isEmpty()
+    }
 }

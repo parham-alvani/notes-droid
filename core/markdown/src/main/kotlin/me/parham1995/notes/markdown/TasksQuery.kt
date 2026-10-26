@@ -112,7 +112,15 @@ class TasksQuery private constructor(
                             .parse(expanded.substring("filter by function ".length))
                             ?.let { expression -> filters += Filter { t, _ -> expression.test(t) } }
                             ?: run { notUnderstood += line }
-                    LIMIT.matches(lower) -> limit = LIMIT.find(lower)!!.groupValues[1].toInt()
+                    // A limit past what an Int holds limits nothing; it was a
+                    // NumberFormatException, which took the note down with it.
+                    LIMIT.matches(lower) ->
+                        limit =
+                            LIMIT
+                                .find(lower)
+                                ?.groupValues
+                                ?.get(1)
+                                ?.toIntOrNull()
                     lower.startsWith("sort by ") ->
                         sort(lower.removePrefix("sort by "))?.let { sorts += it }
                             ?: run { notUnderstood += line }
