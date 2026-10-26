@@ -59,9 +59,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -101,6 +103,7 @@ import me.parham1995.notes.ui.render.FootnoteSheet
 import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
+import me.parham1995.notes.ui.render.Transcluded
 import me.parham1995.notes.ui.sharedBoundsIn
 import me.parham1995.notes.ui.sharedElementIn
 import me.parham1995.notes.ui.sheetProperties
@@ -166,6 +169,8 @@ fun NoteScreen(
     var findAt by remember(noteId) { mutableIntStateOf(0) }
     var peeking by remember { mutableStateOf<LinkTarget?>(null) }
     var peekBroken by remember { mutableStateOf<String?>(null) }
+    var previewing by remember { mutableStateOf<Pair<LinkTarget, Transcluded>?>(null) }
+    val haptics = LocalHapticFeedback.current
     // A heading to land on once the note it belongs to has loaded.
     var pendingHeading by remember { mutableStateOf<String?>(null) }
     // A heading asked for with the note it is in, handed over only once that
@@ -475,6 +480,24 @@ fun NoteScreen(
                             },
                             onBrokenLink = { target -> peekBroken = target },
                             onDefine = { word -> context.startActivity(DefineActivity.lookUp(context, word)) },
+                            // A hold on a link reads it in place; a tap
+                            // still asks where to open it.
+                            onPreviewLink = { target, heading ->
+                                val id = if (target.isBlank()) note.id else viewModel.targetOf(target)
+                                if (id == null) {
+                                    peekBroken = target
+                                } else {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    scope.launch {
+                                        val peek = viewModel.peek(id) ?: return@launch
+                                        val content =
+                                            viewModel.preview(id, heading)
+                                                ?: viewModel.preview(id, null)
+                                                ?: return@launch
+                                        previewing = peek.copy(heading = heading) to content
+                                    }
+                                }
+                            },
                             // The note's own vault: a tag means
                             // nothing across two of them.
                             onTag = { tag -> onOpenTag(note.vaultId, tag) },
@@ -996,6 +1019,29 @@ fun NoteScreen(
                 },
                 onOpenInNewTab = {
                     peeking = null
+                    headingIn = target.heading?.let { target.noteId to it }
+                    viewModel.openTab(target.noteId, inNewTab = true)
+                },
+            )
+        }
+
+        previewing?.let { (target, content) ->
+            LinkPreview(
+                target = target,
+                content = content,
+                vaultId = state.note?.vaultId ?: 0,
+                onDismiss = { previewing = null },
+                onOpenHere = {
+                    previewing = null
+                    if (target.noteId == state.note?.id) {
+                        pendingHeading = target.heading
+                    } else {
+                        headingIn = target.heading?.let { target.noteId to it }
+                        viewModel.openTab(target.noteId, inNewTab = false)
+                    }
+                },
+                onOpenInNewTab = {
+                    previewing = null
                     headingIn = target.heading?.let { target.noteId to it }
                     viewModel.openTab(target.noteId, inNewTab = true)
                 },

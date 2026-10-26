@@ -536,8 +536,17 @@ class NoteViewModel
         suspend fun transclusion(
             target: String,
             heading: String?,
+        ): Transcluded? = targetOf(target)?.let { preview(it, heading) }
+
+        /**
+         * The note [id], or the section [heading] names in it -- a heading, a
+         * `Parent#Child` path or a `^block` -- as an embed or a held link
+         * draws it; null when there is no such note or part of it.
+         */
+        suspend fun preview(
+            id: Long,
+            heading: String?,
         ): Transcluded? {
-            val id = targetOf(target) ?: return null
             val note = repository.note(id) ?: return null
             val section = Transclusion.section(note.blocks, heading, note.blockTargets) ?: return null
             return Transcluded(

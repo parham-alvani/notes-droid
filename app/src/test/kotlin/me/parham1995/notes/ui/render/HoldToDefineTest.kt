@@ -104,4 +104,67 @@ class HoldToDefineTest {
 
         assertThat(defined).isEmpty()
     }
+
+    @Test
+    fun `holding a link previews it, and the lift does not also follow it`() {
+        val previewed = mutableListOf<Pair<String, String?>>()
+        val followed = mutableListOf<String>()
+        val blocks = MarkdownParser.parseNote("[[Bakery#Ovens]] is a link\n").blocks
+        val actions =
+            RenderActions(
+                inline =
+                    InlineActions(
+                        onDefine = { defined += it },
+                        onPreviewLink = { target, heading -> previewed += target to heading },
+                        onWikiLink = { target, _ -> followed += target },
+                    ),
+            )
+        compose.setContent {
+            CompositionLocalProvider(LocalReading provides ReadingSettings()) {
+                SelectionContainer { blocks.forEach { MdBlockView(it, actions, emptySet()) } }
+            }
+        }
+
+        compose.onNodeWithText("is a link", substring = true).performTouchInput {
+            longClick(centerLeft + onFirstWord)
+        }
+
+        assertThat(previewed).containsExactly("Bakery" to "Ovens")
+        assertThat(defined).isEmpty()
+        assertThat(followed).isEmpty()
+
+        // A tap on it is still a tap.
+        compose.onNodeWithText("is a link", substring = true).performTouchInput {
+            click(centerLeft + onFirstWord)
+        }
+        assertThat(followed).containsExactly("Bakery")
+    }
+
+    @Test
+    fun `beside a link, a hold still defines`() {
+        val previewed = mutableListOf<String>()
+        val blocks = MarkdownParser.parseNote("serendipity [[Bakery]]\n").blocks
+        val actions =
+            RenderActions(
+                inline =
+                    InlineActions(onDefine = { defined += it }, onPreviewLink = {
+                        target,
+                        _,
+                        ->
+                        previewed += target
+                    }),
+            )
+        compose.setContent {
+            CompositionLocalProvider(LocalReading provides ReadingSettings()) {
+                SelectionContainer { blocks.forEach { MdBlockView(it, actions, emptySet()) } }
+            }
+        }
+
+        compose.onNodeWithText("serendipity", substring = true).performTouchInput {
+            longClick(centerLeft + onFirstWord)
+        }
+
+        assertThat(defined).containsExactly("serendipity")
+        assertThat(previewed).isEmpty()
+    }
 }

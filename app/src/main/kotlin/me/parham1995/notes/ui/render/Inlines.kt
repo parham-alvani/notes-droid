@@ -54,6 +54,13 @@ data class InlineActions(
      * only select it -- everywhere but the reader.
      */
     val onDefine: ((word: String) -> Unit)? = null,
+    /**
+     * A `[[link]]` a finger was held on: show what it points at without
+     * leaving the page. Null where a hold on a link should do what a hold on
+     * any word does -- inside an embed, whose links are resolved against
+     * another note's table.
+     */
+    val onPreviewLink: ((target: String, heading: String?) -> Unit)? = null,
 )
 
 /**
@@ -194,7 +201,11 @@ private fun appendInlines(
                     LinkAnnotation.Clickable(tag = node.target, styles = TextLinkStyles(style)) {
                         actions.onWikiLink(node.target, node.heading)
                     }
+                // Marked a second time, for a hold to find: a link's own tag
+                // cannot say what kind of link it is.
+                val start = builder.length
                 builder.withLink(link) { builder.append(node.display) }
+                builder.addStringAnnotation(PREVIEW_TAG, previewValue(node.target, node.heading), start, builder.length)
             }
 
             // Drawn as a tag, and a way to every other note carrying it --
@@ -244,6 +255,21 @@ private fun appendInlines(
 }
 
 internal const val MATH_TAG_PREFIX = "math:"
+
+/** Where a `[[link]]` runs in a block's text, so a hold on it can preview it. */
+internal const val PREVIEW_TAG = "preview"
+
+private const val PREVIEW_SEPARATOR = '\u001F'
+
+private fun previewValue(
+    target: String,
+    heading: String?,
+): String = if (heading == null) target else "$target$PREVIEW_SEPARATOR$heading"
+
+/** The target and heading [previewValue] packed. */
+internal fun previewOf(value: String): Pair<String, String?> =
+    value.substringBefore(PREVIEW_SEPARATOR) to value.substringAfter(PREVIEW_SEPARATOR, "").ifEmpty { null }
+
 private const val TAG_PREFIX = "tag:"
 private const val FOOTNOTE_PREFIX = "footnote:"
 

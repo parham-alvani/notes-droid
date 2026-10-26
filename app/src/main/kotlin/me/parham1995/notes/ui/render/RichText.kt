@@ -25,6 +25,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextLayoutResult
@@ -124,7 +125,7 @@ fun RichText(
     val onDefine = actions.onDefine.takeIf { LocalReading.current.holdToDefine }
     Text(
         text = marked,
-        modifier = modifier.holdToDefine(marked.text, { layout }, onDefine),
+        modifier = modifier.hold(marked, { layout }, onDefine, actions.onPreviewLink),
         style = style,
         textAlign = textAlign,
         inlineContent = inlineContent,
@@ -133,21 +134,25 @@ fun RichText(
 }
 
 /**
- * Holding a finger still on a word hands the word to [onDefine].
+ * Holding a finger still on a `[[link]]` previews it; on any other word it
+ * hands the word to [onDefine].
  *
- * Watched on the initial pass and never consumed, so the selection the same
- * hold starts goes ahead underneath: the dictionary opens and the word is
- * also selected, ready to copy once the sheet is closed. A finger that lifts,
+ * Watched on the initial pass. A hold on a word is never consumed, so the
+ * selection the same hold starts goes ahead underneath: the dictionary opens
+ * and the word is also selected, ready to copy once the sheet is closed. A
+ * hold on a link consumes the finger's lift, or the link would take that lift
+ * as a tap and open its own sheet over the preview. A finger that lifts,
  * slides past the touch slop -- a scroll -- or is joined by a second one
  * before the long-press timeout is not a hold.
  */
-private fun Modifier.holdToDefine(
-    text: String,
+private fun Modifier.hold(
+    text: AnnotatedString,
     layout: () -> TextLayoutResult?,
     onDefine: ((String) -> Unit)?,
+    onPreview: ((String, String?) -> Unit)?,
 ): Modifier {
-    if (onDefine == null) return this
-    return pointerInput(text, onDefine) {
+    if (onDefine == null && onPreview == null) return this
+    return pointerInput(text, onDefine, onPreview) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             val interrupted =
@@ -162,9 +167,37 @@ private fun Modifier.holdToDefine(
                     }
                     true
                 }
-            if (interrupted == null) wordUnder(layout(), text, down.position)?.let(onDefine)
+            if (interrupted != null) return@awaitEachGesture
+            val link = onPreview?.let { linkUnder(layout(), text, down.position) }
+            if (link != null) {
+                onPreview(link.first, link.second)
+                // Swallow the lift, so the link does not also count it as a tap.
+                do {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    event.changes.forEach { it.consume() }
+                } while (event.changes.any { it.pressed })
+            } else {
+                onDefine?.let { define -> wordUnder(layout(), text.text, down.position)?.let(define) }
+            }
         }
     }
+}
+
+/** The `[[link]]` drawn under [position], as its target and heading. */
+private fun linkUnder(
+    layout: TextLayoutResult?,
+    text: AnnotatedString,
+    position: Offset,
+): Pair<String, String?>? {
+    layout ?: return null
+    val line = layout.getLineForVerticalPosition(position.y)
+    if (position.x < layout.getLineLeft(line) || position.x > layout.getLineRight(line)) return null
+    val offset = layout.getOffsetForPosition(position)
+    return text
+        .getStringAnnotations(PREVIEW_TAG, offset, offset + 1)
+        .firstOrNull()
+        ?.item
+        ?.let(::previewOf)
 }
 
 /** The word drawn under [position], and only if the finger is on the text rather than beside it. */

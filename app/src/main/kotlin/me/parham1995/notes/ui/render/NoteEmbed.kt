@@ -150,6 +150,8 @@ internal fun NoteEmbedView(
                         runBase = null,
                         inline =
                             actions.inline.copy(
+                                // Its links name notes from its own table, not the page's.
+                                onPreviewLink = null,
                                 onWikiLink = { target, heading ->
                                     val id = if (target.isBlank()) note.noteId else note.linkTargets[target]
                                     if (id != null) {

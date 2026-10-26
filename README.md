@@ -23,6 +23,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Tags** — inline `#tags` and nested `#parent/child` ones, and those in front matter; tap one for every note carrying it, or browse the vault's tag tree
 - **Properties and aliases** — front matter shown as a foldable Properties block, and a note's `aliases` answer to `[[links]]` and the quick switcher
 - **Backlinks, unlinked mentions, an outline and a connections graph** for every note
+- **Link previews** — tap a `[[link]]` to see where it goes before going; hold one to read the note it points at — or just the section its heading names, or the block its `^id` names — in a sheet, with buttons to open it here or in a new tab. A hold anywhere else still looks the word up in the dictionary
 - **Find in note**, and notes that resume where you left them
 - **Made for reading** — fold a section shut from its heading, as Obsidian's reading view does, and the note remembers its folds; the bar slides away as you read down and back on the first scroll up; a hairline under it says how far through the note you are; the screen can be kept on while a note is open; and folding, ticking and pinching are felt as well as seen
 - **Tabs you can swipe between**, and a note's title that travels from the row you tapped into the bar above the page, and pictures that grow out of their place in the note
