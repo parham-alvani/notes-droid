@@ -18,6 +18,8 @@ import me.parham1995.notes.data.TaskBuckets
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.data.WriteResult
+import me.parham1995.notes.data.calendar.TodayCalendar
+import me.parham1995.notes.data.calendar.TodayCalendarSource
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.ui.UiText
 import java.time.LocalDate
@@ -82,7 +84,14 @@ class TasksViewModel
         private val repository: VaultRepository,
         private val writes: VaultWriteRepository,
         private val savedState: SavedStateHandle,
+        todayCalendar: TodayCalendarSource,
     ) : ViewModel() {
+        /** Today's meetings and free time, for the card at the top of the list. */
+        val today: StateFlow<TodayCalendar> =
+            todayCalendar
+                .observe(repository.activeVaultId)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS), TodayCalendar())
+
         /** A message, and the undo that goes with it when there is one. */
         private data class Notice(
             val text: UiText,

@@ -201,6 +201,36 @@
     <string name="settings_section_notifications_summary">خلاصهٔ روزانهٔ کارها، و یادآوری‌ها</string>
     <string name="settings_section_calendar">تقویم</string>
     <string name="settings_section_calendar_summary">کدام تقویم‌ها دیده شوند، و یادداشت‌های هفتگی‌شان</string>
+    <plurals name="today_meetings">
+        <item quantity="one">%1$d جلسه</item>
+        <item quantity="other">%1$d جلسه</item>
+    </plurals>
+    <string name="today_free">وقت آزاد %1$s</string>
+    <string name="today_free_none">بی وقت آزاد</string>
+    <plurals name="today_due">
+        <item quantity="one">%1$d سررسید</item>
+        <item quantity="other">%1$d سررسید</item>
+    </plurals>
+    <plurals name="today_overdue">
+        <item quantity="one">%1$d عقب‌افتاده</item>
+        <item quantity="other">%1$d عقب‌افتاده</item>
+    </plurals>
+    <plurals name="today_in_progress">
+        <item quantity="one">%1$d در جریان</item>
+        <item quantity="other">%1$d در جریان</item>
+    </plurals>
+    <plurals name="today_coming">
+        <item quantity="one">%1$d این هفته</item>
+        <item quantity="other">%1$d این هفته</item>
+    </plurals>
+    <string name="today_no_meetings">امروز جلسه‌ای نیست.</string>
+    <string name="today_no_week_note">یادداشت هفتهٔ امروز در %1$s/ نیست. در تنظیمات تقویم‌ها را انتخاب کنید تا گوشی آن را بنویسد.</string>
+    <string name="today_tomorrow">فردا از %1$s شروع می‌شود: %2$s</string>
+    <string name="today_now">اکنون</string>
+    <string name="today_maybe">شاید</string>
+    <string name="today_all_day">تمام روز</string>
+    <string name="today_overlaps">هم‌زمان با %1$s</string>
+    <string name="today_join">پیوستن</string>
     <string name="calendar_title">تقویم</string>
     <string name="calendar_needs_access">دفتر تقویم‌های این گوشی را می‌خواند تا جلسه‌ها را کنار کارها نشان دهد. هیچ‌وقت آن‌ها را تغییر نمی‌دهد.</string>
     <string name="calendar_allow">اجازهٔ دسترسی به تقویم</string>

@@ -85,6 +85,7 @@ fun TasksScreen(
     viewModel: TasksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val today by viewModel.today.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var adding by remember { mutableStateOf(false) }
 
@@ -244,6 +245,14 @@ fun TasksScreen(
             reminded = { row -> TaskReminders.keyOf(row.vaultId, row.notePath, row.text) in remindedKeys },
             onOpen = { onOpenNote(it.noteId) },
             modifier = Modifier.fillMaxSize().padding(padding),
+            // The day, above the whole vault's tasks; a list filtered to one
+            // file is about that file, not the day.
+            header =
+                if (state.selectedPath == null) {
+                    { TodayCard(today, TodayCounts.of(state.groups)) }
+                } else {
+                    null
+                },
         )
     }
 }
@@ -268,6 +277,8 @@ internal fun TaskList(
     onRemind: ((TaskRow, LocalDateTime) -> Unit)? = null,
     /** Whether a task has a reminder waiting, to draw its bell. */
     reminded: (TaskRow) -> Boolean = { false },
+    /** Drawn above the groups, scrolling with them. */
+    header: (@Composable () -> Unit)? = null,
 ) {
     var moving by remember { mutableStateOf<TaskRow?>(null) }
 
@@ -291,6 +302,7 @@ internal fun TaskList(
     }
 
     LazyColumn(modifier) {
+        header?.let { item(key = "header") { it() } }
         groups.forEach { group ->
             stickyHeader(key = "header-${group.bucket.name}") {
                 BucketHeader(group.bucket, group.rows.size)

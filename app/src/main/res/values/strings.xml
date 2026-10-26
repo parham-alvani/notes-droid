@@ -202,6 +202,36 @@
     <string name="settings_section_notifications_summary">The daily task summary, and reminders</string>
     <string name="settings_section_calendar">Calendar</string>
     <string name="settings_section_calendar_summary">Which calendars to show, and their week notes</string>
+    <plurals name="today_meetings">
+        <item quantity="one">%1$d meeting</item>
+        <item quantity="other">%1$d meetings</item>
+    </plurals>
+    <string name="today_free">free %1$s</string>
+    <string name="today_free_none">no free time</string>
+    <plurals name="today_due">
+        <item quantity="one">%1$d due</item>
+        <item quantity="other">%1$d due</item>
+    </plurals>
+    <plurals name="today_overdue">
+        <item quantity="one">%1$d overdue</item>
+        <item quantity="other">%1$d overdue</item>
+    </plurals>
+    <plurals name="today_in_progress">
+        <item quantity="one">%1$d in progress</item>
+        <item quantity="other">%1$d in progress</item>
+    </plurals>
+    <plurals name="today_coming">
+        <item quantity="one">%1$d this week</item>
+        <item quantity="other">%1$d this week</item>
+    </plurals>
+    <string name="today_no_meetings">No meetings today.</string>
+    <string name="today_no_week_note">There is no week note for today in %1$s/. Choose calendars in Settings and the phone writes it.</string>
+    <string name="today_tomorrow">Tomorrow starts at %1$s: %2$s</string>
+    <string name="today_now">now</string>
+    <string name="today_maybe">maybe</string>
+    <string name="today_all_day">All day</string>
+    <string name="today_overlaps">Overlaps %1$s</string>
+    <string name="today_join">Join</string>
     <string name="calendar_title">Calendar</string>
     <string name="calendar_needs_access">Daftar reads the calendars on this phone to show your meetings next to your tasks. It never changes them.</string>
     <string name="calendar_allow">Allow calendar access</string>
