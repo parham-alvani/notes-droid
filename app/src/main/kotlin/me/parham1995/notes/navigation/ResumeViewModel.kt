@@ -1,8 +1,11 @@
 package me.parham1995.notes.navigation
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.feature.note.NoteTabs
 import me.parham1995.notes.feature.note.TabsState
 import javax.inject.Inject
@@ -19,6 +22,7 @@ class ResumeViewModel
     @Inject
     constructor(
         private val tabs: NoteTabs,
+        private val settings: SettingsStore,
     ) : ViewModel() {
         /** True once what was written down has been read back. */
         val restored: StateFlow<Boolean> = tabs.restored
@@ -32,6 +36,9 @@ class ResumeViewModel
             inNewTab: Boolean,
             fresh: Boolean,
         ) = tabs.open(noteId, inNewTab, fresh)
+
+        /** Folds the tabs' rail away, or brings it back. */
+        fun setRailHidden(hidden: Boolean) = viewModelScope.launch { settings.setHideRail(hidden) }
 
         /** The note that was being read, or null if none was. */
         fun activeNote(): Long? =

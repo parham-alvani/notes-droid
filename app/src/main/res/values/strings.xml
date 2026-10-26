@@ -264,6 +264,8 @@
     <string name="theme_light">light</string>
     <string name="theme_system">system</string>
     <string name="nav_browse">Browse</string>
+    <string name="nav_hide_rail">Hide the tabs</string>
+    <string name="nav_show_rail">Show the tabs</string>
     <string name="nav_search">Search</string>
     <string name="sort_name">name</string>
     <string name="sort_recently_opened">recently opened</string>

@@ -263,6 +263,8 @@
     <string name="theme_light">روشن</string>
     <string name="theme_system">مثل سیستم</string>
     <string name="nav_browse">مرور</string>
+    <string name="nav_hide_rail">پنهان کردن زبانه‌ها</string>
+    <string name="nav_show_rail">نمایش زبانه‌ها</string>
     <string name="nav_search">جستجو</string>
     <string name="sort_name">نام</string>
     <string name="sort_recently_opened">آخرین باز شده</string>

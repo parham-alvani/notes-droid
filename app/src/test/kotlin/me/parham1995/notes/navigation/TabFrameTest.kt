@@ -2,6 +2,7 @@ package me.parham1995.notes.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -27,6 +28,8 @@ class TabFrameTest {
 
     private val tapped = mutableListOf<String>()
 
+    private val railHidden = mutableStateOf(false)
+
     private fun render(showTabs: Boolean = true) {
         compose.setContent {
             TabFrame(
@@ -36,6 +39,8 @@ class TabFrameTest {
                     },
                 showTabs = showTabs,
                 snackbar = SnackbarHostState(),
+                railHidden = railHidden.value,
+                onRailHidden = { railHidden.value = it },
             ) { placement -> Box(placement.testTag("screen")) }
         }
     }
@@ -75,5 +80,30 @@ class TabFrameTest {
         render(showTabs = false)
         compose.onNodeWithContentDescription("Search", useUnmergedTree = true).assertDoesNotExist()
         assertThat(screen().left).isEqualTo(0f)
+    }
+
+    @Test
+    @Config(qualifiers = "w900dp-h600dp")
+    fun `the rail folds away and comes back`() {
+        render()
+        compose.onNodeWithContentDescription("Hide the tabs", useUnmergedTree = true).performClick()
+        compose.waitForIdle()
+        assertThat(railHidden.value).isTrue()
+        compose.onNodeWithContentDescription("Search", useUnmergedTree = true).assertDoesNotExist()
+        assertThat(screen().left).isEqualTo(0f)
+
+        compose.onNodeWithContentDescription("Show the tabs", useUnmergedTree = true).performClick()
+        compose.waitForIdle()
+        assertThat(railHidden.value).isFalse()
+        assertThat(bounds("Search").right).isAtMost(screen().left)
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp")
+    fun `a phone's bar has nothing to fold`() {
+        railHidden.value = true
+        render()
+        assertThat(screen().bottom).isAtMost(bounds("Search").top)
+        compose.onNodeWithContentDescription("Show the tabs", useUnmergedTree = true).assertDoesNotExist()
     }
 }

@@ -188,6 +188,14 @@ data class ReadingSettings(
      * difference between a reader and a screen that keeps going dark.
      */
     val keepScreenOn: Boolean = false,
+    /**
+     * The tabs' rail folded away, on a window wide enough to have one.
+     *
+     * A tablet held for reading gives the rail a strip of the screen that the
+     * list and the note beside it could use. A small button in the corner
+     * brings it back, and the choice stays across launches.
+     */
+    val hideRail: Boolean = false,
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
@@ -374,6 +382,7 @@ class SettingsStore
                             browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
                             lineWidth = LineWidth.parse(preferences[LINE_WIDTH]),
                             keepScreenOn = preferences[KEEP_SCREEN_ON] ?: false,
+                            hideRail = preferences[HIDE_RAIL] ?: false,
                         ),
                 )
             }
@@ -570,6 +579,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[BROWSER_SORT] = sort.name }
         }
 
+        suspend fun setHideRail(hidden: Boolean) {
+            context.settingsDataStore.edit { it[HIDE_RAIL] = hidden }
+        }
+
         private companion object {
             val OWNER = stringPreferencesKey("repo_owner")
             val REPO = stringPreferencesKey("repo_name")
@@ -599,6 +612,7 @@ class SettingsStore
             val HIDE_DONE_TASKS = booleanPreferencesKey("hide_completed_tasks")
             val HOLD_TO_DEFINE = booleanPreferencesKey("hold_to_define")
             val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+            val HIDE_RAIL = booleanPreferencesKey("hide_rail")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")

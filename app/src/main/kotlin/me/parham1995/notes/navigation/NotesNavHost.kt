@@ -64,6 +64,7 @@ import me.parham1995.notes.feature.tags.TagsViewModel
 import me.parham1995.notes.feature.tasks.TasksScreen
 import me.parham1995.notes.obsidian.Period
 import me.parham1995.notes.ui.LocalNavAnimatedVisibilityScope
+import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.LocalSharedTransitionScope
 import me.parham1995.notes.ui.missingMessage
 
@@ -452,6 +453,8 @@ fun NotesNavHost(
                 )
             },
         showTabs = showBar,
+        railHidden = LocalReading.current.hideRail,
+        onRailHidden = resume::setRailHidden,
         snackbar = snackbar,
     ) { placement ->
         // One layout for every element shared across a navigation -- a note's
