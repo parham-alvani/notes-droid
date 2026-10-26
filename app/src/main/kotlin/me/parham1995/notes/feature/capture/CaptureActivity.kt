@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -27,6 +28,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -149,7 +153,11 @@ private fun CaptureDialog(
     viewModel: CaptureViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var text by rememberSaveable { mutableStateOf(initial) }
+    // With its caret, so text that arrives -- a share merged in, or the one
+    // the screen opened with -- leaves the caret after it, ready to go on.
+    var text by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(initial, TextRange(initial.length)))
+    }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -159,7 +167,8 @@ private fun CaptureDialog(
     val arriving by incoming.collectAsStateWithLifecycle()
     LaunchedEffect(arriving) {
         arriving?.takeIf { it.serial > merged }?.let {
-            text = mergeShared(text, it.text)
+            val joined = mergeShared(text.text, it.text)
+            text = TextFieldValue(joined, TextRange(joined.length))
             merged = it.serial
         }
     }
@@ -180,8 +189,8 @@ private fun CaptureDialog(
         title = { Text(stringResource(R.string.capture_title)) },
         confirmButton = {
             TextButton(
-                onClick = { viewModel.save(text) },
-                enabled = state.ready && text.isNotBlank() && !state.saving,
+                onClick = { viewModel.save(text.text) },
+                enabled = state.ready && text.text.isNotBlank() && !state.saving,
             ) {
                 Text(stringResource(R.string.action_save))
             }
@@ -202,6 +211,8 @@ private fun CaptureDialog(
                     onValueChange = { text = it },
                     label = { Text(stringResource(R.string.capture_hint)) },
                     enabled = state.ready,
+                    // A thought is a sentence: it starts with a capital.
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     modifier =
                         Modifier
                             .fillMaxWidth()
