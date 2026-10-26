@@ -1,0 +1,1 @@
+On a tablet, or a phone on its side, the tabs' rail can now be folded away with the button at its top, so the list and the note have the whole width. The small button in the bottom corner brings it back, and Daftar remembers your choice.
