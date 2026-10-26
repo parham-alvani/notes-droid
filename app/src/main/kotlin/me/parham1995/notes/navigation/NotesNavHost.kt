@@ -63,6 +63,8 @@ import me.parham1995.notes.feature.tags.TagsScreen
 import me.parham1995.notes.feature.tags.TagsViewModel
 import me.parham1995.notes.feature.tasks.TasksScreen
 import me.parham1995.notes.obsidian.Period
+import me.parham1995.notes.ui.FullScreen
+import me.parham1995.notes.ui.LocalFullScreen
 import me.parham1995.notes.ui.LocalNavAnimatedVisibilityScope
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.LocalSharedTransitionScope
@@ -430,91 +432,96 @@ fun NotesNavHost(
             ) { tab -> runCatching { navController.getBackStackEntry(tab.route::class) }.isSuccess }
         }
 
-    TabFrame(
-        tabs =
-            tabs.map { tab ->
-                TabEntry(
-                    label = stringResource(tab.label),
-                    icon = tab.icon,
-                    selected = tab == inUse,
-                    onClick = {
-                        if (tab == inUse) {
-                            // Already here: back to the tab's own root, the
-                            // way every other app's bar answers a second tap.
-                            navController.popBackStack(tab.route::class, inclusive = false)
-                        } else {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+    // Above the frame: a tap on the page hides the rail as well as the bars
+    // over the note.
+    val fullScreen = remember { FullScreen() }
+    CompositionLocalProvider(LocalFullScreen provides fullScreen) {
+        TabFrame(
+            tabs =
+                tabs.map { tab ->
+                    TabEntry(
+                        label = stringResource(tab.label),
+                        icon = tab.icon,
+                        selected = tab == inUse,
+                        onClick = {
+                            if (tab == inUse) {
+                                // Already here: back to the tab's own root, the
+                                // way every other app's bar answers a second tap.
+                                navController.popBackStack(tab.route::class, inclusive = false)
+                            } else {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
-                        }
-                    },
-                )
-            },
-        showTabs = showBar,
-        railHidden = LocalReading.current.hideRail,
-        onRailHidden = resume::setRailHidden,
-        snackbar = snackbar,
-    ) { placement ->
-        // One layout for every element shared across a navigation -- a note's
-        // title moving from the row it was tapped in to the bar above the
-        // page -- so a destination asks for the scope rather than being given
-        // it. Movable, so that the window growing or shrinking moves the
-        // host between the pane and the whole screen without rebuilding it.
-        val host =
-            remember {
-                movableContentOf { modifier: Modifier ->
-                    SharedTransitionLayout(modifier) {
-                        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
-                            NavHost(
-                                navController = navController,
-                                startDestination =
-                                    when (start) {
-                                        StartScreen.BROWSE -> BrowseRoute()
-                                        StartScreen.TASKS -> TasksRoute
-                                        StartScreen.SEARCH -> SearchRoute()
-                                    },
-                            ) {
-                                graph(navController, open, dailyPeriod) { openToday() }
+                        },
+                    )
+                },
+            showTabs = showBar && !fullScreen.on,
+            railHidden = LocalReading.current.hideRail,
+            onRailHidden = resume::setRailHidden,
+            snackbar = snackbar,
+        ) { placement ->
+            // One layout for every element shared across a navigation -- a note's
+            // title moving from the row it was tapped in to the bar above the
+            // page -- so a destination asks for the scope rather than being given
+            // it. Movable, so that the window growing or shrinking moves the
+            // host between the pane and the whole screen without rebuilding it.
+            val host =
+                remember {
+                    movableContentOf { modifier: Modifier ->
+                        SharedTransitionLayout(modifier) {
+                            CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+                                NavHost(
+                                    navController = navController,
+                                    startDestination =
+                                        when (start) {
+                                            StartScreen.BROWSE -> BrowseRoute()
+                                            StartScreen.TASKS -> TasksRoute
+                                            StartScreen.SEARCH -> SearchRoute()
+                                        },
+                                ) {
+                                    graph(navController, open, dailyPeriod) { openToday() }
+                                }
                             }
                         }
                     }
                 }
-            }
-        if (!twoPane) {
-            host(placement)
-        } else {
-            val tabs by resume.open.collectAsStateWithLifecycle()
-            val navigator = rememberListDetailPaneScaffoldNavigator<Nothing>(scaffoldDirective = directive)
-            ListDetailPaneScaffold(
-                directive = navigator.scaffoldDirective,
-                value = navigator.scaffoldValue,
-                modifier = placement,
-                listPane = { AnimatedPane { host(Modifier) } },
-                detailPane = {
-                    AnimatedPane {
-                        val tab = tabs.current
-                        if (tab == null) {
-                            NothingOpen()
-                        } else {
-                            NoteScreen(
-                                noteId = tab.noteId,
-                                openInNewTab = false,
-                                heading = paneHeading,
-                                // Closing the last tab empties the pane; there
-                                // is nowhere to go back to from beside a list.
-                                onBack = {},
-                                onOpenGraph = { navController.navigate(GraphRoute(it)) },
-                                onOpenNote = { open.note(it) },
-                                onOpenFolder = { navController.navigate(BrowseRoute(it)) },
-                                onSearch = { navController.search(it) },
-                                onOpenTag = { vaultId, tag -> navController.navigate(TagsRoute(tag, vaultId)) },
-                            )
+            if (!twoPane) {
+                host(placement)
+            } else {
+                val tabs by resume.open.collectAsStateWithLifecycle()
+                val navigator = rememberListDetailPaneScaffoldNavigator<Nothing>(scaffoldDirective = directive)
+                ListDetailPaneScaffold(
+                    directive = navigator.scaffoldDirective,
+                    value = navigator.scaffoldValue,
+                    modifier = placement,
+                    listPane = { AnimatedPane { host(Modifier) } },
+                    detailPane = {
+                        AnimatedPane {
+                            val tab = tabs.current
+                            if (tab == null) {
+                                NothingOpen()
+                            } else {
+                                NoteScreen(
+                                    noteId = tab.noteId,
+                                    openInNewTab = false,
+                                    heading = paneHeading,
+                                    // Closing the last tab empties the pane; there
+                                    // is nowhere to go back to from beside a list.
+                                    onBack = {},
+                                    onOpenGraph = { navController.navigate(GraphRoute(it)) },
+                                    onOpenNote = { open.note(it) },
+                                    onOpenFolder = { navController.navigate(BrowseRoute(it)) },
+                                    onSearch = { navController.search(it) },
+                                    onOpenTag = { vaultId, tag -> navController.navigate(TagsRoute(tag, vaultId)) },
+                                )
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
+            }
         }
     }
 }

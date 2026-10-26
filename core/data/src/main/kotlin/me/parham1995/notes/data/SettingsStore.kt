@@ -189,6 +189,13 @@ data class ReadingSettings(
      */
     val keepScreenOn: Boolean = false,
     /**
+     * On a tablet or a phone on its side, a tap on the page hides the bars --
+     * the note's own, the rail, the system's -- and the next tap brings them
+     * back. On by default: on a wide window the bars are a frame around the
+     * page, and the page is what is being read.
+     */
+    val tapForFullScreen: Boolean = true,
+    /**
      * The tabs' rail folded away, on a window wide enough to have one.
      *
      * A tablet held for reading gives the rail a strip of the screen that the
@@ -382,6 +389,7 @@ class SettingsStore
                             browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
                             lineWidth = LineWidth.parse(preferences[LINE_WIDTH]),
                             keepScreenOn = preferences[KEEP_SCREEN_ON] ?: false,
+                            tapForFullScreen = preferences[TAP_FULL_SCREEN] ?: true,
                             hideRail = preferences[HIDE_RAIL] ?: false,
                         ),
                 )
@@ -542,6 +550,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[KEEP_SCREEN_ON] = enabled }
         }
 
+        suspend fun setTapForFullScreen(enabled: Boolean) {
+            context.settingsDataStore.edit { it[TAP_FULL_SCREEN] = enabled }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -612,6 +624,7 @@ class SettingsStore
             val HIDE_DONE_TASKS = booleanPreferencesKey("hide_completed_tasks")
             val HOLD_TO_DEFINE = booleanPreferencesKey("hold_to_define")
             val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+            val TAP_FULL_SCREEN = booleanPreferencesKey("reading_tap_full_screen")
             val HIDE_RAIL = booleanPreferencesKey("hide_rail")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")

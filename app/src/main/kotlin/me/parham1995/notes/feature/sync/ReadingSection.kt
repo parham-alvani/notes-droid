@@ -210,6 +210,18 @@ internal fun ReadingCard(
             }
             Switch(checked = reading.keepScreenOn, onCheckedChange = viewModel::setKeepScreenOn)
         }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_tap_full_screen), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.help_tap_full_screen),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = reading.tapForFullScreen, onCheckedChange = viewModel::setTapForFullScreen)
+        }
     }
 }
 

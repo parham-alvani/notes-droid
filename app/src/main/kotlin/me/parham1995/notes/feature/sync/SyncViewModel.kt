@@ -334,6 +334,8 @@ class SyncViewModel
 
         fun setKeepScreenOn(enabled: Boolean) = viewModelScope.launch { settingsStore.setKeepScreenOn(enabled) }
 
+        fun setTapForFullScreen(enabled: Boolean) = viewModelScope.launch { settingsStore.setTapForFullScreen(enabled) }
+
         fun setStartScreen(screen: StartScreen) = viewModelScope.launch { settingsStore.setStartScreen(screen) }
 
         fun setBrowserSort(sort: BrowserSort) = viewModelScope.launch { settingsStore.setBrowserSort(sort) }

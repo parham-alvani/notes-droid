@@ -500,6 +500,8 @@
     <string name="help_hold_to_define">با نگه‌داشتن انگشت روی یک واژهٔ انگلیسی در نوشته، واژه‌نامه باز می‌شود. واژه برای رونوشت هم انتخاب می‌شود.</string>
     <string name="note_fold">بستن بخش</string>
     <string name="note_unfold">باز کردن بخش</string>
+    <string name="settings_tap_full_screen">تمام‌صفحه با یک ضربه روی صفحه</string>
+    <string name="help_tap_full_screen">روی تبلت یا گوشی افقی، یک ضربه روی یادداشت نوارها را پنهان می‌کند و ضربهٔ دوم آن‌ها را برمی‌گرداند. ضربه روی پیوند، جعبه یا تصویر همان کار همیشگی را می‌کند.</string>
     <string name="settings_keep_screen_on">روشن ماندن صفحه هنگام خواندن</string>
     <string name="help_keep_screen_on">تا نوشته‌ای باز است صفحه خاموش یا قفل نمی‌شود. بقیهٔ برنامه مثل همیشه رفتار می‌کند.</string>
     <string name="pane_nothing_open">نوشته‌ای را از فهرست انتخاب کنید تا اینجا خوانده شود</string>

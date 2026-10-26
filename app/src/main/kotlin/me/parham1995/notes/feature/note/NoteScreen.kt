@@ -8,8 +8,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -63,7 +65,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -71,6 +76,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
@@ -89,6 +97,7 @@ import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
 import me.parham1995.notes.ui.Loading
+import me.parham1995.notes.ui.LocalFullScreen
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.RescheduleSheet
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -104,6 +113,7 @@ import me.parham1995.notes.ui.render.InlineActions
 import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
 import me.parham1995.notes.ui.render.Transcluded
+import me.parham1995.notes.ui.roomyForFullScreen
 import me.parham1995.notes.ui.sharedBoundsIn
 import me.parham1995.notes.ui.sharedElementIn
 import me.parham1995.notes.ui.sheetProperties
@@ -150,6 +160,27 @@ fun NoteScreen(
     DisposableEffect(keepScreenOn, window) {
         if (keepScreenOn) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { if (keepScreenOn) window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+
+    // A tap on the page takes the bars away and gives them back, on a window
+    // roomy enough to read full screen in and while the setting allows it.
+    val fullScreen = LocalFullScreen.current
+    val windowSize = LocalWindowInfo.current.containerSize
+    val density = LocalDensity.current.density
+    val tapForFullScreen = LocalReading.current.tapForFullScreen && roomyForFullScreen(windowSize, density)
+    val immersive = fullScreen.on && tapForFullScreen
+    // Left as the screen goes, or as the window stops being roomy: a full
+    // screen nobody can tap back out of is a trap.
+    LaunchedEffect(tapForFullScreen) { if (!tapForFullScreen) fullScreen.on = false }
+    DisposableEffect(fullScreen) { onDispose { fullScreen.on = false } }
+    val view = LocalView.current
+    DisposableEffect(immersive, window) {
+        val bars = window?.let { WindowCompat.getInsetsController(it, view) }
+        if (immersive) {
+            bars?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars?.hide(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose { if (immersive) bars?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 
     var showOutline by remember { mutableStateOf(false) }
@@ -615,157 +646,165 @@ fun NoteScreen(
             modifier = Modifier.nestedScroll(topBar.nestedScrollConnection),
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
-                TopAppBar(
-                    scrollBehavior = topBar,
-                    title = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            // The vault turns Iconic's title icons on, so a note
-                            // that has one carries it into its own header too.
-                            state.icon?.let { VaultIcon(spec = it, default = "file-text") }
-                            Text(
-                                text = state.note?.title ?: "",
-                                // Keyed on the note the route asked for, which
-                                // is the one the row that opened it named --
-                                // the loaded note arrives after the transition
-                                // has already begun.
-                                modifier = Modifier.sharedBoundsIn(noteTitleKey(noteId)),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        // A Row, because the navigation slot lays its content
-                        // out as a box: two buttons put in it directly are
-                        // drawn one on top of the other, which is how the back
-                        // arrow spent a build hidden underneath the drawer's.
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // The files drawer, then back. Ordered that way
-                            // because the leading slot is where a drawer is
-                            // looked for, and back has a second home in the
-                            // gesture.
-                            IconButton(onClick = { scope.launch { drawer.open() } }) {
-                                LucideGlyph(
-                                    "panel-left",
-                                    size = 20.dp,
-                                    contentDescription = stringResource(R.string.drawer_title),
+                // Hidden whole in full screen; otherwise it still slides away
+                // with the scroll, as it always has.
+                AnimatedVisibility(visible = !immersive, enter = expandVertically(), exit = shrinkVertically()) {
+                    TopAppBar(
+                        scrollBehavior = topBar,
+                        title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                // The vault turns Iconic's title icons on, so a note
+                                // that has one carries it into its own header too.
+                                state.icon?.let { VaultIcon(spec = it, default = "file-text") }
+                                Text(
+                                    text = state.note?.title ?: "",
+                                    // Keyed on the note the route asked for, which
+                                    // is the one the row that opened it named --
+                                    // the loaded note arrives after the transition
+                                    // has already begun.
+                                    modifier = Modifier.sharedBoundsIn(noteTitleKey(noteId)),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            // Gone, rather than greyed out, when this tab has
-                            // nowhere to go back to. A note is usually opened
-                            // from a list and has no trail behind it yet, so a
-                            // disabled arrow is what most of them wear most of
-                            // the time -- permanent furniture that says only
-                            // that a thing does not work, and takes the space
-                            // the title needs on a phone. It appears once
-                            // following a link has given it somewhere to go.
-                            if (tabs.current?.canGoBack == true) {
-                                IconButton(onClick = { viewModel.back() }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = stringResource(R.string.action_back),
+                        },
+                        navigationIcon = {
+                            // A Row, because the navigation slot lays its content
+                            // out as a box: two buttons put in it directly are
+                            // drawn one on top of the other, which is how the back
+                            // arrow spent a build hidden underneath the drawer's.
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // The files drawer, then back. Ordered that way
+                                // because the leading slot is where a drawer is
+                                // looked for, and back has a second home in the
+                                // gesture.
+                                IconButton(onClick = { scope.launch { drawer.open() } }) {
+                                    LucideGlyph(
+                                        "panel-left",
+                                        size = 20.dp,
+                                        contentDescription = stringResource(R.string.drawer_title),
                                     )
                                 }
-                            }
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = {
-                                finding = !finding
-                                if (!finding) viewModel.clearFind()
-                            },
-                            enabled = state.note != null,
-                        ) {
-                            LucideGlyph(
-                                if (finding) "x" else "text-search",
-                                size = 20.dp,
-                                contentDescription =
-                                    stringResource(
-                                        if (finding) R.string.action_close else R.string.note_find,
-                                    ),
-                            )
-                        }
-                        IconButton(
-                            onClick = { state.note?.id?.let(onOpenGraph) },
-                            enabled = state.note != null,
-                        ) {
-                            LucideGlyph(
-                                "waypoints",
-                                size = 20.dp,
-                                contentDescription = stringResource(R.string.note_connections),
-                            )
-                        }
-                        IconButton(onClick = { showOutline = true }, enabled = state.note != null) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.List,
-                                contentDescription = stringResource(R.string.note_outline),
-                            )
-                        }
-                        // The count is more use than an icon here: it says
-                        // whether opening the sheet is worth it.
-                        if (state.backlinks.isNotEmpty()) {
-                            TextButton(onClick = { showBacklinks = true }) {
-                                Text(
-                                    pluralStringResource(
-                                        R.plurals.note_links,
-                                        state.backlinks.size,
-                                        state.backlinks.size,
-                                    ),
-                                )
-                            }
-                        }
-                        // Shares the note as it is written, not as it is rendered:
-                        // what goes out is markdown, which is what the person on
-                        // the other end can do something with.
-                        NoteMenu(
-                            enabled = state.note != null,
-                            pinned = pinned,
-                            onShare = {
-                                scope.launch {
-                                    val text = viewModel.markdown()
-                                    if (text == null) {
-                                        Toast
-                                            .makeText(
-                                                context,
-                                                noteMissing,
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                    } else {
-                                        context.startActivity(
-                                            Intent.createChooser(
-                                                Intent(Intent.ACTION_SEND).apply {
-                                                    type = "text/markdown"
-                                                    putExtra(Intent.EXTRA_TITLE, state.note?.title)
-                                                    putExtra(Intent.EXTRA_SUBJECT, state.note?.title)
-                                                    putExtra(Intent.EXTRA_TEXT, text)
-                                                },
-                                                state.note?.title,
-                                            ),
+                                // Gone, rather than greyed out, when this tab has
+                                // nowhere to go back to. A note is usually opened
+                                // from a list and has no trail behind it yet, so a
+                                // disabled arrow is what most of them wear most of
+                                // the time -- permanent furniture that says only
+                                // that a thing does not work, and takes the space
+                                // the title needs on a phone. It appears once
+                                // following a link has given it somewhere to go.
+                                if (tabs.current?.canGoBack == true) {
+                                    IconButton(onClick = { viewModel.back() }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = stringResource(R.string.action_back),
                                         )
                                     }
                                 }
-                            },
-                            onTogglePin = { pins.toggle() },
-                            speaking = speaking,
-                            onReadAloud = {
-                                val note = state.note
-                                when {
-                                    speaking -> reader.stop()
-                                    note != null -> reader.speak(SpokenText.of(note.blocks))
+                            }
+                        },
+                        actions = {
+                            IconButton(
+                                onClick = {
+                                    finding = !finding
+                                    if (!finding) viewModel.clearFind()
+                                },
+                                enabled = state.note != null,
+                            ) {
+                                LucideGlyph(
+                                    if (finding) "x" else "text-search",
+                                    size = 20.dp,
+                                    contentDescription =
+                                        stringResource(
+                                            if (finding) R.string.action_close else R.string.note_find,
+                                        ),
+                                )
+                            }
+                            IconButton(
+                                onClick = { state.note?.id?.let(onOpenGraph) },
+                                enabled = state.note != null,
+                            ) {
+                                LucideGlyph(
+                                    "waypoints",
+                                    size = 20.dp,
+                                    contentDescription = stringResource(R.string.note_connections),
+                                )
+                            }
+                            IconButton(onClick = { showOutline = true }, enabled = state.note != null) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.List,
+                                    contentDescription = stringResource(R.string.note_outline),
+                                )
+                            }
+                            // The count is more use than an icon here: it says
+                            // whether opening the sheet is worth it.
+                            if (state.backlinks.isNotEmpty()) {
+                                TextButton(onClick = { showBacklinks = true }) {
+                                    Text(
+                                        pluralStringResource(
+                                            R.plurals.note_links,
+                                            state.backlinks.size,
+                                            state.backlinks.size,
+                                        ),
+                                    )
                                 }
-                            },
-                            onPlaces = { showPlaces = true },
-                            syncing = state.syncing,
-                            onSync = viewModel::sync,
-                            onSharePdf = {
-                                state.note?.let { note ->
+                            }
+                            // Shares the note as it is written, not as it is rendered:
+                            // what goes out is markdown, which is what the person on
+                            // the other end can do something with.
+                            NoteMenu(
+                                enabled = state.note != null,
+                                pinned = pinned,
+                                onShare = {
                                     scope.launch {
-                                        runCatchingUnlessCancelled { NotePdf.share(context, note.title, note.blocks) }
-                                            .onFailure {
+                                        val text = viewModel.markdown()
+                                        if (text == null) {
+                                            Toast
+                                                .makeText(
+                                                    context,
+                                                    noteMissing,
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
+                                        } else {
+                                            context.startActivity(
+                                                Intent.createChooser(
+                                                    Intent(Intent.ACTION_SEND).apply {
+                                                        type = "text/markdown"
+                                                        putExtra(Intent.EXTRA_TITLE, state.note?.title)
+                                                        putExtra(Intent.EXTRA_SUBJECT, state.note?.title)
+                                                        putExtra(Intent.EXTRA_TEXT, text)
+                                                    },
+                                                    state.note?.title,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                },
+                                onTogglePin = { pins.toggle() },
+                                speaking = speaking,
+                                onReadAloud = {
+                                    val note = state.note
+                                    when {
+                                        speaking -> reader.stop()
+                                        note != null -> reader.speak(SpokenText.of(note.blocks))
+                                    }
+                                },
+                                onPlaces = { showPlaces = true },
+                                syncing = state.syncing,
+                                onSync = viewModel::sync,
+                                onSharePdf = {
+                                    state.note?.let { note ->
+                                        scope.launch {
+                                            runCatchingUnlessCancelled {
+                                                NotePdf.share(
+                                                    context,
+                                                    note.title,
+                                                    note.blocks,
+                                                )
+                                            }.onFailure {
                                                 Toast
                                                     .makeText(
                                                         context,
@@ -773,19 +812,20 @@ fun NoteScreen(
                                                         Toast.LENGTH_SHORT,
                                                     ).show()
                                             }
+                                        }
                                     }
-                                }
-                            },
-                            onAddWidget = {
-                                state.note?.let { note ->
-                                    if (!NoteWidget.request(context, Pin(note.vaultId, note.path))) {
-                                        Toast.makeText(context, cannotPlaceWidget, Toast.LENGTH_LONG).show()
+                                },
+                                onAddWidget = {
+                                    state.note?.let { note ->
+                                        if (!NoteWidget.request(context, Pin(note.vaultId, note.path))) {
+                                            Toast.makeText(context, cannotPlaceWidget, Toast.LENGTH_LONG).show()
+                                        }
                                     }
-                                }
-                            },
-                        )
-                    },
-                )
+                                },
+                            )
+                        },
+                    )
+                }
             },
         ) { padding ->
             // One column, not two siblings.
@@ -910,6 +950,12 @@ fun NoteScreen(
                                                         spoken = spokenBlock,
                                                         folded = state.folded,
                                                         onToggleFold = viewModel::toggleFold,
+                                                        onTapPage =
+                                                            if (tapForFullScreen) {
+                                                                { fullScreen.on = !fullScreen.on }
+                                                            } else {
+                                                                null
+                                                            },
                                                         find =
                                                             if (finding) {
                                                                 findTarget(

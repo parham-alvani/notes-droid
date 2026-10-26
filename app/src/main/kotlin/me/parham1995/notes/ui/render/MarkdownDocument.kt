@@ -18,6 +18,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
@@ -62,6 +64,12 @@ fun MarkdownDocument(
      * is closed.
      */
     find: FindTarget? = null,
+    /**
+     * A tap on the page that nothing on it took -- not a link, a box, a
+     * picture, a fold -- and that was not the start of a scroll or a hold.
+     * Null leaves taps alone.
+     */
+    onTapPage: (() -> Unit)? = null,
 ) {
     val reading = LocalReading.current
     // The size steps are coarse and snap once per gesture, so the snap is
@@ -76,27 +84,29 @@ fun MarkdownDocument(
     StylusSpotlight(
         enabled = reading.stylusSpotlight,
         modifier =
-            modifier.pointerInput(onPinch) {
-                if (onPinch == null) return@pointerInput
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    var applied = false
-                    do {
-                        val event = awaitPointerEvent()
-                        // Two fingers, and only once per gesture: the steps
-                        // are coarse, so a continuous pinch would run through
-                        // all of them in a moment.
-                        if (!applied && event.changes.size >= 2) {
-                            val zoom = event.calculateZoom()
-                            if (zoom !in (1f - PINCH_SLOP)..(1f + PINCH_SLOP)) {
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                onPinch(zoom)
-                                applied = true
+            modifier
+                .tapOnPage(onTapPage)
+                .pointerInput(onPinch) {
+                    if (onPinch == null) return@pointerInput
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        var applied = false
+                        do {
+                            val event = awaitPointerEvent()
+                            // Two fingers, and only once per gesture: the steps
+                            // are coarse, so a continuous pinch would run through
+                            // all of them in a moment.
+                            if (!applied && event.changes.size >= 2) {
+                                val zoom = event.calculateZoom()
+                                if (zoom !in (1f - PINCH_SLOP)..(1f + PINCH_SLOP)) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                    onPinch(zoom)
+                                    applied = true
+                                }
                             }
-                        }
-                    } while (event.changes.any { it.pressed })
-                }
-            },
+                        } while (event.changes.any { it.pressed })
+                    }
+                },
         tint = MaterialTheme.colorScheme.primary,
     ) {
         // Selection spans the document rather than each block, so copying a
@@ -131,6 +141,36 @@ fun MarkdownDocument(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Watches for a tap the page itself is given. Looked at on the final pass,
+ * after everything on the page has had its say: a link, a box or a picture
+ * that took the tap consumed it, and a scroll consumed the movement, so a
+ * press that comes up unconsumed, soon, in one finger, is the page's.
+ */
+private fun Modifier.tapOnPage(onTap: (() -> Unit)?): Modifier {
+    if (onTap == null) return this
+    return pointerInput(onTap) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
+            if (down.isConsumed) return@awaitEachGesture
+            val up =
+                withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    var lifted: PointerInputChange? = null
+                    while (lifted == null) {
+                        val event = awaitPointerEvent(PointerEventPass.Final)
+                        if (event.changes.size > 1) return@withTimeoutOrNull null
+                        val finger = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull null
+                        val moved = (finger.position - down.position).getDistance() > viewConfiguration.touchSlop
+                        if (finger.isConsumed || moved) return@withTimeoutOrNull null
+                        if (!finger.pressed) lifted = finger
+                    }
+                    lifted
+                }
+            if (up != null) onTap()
         }
     }
 }
