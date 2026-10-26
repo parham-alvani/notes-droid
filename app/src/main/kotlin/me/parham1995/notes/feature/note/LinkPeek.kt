@@ -14,6 +14,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -22,8 +24,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
+import me.parham1995.notes.data.BaseAnswer
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.inScript
+import me.parham1995.notes.ui.render.BaseTables
 import me.parham1995.notes.ui.render.MdBlockView
 import me.parham1995.notes.ui.render.RenderActions
 import me.parham1995.notes.ui.render.Transcluded
@@ -144,6 +148,37 @@ internal fun LinkPreview(
 /** Enough of a long note to read the gist of; the button is there for the rest. */
 private const val PREVIEW_BLOCKS = 60
 private val PREVIEW_HEIGHT = 480.dp
+
+/**
+ * A `[[x.base]]` link, followed: the base's tables in a sheet, [view] alone
+ * when the link named one. A name in a table opens its note.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun BaseSheet(
+    title: String,
+    view: String?,
+    run: suspend () -> BaseAnswer?,
+    onDismiss: () -> Unit,
+    onOpen: (Long) -> Unit,
+) {
+    val answer by produceState<Result<BaseAnswer?>?>(null, title, view) { value = runCatching { run() } }
+    ModalBottomSheet(onDismissRequest = onDismiss, properties = sheetProperties()) {
+        BaseTables(
+            title = title,
+            answer = answer,
+            onlyView = view,
+            onOpen = { path ->
+                answer
+                    ?.getOrNull()
+                    ?.noteIds
+                    ?.get(path)
+                    ?.let(onOpen)
+            },
+            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+        )
+    }
+}
 
 /** A link that resolves to nothing, said plainly rather than ignored. */
 @OptIn(ExperimentalMaterial3Api::class)

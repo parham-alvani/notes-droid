@@ -603,7 +603,77 @@ class BlockFlattener(
 
     private fun inlines(parent: Node): List<MdInline> = inlinesOf(parent.children())
 
-    private fun inlinesOf(nodes: List<Node>): List<MdInline> = nodes.mapNotNull { inline(it) }
+    /**
+     * The inlines of [nodes], with the inline HTML a note uses for formatting
+     * read as that formatting: `<mark>` a highlight, `<b>` and `<strong>`
+     * bold, `<i>` and `<em>` italic, `<s>`, `<del>` and `<strike>` struck
+     * through, `<code>` and `<kbd>` code. commonmark hands each tag over as a
+     * sibling of the text it wraps, so a tag is paired with its closing tag
+     * among the siblings; one left unclosed is dropped, as every other tag is.
+     */
+    private fun inlinesOf(nodes: List<Node>): List<MdInline> {
+        val out = mutableListOf<MdInline>()
+        var at = 0
+        while (at < nodes.size) {
+            val node = nodes[at]
+            val tag =
+                (node as? HtmlInline)
+                    ?.let {
+                        OPEN_TAG.matchEntire(
+                            it.literal.trim(),
+                        )
+                    }?.groupValues
+                    ?.get(1)
+                    ?.lowercase()
+            val close = tag?.let { closing(nodes, at, it) }
+            if (tag != null && close != null) {
+                val inside = nodes.subList(at + 1, close)
+                out +=
+                    when (tag) {
+                        "mark" -> MdInline.Highlight(inlinesOf(inside))
+                        "b", "strong" -> MdInline.Strong(inlinesOf(inside))
+                        "i", "em" -> MdInline.Emphasis(inlinesOf(inside))
+                        "s", "del", "strike" -> MdInline.Strikethrough(inlinesOf(inside))
+                        else -> MdInline.Code(plainTextOf(inside))
+                    }
+                at = close + 1
+            } else {
+                inline(node)?.let { out += it }
+                at++
+            }
+        }
+        return out
+    }
+
+    /** Where the tag [name] opened at [open] closes among [nodes], counting the same tag nested inside it. */
+    private fun closing(
+        nodes: List<Node>,
+        open: Int,
+        name: String,
+    ): Int? {
+        var depth = 0
+        for (index in open + 1 until nodes.size) {
+            val literal = (nodes[index] as? HtmlInline)?.literal?.trim() ?: continue
+            if (OPEN_TAG
+                    .matchEntire(literal)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.lowercase() == name
+            ) {
+                depth++
+            }
+            if (CLOSE_TAG
+                    .matchEntire(literal)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.lowercase() == name
+            ) {
+                if (depth == 0) return index
+                depth--
+            }
+        }
+        return null
+    }
 
     private fun inline(node: Node): MdInline? =
         when (node) {
@@ -696,6 +766,10 @@ class BlockFlattener(
 
     private companion object {
         val BR = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
+
+        /** The formatting tags read as formatting; anything else is dropped. */
+        val OPEN_TAG = Regex("""<(mark|b|strong|i|em|s|del|strike|code|kbd)(?:\s[^>]*)?>""", RegexOption.IGNORE_CASE)
+        val CLOSE_TAG = Regex("""</(mark|b|strong|i|em|s|del|strike|code|kbd)\s*>""", RegexOption.IGNORE_CASE)
 
         /** ` ^id` at the very end: letters, digits and dashes, as Obsidian makes them. */
         val BLOCK_ID = Regex("""(?:^|\s)\^([A-Za-z0-9-]+)\s*$""")

@@ -27,6 +27,7 @@ import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.database.byPath
 import me.parham1995.notes.data.database.escapeLike
 import me.parham1995.notes.data.database.isUpdatedSinceRead
+import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.MarkdownParser
@@ -340,11 +341,18 @@ class VaultRepository
                             link.rawTarget to noteId
                         }.toMap()
 
+                // A link to a base goes to no note, and is not broken for it:
+                // it opens the base.
+                val bases =
+                    LinkResolver(
+                        blobs.files(entity.vaultId).map { it.path }.filter { Base.isBase(it) },
+                    )
                 val allTargets =
                     parsed.links
                         .filter { it.kind == LinkKind.WIKILINK }
                         .map { it.rawTarget }
                         .filter { it.isNotEmpty() }
+                        .filterNot { Base.isBase(it) && bases.resolve(it, entity.path) != null }
                         .toSet()
 
                 RenderedNote(

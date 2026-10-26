@@ -91,7 +91,9 @@ import me.parham1995.notes.data.runCatchingUnlessCancelled
 import me.parham1995.notes.feature.define.DefineActivity
 import me.parham1995.notes.feature.drawer.FileDrawerSheet
 import me.parham1995.notes.feature.drawer.FileDrawerViewModel
+import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.markdown.FootnoteEntry
+import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.reminder.ReminderViewModel
@@ -201,6 +203,8 @@ fun NoteScreen(
     var peeking by remember { mutableStateOf<LinkTarget?>(null) }
     var peekBroken by remember { mutableStateOf<String?>(null) }
     var previewing by remember { mutableStateOf<Pair<LinkTarget, Transcluded>?>(null) }
+    // A `[[x.base]]` link that was followed: the base and the view it named.
+    var baseSheet by remember { mutableStateOf<Pair<String, String?>?>(null) }
     val haptics = LocalHapticFeedback.current
     // A heading to land on once the note it belongs to has loaded.
     var pendingHeading by remember { mutableStateOf<String?>(null) }
@@ -486,6 +490,8 @@ fun NoteScreen(
                                     // note, so there is nothing
                                     // to decide about.
                                     target.isBlank() -> pendingHeading = heading
+                                    // A base opens as its tables.
+                                    id == null && Base.isBase(target) -> baseSheet = target to heading
                                     id == null -> peekBroken = target
                                     else ->
                                         scope.launch {
@@ -1069,6 +1075,21 @@ fun NoteScreen(
                     viewModel.openTab(target.noteId, inNewTab = true)
                 },
             )
+        }
+
+        baseSheet?.let { (target, view) ->
+            state.note?.let { note ->
+                BaseSheet(
+                    title = target.substringAfterLast('/').removeSuffix(".base"),
+                    view = view,
+                    run = { viewModel.runBase(note.vaultId, note.path, MdBlock.BaseView(-1, target = target)) },
+                    onDismiss = { baseSheet = null },
+                    onOpen = { id ->
+                        baseSheet = null
+                        viewModel.openTab(id, inNewTab = false)
+                    },
+                )
+            }
         }
 
         previewing?.let { (target, content) ->

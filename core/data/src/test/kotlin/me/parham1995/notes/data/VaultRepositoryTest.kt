@@ -733,6 +733,26 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `a link to a base the vault has is not broken`() =
+        runTest {
+            index("Home.md" to "See [[Shops.base]] and [[Gone.base]].")
+            database.blobDao().upsert(
+                me.parham1995.notes.data.database.BlobEntity(
+                    path = "Shops/Shops.base",
+                    vaultId = first,
+                    sha = "sha-base",
+                    size = 1,
+                    kind = me.parham1995.notes.sync.BlobKind.CONFIG,
+                    localState = me.parham1995.notes.sync.LocalState.DOWNLOADED,
+                ),
+            )
+
+            val note = repository.note(database.noteDao().idOf(first, "Home.md")!!)!!
+
+            assertThat(note.brokenTargets).containsExactly("Gone.base")
+        }
+
+    @Test
     fun `two vaults holding the same path hold different notes`() =
         runTest {
             indexInto(first, "README.md" to "the first vault")
