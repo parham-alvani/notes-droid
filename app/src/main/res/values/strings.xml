@@ -63,6 +63,14 @@
         <item quantity="one">%1$d open in %2$s</item>
         <item quantity="other">%1$d open in %2$s</item>
     </plurals>
+    <plurals name="note_words">
+        <item quantity="one">%1$d word</item>
+        <item quantity="other">%1$d words</item>
+    </plurals>
+    <plurals name="note_minutes">
+        <item quantity="one">%1$d min read</item>
+        <item quantity="other">%1$d min read</item>
+    </plurals>
     <plurals name="note_links">
         <item quantity="one">%1$d link</item>
         <item quantity="other">%1$d links</item>

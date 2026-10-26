@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import me.parham1995.notes.data.database.HeadingEntity
+import me.parham1995.notes.markdown.ReadingTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,5 +53,12 @@ class OutlineTest {
 
         compose.onNodeWithText("Water").performClick()
         assertThat(jumped).containsExactly(11)
+    }
+
+    @Test
+    fun `the sheet says how long the note is and how long it takes to read`() {
+        compose.setContent { ReadingLine(ReadingTime(words = 1_240, minutes = 6)) }
+
+        compose.onNodeWithText("1240 words · 6 min read").assertExists()
     }
 }

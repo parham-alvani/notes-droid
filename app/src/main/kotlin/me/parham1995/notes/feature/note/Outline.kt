@@ -20,11 +20,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
 import me.parham1995.notes.data.database.HeadingEntity
+import me.parham1995.notes.markdown.ReadingTime
 import me.parham1995.notes.ui.sheetProperties
 
 /**
@@ -32,6 +34,8 @@ import me.parham1995.notes.ui.sheetProperties
  *
  * The section being read is marked and the list opens on it, so in a note
  * with forty headings the outline answers "where am I" before "where to".
+ * Above it, how long the note is and how long it takes to read, as the bar
+ * above a note on the Mac says it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,10 +44,25 @@ internal fun OutlineSheet(
     current: Long?,
     onDismiss: () -> Unit,
     onJump: (HeadingEntity) -> Unit,
+    reading: ReadingTime? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, properties = sheetProperties()) {
+        reading?.let { ReadingLine(it) }
         OutlineList(headings, current, onJump)
     }
+}
+
+/** "1,240 words · 6 min", for a note long enough to say it of. */
+@Composable
+internal fun ReadingLine(reading: ReadingTime) {
+    Text(
+        text =
+            pluralStringResource(R.plurals.note_words, reading.words, reading.words) + " · " +
+                pluralStringResource(R.plurals.note_minutes, reading.minutes, reading.minutes),
+        modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** The sheet's list, apart from the sheet, so a test can tap it. */

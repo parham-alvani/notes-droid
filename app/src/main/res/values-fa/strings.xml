@@ -63,6 +63,14 @@
         <item quantity="one">%1$d کار باز در %2$s</item>
         <item quantity="other">%1$d کار باز در %2$s</item>
     </plurals>
+    <plurals name="note_words">
+        <item quantity="one">%1$d واژه</item>
+        <item quantity="other">%1$d واژه</item>
+    </plurals>
+    <plurals name="note_minutes">
+        <item quantity="one">%1$d دقیقه خواندن</item>
+        <item quantity="other">%1$d دقیقه خواندن</item>
+    </plurals>
     <plurals name="note_links">
         <item quantity="one">%1$d پیوند</item>
         <item quantity="other">%1$d پیوند</item>

@@ -94,6 +94,7 @@ import me.parham1995.notes.feature.drawer.FileDrawerViewModel
 import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MdBlock
+import me.parham1995.notes.markdown.ReadingTime
 import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.reminder.ReminderViewModel
@@ -1167,6 +1168,7 @@ fun NoteScreen(
                     showOutline = false
                     scope.launch { listState.animateScrollToItem(viewModel.reveal(heading.blockIndex)) }
                 },
+                reading = remember(state.note) { state.note?.blocks?.let(ReadingTime::of) },
             )
         }
 
