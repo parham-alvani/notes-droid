@@ -164,6 +164,15 @@ object VaultEdits {
         }
 
     /**
+     * Sorts every section's tasks done first, open last, by the vault's
+     * `task-sorter` plugin's rule ([TaskSorter]).
+     *
+     * Carries nothing but the intent, so a sort queued offline sorts the file
+     * as it is when it lands. Null when it is already in order.
+     */
+    fun sortTasks(): (String?) -> String? = { current -> current?.let(TaskSorter::sort) }
+
+    /**
      * Moves the task written on [line] -- reading [task] to the index -- to
      * [date], or takes off the scheduled date an earlier move added when
      * [date] is null.

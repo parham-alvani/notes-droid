@@ -481,6 +481,9 @@
     <string name="whats_new_title">New in %1$s</string>
     <string name="whats_new_ok">Got it</string>
     <string name="note_share_pdf">Share as PDF</string>
+    <string name="note_sort_tasks">Sort tasks</string>
+    <string name="note_tasks_sorted">Tasks sorted, done first</string>
+    <string name="note_tasks_in_order">The tasks are already in order</string>
     <string name="note_share_pdf_failed">Could not make a PDF of this note</string>
     <string name="places_title">Places in this note</string>
     <string name="places_none">No addresses in this note.</string>

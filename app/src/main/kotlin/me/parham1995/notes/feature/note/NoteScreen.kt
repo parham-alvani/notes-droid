@@ -801,6 +801,12 @@ fun NoteScreen(
                                 onPlaces = { showPlaces = true },
                                 syncing = state.syncing,
                                 onSync = viewModel::sync,
+                                onSortTasks =
+                                    if (state.writable && state.note?.isFolderNote == false) {
+                                        { viewModel.sortTasks() }
+                                    } else {
+                                        null
+                                    },
                                 onSharePdf = {
                                     state.note?.let { note ->
                                         scope.launch {

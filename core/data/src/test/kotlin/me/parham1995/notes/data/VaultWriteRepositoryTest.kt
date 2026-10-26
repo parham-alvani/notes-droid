@@ -556,6 +556,28 @@ class VaultWriteRepositoryTest {
         }
 
     @Test
+    fun `a sort made offline sorts the file as it is when it goes up`() =
+        runTest {
+            val path = "Projects/Plan.md"
+            files.write(vaultId, path, "- [ ] open\n- [x] done\n".toByteArray())
+            transport.offline = true
+
+            assertThat(writes.sortTasks(vaultId, path)).isInstanceOf(WriteResult.Queued::class.java)
+            assertThat(files.readText(vaultId, path)).isEqualTo("- [x] done\n- [ ] open\n")
+
+            // The desk ticked another one off meanwhile.
+            transport.offline = false
+            transport.content = "- [ ] open\n- [x] done\n- [x] also done\n"
+
+            assertThat(writes.flush()).isEqualTo(1)
+            assertThat(transport.content).isEqualTo("- [x] done\n- [x] also done\n- [ ] open\n")
+            assertThat(transport.messages.single()).isEqualTo("docs(tasks): sort Plan")
+            // Sorted already: nothing to send, and nothing queued.
+            assertThat(writes.sortTasks(vaultId, path)).isEqualTo(WriteResult.Unchanged)
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
     fun `no note is made where the vault cannot be written`() =
         runTest {
             database.vaultDao().update(database.vaultDao().byId(vaultId)!!.copy(canWrite = false))

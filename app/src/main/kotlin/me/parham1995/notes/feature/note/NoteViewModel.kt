@@ -263,6 +263,27 @@ class NoteViewModel
             if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
         }
 
+        /**
+         * Sorts this note's tasks done first and open last, section by
+         * section, as the vault's `task-sorter` plugin does on the desk.
+         */
+        fun sortTasks() =
+            viewModelScope.launch {
+                val note = _state.value.note ?: return@launch
+                val result = writes.sortTasks(note.vaultId, note.path)
+                _state.update {
+                    it.copy(
+                        message =
+                            when (result) {
+                                WriteResult.Pushed -> UiText.Resource(R.string.note_tasks_sorted)
+                                WriteResult.Unchanged -> UiText.Resource(R.string.note_tasks_in_order)
+                                else -> result.describe()
+                            },
+                    )
+                }
+                if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
+            }
+
         private suspend fun reload() {
             val id = _state.value.note?.id ?: return
             val note = repository.note(id) ?: return

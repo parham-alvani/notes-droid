@@ -55,7 +55,8 @@ All seven milestones are implemented, and the app has been running against a rea
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Tablets and landscape** — the note beside the list it was picked from on an expanded window, held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar; a tap on the page — not on a link, a box or a picture — hides the bars, the rail and the system bars for full-screen reading, and the next tap brings them back (a setting turns it off)
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
-- **A little writing** — tick a task off, add one, move one to another day, capture a thought, start a note from one of the vault's templates — each a commit, and offered only where the credential can actually push
+- **A little writing** — tick a task off, add one, move one to another day, capture a thought, start a note from one of the vault's templates, sort a note's tasks — each a commit, and offered only where the credential can actually push
+- **Sort tasks** — from a note's menu, the done and cancelled tasks of each section move above the open ones, sub-items with their parent, as the vault's `task-sorter` plugin does on the desk
 - **New note from a template** — in the browser, a button makes a note in the folder being looked at from a template in the folder the core Templates plugin names in `.obsidian/templates.json`, filling `{{title}}`, `{{date}}`, `{{time}}` and `{{date:FORMAT}}` with the plugin's own formats, and opens it; a note already there is never written over
 
 ## Requirements

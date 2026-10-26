@@ -59,6 +59,9 @@ enum class EditKind {
 
     /** Make a new note, from a template. The text is the note; one already there is never written over. */
     CREATE_FILE,
+
+    /** Sort a note's tasks done first, as the vault's `task-sorter` plugin does. No anchor, no text. */
+    SORT_TASKS,
     ;
 
     companion object {
@@ -410,6 +413,27 @@ class VaultWriteRepository
         }
 
         /**
+         * Sorts the tasks of [path] in [vaultId] done first and open last, as
+         * the vault's `task-sorter` plugin does ([VaultEdits.sortTasks]).
+         * [WriteResult.Unchanged] when they are in that order already.
+         */
+        suspend fun sortTasks(
+            vaultId: Long,
+            path: String,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            val name = path.substringAfterLast('/').removeSuffix(".md")
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.SORT_TASKS,
+                anchor = "",
+                replacement = "",
+                summary = "docs(tasks): sort ${name.take(SUBJECT)}",
+            )
+        }
+
+        /**
          * Sends everything queued, oldest first.
          *
          * Called at the start of a sync rather than at the end: the pull that
@@ -612,6 +636,7 @@ class VaultWriteRepository
                 }
                 EditKind.REPLACE_FILE -> VaultEdits.replaceFile(edit.text)
                 EditKind.CREATE_FILE -> VaultEdits.createFile(edit.text)
+                EditKind.SORT_TASKS -> VaultEdits.sortTasks()
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
 

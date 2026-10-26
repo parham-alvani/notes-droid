@@ -37,6 +37,8 @@ import javax.inject.Inject
  * gives the title whatever is left. Pinning is done once per note and sharing
  * rarely, so both live here instead of taking two more buttons' worth of the
  * title.
+ *
+ * [onSortTasks] is null where the note cannot be written, which hides it.
  */
 @Composable
 fun NoteMenu(
@@ -51,6 +53,7 @@ fun NoteMenu(
     onPlaces: () -> Unit = {},
     syncing: Boolean = false,
     onSync: () -> Unit = {},
+    onSortTasks: (() -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -90,6 +93,18 @@ fun NoteMenu(
                     onAddWidget()
                 },
             )
+            // Only where the vault can be written: it is the one item here
+            // that changes the note.
+            onSortTasks?.let { sort ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.note_sort_tasks)) },
+                    leadingIcon = { LucideGlyph("list-checks", size = 18.dp) },
+                    onClick = {
+                        open = false
+                        sort()
+                    },
+                )
+            }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.places_title)) },
                 leadingIcon = { LucideGlyph("map-pin", size = 18.dp) },
