@@ -127,6 +127,54 @@ class SearchOperatorsTest {
             assertThat(titles("\"red harv")).containsExactly("Tomatoes")
         }
 
+    private suspend fun houses() =
+        vault(
+            1L,
+            // Named for one word and saying the other far off: on bm25 alone
+            // the title puts it first.
+            "History/House.md" to
+                "The house stood on the hill for a century before anyone thought to write it down. " +
+                "Its owners came and went, the roof was mended twice, the garden grew wild and was " +
+                "cleared, and the last of them left for the city during World War II.",
+            "Places/Wing.md" to "The house had a second wing, called II by the builders.",
+            "Places/Plans.md" to "Plans for the House II renovation, room by room, with notes and a long list.",
+        )
+
+    @Test
+    fun `words side by side come before words near before words anywhere`() =
+        runTest {
+            houses()
+            assertThat(titles("House II")).containsExactly("Plans", "Wing", "House").inOrder()
+        }
+
+    @Test
+    fun `a half typed last word still ranks the phrase first`() =
+        runTest {
+            houses()
+            assertThat(titles("house i")).containsExactly("Plans", "Wing", "House").inOrder()
+            assertThat(FtsQuery.parse("house i")?.tiers)
+                .containsExactly("\"house\" + \"i\"*", "NEAR(\"house\" \"i\"*, 10)")
+                .inOrder()
+        }
+
+    @Test
+    fun `a quoted phrase or one word runs as it always has`() =
+        runTest {
+            houses()
+            assertThat(titles("\"house ii\"")).containsExactly("Plans")
+            assertThat(FtsQuery.parse("\"house ii\"")?.tiers).isEmpty()
+            assertThat(FtsQuery.parse("\"house\" ii")?.tiers).isEmpty()
+            assertThat(FtsQuery.parse("house")?.tiers).isEmpty()
+        }
+
+    @Test
+    fun `the tiers keep the exclusions and the folder`() =
+        runTest {
+            houses()
+            assertThat(titles("house ii -renovation")).containsExactly("Wing", "House").inOrder()
+            assertThat(titles("house ii path:Places")).containsExactly("Plans", "Wing").inOrder()
+        }
+
     @Test
     fun `exclusions alone ask for nothing`() {
         assertThat(FtsQuery.parse("-red")).isNull()

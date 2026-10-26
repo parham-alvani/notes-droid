@@ -136,17 +136,28 @@ class SearchIndex
             limit: Int = DEFAULT_LIMIT,
         ): List<SearchHit> {
             val query = FtsQuery.parse(raw) ?: return emptyList()
-            val (sql, arguments) = query.sql(vaultId, limit)
             return database.useReaderConnection { connection ->
-                connection.usePrepared(sql) { statement ->
-                    arguments.forEachIndexed { index, argument ->
-                        when (argument) {
-                            is Long -> statement.bindLong(index + 1, argument)
-                            else -> statement.bindText(index + 1, argument.toString())
+                // Each tier ranked on its own and appended, so a note that
+                // says the words together is never outranked by one that
+                // says them pages apart.
+                val hits = LinkedHashMap<Long, SearchHit>()
+                for (match in query.matches) {
+                    if (hits.size >= limit) break
+                    val (sql, arguments) = query.sql(vaultId, limit, match)
+                    connection.usePrepared(sql) { statement ->
+                        arguments.forEachIndexed { index, argument ->
+                            when (argument) {
+                                is Long -> statement.bindLong(index + 1, argument)
+                                else -> statement.bindText(index + 1, argument.toString())
+                            }
+                        }
+                        while (hits.size < limit && statement.step()) {
+                            val hit = statement.hit()
+                            hits.putIfAbsent(hit.noteId, hit)
                         }
                     }
-                    buildList { while (statement.step()) add(statement.hit()) }
                 }
+                hits.values.toList()
             }
         }
 
@@ -282,23 +293,33 @@ data class ParsedSearch(
     val exclude: String? = null,
     val paths: List<String> = emptyList(),
     val excludedPaths: List<String> = emptyList(),
+    /**
+     * Stricter forms of [include] to run before it, best first: the words as
+     * one phrase, then the words near each other. Empty when [include] is
+     * all there is -- one word, or a quoted phrase.
+     */
+    val tiers: List<String> = emptyList(),
 ) {
     /** The FTS5 expression, with the exclusions folded in. */
     val match: String?
-        get() =
-            when {
-                include == null -> null
-                exclude == null -> include
-                else -> "($include) NOT ($exclude)"
-            }
+        get() = include?.let(::excluding)
 
-    /** The statement for one vault, and its arguments in order. */
+    /**
+     * Every expression to run, best first, each with the exclusions folded
+     * in: [tiers], then [include]. One null when only a folder narrows it.
+     */
+    val matches: List<String?>
+        get() = if (include == null) listOf(null) else (tiers + include).map(::excluding)
+
+    private fun excluding(text: String) = if (exclude == null) text else "($text) NOT ($exclude)"
+
+    /** The statement for one vault and one of [matches], and its arguments in order. */
     internal fun sql(
         vaultId: Long,
         limit: Int,
+        text: String? = match,
     ): Pair<String, List<Any>> {
         val arguments = mutableListOf<Any>()
-        val text = match
         val select =
             if (text != null) {
                 arguments += text
@@ -345,6 +366,9 @@ object FtsQuery {
     private val TOKEN = Regex("""[\p{L}\p{N}_]+""")
     private const val PATH = "path:"
 
+    /** How many words apart two words may be and still count as near. */
+    const val NEAR = 10
+
     /**
      * The same text as an exact phrase rather than a bag of words.
      *
@@ -368,7 +392,11 @@ object FtsQuery {
      * What [raw] asks for, or null when nothing is left worth searching for.
      *
      * - Words match as they always have, the last one as a prefix so results
-     *   appear while it is still being typed.
+     *   appear while it is still being typed. Two or more are looked for as
+     *   a phrase first, then within [NEAR] words of each other, and only
+     *   then anywhere in the note ([ParsedSearch.tiers]): "House II" lists
+     *   the notes that say "House II" before one with "house" in one place
+     *   and "World War II" in another.
      * - `"an exact phrase"` matches as written. An unclosed quote runs to the
      *   end, which is what one looks like mid-typing.
      * - `-word` or `-"a phrase"` leaves out the notes that say it.
@@ -391,6 +419,9 @@ object FtsQuery {
         val excludedPaths = mutableListOf<String>()
         val found = terms(raw)
         val last = found.indexOfLast { !it.negated && !it.path }
+        // The unquoted words, each quoted alone, for the phrase and near tiers.
+        val words = mutableListOf<String>()
+        var quotedPhrase = false
         found.forEachIndexed { index, term ->
             if (term.path) {
                 val prefix = term.text.trim().trim('/')
@@ -403,10 +434,15 @@ object FtsQuery {
             when {
                 // One thing to leave out, however many tokens it spans.
                 term.negated -> exclude += quoted(tokens)
-                term.quoted -> include += quoted(tokens) + if (typing) "*" else ""
+                term.quoted -> {
+                    quotedPhrase = true
+                    include += quoted(tokens) + if (typing) "*" else ""
+                }
                 else ->
                     tokens.forEachIndexed { at, token ->
-                        include += quoted(listOf(token)) + if (typing && at == tokens.lastIndex) "*" else ""
+                        val word = quoted(listOf(token)) + if (typing && at == tokens.lastIndex) "*" else ""
+                        include += word
+                        words += word
                     }
             }
         }
@@ -416,6 +452,13 @@ object FtsQuery {
             exclude = exclude.takeIf { it.isNotEmpty() }?.joinToString(" OR "),
             paths = paths,
             excludedPaths = excludedPaths,
+            // A quoted phrase already says how the words go together.
+            tiers =
+                if (quotedPhrase || words.size < 2) {
+                    emptyList()
+                } else {
+                    listOf(words.joinToString(" + "), words.joinToString(" ", "NEAR(", ", $NEAR)"))
+                },
         )
     }
 
