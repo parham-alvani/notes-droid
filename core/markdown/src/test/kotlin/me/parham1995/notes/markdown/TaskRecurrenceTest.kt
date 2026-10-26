@@ -58,4 +58,16 @@ class TaskRecurrenceTest {
         assertThat(TaskRecurrence.next(LocalDate.of(2026, 1, 31), rule, LocalDate.of(2026, 1, 31)))
             .isEqualTo(LocalDate.of(2026, 2, 28))
     }
+
+    @Test
+    fun `an interval past the end of the calendar is not a rule worked out`() {
+        assertThat(TaskRecurrence.parse("every 99999999999 days")).isNull()
+        assertThat(TaskRecurrence.parse("every 999999999999999999999 years")).isNull()
+        assertThat(
+            TaskLine.completeRecurring("- [ ] far 🔁 every 99999999999 days 📅 2026-10-26", "2026-10-26"),
+        ).isNull()
+
+        val far = TaskRecurrence.parse("every 10000 years")!!
+        assertThat(TaskRecurrence.next(LocalDate.of(2026, 1, 1), far, LocalDate.of(2026, 1, 1)).year).isEqualTo(12026)
+    }
 }

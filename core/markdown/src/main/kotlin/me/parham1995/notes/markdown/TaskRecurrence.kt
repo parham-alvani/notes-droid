@@ -38,8 +38,13 @@ object TaskRecurrence {
         if (whenDone) text = text.removeSuffix(WHEN_DONE).trim()
 
         val match = EVERY.find(text) ?: return null
-        val amount = match.groupValues[1].takeIf { it.isNotEmpty() }?.toLongOrNull() ?: 1L
-        if (amount <= 0) return null
+        val written = match.groupValues[1]
+        // Too many digits for a number is not "every 1": that read a rule
+        // nobody wrote and moved the task by it.
+        val amount = if (written.isEmpty()) 1L else written.toLongOrNull() ?: return null
+        // Past this, a step runs off the end of the calendar and throws a
+        // DateTimeException out of the tick; refused, it is said out loud.
+        if (amount <= 0 || amount > MAX_AMOUNT) return null
         val unit =
             when (match.groupValues[2]) {
                 "day" -> RecurrenceUnit.DAY
@@ -83,6 +88,7 @@ object TaskRecurrence {
         }
 
     private const val WHEN_DONE = "when done"
+    private const val MAX_AMOUNT = 10_000L
 
     /** A daily rule on a task abandoned for years still terminates. */
     private const val MAX_STEPS = 4000
