@@ -1,0 +1,1 @@
+Sort a note's tasks done first, as the task-sorter plugin does. Postpone a task by a day, a week or a month from the task list. Rich text pasted or shared into a capture arrives as Markdown. A link to a note that is not there yet can make it. The outline shows the word count and the reading time. Fixes for crashes on broken task queries, repeats and links.
