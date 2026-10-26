@@ -411,6 +411,13 @@
     <string name="reschedule_weekend">This weekend</string>
     <string name="reschedule_next_week">Next week</string>
     <string name="reschedule_pick">Pick a date</string>
+    <string name="postpone_title">Postpone by</string>
+    <string name="postpone_day">A day</string>
+    <string name="postpone_two_days">2 days</string>
+    <string name="postpone_three_days">3 days</string>
+    <string name="postpone_week">A week</string>
+    <string name="postpone_two_weeks">2 weeks</string>
+    <string name="postpone_month">A month</string>
     <string name="reschedule_move">Move</string>
     <string name="reschedule_action">Move to another day, or set a reminder</string>
     <string name="reschedule_moved">Moved to %1$s</string>

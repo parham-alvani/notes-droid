@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
 import me.parham1995.notes.data.TaskBucket
@@ -105,5 +106,16 @@ class TaskRescheduleTest {
         // pushing it.
         assertThat(RescheduleChoices.from(LocalDate.of(2026, 9, 26)).weekend).isEqualTo(LocalDate.of(2026, 10, 3))
         assertThat(RescheduleChoices.from(LocalDate.of(2026, 9, 28)).nextWeek).isEqualTo(LocalDate.of(2026, 10, 5))
+    }
+
+    @Test
+    fun `postponing an overdue task moves it on from today, not from its old day`() {
+        val moved = mutableListOf<Pair<Int, LocalDate>>()
+        show(canWrite = true) { row, date -> moved += row.line to date }
+
+        compose.onNodeWithText("call the bank").performTouchInput { longClick() }
+        compose.onNodeWithText("2 days").performScrollTo().performClick()
+
+        assertThat(moved).containsExactly(4 to LocalDate.of(2026, 9, 25))
     }
 }

@@ -410,6 +410,13 @@
     <string name="reschedule_weekend">همین آخر هفته</string>
     <string name="reschedule_next_week">هفته‌ی بعد</string>
     <string name="reschedule_pick">انتخاب تاریخ</string>
+    <string name="postpone_title">به تعویق انداختن به اندازهٔ</string>
+    <string name="postpone_day">یک روز</string>
+    <string name="postpone_two_days">۲ روز</string>
+    <string name="postpone_three_days">۳ روز</string>
+    <string name="postpone_week">یک هفته</string>
+    <string name="postpone_two_weeks">۲ هفته</string>
+    <string name="postpone_month">یک ماه</string>
     <string name="reschedule_move">انتقال</string>
     <string name="reschedule_action">جابه‌جایی به روز دیگر، یا یادآوری</string>
     <string name="reschedule_moved">به %1$s منتقل شد</string>

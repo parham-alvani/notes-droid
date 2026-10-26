@@ -4,6 +4,8 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -27,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
+import me.parham1995.notes.markdown.Postpone
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -73,6 +76,12 @@ fun RescheduleSheet(
     canMove: Boolean = true,
     /** A reminder at a time, kept on the phone; null where there is nothing to remind about. */
     onRemind: ((LocalDateTime) -> Unit)? = null,
+    /**
+     * The day the task is filed under, due else scheduled. Given, the sheet
+     * also offers the Tasks plugin's Postpone, which moves on from that day
+     * rather than from today.
+     */
+    filed: LocalDate? = null,
 ) {
     val choices = remember(today) { RescheduleChoices.from(today) }
     var picking by remember { mutableStateOf(false) }
@@ -114,7 +123,9 @@ fun RescheduleSheet(
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, properties = sheetProperties()) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        // Scrolls: with the postpone choices it is taller than a small
+        // phone held sideways.
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
             if (canMove) {
                 Text(
                     text = stringResource(R.string.reschedule_title),
@@ -126,6 +137,7 @@ fun RescheduleSheet(
                 Choice(stringResource(R.string.reschedule_weekend), choices.weekend) { onChoose(choices.weekend) }
                 Choice(stringResource(R.string.reschedule_next_week), choices.nextWeek) { onChoose(choices.nextWeek) }
                 Choice(stringResource(R.string.reschedule_pick), date = null) { picking = true }
+                filed?.let { PostponeChoices(it, today, onChoose) }
             }
             if (onRemind != null) {
                 if (canMove) HorizontalDivider()
@@ -197,6 +209,36 @@ private fun ReminderPicker(
 
 private const val DEFAULT_REMINDER_HOUR = 9
 private const val LAST_HOUR = 23
+
+/** The Tasks plugin's Postpone, each with the day it lands on. */
+@Composable
+private fun PostponeChoices(
+    filed: LocalDate,
+    today: LocalDate,
+    onChoose: (LocalDate) -> Unit,
+) {
+    HorizontalDivider()
+    Text(
+        text = stringResource(R.string.postpone_title),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+    )
+    Postpone.entries.forEach { amount ->
+        val day = amount.from(filed, today)
+        Choice(stringResource(amount.label()), day) { onChoose(day) }
+    }
+}
+
+private fun Postpone.label(): Int =
+    when (this) {
+        Postpone.DAY -> R.string.postpone_day
+        Postpone.TWO_DAYS -> R.string.postpone_two_days
+        Postpone.THREE_DAYS -> R.string.postpone_three_days
+        Postpone.WEEK -> R.string.postpone_week
+        Postpone.TWO_WEEKS -> R.string.postpone_two_weeks
+        Postpone.MONTH -> R.string.postpone_month
+    }
 
 @Composable
 private fun Choice(

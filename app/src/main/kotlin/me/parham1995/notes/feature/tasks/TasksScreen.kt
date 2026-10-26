@@ -304,6 +304,7 @@ internal fun TaskList(
                         remind(row, at)
                     }
                 },
+            filed = row.actionableOn?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
         )
     }
 
