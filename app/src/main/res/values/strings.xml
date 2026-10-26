@@ -167,6 +167,7 @@
     <string name="shortcut_capture_short">Capture</string>
     <string name="shortcut_capture_long">Write something down</string>
     <string name="capture_hint">A thought, a link, anything</string>
+    <string name="capture_paste_markdown">Paste as Markdown</string>
     <string name="drawer_title">Files</string>
     <string name="drawer_filter">Jump to a note</string>
     <string name="drawer_open">Open</string>

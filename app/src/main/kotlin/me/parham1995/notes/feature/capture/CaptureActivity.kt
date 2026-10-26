@@ -1,5 +1,7 @@
 package me.parham1995.notes.feature.capture
 
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
@@ -7,8 +9,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
@@ -43,6 +48,8 @@ import me.parham1995.notes.R
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.ThemeChoice
 import me.parham1995.notes.data.VaultSettings
+import me.parham1995.notes.markdown.HtmlMarkdown
+import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.theme.NotesTheme
 import javax.inject.Inject
 
@@ -116,7 +123,11 @@ class CaptureActivity : ComponentActivity() {
         if (intent == null) return ""
         val body =
             when (intent.action) {
-                Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+                Intent.ACTION_SEND ->
+                    sharedBody(
+                        intent.getStringExtra(Intent.EXTRA_TEXT),
+                        intent.getStringExtra(Intent.EXTRA_HTML_TEXT),
+                    )
                 Intent.ACTION_PROCESS_TEXT ->
                     intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString().orEmpty()
 
@@ -127,6 +138,42 @@ class CaptureActivity : ComponentActivity() {
         val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
         return listOf(subject, body).filter { it.isNotBlank() }.joinToString(" - ")
     }
+}
+
+/**
+ * What a share says, as Markdown where it came as rich text: a page or a
+ * document shared with its formatting keeps its headings, links and lists
+ * rather than arriving flattened. HTML that holds nothing a plain copy would
+ * lose -- a code editor's coloured lines -- is taken as the plain text.
+ */
+internal fun sharedBody(
+    text: String?,
+    html: String?,
+): String = html?.let(HtmlMarkdown::convert) ?: text.orEmpty()
+
+/**
+ * [value] with [pasted] in place of its selection, and the caret after it,
+ * as a paste from the keyboard would leave it.
+ */
+internal fun pasteInto(
+    value: TextFieldValue,
+    pasted: String,
+): TextFieldValue {
+    val start = minOf(value.selection.start, value.selection.end).coerceIn(0, value.text.length)
+    val end = maxOf(value.selection.start, value.selection.end).coerceIn(0, value.text.length)
+    val text = value.text.replaceRange(start, end, pasted)
+    return TextFieldValue(text, TextRange(start + pasted.length))
+}
+
+/**
+ * The clipboard as Markdown: its HTML converted where there is any worth
+ * converting, its plain text otherwise, null when it holds no text at all.
+ * Read only when asked -- Android tells the person every time an app reads it.
+ */
+private fun clipboardMarkdown(context: Context): String? {
+    val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return null
+    val item = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0) ?: return null
+    return sharedBody(item.coerceToText(context)?.toString(), item.htmlText).takeIf { it.isNotEmpty() }
 }
 
 /** A share that arrived while the dialog was open, numbered so two alike are two. */
@@ -219,6 +266,18 @@ private fun CaptureDialog(
                             .heightIn(min = FIELD_HEIGHT)
                             .focusRequester(focus),
                 )
+                // A paste from the keyboard is plain text; this one keeps a web
+                // page's or a document's headings, links and lists, as the
+                // Mac's paste does.
+                val context = LocalContext.current
+                TextButton(
+                    onClick = { clipboardMarkdown(context)?.let { text = pasteInto(text, it) } },
+                    enabled = state.ready,
+                ) {
+                    LucideGlyph("clipboard-paste", size = 18.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.capture_paste_markdown))
+                }
                 if (state.destination.isNotBlank()) {
                     Text(
                         text = state.destination,

@@ -162,6 +162,7 @@
     <string name="tasks_add_section">پروژه</string>
     <string name="tasks_add_section_end">انتهای فایل</string>
     <string name="tasks_add_file">فایل</string>
+    <string name="capture_paste_markdown">چسباندن به‌صورت Markdown</string>
     <string name="capture_title">یادداشت سریع</string>
     <string name="capture_hint">یک فکر، یک لینک، هر چیزی</string>
     <string name="shortcut_capture_short">یادداشت</string>
