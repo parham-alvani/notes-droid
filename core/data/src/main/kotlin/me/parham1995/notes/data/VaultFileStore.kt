@@ -51,6 +51,16 @@ class VaultFileStore
             return file
         }
 
+        /**
+         * Whether [path] stays inside [vaultId]'s tree. [fileFor] throws for
+         * one that does not, which is right for a sync writing it and wrong
+         * for a link in a note asking to open it.
+         */
+        fun holds(
+            vaultId: Long,
+            path: String,
+        ): Boolean = runCatching { fileFor(vaultId, path) }.isSuccess
+
         suspend fun write(
             vaultId: Long,
             path: String,

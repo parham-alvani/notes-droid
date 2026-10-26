@@ -35,7 +35,7 @@ class VaultFileSource
         suspend fun bytes(
             vaultId: Long,
             path: String,
-        ): ByteArray? = fetch(vaultId, path)?.second
+        ): ByteArray? = if (files.holds(vaultId, path)) fetch(vaultId, path)?.second else null
 
         /**
          * The file on disk, fetching it first if it is not there yet.
@@ -49,6 +49,9 @@ class VaultFileSource
             vaultId: Long,
             path: String,
         ): File? {
+            // A note can link to `a/../../x.pdf`; that is nothing to open, not
+            // an IllegalArgumentException out of a tap.
+            if (!files.holds(vaultId, path)) return null
             files.fileFor(vaultId, path).takeIf { it.isFile }?.let { return it }
             fetch(vaultId, path) ?: return null
             return files.fileFor(vaultId, path).takeIf { it.isFile }
