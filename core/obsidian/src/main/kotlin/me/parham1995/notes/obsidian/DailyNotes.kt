@@ -11,7 +11,7 @@ import java.util.Locale
  * Where Obsidian's core Daily notes plugin keeps a day's note.
  *
  * Only the two settings that decide the path are read. The template is what a
- * new note starts from, and this app does not create notes.
+ * new note starts from, and this app does not create daily notes.
  */
 data class DailyNotes(
     /** Vault-relative, empty for the root. */

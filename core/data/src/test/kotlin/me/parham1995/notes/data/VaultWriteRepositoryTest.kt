@@ -516,4 +516,51 @@ class VaultWriteRepositoryTest {
         const val SCRATCHPAD = "Scratchpad.md"
         const val WEEK = "Calendar/2026-W43.md"
     }
+
+    @Test
+    fun `a note from a template is made, filled and indexed, and never written over`() =
+        runTest {
+            val template = "Templates/Meeting.md"
+            files.write(vaultId, template, "# {{title}}\n\nOn {{date:YYYY-MM-DD}}.\n".toByteArray())
+            files.write(vaultId, ".obsidian/templates.json", """{"folder": "Templates"}""".toByteArray())
+            indexer.indexAll(vaultId, listOf(PathAndSha(template, "sha-template")))
+            val templates =
+                NoteTemplates(
+                    configs =
+                        ObsidianConfigStore(
+                            files,
+                            database.noteDao(),
+                            database.syncStateDao(),
+                            SyncLog(database.syncLogDao()),
+                        ),
+                    notes = database.noteDao(),
+                    files = files,
+                    writes = writes,
+                )
+
+            assertThat(templates.list(vaultId)).containsExactly(TemplateFile(template, "Meeting"))
+
+            val at = java.time.LocalDateTime.of(2026, 10, 26, 9, 0)
+            val (result, path) = templates.create(vaultId, "Work", template, "Plan: Q4", at)
+
+            assertThat(result).isEqualTo(WriteResult.Pushed)
+            assertThat(path).isEqualTo("Work/Plan Q4.md")
+            assertThat(transport.content).isEqualTo("# Plan Q4\n\nOn 2026-10-26.\n")
+            assertThat(database.noteDao().byPath(vaultId, "Work/Plan Q4.md")).isNotNull()
+
+            // The same title again finds the note there, and leaves it alone.
+            files.write(vaultId, "Work/Plan Q4.md", "edited at the desk\n".toByteArray())
+            val (again, _) = templates.create(vaultId, "Work", template, "Plan: Q4", at)
+            assertThat(again).isInstanceOf(WriteResult.Refused::class.java)
+            assertThat(files.readText(vaultId, "Work/Plan Q4.md")).isEqualTo("edited at the desk\n")
+        }
+
+    @Test
+    fun `no note is made where the vault cannot be written`() =
+        runTest {
+            database.vaultDao().update(database.vaultDao().byId(vaultId)!!.copy(canWrite = false))
+            val result = writes.createNote(vaultId, "New.md", "text")
+            assertThat(result).isInstanceOf(WriteResult.Refused::class.java)
+            assertThat(files.readText(vaultId, "New.md")).isNull()
+        }
 }

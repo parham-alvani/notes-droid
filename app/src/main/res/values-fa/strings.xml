@@ -236,6 +236,10 @@
     <string name="today_all_day">تمام روز</string>
     <string name="today_overlaps">هم‌زمان با %1$s</string>
     <string name="today_join">پیوستن</string>
+    <string name="template_new">یادداشت تازه از الگو</string>
+    <string name="template_in">در %1$s</string>
+    <string name="template_title">عنوان</string>
+    <string name="template_create">ساختن</string>
     <string name="calendar_title">تقویم</string>
     <string name="calendar_needs_access">دفتر تقویم‌های این گوشی را می‌خواند تا جلسه‌ها را کنار کارها نشان دهد. هیچ‌وقت آن‌ها را تغییر نمی‌دهد.</string>
     <string name="calendar_allow">اجازهٔ دسترسی به تقویم</string>

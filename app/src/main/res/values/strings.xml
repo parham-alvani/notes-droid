@@ -237,6 +237,10 @@
     <string name="today_all_day">All day</string>
     <string name="today_overlaps">Overlaps %1$s</string>
     <string name="today_join">Join</string>
+    <string name="template_new">New note from template</string>
+    <string name="template_in">In %1$s</string>
+    <string name="template_title">Title</string>
+    <string name="template_create">Create</string>
     <string name="calendar_title">Calendar</string>
     <string name="calendar_needs_access">Daftar reads the calendars on this phone to show your meetings next to your tasks. It never changes them.</string>
     <string name="calendar_allow">Allow calendar access</string>

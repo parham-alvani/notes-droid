@@ -55,7 +55,8 @@ All seven milestones are implemented, and the app has been running against a rea
 - **The vault's own icons** — the assignments from the [Iconic](https://github.com/gfxholo/iconic) plugin, glyphs and colours included
 - **Tablets and landscape** — the note beside the list it was picked from on an expanded window, held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
-- **A little writing** — tick a task off, add one, move one to another day, capture a thought — each a commit, and offered only where the credential can actually push
+- **A little writing** — tick a task off, add one, move one to another day, capture a thought, start a note from one of the vault's templates — each a commit, and offered only where the credential can actually push
+- **New note from a template** — in the browser, a button makes a note in the folder being looked at from a template in the folder the core Templates plugin names in `.obsidian/templates.json`, filling `{{title}}`, `{{date}}`, `{{time}}` and `{{date:FORMAT}}` with the plugin's own formats, and opens it; a note already there is never written over
 
 ## Requirements
 
@@ -158,6 +159,8 @@ Four edits, and no more: tick an open task, add a task under a project heading, 
 **An edit is never a patch.** It is stored as an intent — the line to find, the line to write — and re-applied to whatever the file says at the moment it reaches the repository. An edit queued on a train lands in the current file rather than reverting a morning's work at the desk, and a task already ticked at the desk is a quiet no-op rather than a conflict. GitHub's own blob-sha check refuses a stale write, and the answer to that refusal is to read again and re-apply, never to force it through.
 
 **An edit made with no signal is kept.** It is applied on the device straight away, so the app tells the truth about what it was asked to do, and queued. The queue is flushed at the *start* of the next sync, before anything is pulled down — a pull that overwrote a queued edit's file would be indistinguishable from losing it.
+
+**A new note starts from a template, and never replaces one.** The browser offers it where the vault can be written and has a templates folder. The note goes in the folder being browsed, named by its title, with the template's variables filled the way Obsidian fills them. If a note of that name is already there — or arrives from the desk while the new one waits in the queue — the edit is refused rather than written over it.
 
 Capture is reachable from the share sheet, the text-selection menu, a launcher shortcut and a button on the tasks widget, because the point of it is the thought that arrives away from the desk.
 

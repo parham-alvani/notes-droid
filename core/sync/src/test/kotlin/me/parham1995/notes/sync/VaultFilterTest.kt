@@ -78,6 +78,7 @@ class VaultFilterTest {
         assertThat(filter.kindOf(".obsidian/bookmarks.json")).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/daily-notes.json")).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/types.json")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.kindOf(".obsidian/templates.json")).isEqualTo(BlobKind.CONFIG)
         // And nothing beside them: the rest of the editor's settings stay out.
         assertThat(filter.kindOf(".obsidian/workspace.json")).isNull()
         assertThat(filter.kindOf(".obsidian/bookmarks.json.bak")).isNull()

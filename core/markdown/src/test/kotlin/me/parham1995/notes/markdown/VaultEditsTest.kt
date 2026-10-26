@@ -155,4 +155,12 @@ class VaultEditsTest {
     fun `an empty capture is not applicable`() {
         assertThat(VaultEdits.append("   ")("# Scratch\n")).isNull()
     }
+
+    @Test
+    fun `a new note is written only where there is none`() {
+        val create = VaultEdits.createFile("# New\n")
+        assertThat(create(null)).isEqualTo("# New\n")
+        assertThat(create("# New\n")).isNull()
+        org.junit.Assert.assertThrows(NoteExists::class.java) { create("written at the desk\n") }
+    }
 }

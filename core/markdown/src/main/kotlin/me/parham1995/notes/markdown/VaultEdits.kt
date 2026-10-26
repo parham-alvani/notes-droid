@@ -147,6 +147,23 @@ object VaultEdits {
     fun replaceFile(text: String): (String?) -> String? = { current -> text.takeIf { it != current } }
 
     /**
+     * Makes a new note that reads [text].
+     *
+     * A note is never written over: a file already there with other words in
+     * it -- written at the desk while this waited in the queue -- throws
+     * [NoteExists] rather than losing them. Null when it already reads [text],
+     * which is this same edit having landed once.
+     */
+    fun createFile(text: String): (String?) -> String? =
+        { current ->
+            when (current) {
+                null -> text
+                text -> null
+                else -> throw NoteExists()
+            }
+        }
+
+    /**
      * Moves the task written on [line] -- reading [task] to the index -- to
      * [date], or takes off the scheduled date an earlier move added when
      * [date] is null.
@@ -325,6 +342,9 @@ object VaultEdits {
 class TaskNotFound(
     val task: String,
 ) : IllegalStateException("\"${task.take(TASK_IN_MESSAGE)}\" is not in that note any more - refresh and try again")
+
+/** A new note asked for where a note already is. */
+class NoteExists : IllegalStateException("a note of that name is already there - pick another title")
 
 /**
  * A repeating task asked to be done, on a rule the app will not work out for

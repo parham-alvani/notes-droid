@@ -2,6 +2,7 @@ package me.parham1995.notes.obsidian
 
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.TextStyle
 import java.time.temporal.ChronoField
 import java.time.temporal.IsoFields
@@ -52,6 +53,50 @@ object MomentFormat {
         buildString {
             tokens(pattern).forEach { append(token(it, date, locale)) }
         }
+
+    /**
+     * [pattern] with the time of day read too: hours (`H` `HH` `h` `hh`),
+     * minutes (`m` `mm`), seconds (`s` `ss`) and `A`/`a`. Apart from [format]
+     * because a daily note's name is a date, and a letter in it that moment
+     * would read as an hour has always been copied through there.
+     */
+    fun format(
+        pattern: String,
+        at: LocalDateTime,
+        locale: Locale = Locale.ENGLISH,
+    ): String =
+        buildString {
+            WITH_TIME.findAll(pattern).forEach { match ->
+                append(timeToken(match.value, at) ?: token(match.value, at.toLocalDate(), locale))
+            }
+        }
+
+    /** The date's tokens, with the time's in front of them so `mm` is minutes and not two months. */
+    private val WITH_TIME =
+        Regex(
+            """\[[^\[]*]|\\.|HH|H|hh|h|mm|m|ss|s|A|a|""" + TOKENS.pattern.substringAfter("""\\.|"""),
+            RegexOption.DOT_MATCHES_ALL,
+        )
+
+    private fun timeToken(
+        token: String,
+        at: LocalDateTime,
+    ): String? {
+        val twelve = if (at.hour % HALF_DAY == 0) HALF_DAY else at.hour % HALF_DAY
+        return when (token) {
+            "HH" -> at.hour.toString().padStart(2, '0')
+            "H" -> at.hour.toString()
+            "hh" -> twelve.toString().padStart(2, '0')
+            "h" -> twelve.toString()
+            "mm" -> at.minute.toString().padStart(2, '0')
+            "m" -> at.minute.toString()
+            "ss" -> at.second.toString().padStart(2, '0')
+            "s" -> at.second.toString()
+            "A" -> if (at.hour < HALF_DAY) "AM" else "PM"
+            "a" -> if (at.hour < HALF_DAY) "am" else "pm"
+            else -> null
+        }
+    }
 
     private fun token(
         token: String,
@@ -117,6 +162,7 @@ object MomentFormat {
         return "$n$suffix"
     }
 
+    private const val HALF_DAY = 12
     private const val YEAR_WIDTH = 4
     private const val DAY_OF_YEAR_WIDTH = 3
     private const val CENTURY = 100

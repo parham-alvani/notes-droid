@@ -5,31 +5,39 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.IconStore
+import me.parham1995.notes.data.NoteTemplates
 import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
+import me.parham1995.notes.data.TemplateFile
 import me.parham1995.notes.data.VaultBookmarks
 import me.parham1995.notes.data.VaultFileSource
 import me.parham1995.notes.data.VaultItem
 import me.parham1995.notes.data.VaultRepository
+import me.parham1995.notes.data.VaultWriteRepository
+import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.NoteEntity
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.database.isUpdatedSinceRead
+import me.parham1995.notes.feature.tasks.describe
 import me.parham1995.notes.icons.IconSpec
 import me.parham1995.notes.ui.UiText
 import me.parham1995.notes.ui.VaultRowItem
@@ -87,7 +95,37 @@ class BrowserViewModel
         private val settings: SettingsStore,
         configs: ObsidianConfigStore,
         private val savedState: SavedStateHandle,
+        private val noteTemplates: NoteTemplates,
+        writes: VaultWriteRepository,
     ) : ViewModel() {
+        /**
+         * The templates a new note can start from, in the vault being read --
+         * none where it cannot be written, which is what hides the button.
+         */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        val templates: StateFlow<List<TemplateFile>> =
+            combine(repository.activeVaultId, writes.writable) { id, writable -> id to (id in writable) }
+                .distinctUntilChanged()
+                .mapLatest { (id, writable) -> if (writable) noteTemplates.list(id) else emptyList() }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), emptyList())
+
+        /**
+         * Makes a note in the folder being browsed from [template], and opens
+         * it once it is there; says why when it is not.
+         */
+        fun newNote(
+            template: TemplateFile,
+            title: String,
+            onOpen: (Long) -> Unit,
+        ) = viewModelScope.launch {
+            val vaultId = repository.activeVaultId.first()
+            val (result, path) = noteTemplates.create(vaultId, this@BrowserViewModel.path.value, template.path, title)
+            val made = result == WriteResult.Pushed || result is WriteResult.Queued
+            val opened = path?.takeIf { made }?.let { repository.resolve(vaultId, it) }
+            opened?.let { onOpen(it.first) }
+            if (opened == null || result is WriteResult.Queued) _syncMessage.value = result.describe()
+        }
+
         /**
          * The vault's own bookmarks, from Obsidian's Bookmarks plugin.
          *

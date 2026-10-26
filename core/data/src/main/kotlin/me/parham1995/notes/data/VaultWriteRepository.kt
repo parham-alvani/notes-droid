@@ -11,6 +11,7 @@ import me.parham1995.notes.data.database.PendingEditEntity
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.markdown.NoteExists
 import me.parham1995.notes.markdown.RepeatNotWorkedOut
 import me.parham1995.notes.markdown.TaskLine
 import me.parham1995.notes.markdown.TaskNotFound
@@ -55,6 +56,9 @@ enum class EditKind {
 
     /** Write a generated note whole. The text is the note; there is no anchor. */
     REPLACE_FILE,
+
+    /** Make a new note, from a template. The text is the note; one already there is never written over. */
+    CREATE_FILE,
     ;
 
     companion object {
@@ -385,6 +389,27 @@ class VaultWriteRepository
         }
 
         /**
+         * Makes a new note at [path] in [vaultId] that reads [text] -- a note
+         * from a template. Refused, not written over, when a note is there.
+         */
+        suspend fun createNote(
+            vaultId: Long,
+            path: String,
+            text: String,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            val name = path.substringAfterLast('/').removeSuffix(".md")
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.CREATE_FILE,
+                anchor = "",
+                replacement = text,
+                summary = "docs: add ${name.take(SUBJECT)}",
+            )
+        }
+
+        /**
          * Sends everything queued, oldest first.
          *
          * Called at the start of a sync rather than at the end: the pull that
@@ -480,6 +505,8 @@ class VaultWriteRepository
                         return@tryWithVault WriteResult.Refused(gone.message.orEmpty())
                     } catch (repeat: RepeatNotWorkedOut) {
                         return@tryWithVault WriteResult.Refused(repeat.message.orEmpty())
+                    } catch (taken: NoteExists) {
+                        return@tryWithVault WriteResult.Refused(taken.message.orEmpty())
                     } ?: return@tryWithVault WriteResult.Unchanged
 
                 val id = pending.insert(edit)
@@ -584,6 +611,7 @@ class VaultWriteRepository
                     VaultEdits.setStatus(line.toInt(), edit.anchor, status.single(), day)
                 }
                 EditKind.REPLACE_FILE -> VaultEdits.replaceFile(edit.text)
+                EditKind.CREATE_FILE -> VaultEdits.createFile(edit.text)
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
 

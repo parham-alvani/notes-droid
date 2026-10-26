@@ -84,8 +84,9 @@ class VaultFilter(
          * 3: attachments -- PDFs, video, audio, archives, office documents.
          * 4: Obsidian's bookmarks and daily-notes settings.
          * 5: Obsidian bases (`.base`) and the property types they read.
+         * 6: the Templates plugin's settings.
          */
-        const val VERSION = 5
+        const val VERSION = 6
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -122,7 +123,10 @@ class VaultFilter(
          */
         const val PROPERTY_TYPES = ".obsidian/types.json"
 
-        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES)
+        /** The core Templates plugin's folder and date and time formats, for a new note from a template. */
+        const val TEMPLATES = ".obsidian/templates.json"
+
+        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES)
 
         /**
          * Formats the reader draws itself. Everything else it can offer is in

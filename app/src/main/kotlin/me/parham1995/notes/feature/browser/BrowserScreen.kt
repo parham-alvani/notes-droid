@@ -103,6 +103,19 @@ fun BrowserScreen(
         }
     }
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
+    val templates by viewModel.templates.collectAsStateWithLifecycle()
+    var creating by remember { mutableStateOf(false) }
+    if (creating && templates.isNotEmpty()) {
+        NewNoteDialog(
+            folder = state.path,
+            templates = templates,
+            onDismiss = { creating = false },
+            onCreate = { template, title ->
+                creating = false
+                viewModel.newNote(template, title, onOpenNote)
+            },
+        )
+    }
     // Shut again on a vault switch: the keys are positions in one vault's tree.
     var openGroups by remember(bookmarks.vaultId) { mutableStateOf(emptySet<String>()) }
 
@@ -209,6 +222,16 @@ fun BrowserScreen(
                     }
                 },
                 actions = {
+                    // Only where the vault can be written and has templates.
+                    if (templates.isNotEmpty()) {
+                        IconButton(onClick = { creating = true }) {
+                            LucideGlyph(
+                                "file-plus",
+                                size = 20.dp,
+                                contentDescription = stringResource(R.string.template_new),
+                            )
+                        }
+                    }
                     IconButton(onClick = onToday) {
                         LucideGlyph(
                             "calendar-days",

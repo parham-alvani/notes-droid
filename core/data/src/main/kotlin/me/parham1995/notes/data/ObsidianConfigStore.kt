@@ -13,6 +13,7 @@ import me.parham1995.notes.data.database.SyncStateDao
 import me.parham1995.notes.obsidian.Bookmark
 import me.parham1995.notes.obsidian.Bookmarks
 import me.parham1995.notes.obsidian.DailyNotes
+import me.parham1995.notes.obsidian.Templates
 import me.parham1995.notes.sync.VaultFilter
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -80,6 +81,10 @@ class ObsidianConfigStore
         /** Where [vaultId] keeps its daily notes; the plugin's defaults when it has not said. */
         suspend fun dailyNotes(vaultId: Long): DailyNotes =
             read(vaultId, VaultFilter.DAILY_NOTES, "daily notes settings", DailyNotes::parse) ?: DailyNotes()
+
+        /** The Templates plugin's settings for [vaultId]; its defaults, with no folder, when it has none. */
+        suspend fun templates(vaultId: Long): Templates =
+            read(vaultId, VaultFilter.TEMPLATES, "templates settings", Templates::parse) ?: Templates()
 
         private suspend fun <T> read(
             vaultId: Long,
