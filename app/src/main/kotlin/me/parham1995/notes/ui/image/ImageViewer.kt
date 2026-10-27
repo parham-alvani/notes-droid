@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -130,9 +131,12 @@ internal fun ZoomableContent(
         }
 
         // Over a page the layer runs under the status bar, so the
-        // controls step inside it.
+        // controls step inside it. Each sits on a dark disc of its own: a
+        // zoomed picture fills the black they were drawn on, and a white
+        // glyph over a white diagram is a button nobody can find.
         IconButton(
             onClick = onDismiss,
+            colors = OVER_PICTURE,
             modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(8.dp),
         ) {
             LucideGlyph(
@@ -150,6 +154,7 @@ internal fun ZoomableContent(
         onOpenExternally?.let { open ->
             IconButton(
                 onClick = open,
+                colors = OVER_PICTURE,
                 modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp),
             ) {
                 LucideGlyph(
@@ -271,3 +276,12 @@ private const val DOUBLE_TAP_ZOOM = 2.5f
  */
 private const val ZOOMED_FRACTION = 0.001f
 private const val SCRIM = 0.5f
+
+/** A dark disc behind a control, so it shows over any picture. */
+private val OVER_PICTURE =
+    IconButtonColors(
+        containerColor = Color.Black.copy(alpha = SCRIM),
+        contentColor = Color.White,
+        disabledContainerColor = Color.Black.copy(alpha = SCRIM),
+        disabledContentColor = Color.White,
+    )
