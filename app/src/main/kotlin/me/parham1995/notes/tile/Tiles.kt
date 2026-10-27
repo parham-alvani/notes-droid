@@ -6,10 +6,14 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.runBlocking
 import me.parham1995.notes.MainActivity
+import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.feature.capture.CaptureActivity
 import me.parham1995.notes.navigation.EXTRA_OPEN
 import me.parham1995.notes.navigation.SCREEN_TODAY
+import javax.inject.Inject
 
 /**
  * A Quick Settings tile that opens one thing, from anywhere, in one swipe and
@@ -69,9 +73,18 @@ abstract class LaunchTile : TileService() {
  * the one most often lost, and the capture only takes: it queues an edit, as
  * it always does, and shows nothing of the vault while the phone is locked
  * (see [CaptureActivity]).
+ *
+ * Not with the app lock on. A capture is still a commit in the owner's name,
+ * and whoever holds a locked phone could write one; someone who locks the
+ * app has said the phone in other hands is not them.
  */
+@AndroidEntryPoint
 class CaptureTile : LaunchTile() {
-    override val overLockScreen = true
+    @Inject lateinit var settings: SettingsStore
+
+    // Asked on each tap: the setting can change between two of them.
+    override val overLockScreen: Boolean
+        get() = !runBlocking { settings.current() }.privacy.appLock
 
     override fun target() = Intent(this, CaptureActivity::class.java).setAction(Intent.ACTION_VIEW)
 }
