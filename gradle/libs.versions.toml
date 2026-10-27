@@ -120,6 +120,8 @@ commonmark-footnotes = { group = "org.commonmark", name = "commonmark-ext-footno
 # rendering
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-svg = { group = "io.coil-kt.coil3", name = "coil-svg", version.ref = "coil" }
+# Animated GIF and WebP through the platform's ImageDecoder (API 28+).
+coil-gif = { group = "io.coil-kt.coil3", name = "coil-gif", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 jlatexmath = { group = "ru.noties", name = "jlatexmath-android", version.ref = "jlatexmath" }
 # Tokenises code so it can be coloured with the vault's own palette.

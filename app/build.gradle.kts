@@ -218,6 +218,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
+    implementation(libs.coil.gif)
     implementation(libs.jlatexmath)
     implementation(libs.highlights)
     implementation(libs.androidx.webkit)

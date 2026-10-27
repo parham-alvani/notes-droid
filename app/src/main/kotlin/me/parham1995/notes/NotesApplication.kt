@@ -27,6 +27,7 @@ import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.reminder.Reminders
+import me.parham1995.notes.ui.image.VaultAnimated
 import me.parham1995.notes.ui.image.VaultSvg
 import me.parham1995.notes.widget.Widgets
 import javax.inject.Inject
@@ -238,15 +239,18 @@ class NotesApplication :
     }
 
     /**
-     * Coil's defaults, plus the SVG decoder that reads the vault's figures.
-     * Components added here are tried before the ones Coil finds by itself,
-     * so it takes over from the plain one `coil-svg` installs.
+     * Coil's defaults, plus the SVG decoder that reads the vault's figures and
+     * the one that keeps an animated picture still when the system's
+     * animations are off. Components added here are tried before the ones Coil
+     * finds by itself, so each takes over from the one its library installs.
      */
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader
             .Builder(context)
-            .components { add(VaultSvg.factory) }
-            .build()
+            .components {
+                add(VaultSvg.factory)
+                add(VaultAnimated.factory)
+            }.build()
 
     override val workManagerConfiguration: Configuration
         get() =
