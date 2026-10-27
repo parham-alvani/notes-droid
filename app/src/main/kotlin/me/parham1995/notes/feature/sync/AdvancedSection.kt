@@ -2,6 +2,7 @@ package me.parham1995.notes.feature.sync
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +50,7 @@ internal fun CrashCard(
             maxLines = CRASH_PREVIEW_LINES,
             overflow = TextOverflow.Ellipsis,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
                 runCatching {
                     context.startActivity(
@@ -157,7 +158,7 @@ internal fun LogCard(viewModel: SyncViewModel) {
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (entries.size > COLLAPSED_LOG_LINES) {
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(

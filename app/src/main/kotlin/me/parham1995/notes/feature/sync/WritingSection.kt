@@ -2,6 +2,7 @@ package me.parham1995.notes.feature.sync
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
@@ -128,7 +129,7 @@ internal fun ScratchpadCard(
             modifier = Modifier.fillMaxWidth(),
         )
         if (state.vaults.size > 1) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.vaults.forEach { vault ->
                     FilterChip(
                         selected = vault.id == chosen,

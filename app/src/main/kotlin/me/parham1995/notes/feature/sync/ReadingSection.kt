@@ -3,7 +3,6 @@ package me.parham1995.notes.feature.sync
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,7 +40,7 @@ internal fun ReadingCard(
 
     SectionCard(stringResource(R.string.card_text)) {
         Text(stringResource(R.string.settings_size), style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReadingSettings.TEXT_SCALES.forEach { scale ->
                 FilterChip(
                     selected = reading.textScale == scale,
@@ -52,7 +51,7 @@ internal fun ReadingCard(
         }
 
         Text(stringResource(R.string.settings_line_spacing), style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReadingSettings.LINE_SPACINGS.forEach { spacing ->
                 FilterChip(
                     selected = reading.lineSpacing == spacing,
@@ -71,7 +70,7 @@ internal fun ReadingCard(
         }
 
         Text(stringResource(R.string.settings_line_width), style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LineWidth.entries.forEach { width ->
                 FilterChip(
                     selected = reading.lineWidth == width,
@@ -103,7 +102,7 @@ internal fun ReadingCard(
 
     SectionCard(stringResource(R.string.card_appearance)) {
         Text(stringResource(R.string.settings_theme), style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ThemeChoice.entries.forEach { choice ->
                 FilterChip(
                     selected = reading.theme == choice,
@@ -119,7 +118,7 @@ internal fun ReadingCard(
         )
 
         Text(stringResource(R.string.settings_widget_background), style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReadingSettings.WIDGET_OPACITIES.forEach { percent ->
                 FilterChip(
                     selected = reading.widgetOpacity == percent,
@@ -185,7 +184,7 @@ internal fun ReadingCard(
         }
 
         Text(stringResource(R.string.settings_folder_order), style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BrowserSort.entries.forEach { sort ->
                 FilterChip(
                     selected = reading.browserSort == sort,
