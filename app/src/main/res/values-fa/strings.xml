@@ -207,6 +207,7 @@
     <string name="capture_saved">ذخیره شد</string>
     <string name="capture_queued">اینجا ذخیره شد و با همگام‌سازی بعدی فرستاده می‌شود.</string>
     <string name="capture_nothing">چیزی برای ذخیره نیست</string>
+    <string name="capture_locked_problem">فعلاً ذخیره نمی‌شود. برای دیدن دلیلش قفل گوشی را باز کنید.</string>
     <string name="settings_section_vaults">دفترها</string>
     <string name="settings_section_vaults_summary">مخزن‌هایی که می‌خوانید، و اینکه چطور</string>
     <string name="settings_section_reading">خواندن</string>

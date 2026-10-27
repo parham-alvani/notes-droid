@@ -240,6 +240,19 @@ class VaultWriteRepositoryTest {
         }
 
     @Test
+    fun `a capture of several lines lands as the paragraphs it was, and one line as a list item`() =
+        runTest {
+            writes.capture("Recipe\nflour\nwater\n\nsalt")
+            writes.capture("[The quick brown fox](https://example.com/fox)")
+
+            val text = transport.content.orEmpty()
+            // The lines kept together and in order, under the time they were
+            // caught -- not flattened into one list item.
+            assertThat(text).containsMatch("""\d\d:\d\d\n\nRecipe\nflour\nwater\n\nsalt\n""")
+            assertThat(text).containsMatch("""- \d\d:\d\d \[The quick brown fox]\(https://example.com/fox\)""")
+        }
+
+    @Test
     fun `an edit made offline is kept, and applies to the file as it is when it goes up`() =
         runTest {
             transport.offline = true

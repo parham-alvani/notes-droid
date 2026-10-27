@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.capture
 
+import android.app.KeyguardManager
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -63,6 +64,14 @@ import javax.inject.Inject
  *
  * It is a dialog over whatever was already on screen, and closing it is the
  * whole interaction.
+ *
+ * Opened on a locked phone -- from the Quick Settings tile -- it is drawn over
+ * the lock screen rather than asking for the unlock first. That is safe
+ * because a capture only ever adds: it queues an edit to the scratchpad and
+ * reads nothing back. While the phone is locked the dialog shows nothing of the
+ * vault or the phone either -- not where the line will land, and not the
+ * clipboard paste, which would hand whoever picked the phone up whatever was
+ * last copied.
  */
 @AndroidEntryPoint
 class CaptureActivity : ComponentActivity() {
@@ -78,12 +87,20 @@ class CaptureActivity : ComponentActivity() {
      */
     private val incoming = MutableStateFlow<Shared?>(null)
 
+    /** Whether the phone is locked behind this dialog; read again on every resume. */
+    private val locked = MutableStateFlow(false)
+
     private val themes: Flow<ThemeChoice?> by lazy {
         settingsStore.settings.map<VaultSettings, ThemeChoice?> { it.reading.theme }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Over the lock screen only when it was opened over it. One opened on
+        // an unlocked phone stays behind the lock when the screen goes off, so
+        // a share typed into it is not shown to whoever wakes the phone.
+        locked.value = deviceLocked()
+        if (locked.value) setShowWhenLocked(true)
         // A recreation keeps the field's own saved text; the intent it was
         // started with has already been put there.
         val shared = if (savedInstanceState == null) sharedText(intent) else ""
@@ -93,10 +110,12 @@ class CaptureActivity : ComponentActivity() {
             // until it is known, so a light phone does not flash the dark one.
             val theme by themes.collectAsStateWithLifecycle(initialValue = null)
             val chosen = theme ?: return@setContent
+            val onLockScreen by locked.collectAsStateWithLifecycle()
             NotesTheme(theme = chosen) {
                 CaptureDialog(
                     initial = shared,
                     incoming = incoming,
+                    locked = onLockScreen,
                     onDone = { message ->
                         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
                         finish()
@@ -106,6 +125,14 @@ class CaptureActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        locked.value = deviceLocked()
+    }
+
+    /** A secure lock only: a swipe to unlock keeps nothing from anyone. */
+    private fun deviceLocked(): Boolean = getSystemService(KeyguardManager::class.java)?.isDeviceLocked == true
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -121,11 +148,13 @@ class CaptureActivity : ComponentActivity() {
      */
     private fun sharedText(intent: Intent?): String {
         if (intent == null) return ""
+        // As CharSequence, not String: an app that shares styled text puts a
+        // Spanned in the extra, and getStringExtra answers that with null.
         val body =
             when (intent.action) {
                 Intent.ACTION_SEND ->
                     sharedBody(
-                        intent.getStringExtra(Intent.EXTRA_TEXT),
+                        intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString(),
                         intent.getStringExtra(Intent.EXTRA_HTML_TEXT),
                     )
                 Intent.ACTION_PROCESS_TEXT ->
@@ -133,10 +162,7 @@ class CaptureActivity : ComponentActivity() {
 
                 else -> ""
             }
-        // A shared page arrives as a title and a URL in two extras, and the
-        // title on its own is the half that is no use later.
-        val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
-        return listOf(subject, body).filter { it.isNotBlank() }.joinToString(" - ")
+        return sharedCapture(intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString(), body)
     }
 }
 
@@ -150,6 +176,70 @@ internal fun sharedBody(
     text: String?,
     html: String?,
 ): String = html?.let(HtmlMarkdown::convert) ?: text.orEmpty()
+
+/**
+ * A share as the line it should be in the vault.
+ *
+ * A shared page arrives as a title in the subject and a URL in the text, and
+ * the two belong together as a link: `[Title](url)` reads as the title and
+ * still goes to the page. A URL shared on its own becomes an autolink, `<url>`,
+ * because a bare one fails the markdownlint the vault runs on every commit.
+ * Apps that also put the title in the text -- "Title url", or the title and
+ * the URL on two lines -- make the same link rather than the title twice.
+ *
+ * Anything else keeps the subject in front of it: on the same line for one
+ * line of text, on a line of its own above several, so a multi-line share
+ * stays the paragraphs it was. A subject the text already starts with is not
+ * said again.
+ */
+internal fun sharedCapture(
+    subject: String?,
+    body: String,
+): String {
+    val title = subject?.trim().orEmpty()
+    val text = body.trim()
+    if (text.isEmpty()) return title
+    val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    val url = lines.last().substringAfterLast(' ').takeIf(WEB_URL::matches)
+    if (url != null) {
+        // What the text says before the URL: nothing, or the title again.
+        val before = (lines.dropLast(1) + lines.last().removeSuffix(url).trim()).filter { it.isNotEmpty() }
+        val named = before.joinToString(" ")
+        // A line above the URL with no subject is the title too; a sentence
+        // with a URL at its end ("look at this https://...") is not, and stays
+        // the sentence it was.
+        val titled = before.size == 1 && (title == named || (title.isEmpty() && lines.size == 2 && lines.last() == url))
+        when {
+            before.isEmpty() && title.isNotEmpty() && title != url -> return markdownLink(title, url)
+            before.isEmpty() -> return "<$url>"
+            titled -> return markdownLink(named, url)
+        }
+    }
+    // The URL at the end, if there is one, as an autolink like the one above.
+    val linked = if (url == null) text else text.removeSuffix(url) + "<$url>"
+    return when {
+        title.isEmpty() || text.startsWith(title) -> linked
+        lines.size > 1 -> "$title\n$linked"
+        else -> "$title - $linked"
+    }
+}
+
+/**
+ * `[text](url)`, with the brackets of [text] escaped so a title that has some
+ * still ends where it should, and [url] in angle brackets when it holds a
+ * parenthesis -- a Wikipedia page's would otherwise close the link early.
+ */
+private fun markdownLink(
+    text: String,
+    url: String,
+): String {
+    val label = text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    val target = if (url.any { it == '(' || it == ')' }) "<$url>" else url
+    return "[$label]($target)"
+}
+
+/** One http(s) URL and nothing else: no space, no angle bracket. */
+private val WEB_URL = Regex("""https?://[^\s<>]+""")
 
 /**
  * [value] with [pasted] in place of its selection, and the caret after it,
@@ -195,6 +285,7 @@ internal fun mergeShared(
 private fun CaptureDialog(
     initial: String,
     incoming: StateFlow<Shared?>,
+    locked: Boolean,
     onDone: (String) -> Unit,
     onDismiss: () -> Unit,
     viewModel: CaptureViewModel = hiltViewModel(),
@@ -247,9 +338,13 @@ private fun CaptureDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Both name the vault, so the lock screen gets the fact and
+                // not the reason.
                 val problem =
-                    state.refused
-                        ?: state.blocked?.let { stringResource(it, state.blockedVault) }
+                    (
+                        state.refused
+                            ?: state.blocked?.let { stringResource(it, state.blockedVault) }
+                    )?.let { if (locked) stringResource(R.string.capture_locked_problem) else it }
                 problem?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
@@ -268,17 +363,19 @@ private fun CaptureDialog(
                 )
                 // A paste from the keyboard is plain text; this one keeps a web
                 // page's or a document's headings, links and lists, as the
-                // Mac's paste does.
+                // Mac's paste does. Not on the lock screen: see the activity.
                 val context = LocalContext.current
-                TextButton(
-                    onClick = { clipboardMarkdown(context)?.let { text = pasteInto(text, it) } },
-                    enabled = state.ready,
-                ) {
-                    LucideGlyph("clipboard-paste", size = 18.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.capture_paste_markdown))
+                if (!locked) {
+                    TextButton(
+                        onClick = { clipboardMarkdown(context)?.let { text = pasteInto(text, it) } },
+                        enabled = state.ready,
+                    ) {
+                        LucideGlyph("clipboard-paste", size = 18.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.capture_paste_markdown))
+                    }
                 }
-                if (state.destination.isNotBlank()) {
+                if (state.destination.isNotBlank() && !locked) {
                     Text(
                         text = state.destination,
                         style = MaterialTheme.typography.labelSmall,

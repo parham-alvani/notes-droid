@@ -18,10 +18,19 @@ import me.parham1995.notes.navigation.SCREEN_TODAY
  *
  * A tile is not a toggle here, so it always draws as inactive: an "on" state
  * would claim something is running that is not. On a locked phone the tap
- * asks for the unlock first, because what it opens is the vault.
+ * asks for the unlock first, because what it opens is the vault -- unless the
+ * tile says [overLockScreen], for a screen that shows none of it.
  */
 abstract class LaunchTile : TileService() {
     protected abstract fun target(): Intent
+
+    /**
+     * Whether [target] may open over the lock screen without the unlock. Only
+     * for an activity that is drawn over it itself (`setShowWhenLocked`) and
+     * that keeps the vault to itself while the phone is locked; anything else
+     * would be asked to unlock by the system anyway, a step later.
+     */
+    protected open val overLockScreen: Boolean = false
 
     override fun onStartListening() {
         qsTile?.apply {
@@ -31,7 +40,7 @@ abstract class LaunchTile : TileService() {
     }
 
     override fun onClick() {
-        if (isLocked) unlockAndRun { launch() } else launch()
+        if (isLocked && !overLockScreen) unlockAndRun { launch() } else launch()
     }
 
     // The Intent form is what API 33 and below have; 34 wants a PendingIntent.
@@ -54,8 +63,16 @@ abstract class LaunchTile : TileService() {
     }
 }
 
-/** A line into the scratchpad, without opening the vault first. */
+/**
+ * A line into the scratchpad, without opening the vault first -- and without
+ * unlocking the phone either. A thought that has to wait for a fingerprint is
+ * the one most often lost, and the capture only takes: it queues an edit, as
+ * it always does, and shows nothing of the vault while the phone is locked
+ * (see [CaptureActivity]).
+ */
 class CaptureTile : LaunchTile() {
+    override val overLockScreen = true
+
     override fun target() = Intent(this, CaptureActivity::class.java).setAction(Intent.ACTION_VIEW)
 }
 

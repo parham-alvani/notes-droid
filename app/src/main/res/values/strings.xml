@@ -208,6 +208,7 @@
     <string name="capture_saved">Saved</string>
     <string name="capture_queued">Saved here. It goes up with the next sync.</string>
     <string name="capture_nothing">Nothing to save</string>
+    <string name="capture_locked_problem">This cannot be saved yet. Unlock the phone to see why.</string>
     <string name="settings_section_vaults">Vaults</string>
     <string name="settings_section_vaults_summary">The repositories you read, and how</string>
     <string name="settings_section_reading">Reading</string>
