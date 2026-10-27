@@ -1,0 +1,1 @@
+A tap anywhere on a setting's row turns its switch on or off. The capture tile opens over the lock screen when the app lock is off. A page shared from another app becomes a link with its title. Back closes the files drawer in a note.
