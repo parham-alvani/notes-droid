@@ -1,0 +1,1 @@
+Settings › Appearance › Widget background makes the home screen widgets solid, 75%, 50%, 25% or clear, so the wallpaper shows through. In the picture viewer, the close and open buttons show over a zoomed picture.
