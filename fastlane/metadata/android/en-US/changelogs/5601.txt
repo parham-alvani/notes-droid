@@ -1,0 +1,1 @@
+In a narrow settings pane, all the choices of a setting show, on more than one line if needed: before, the widget background's 25% and Clear and two text sizes were cut off. The home picture's Clear button is no longer squeezed.
