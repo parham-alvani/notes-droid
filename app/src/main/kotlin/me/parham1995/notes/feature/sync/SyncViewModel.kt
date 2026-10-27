@@ -332,6 +332,12 @@ class SyncViewModel
 
         fun setHoldToDefine(enabled: Boolean) = viewModelScope.launch { settingsStore.setHoldToDefine(enabled) }
 
+        // The notes are marked again by the application, which watches both:
+        // a change made anywhere else -- adb, a restore -- is followed too.
+        fun setHideAgentFiles(enabled: Boolean) = viewModelScope.launch { settingsStore.setHideAgentFiles(enabled) }
+
+        fun setShowHiddenFiles(enabled: Boolean) = viewModelScope.launch { settingsStore.setShowHiddenFiles(enabled) }
+
         fun setKeepScreenOn(enabled: Boolean) = viewModelScope.launch { settingsStore.setKeepScreenOn(enabled) }
 
         fun setTapForFullScreen(enabled: Boolean) = viewModelScope.launch { settingsStore.setTapForFullScreen(enabled) }

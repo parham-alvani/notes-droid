@@ -525,6 +525,10 @@
     <string name="note_unfold">باز کردن بخش</string>
     <string name="settings_tap_full_screen">تمام‌صفحه با یک ضربه روی صفحه</string>
     <string name="help_tap_full_screen">روی تبلت یا گوشی افقی، یک ضربه روی یادداشت نوارها را پنهان می‌کند و ضربهٔ دوم آن‌ها را برمی‌گرداند. ضربه روی پیوند، جعبه یا تصویر همان کار همیشگی را می‌کند.</string>
+    <string name="settings_hide_agent_files">پنهان کردن فایل‌های دستیارهای هوش مصنوعی</string>
+    <string name="help_hide_agent_files">CLAUDE.md، AGENTS.md، GEMINI.md و CLAUDE.local.md در هیچ پوشه‌ای در فهرست پوشه‌ها، جستجو، برچسب‌ها و نقشهٔ پیوندها دیده نمی‌شوند. پیوند به آن‌ها همچنان بازشان می‌کند.</string>
+    <string name="settings_show_hidden_files">نمایش فایل‌های پنهان</string>
+    <string name="help_show_hidden_files">فایل‌های دستیارهای هوش مصنوعی و آنچه تنظیم «فایل‌های مستثنا» در Obsidian کنار می‌گذارد، مانند پوشهٔ uploads، هم فهرست می‌شوند. فایل پنهان در هر حال از راه پیوند باز می‌شود.</string>
     <string name="settings_keep_screen_on">روشن ماندن صفحه هنگام خواندن</string>
     <string name="help_keep_screen_on">تا نوشته‌ای باز است صفحه خاموش یا قفل نمی‌شود. بقیهٔ برنامه مثل همیشه رفتار می‌کند.</string>
     <string name="board_title">تابلو</string>

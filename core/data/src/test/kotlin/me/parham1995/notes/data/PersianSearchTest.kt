@@ -66,6 +66,7 @@ class PersianSearchTest {
                 settings = SettingsStore(ApplicationProvider.getApplicationContext()),
                 tags = database.tagDao(),
                 aliases = database.aliasDao(),
+                hidden = testHiddenFiles(database, files),
             )
     }
 

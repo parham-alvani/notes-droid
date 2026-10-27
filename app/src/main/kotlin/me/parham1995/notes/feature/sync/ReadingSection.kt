@@ -203,6 +203,36 @@ internal fun ReadingCard(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_hide_agent_files), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.help_hide_agent_files),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            // Nothing is hidden while hidden files are shown, so this would
+            // be a switch that does nothing.
+            Switch(
+                checked = reading.hideAgentFiles,
+                onCheckedChange = viewModel::setHideAgentFiles,
+                enabled = !reading.showHiddenFiles,
+            )
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_show_hidden_files), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.help_show_hidden_files),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = reading.showHiddenFiles, onCheckedChange = viewModel::setShowHiddenFiles)
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.settings_keep_screen_on), style = MaterialTheme.typography.bodyMedium)
                 Text(
                     stringResource(R.string.help_keep_screen_on),

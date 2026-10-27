@@ -215,6 +215,20 @@ data class ReadingSettings(
      * plugin's own background, when that is a picture in the vault.
      */
     val homePicture: String = "",
+    /**
+     * Leave the files AI agents read -- `CLAUDE.md`, `AGENTS.md` and the
+     * like ([me.parham1995.notes.obsidian.HiddenFiles.AGENT_FILES]) -- out
+     * of the browser, search and every other list, in whichever folder they
+     * are. On by default: they are instructions for the tooling that writes
+     * the vault, and a vault written that way has one at every level.
+     */
+    val hideAgentFiles: Boolean = true,
+    /**
+     * List everything, the hidden files too: the agents' files and what the
+     * vault's own "Excluded files" leaves out. Off by default. A hidden file
+     * opens from a link either way; this is only whether lists offer it.
+     */
+    val showHiddenFiles: Boolean = false,
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
@@ -404,6 +418,8 @@ class SettingsStore
                             tapForFullScreen = preferences[TAP_FULL_SCREEN] ?: true,
                             hideRail = preferences[HIDE_RAIL] ?: false,
                             homePicture = preferences[HOME_PICTURE].orEmpty(),
+                            hideAgentFiles = preferences[HIDE_AGENT_FILES] ?: true,
+                            showHiddenFiles = preferences[SHOW_HIDDEN_FILES] ?: false,
                         ),
                 )
             }
@@ -567,6 +583,14 @@ class SettingsStore
             context.settingsDataStore.edit { it[TAP_FULL_SCREEN] = enabled }
         }
 
+        suspend fun setHideAgentFiles(enabled: Boolean) {
+            context.settingsDataStore.edit { it[HIDE_AGENT_FILES] = enabled }
+        }
+
+        suspend fun setShowHiddenFiles(enabled: Boolean) {
+            context.settingsDataStore.edit { it[SHOW_HIDDEN_FILES] = enabled }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -647,6 +671,8 @@ class SettingsStore
             val TAP_FULL_SCREEN = booleanPreferencesKey("reading_tap_full_screen")
             val HIDE_RAIL = booleanPreferencesKey("hide_rail")
             val HOME_PICTURE = stringPreferencesKey("home_picture")
+            val HIDE_AGENT_FILES = booleanPreferencesKey("hide_agent_files")
+            val SHOW_HIDDEN_FILES = booleanPreferencesKey("show_hidden_files")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")

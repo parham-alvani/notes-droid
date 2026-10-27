@@ -421,6 +421,34 @@ class MigrationTest {
         )
 
     @Test
+    fun `every note starts out shown, and keeps everything it had`() =
+        withData(
+            version = 16,
+            migration = NotesDatabase.MIGRATION_16_17,
+            seed = { connection ->
+                // A guide among them: the migration does not decide what is
+                // hidden, the store does, once the app is running.
+                connection.execSQL(
+                    "INSERT INTO notes (id, vaultId, path, parent, name, slug, title, blobSha, size, " +
+                        "isFolderNote, isRtl, hasMermaid, hasMath, indexedAt, openedAt, scrollIndex, " +
+                        "readSha, changedAt, folds) VALUES " +
+                        "(1, 1, 'CLAUDE.md', '', 'CLAUDE', 'claude', 'CLAUDE', 'a', 1, 0, 0, 0, 0, 100, 7, 4, " +
+                        "'a', 100, '3'), " +
+                        "(2, 2, 'uploads/Spec.md', 'uploads', 'Spec', 'spec', 'Spec', 'b', 1, 0, 0, 0, 0, 200, " +
+                        "NULL, 0, NULL, 200, '')",
+                )
+            },
+            check = { connection ->
+                assertThat(
+                    texts(
+                        connection,
+                        "SELECT id || ':' || hidden || ':' || scrollIndex || ':' || folds FROM notes ORDER BY id",
+                    ),
+                ).containsExactly("1:0:4:3", "2:0:0:").inOrder()
+            },
+        )
+
+    @Test
     fun `folds arrive empty, and two vaults' notes keep where they were left`() =
         withData(
             version = 14,

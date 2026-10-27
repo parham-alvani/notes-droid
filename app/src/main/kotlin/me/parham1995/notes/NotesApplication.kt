@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.CrashLog
+import me.parham1995.notes.data.HiddenFileStore
 import me.parham1995.notes.data.PinStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
@@ -61,6 +62,9 @@ class NotesApplication :
     @Inject
     lateinit var reminders: Provider<Reminders>
 
+    @Inject
+    lateinit var hiddenFiles: Provider<HiddenFileStore>
+
     /**
      * Startup scheduling runs here, and a failure in it must not be fatal.
      *
@@ -99,6 +103,7 @@ class NotesApplication :
         // otherwise, until whenever the next background refresh happens to run.
         VaultWriteRepository.afterWrite = ::refreshWidgets
         refreshPinsWhenTheyChange()
+        keepHiddenFilesCurrent()
         // A force-stop forgets every alarm and leaves no broadcast to say so;
         // the next launch is the first chance to set them again.
         reminders.get().rearm(this)
@@ -128,6 +133,30 @@ class NotesApplication :
                 .distinctUntilChanged()
                 .drop(1)
                 .collect { Widgets.refreshPinned(this@NotesApplication) }
+        }
+    }
+
+    /**
+     * Marks which notes the lists leave out, on every launch and again
+     * whenever "hide the agents' files" or "show hidden files" is switched.
+     *
+     * On launch as well, rather than only on a change: the migration that
+     * added the mark left every note shown, and a note the rules hide has to
+     * be marked before the first sync after an upgrade would get to it. A
+     * vault where every mark is already right costs one read of its paths.
+     * Widgets show recent notes and tasks, so they are redrawn when a mark
+     * moved.
+     */
+    private fun keepHiddenFilesCurrent() {
+        scope.launch {
+            settings
+                .get()
+                .settings
+                .map { it.reading.hideAgentFiles to it.reading.showHiddenFiles }
+                .distinctUntilChanged()
+                .collect {
+                    if (hiddenFiles.get().applyAll() > 0) Widgets.refreshAll(this@NotesApplication)
+                }
         }
     }
 

@@ -24,11 +24,12 @@ interface TagDao {
         """
         SELECT tags.name AS name, tags.noteId AS noteId
         FROM tags JOIN notes ON notes.id = tags.noteId
-        WHERE notes.vaultId = :vaultId
+        WHERE notes.vaultId = :vaultId AND notes.hidden = 0
         """,
     )
     fun uses(vaultId: Long): Flow<List<TagUse>>
 
+    /** Every tag in one vault, hidden notes' too: a base reads this, and lists what its author asked for. */
     @Query(
         """
         SELECT tags.name AS name, tags.noteId AS noteId
@@ -47,7 +48,7 @@ interface TagDao {
     @Query(
         """
         SELECT DISTINCT notes.* FROM tags JOIN notes ON notes.id = tags.noteId
-        WHERE notes.vaultId = :vaultId
+        WHERE notes.vaultId = :vaultId AND notes.hidden = 0
           AND (tags.folded = :folded OR tags.folded LIKE :nested || '/%' ESCAPE '\')
         ORDER BY notes.name COLLATE NOCASE
         """,

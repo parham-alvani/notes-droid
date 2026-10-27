@@ -21,7 +21,7 @@ import androidx.sqlite.execSQL
         TagEntity::class,
         AliasEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -542,6 +542,18 @@ abstract class NotesDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * Whether a note is kept out of the lists. Every note starts shown;
+         * the store that decides it goes over every vault when the app
+         * starts, which is moments after this runs.
+         */
+        val MIGRATION_16_17 =
+            object : Migration(16, 17) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `notes` ADD COLUMN `hidden` INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+
         /** The tables derived from a note, exactly as the entities declare them. */
         private fun createNotes(connection: SQLiteConnection) {
             connection.execSQL(
@@ -632,6 +644,7 @@ abstract class NotesDatabase : RoomDatabase() {
                 MIGRATION_13_14,
                 MIGRATION_14_15,
                 MIGRATION_15_16,
+                MIGRATION_16_17,
             )
     }
 }

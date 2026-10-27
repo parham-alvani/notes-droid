@@ -60,6 +60,7 @@ class DestinationsTest {
                 aliases = database.aliasDao(),
                 vaults = database.vaultDao(),
                 settings = settings,
+                hidden = testHiddenFiles(database, files, settings),
             )
         val configs =
             ObsidianConfigStore(

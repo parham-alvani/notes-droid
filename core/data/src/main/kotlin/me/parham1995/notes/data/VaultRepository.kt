@@ -38,6 +38,7 @@ import me.parham1995.notes.markdown.Slugs
 import me.parham1995.notes.markdown.TagTree
 import me.parham1995.notes.markdown.TagTreeNode
 import me.parham1995.notes.obsidian.FolderLogos
+import me.parham1995.notes.obsidian.HiddenFiles
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -137,6 +138,7 @@ class VaultRepository
         private val settings: SettingsStore,
         private val tags: TagDao,
         private val aliases: AliasDao,
+        private val hidden: HiddenFileStore,
     ) {
         /**
          * The vault being read.
@@ -210,8 +212,9 @@ class VaultRepository
                         notes.childrenOfFlow(vaultId, parent).distinctUntilChanged(),
                         blobs.attachmentPaths(vaultId).distinctUntilChanged(),
                         notes.folderNotesFlow(vaultId).distinctUntilChanged(),
-                    ) { parents, childNotes, attachments, folderNotes ->
-                        buildChildren(parent, parents, childNotes, attachments, folderNotes)
+                        hidden.rules(vaultId),
+                    ) { parents, childNotes, attachments, folderNotes, rules ->
+                        buildChildren(parent, parents, childNotes, attachments, folderNotes, rules)
                     }
                 }.distinctUntilChanged()
                 .flowOn(Dispatchers.Default)
@@ -238,12 +241,18 @@ class VaultRepository
                     childNotes = notes.childrenOf(vaultId, parent),
                     attachmentPaths = blobs.attachmentPaths(vaultId).first(),
                     folderNotes = notes.folderNotes(vaultId),
+                    rules = hidden.forVault(vaultId),
                 )
             }
 
         /**
          * Folders are derived from the notes' parents rather than stored, so
          * there is no second structure to keep in step with the manifest.
+         *
+         * The notes come already without the hidden ones, which the database
+         * marks. Attachments are not notes and carry no mark, so [rules]
+         * leaves them out here -- the same rules, so an excluded `uploads/`
+         * goes with its pictures as well as its notes.
          */
         private fun buildChildren(
             parent: String,
@@ -251,10 +260,11 @@ class VaultRepository
             childNotes: List<NoteEntity>,
             attachmentPaths: List<String>,
             folderNotes: List<FolderNoteRow>,
+            rules: HiddenFiles,
         ): List<VaultItem> {
             val prefix = if (parent.isEmpty()) "" else "$parent/"
             val landingPages = folderNotes.associateBy { it.path }
-            val under = attachmentPaths.filter { it.startsWith(prefix) }
+            val under = attachmentPaths.filter { it.startsWith(prefix) && !rules.hides(it) }
             val logos = FolderLogos.byFolder(under)
             // Folders come from the attachments as well as the notes: a
             // repository of scanned documents has directories full of PDFs and
@@ -407,11 +417,15 @@ class VaultRepository
         /**
          * Every note in the vault [id] is in and every link between them, for
          * the graph drawn deeper than one hop or whole; null when [id] is gone.
+         *
+         * Hidden notes are not drawn, bar [id] itself when it is one: a
+         * hidden note opened by a link still has a graph to show, centred on
+         * it. A link into a note left out is dropped with it.
          */
         suspend fun linkGraph(id: Long): Pair<NoteGraph, Int>? =
             withContext(Dispatchers.Default) {
                 val centre = notes.byId(id) ?: return@withContext null
-                val all = notes.stats(centre.vaultId)
+                val all = notes.stats(centre.vaultId).filter { !it.hidden || it.id == id }
                 val graph =
                     NoteGraph.of(
                         ids = all.map { it.id },

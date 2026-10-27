@@ -202,6 +202,20 @@ data class NoteEntity(
      * then name the wrong blocks.
      */
     val folds: String = "",
+    /**
+     * Kept out of the lists: the browser, search, tags, recents, the graph,
+     * the tasks. It is still a note -- a link to it resolves and it opens --
+     * it is just not offered.
+     *
+     * Stored rather than worked out in each query, because what decides it
+     * lives outside the database: Obsidian's excluded files in the vault's
+     * `.obsidian/app.json`, and two settings. [me.parham1995.notes.data.HiddenFileStore]
+     * writes it, from the same rules every time, and writes it again
+     * whenever one of them changes; "show hidden files" clears it on every
+     * note. A query that lists notes asks for `hidden = 0`; one that resolves
+     * a link or opens a note by id must not.
+     */
+    val hidden: Boolean = false,
 )
 
 /**

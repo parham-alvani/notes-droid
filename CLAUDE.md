@@ -185,11 +185,13 @@ The app also records its last crash itself, readable at **Settings → Advanced*
 
 ## Synced, but not shown
 
-A `CLAUDE.md` is instructions for the tooling that writes the vault, not something anyone reads on a phone — and there is one in nearly every folder worth browsing, so as notes they sat at every level of the tree and answered to any search for a word about conventions. Nothing in the vault links to them.
+Some files are not for a person to browse: what the vault's own Obsidian "Excluded files" (`userIgnoreFilters` in `.obsidian/app.json`) leaves out -- an `uploads/` of attachments, usually -- and the instructions AI agents read, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `CLAUDE.local.md`, of which a vault written with their help has one in nearly every folder. Listed, they sat at every level of the tree and answered to any search for a word about conventions.
 
-They are **still synced and still on disk**: the exclusion is at index time, in `VaultIndexer.GUIDES`. That is the boundary between "synced" and "shown", and skipping a file there keeps it out of the tree, the search, the tasks and the graph at once — rather than a filter each of those has to remember to apply, which is how the `.obsidian` folder and the cross-vault search both happened.
+They are **still synced, still indexed and still on disk**. A link or an embed into one resolves, and it opens like any note; only the lists leave it out. `HiddenFiles` (core/obsidian) is the rule, `HiddenFileStore` puts it together from `app.json` and the two Reading settings ("Hide files for AI agents", on; "Show hidden files", off), and `notes.hidden` is the rule written down per note: the indexer sets it on every note it writes, and `HiddenFileStore.apply` puts it right after every sync (a new `app.json`) and whenever one of the settings moves (`NotesApplication.keepHiddenFilesCurrent`, which also runs on launch). Attachments carry no mark, so `VaultRepository.buildChildren` asks the same rules for them.
 
-Do not solve this in `VaultFilter` instead. That decides what reaches the device, and narrowing it has never been exercised — both existing `VERSION` bumps widened it, so whether a re-plan removes rows that stopped being eligible is unverified.
+The guides used to be left out at index time instead (`VaultIndexer.GUIDES`), which kept them out of every list at once but made every link to one broken, and it cannot be done to `uploads/` at all -- the notes embed from it. The price of the mark is that **every query that lists notes has to say `hidden = 0`**: the tree, the count, recents, random, search, the switcher, tags, tasks and their counts, backlinks, the graph. A query that resolves a link or opens a note by id (`allIds`, `byPath`, `byId`, `tasks.byNote`) must not, and bases see hidden notes too, because a base lists what its author asked for. `HiddenFileStoreTest` asks each list; a new list belongs there.
+
+Do not solve this in `VaultFilter` instead. That decides what reaches the device, and narrowing it has never been exercised -- every `VERSION` bump widened it, so whether a re-plan removes rows that stopped being eligible is unverified. It syncs `app.json` for this, and nothing else from it is read.
 
 ## Public-repo hygiene
 

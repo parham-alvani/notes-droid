@@ -25,6 +25,7 @@ import me.parham1995.notes.markdown.MarkdownParser
 import me.parham1995.notes.markdown.ParsedNote
 import me.parham1995.notes.markdown.Slugs
 import me.parham1995.notes.markdown.TaskExtractor
+import me.parham1995.notes.obsidian.HiddenFiles
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,6 +56,13 @@ class VaultIndexer
         private val index: IndexDao,
         private val search: SearchIndex,
         private val aliases: AliasDao,
+        /**
+         * Which notes the lists leave out. Every note is indexed -- a link
+         * to a hidden one resolves and opens it -- and marked as it is
+         * written, so a note that arrives in an excluded folder is never
+         * listed for a moment first.
+         */
+        private val hidden: HiddenRules = HiddenRules.DEFAULT,
     ) {
         data class Progress(
             val done: Int,
@@ -62,7 +70,7 @@ class VaultIndexer
         )
 
         /**
-         * Reindexes every markdown file currently on disk, bar the guides.
+         * Reindexes every markdown file currently on disk.
          *
          * A diff against what is indexed, not a wipe and a rebuild. Wiping
          * first cleared the notes and then asked the search index to drop
@@ -78,15 +86,14 @@ class VaultIndexer
             paths: List<PathAndSha>,
             onProgress: (Progress) -> Unit = {},
         ) {
-            @Suppress("NAME_SHADOWING")
-            val paths = paths.filterNot { isGuide(it.path) }
             val present = paths.mapTo(HashSet()) { it.path }
             remove(vaultId, notes.allIds(vaultId).map { it.path }.filterNot { it in present })
 
+            val rules = hidden.forVault(vaultId)
             var done = 0
             paths.chunked(BATCH).forEach { batch ->
                 val parsed = parseBatch(vaultId, batch)
-                writeBatch(vaultId, parsed)
+                writeBatch(vaultId, parsed, rules)
                 done += batch.size
                 onProgress(Progress(done, paths.size))
             }
@@ -107,18 +114,12 @@ class VaultIndexer
             removed: List<String>,
             ownWrite: Boolean = false,
         ) {
-            // A guide that arrives or changes is treated as one that went
-            // away, so a file that used to be indexed stops being a note
-            // rather than lingering as a row nothing will ever revisit.
-            @Suppress("NAME_SHADOWING")
-            val removed = removed + changed.map { it.path }.filter { isGuide(it) }
-
-            @Suppress("NAME_SHADOWING")
-            val changed = changed.filterNot { isGuide(it.path) }
-
             remove(vaultId, removed)
 
-            changed.chunked(BATCH).forEach { batch -> writeBatch(vaultId, parseBatch(vaultId, batch), ownWrite) }
+            val rules = hidden.forVault(vaultId)
+            changed.chunked(BATCH).forEach { batch ->
+                writeBatch(vaultId, parseBatch(vaultId, batch), rules, ownWrite)
+            }
 
             // Cheaper than a full resolve and still correct: only links whose
             // target may have appeared or vanished need revisiting, and the
@@ -164,6 +165,7 @@ class VaultIndexer
         private suspend fun writeBatch(
             vaultId: Long,
             batch: List<Indexed>,
+            rules: HiddenFiles,
             ownWrite: Boolean = false,
         ) {
             if (batch.isEmpty()) return
@@ -196,6 +198,7 @@ class VaultIndexer
                                 // Kept from the row when the sha has not
                                 // moved; see IndexDao.writeBatch.
                                 changedAt = now,
+                                hidden = rules.hides(indexed.path),
                             ),
                         headings =
                             indexed.note.headings.mapIndexed { ordinal, heading ->
@@ -332,26 +335,10 @@ class VaultIndexer
              *    it -- and has to be, to be found again when it is ticked.
              * 12: a task's priority and cancelled date are stored, for the
              *    board; the rows already there have neither until reparsed.
+             * 13: the guides are notes again, hidden from the lists rather
+             *    than left out of the index, so a link to one opens it.
              */
-            const val VERSION = 12
-
-            /**
-             * Files that are kept on the device but are not notes.
-             *
-             * A `CLAUDE.md` is instructions for the tooling that writes the
-             * vault, not something anyone reads on a phone -- and there is one
-             * in nearly every folder worth browsing, so they sit at every level
-             * of the tree and answer to any search for a word about
-             * conventions. Nothing links to them.
-             *
-             * They are still synced, and still on disk. This is only about
-             * what is a note: skipping them here is what keeps them out of the
-             * tree, the search, the tasks and the graph at once, rather than a
-             * filter that each of those has to remember to apply.
-             */
-            val GUIDES = setOf("CLAUDE.md")
-
-            fun isGuide(path: String): Boolean = path.substringAfterLast('/') in GUIDES
+            const val VERSION = 13
 
             /**
              * Large enough that commits are rare, small enough that a failure

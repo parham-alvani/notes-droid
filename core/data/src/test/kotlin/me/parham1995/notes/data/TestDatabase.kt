@@ -38,3 +38,18 @@ private fun RoomDatabase.Builder<NotesDatabase>.wiredAsTheAppWiresIt(): NotesDat
                 override fun onOpen(connection: SQLiteConnection) = NotesDatabase.ensureSearchIndex(connection)
             },
         ).build()
+
+/** What decides the hidden files, reading [database]'s notes and the settings file the test shares. */
+fun testHiddenFiles(
+    database: NotesDatabase,
+    files: VaultFileStore,
+    settings: SettingsStore = SettingsStore(ApplicationProvider.getApplicationContext()),
+): HiddenFileStore =
+    HiddenFileStore(
+        settings = settings,
+        files = files,
+        notes = database.noteDao(),
+        vaults = database.vaultDao(),
+        blobs = database.blobDao(),
+        log = SyncLog(database.syncLogDao()),
+    )

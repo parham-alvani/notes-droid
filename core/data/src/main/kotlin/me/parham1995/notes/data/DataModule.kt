@@ -57,6 +57,10 @@ object DataModule {
                 },
             ).build()
 
+    /** The rules the indexer marks notes hidden by; see [HiddenFileStore]. */
+    @Provides
+    fun hiddenRules(store: HiddenFileStore): HiddenRules = store
+
     @Provides
     fun blobDao(database: NotesDatabase): BlobDao = database.blobDao()
 

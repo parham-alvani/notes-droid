@@ -61,6 +61,7 @@ class VaultRepositoryTest {
                 settings = SettingsStore(ApplicationProvider.getApplicationContext()),
                 tags = database.tagDao(),
                 aliases = database.aliasDao(),
+                hidden = testHiddenFiles(database, files),
             )
     }
 
@@ -565,12 +566,13 @@ class VaultRepositoryTest {
         }
 
     @Test
-    fun `a folder guide is kept on the device but is not a note`() =
+    fun `a folder guide is a note, but not one that is listed`() =
         runTest {
-            // Synced like anything else -- this is only about what is shown.
-            // There is a CLAUDE.md in nearly every folder worth browsing, so
-            // left as notes they sit at every level of the tree and answer to
-            // any search for a word about conventions.
+            // Synced and indexed like anything else -- this is only about
+            // what is shown. There is a CLAUDE.md in nearly every folder
+            // worth browsing, so listed they sit at every level of the tree
+            // and answer to any search for a word about conventions.
+            // HiddenFileStoreTest has the rest of the lists, and the links.
             index(
                 "Learning/CLAUDE.md" to "# How to write notes here",
                 "Learning/Kafka.md" to "a real note",
@@ -582,12 +584,11 @@ class VaultRepositoryTest {
         }
 
     @Test
-    fun `a guide that was indexed before stops being a note`() =
+    fun `a guide indexed before it was hidden stops being listed when it changes`() =
         runTest {
-            // The transition an existing install makes. Bumping the indexer's
-            // version rebuilds from scratch, but a guide arriving in an
-            // ordinary sync has to drop the row it already had -- so the row
-            // is put there the way the old indexer would have left it.
+            // A row left shown -- by the migration that added the mark, or a
+            // build that listed guides -- is marked hidden when the guide is
+            // indexed again, whichever way that happens.
             ensureVault(first)
             files.write(first, "Learning/CLAUDE.md", "# How to write notes here".toByteArray())
             database.noteDao().upsert(

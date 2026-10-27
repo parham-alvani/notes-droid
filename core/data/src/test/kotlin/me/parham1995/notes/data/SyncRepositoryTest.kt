@@ -159,6 +159,7 @@ class SyncRepositoryTest {
                         AppLock(),
                         SettingsStore(context),
                     ),
+                hidden = testHiddenFiles(database, files, settings),
             )
     }
 
@@ -230,6 +231,23 @@ class SyncRepositoryTest {
                     .first()
                     .map { it.text },
             ).containsExactly("the new task")
+        }
+
+    @Test
+    fun `a sync applies the vault's excluded files to notes it did not touch`() =
+        runTest {
+            val id = syncedVault("notes")
+            val spec = onDisk(id, "uploads/Spec.md", "# Spec\n")
+            indexer.indexAll(id, listOf(PathAndSha("uploads/Spec.md", spec)))
+            assertThat(database.noteDao().byPath(id, "uploads/Spec.md")!!.hidden).isFalse()
+
+            // The app settings arrived with the last download; nothing about
+            // the note itself changed, so no reindex will mention it.
+            files.write(id, VaultFilter.APP, """{"userIgnoreFilters": ["uploads/"]}""".toByteArray())
+
+            repository.sync()
+
+            assertThat(database.noteDao().byPath(id, "uploads/Spec.md")!!.hidden).isTrue()
         }
 
     @Test

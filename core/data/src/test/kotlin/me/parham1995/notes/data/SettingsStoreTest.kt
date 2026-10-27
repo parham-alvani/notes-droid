@@ -80,4 +80,19 @@ class SettingsStoreTest {
             store.setSyncOnWifiOnly(true)
             assertThat(store.current().syncOnWifiOnly).isTrue()
         }
+
+    @Test
+    fun `hidden files are hidden by default, and both switches survive a round trip`() =
+        runTest {
+            val defaults = store.current().reading
+            assertThat(defaults.hideAgentFiles).isTrue()
+            assertThat(defaults.showHiddenFiles).isFalse()
+
+            store.setHideAgentFiles(false)
+            store.setShowHiddenFiles(true)
+
+            val reading = store.current().reading
+            assertThat(reading.hideAgentFiles).isFalse()
+            assertThat(reading.showHiddenFiles).isTrue()
+        }
 }

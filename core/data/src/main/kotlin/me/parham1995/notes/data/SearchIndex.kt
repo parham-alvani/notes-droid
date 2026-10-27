@@ -186,12 +186,20 @@ class SearchIndex
                 }
             }
 
-        /** What changes whenever a note of the vault does: its count and the last index time. */
+        /**
+         * What changes whenever a note of the vault does: its count and the
+         * last index time -- and which notes are hidden, which moves without
+         * either when a setting or the vault's excluded files change.
+         */
         suspend fun notesVersion(vaultId: Long): String =
             database.useReaderConnection { connection ->
                 connection.usePrepared(VERSION_SQL) { statement ->
                     statement.bindLong(1, vaultId)
-                    if (statement.step()) "${statement.getLong(0)}:${statement.getLong(1)}" else ""
+                    if (statement.step()) {
+                        "${statement.getLong(0)}:${statement.getLong(1)}:${statement.getLong(2)}"
+                    } else {
+                        ""
+                    }
                 }
             }
 
@@ -239,7 +247,7 @@ class SearchIndex
                 SELECT notes.id, notes.title, notes.path, $SNIPPET, note_fts.original
                 FROM note_fts
                 JOIN notes ON notes.id = note_fts.rowid
-                WHERE note_fts MATCH ? AND notes.vaultId = ?
+                WHERE note_fts MATCH ? AND notes.vaultId = ? AND notes.hidden = 0
                 ORDER BY bm25(note_fts, 10.0, 1.0)
                 LIMIT ?
                 """.trimIndent()
@@ -248,10 +256,11 @@ class SearchIndex
                 """
                 SELECT notes.id, notes.path, notes.name, note_fts.aliases
                 FROM notes LEFT JOIN note_fts ON note_fts.rowid = notes.id
-                WHERE notes.vaultId = ?1
+                WHERE notes.vaultId = ?1 AND notes.hidden = 0
                 """.trimIndent()
 
-            val VERSION_SQL = "SELECT COUNT(*), COALESCE(MAX(indexedAt), 0) FROM notes WHERE vaultId = ?1"
+            val VERSION_SQL =
+                "SELECT COUNT(*), COALESCE(MAX(indexedAt), 0), TOTAL(hidden * id) FROM notes WHERE vaultId = ?1"
 
             /** One alias to a line, with a newline either side, so "starts with" can be asked of it. */
             fun aliasLines(aliases: List<String>): String =
@@ -325,11 +334,11 @@ data class ParsedSearch(
                 arguments += text
                 "SELECT notes.id, notes.title, notes.path, $SNIPPET, note_fts.original " +
                     "FROM note_fts JOIN notes ON notes.id = note_fts.rowid " +
-                    "WHERE note_fts MATCH ? AND notes.vaultId = ?"
+                    "WHERE note_fts MATCH ? AND notes.vaultId = ? AND notes.hidden = 0"
             } else {
                 // Only a folder: nothing to rank by, so it is listed in order.
                 "SELECT notes.id, notes.title, notes.path, '', NULL " +
-                    "FROM notes JOIN note_fts ON note_fts.rowid = notes.id WHERE notes.vaultId = ?"
+                    "FROM notes JOIN note_fts ON note_fts.rowid = notes.id WHERE notes.vaultId = ? AND notes.hidden = 0"
             }
         arguments += vaultId
         val where = StringBuilder()

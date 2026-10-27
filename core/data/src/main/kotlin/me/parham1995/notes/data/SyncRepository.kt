@@ -71,6 +71,7 @@ class SyncRepository
         private val gate: VaultGate,
         private val calendarExport: Provider<CalendarExport>,
         private val documents: VaultDocuments,
+        private val hidden: HiddenFileStore,
     ) {
         val status: Flow<SyncStatus> =
             syncState.observe().map {
@@ -538,6 +539,9 @@ class SyncRepository
                     // times over.
                     reindexVault(vault)
                 }
+                // The indexer marked what it wrote; a new `app.json` can
+                // hide or show notes this sync did not touch.
+                hidden.apply(vault.id)
                 vaults.update(
                     vault.copy(
                         headCommit = plan.headCommit.takeIf { it.isNotEmpty() } ?: vault.headCommit,
@@ -606,8 +610,6 @@ class SyncRepository
                 blobs
                     .indexBehind(vault.id, BlobKind.MARKDOWN, LocalState.DOWNLOADED)
                     .map { PathAndSha(it.path, it.sha) }
-                    // Guides are never notes, so they are always "behind".
-                    .filterNot { VaultIndexer.isGuide(it.path) }
             if (behind.isEmpty()) return
             log.info("${behind.size} notes were downloaded but not indexed - indexing them now")
             indexer.indexChanged(vaultId = vault.id, changed = behind, removed = emptyList())

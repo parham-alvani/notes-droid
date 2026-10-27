@@ -39,8 +39,14 @@ interface NoteDao {
     @Query("SELECT id, path FROM notes WHERE vaultId = :vaultId")
     suspend fun allIds(vaultId: Long): List<NoteRef>
 
-    /** Notes directly inside [parent], folders excluded -- those are derived. */
-    @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND parent = :parent ORDER BY name COLLATE NOCASE")
+    /**
+     * Notes directly inside [parent], folders excluded -- those are derived.
+     * Hidden notes are not listed (see [NoteEntity.hidden]), nor are they in
+     * any list below that says `hidden = 0`.
+     */
+    @Query(
+        "SELECT * FROM notes WHERE vaultId = :vaultId AND parent = :parent AND hidden = 0 ORDER BY name COLLATE NOCASE",
+    )
     suspend fun childrenOf(
         vaultId: Long,
         parent: String,
@@ -51,7 +57,9 @@ interface NoteDao {
      * makes the browser fill in as a sync lands instead of showing whatever
      * happened to be there when the screen opened.
      */
-    @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND parent = :parent ORDER BY name COLLATE NOCASE")
+    @Query(
+        "SELECT * FROM notes WHERE vaultId = :vaultId AND parent = :parent AND hidden = 0 ORDER BY name COLLATE NOCASE",
+    )
     fun childrenOfFlow(
         vaultId: Long,
         parent: String,
@@ -61,11 +69,14 @@ interface NoteDao {
      * Every distinct directory. Only a few hundred rows even for a large vault,
      * so the browser builds its folder tree from this once instead of running a
      * recursive query per level.
+     *
+     * The folders of shown notes only: a folder that holds nothing but
+     * hidden notes -- an excluded `uploads/` -- is not implied by them.
      */
-    @Query("SELECT DISTINCT parent FROM notes WHERE vaultId = :vaultId AND parent != ''")
+    @Query("SELECT DISTINCT parent FROM notes WHERE vaultId = :vaultId AND parent != '' AND hidden = 0")
     suspend fun allParents(vaultId: Long): List<String>
 
-    @Query("SELECT DISTINCT parent FROM notes WHERE vaultId = :vaultId AND parent != ''")
+    @Query("SELECT DISTINCT parent FROM notes WHERE vaultId = :vaultId AND parent != '' AND hidden = 0")
     fun allParentsFlow(vaultId: Long): Flow<List<String>>
 
     /**
@@ -80,7 +91,14 @@ interface NoteDao {
     @Query("SELECT id, path, isRtl FROM notes WHERE vaultId = :vaultId AND isFolderNote = 1")
     fun folderNotesFlow(vaultId: Long): Flow<List<FolderNoteRow>>
 
-    @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND openedAt IS NOT NULL ORDER BY openedAt DESC LIMIT :limit")
+    /**
+     * The notes last opened. A hidden one opened by a link is not among
+     * them: opening it is following the link, not choosing it again.
+     */
+    @Query(
+        "SELECT * FROM notes WHERE vaultId = :vaultId AND openedAt IS NOT NULL AND hidden = 0 " +
+            "ORDER BY openedAt DESC LIMIT :limit",
+    )
     fun recentlyOpened(
         vaultId: Long,
         limit: Int,
@@ -107,7 +125,7 @@ interface NoteDao {
     @Query(
         """
         SELECT * FROM notes
-        WHERE vaultId = :vaultId AND openedAt IS NOT NULL
+        WHERE vaultId = :vaultId AND openedAt IS NOT NULL AND hidden = 0
           AND readSha IS NOT NULL AND readSha != blobSha
         ORDER BY changedAt DESC, openedAt DESC
         LIMIT :limit
@@ -138,15 +156,30 @@ interface NoteDao {
      * again. `ORDER BY RANDOM()` is a full scan, which at this size is
      * microseconds and only happens when asked.
      */
-    @Query("SELECT * FROM notes WHERE vaultId = :vaultId ORDER BY RANDOM() LIMIT 1")
+    @Query("SELECT * FROM notes WHERE vaultId = :vaultId AND hidden = 0 ORDER BY RANDOM() LIMIT 1")
     suspend fun random(vaultId: Long): NoteEntity?
 
-    @Query("SELECT COUNT(*) FROM notes WHERE vaultId = :vaultId")
+    /** The notes the browser's "All notes" counts: the shown ones. */
+    @Query("SELECT COUNT(*) FROM notes WHERE vaultId = :vaultId AND hidden = 0")
     fun count(vaultId: Long): Flow<Int>
 
-    /** What a base knows of each note without reading it: its path, when it changed and its size. */
-    @Query("SELECT id, path, changedAt, size FROM notes WHERE vaultId = :vaultId")
+    /**
+     * What a base knows of each note without reading it: its path, when it
+     * changed and its size. Hidden notes too, flagged: a base lists what its
+     * author asked for, and the graph leaves them out itself.
+     */
+    @Query("SELECT id, path, changedAt, size, hidden FROM notes WHERE vaultId = :vaultId")
     suspend fun stats(vaultId: Long): List<NoteStatRow>
+
+    /** Every note's path and whether it is hidden now, for [setHidden] to bring in line. */
+    @Query("SELECT id, path, hidden FROM notes WHERE vaultId = :vaultId")
+    suspend fun visibility(vaultId: Long): List<NoteVisibility>
+
+    @Query("UPDATE notes SET hidden = :hidden WHERE id IN (:ids)")
+    suspend fun setHidden(
+        ids: List<Long>,
+        hidden: Boolean,
+    )
 }
 
 /** Makes text match itself under `LIKE ... ESCAPE '\'`, wildcards included. */
@@ -167,6 +200,13 @@ data class NoteStatRow(
     val path: String,
     val changedAt: Long,
     val size: Long,
+    val hidden: Boolean = false,
+)
+
+data class NoteVisibility(
+    val id: Long,
+    val path: String,
+    val hidden: Boolean,
 )
 
 data class NoteRef(
@@ -185,7 +225,7 @@ interface LinkDao {
         SELECT links.id AS linkId, notes.id AS noteId, notes.title AS title, notes.path AS path,
                links.context AS context
         FROM links JOIN notes ON notes.id = links.srcId
-        WHERE links.targetId = :targetId
+        WHERE links.targetId = :targetId AND notes.hidden = 0
         ORDER BY notes.title COLLATE NOCASE, links.ordinal
         """,
     )
@@ -202,7 +242,7 @@ interface LinkDao {
         SELECT DISTINCT 0 AS linkId, notes.id AS noteId, notes.title AS title, notes.path AS path, '' AS context
         FROM links
         JOIN notes ON notes.id = links.targetId
-        WHERE links.srcId = :srcId AND links.targetId IS NOT NULL
+        WHERE links.srcId = :srcId AND links.targetId IS NOT NULL AND notes.hidden = 0
         ORDER BY notes.title COLLATE NOCASE
         """,
     )
@@ -218,7 +258,11 @@ interface LinkDao {
     )
     suspend fun inVault(vaultId: Long): List<LinkRow>
 
-    @Query("SELECT COUNT(*) FROM links WHERE targetId = :targetId")
+    /** As many as [backlinks] lists: a hidden note's links are not counted. */
+    @Query(
+        "SELECT COUNT(*) FROM links JOIN notes ON notes.id = links.srcId " +
+            "WHERE links.targetId = :targetId AND notes.hidden = 0",
+    )
     suspend fun backlinkCount(targetId: Long): Int
 
     /** Second indexing pass: attach every link to the note it points at. */

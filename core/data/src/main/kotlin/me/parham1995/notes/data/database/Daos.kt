@@ -55,6 +55,13 @@ interface BlobDao {
         path: String,
     ): BlobEntity?
 
+    /** The sha one file is at, re-emitted as it moves; null while the vault has no such file. */
+    @Query("SELECT sha FROM blobs WHERE vaultId = :vaultId AND path = :path")
+    fun shaOf(
+        vaultId: Long,
+        path: String,
+    ): Flow<String?>
+
     @Query("DELETE FROM blobs WHERE vaultId = :vaultId AND path = :path")
     suspend fun deleteByPath(
         vaultId: Long,
@@ -176,6 +183,10 @@ interface TaskDao {
      * `actionableOn IS NULL` sorts before the date itself because SQLite puts
      * NULL first otherwise, which would bury 120 overdue tasks under every
      * task that has no date at all.
+     *
+     * A hidden note's tasks are in none of the lists and counts here -- an
+     * agent's instructions are often a checklist, and nobody's to do. Only
+     * [byNote] has them, so a hidden note opened by a link still ticks.
      */
     @Query(
         """
@@ -184,7 +195,7 @@ interface TaskDao {
                n.vaultId AS vaultId
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
-        WHERE t.open = 1 AND n.vaultId = :vaultId
+        WHERE t.open = 1 AND n.vaultId = :vaultId AND n.hidden = 0
         ORDER BY (t.actionableOn IS NULL), t.actionableOn, n.path, t.ordinal
         """,
     )
@@ -203,7 +214,7 @@ interface TaskDao {
                t.priority, t.cancelled
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
-        WHERE n.vaultId = :vaultId
+        WHERE n.vaultId = :vaultId AND n.hidden = 0
         ORDER BY n.path, t.ordinal
         """,
     )
@@ -242,7 +253,7 @@ interface TaskDao {
     @Query(
         """
         SELECT COUNT(*) FROM tasks t JOIN notes n ON n.id = t.noteId
-        WHERE t.open = 1 AND t.actionableOn IS NOT NULL AND t.actionableOn < :today
+        WHERE t.open = 1 AND n.hidden = 0 AND t.actionableOn IS NOT NULL AND t.actionableOn < :today
         """,
     )
     suspend fun overdueCount(today: String): Int
@@ -250,7 +261,7 @@ interface TaskDao {
     @Query(
         """
         SELECT COUNT(*) FROM tasks t JOIN notes n ON n.id = t.noteId
-        WHERE t.open = 1 AND t.actionableOn = :today
+        WHERE t.open = 1 AND n.hidden = 0 AND t.actionableOn = :today
         """,
     )
     suspend fun dueTodayCount(today: String): Int
@@ -268,7 +279,7 @@ interface TaskDao {
                n.vaultId AS vaultId
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
-        WHERE t.open = 1 AND t.actionableOn = :today
+        WHERE t.open = 1 AND n.hidden = 0 AND t.actionableOn = :today
         ORDER BY n.vaultId, n.path, t.ordinal
         """,
     )
@@ -282,7 +293,7 @@ interface TaskDao {
         """
         SELECT n.vaultId AS vaultId, COUNT(*) AS count FROM tasks t
         JOIN notes n ON n.id = t.noteId
-        WHERE t.open = 1
+        WHERE t.open = 1 AND n.hidden = 0
         GROUP BY n.vaultId
         """,
     )

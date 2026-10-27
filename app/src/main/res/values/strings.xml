@@ -527,6 +527,10 @@
     <string name="note_unfold">Unfold section</string>
     <string name="settings_tap_full_screen">Tap the page for full screen</string>
     <string name="help_tap_full_screen">On a tablet or a phone on its side, a tap on a note hides the bars and a second tap brings them back. A tap on a link, a box or a picture still does what it did.</string>
+    <string name="settings_hide_agent_files">Hide files for AI agents</string>
+    <string name="help_hide_agent_files">CLAUDE.md, AGENTS.md, GEMINI.md and CLAUDE.local.md stay out of the folders, search, tags and the graph, in every folder. A link to one still opens it.</string>
+    <string name="settings_show_hidden_files">Show hidden files</string>
+    <string name="help_show_hidden_files">List the files for AI agents too, and what the vault\'s Excluded files setting in Obsidian leaves out, such as an uploads folder. Hidden files open from a link either way.</string>
     <string name="settings_keep_screen_on">Keep the screen on while reading</string>
     <string name="help_keep_screen_on">The screen does not dim or lock while a note is open. The rest of the app behaves as usual.</string>
     <string name="board_title">Board</string>
