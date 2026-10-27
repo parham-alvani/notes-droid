@@ -179,6 +179,8 @@
     <string name="capture_hint">A thought, a link, anything</string>
     <string name="capture_paste_markdown">Paste as Markdown</string>
     <string name="drawer_title">Files</string>
+    <string name="list_hide">Hide the file list</string>
+    <string name="list_show">Show the file list</string>
     <string name="drawer_filter">Jump to a note</string>
     <string name="drawer_open">Open</string>
     <string name="drawer_recent">Recent</string>
@@ -547,6 +549,7 @@
     <string name="board_column_empty">Nothing here</string>
     <string name="board_reopen_action">Open again</string>
     <string name="nav_home">Home</string>
+    <string name="home_title">Home</string>
     <string name="home_search_hint">Find a note</string>
     <string name="home_good_morning">Good morning</string>
     <string name="home_good_afternoon">Good afternoon</string>

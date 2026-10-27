@@ -139,6 +139,12 @@ fun NoteScreen(
     /** A heading to land on, for a note opened from a bookmark that names one. */
     heading: String? = null,
     onOpenTag: (vaultId: Long, tag: String) -> Unit = { _, _ -> },
+    /**
+     * Whether the list beside the note is on screen, in two panes; null where
+     * there is no list beside it, on a phone held upright.
+     */
+    listShown: Boolean? = null,
+    onToggleList: () -> Unit = {},
     viewModel: NoteViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -688,9 +694,24 @@ fun NoteScreen(
                                 // because the leading slot is where a drawer is
                                 // looked for, and back has a second home in the
                                 // gesture.
+                                // Beside a list, the list itself first: it is the
+                                // one thing taking the width the note could have.
+                                if (listShown != null) {
+                                    IconButton(onClick = onToggleList) {
+                                        LucideGlyph(
+                                            if (listShown) "panel-left-close" else "panel-left-open",
+                                            size = 20.dp,
+                                            contentDescription =
+                                                stringResource(
+                                                    if (listShown) R.string.list_hide else R.string.list_show,
+                                                ),
+                                        )
+                                    }
+                                }
                                 IconButton(onClick = { scope.launch { drawer.open() } }) {
                                     LucideGlyph(
-                                        "panel-left",
+                                        // Not a second panel beside the list's own.
+                                        if (listShown != null) "files" else "panel-left",
                                         size = 20.dp,
                                         contentDescription = stringResource(R.string.drawer_title),
                                     )

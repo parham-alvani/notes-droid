@@ -178,6 +178,8 @@
     <string name="shortcut_capture_short">یادداشت</string>
     <string name="shortcut_capture_long">یک چیزی بنویسید</string>
     <string name="drawer_title">فایلها</string>
+    <string name="list_hide">پنهان کردن فهرست فایلها</string>
+    <string name="list_show">نمایش فهرست فایلها</string>
     <string name="drawer_filter">رفتن به یک نوشته</string>
     <string name="drawer_open">باز</string>
     <string name="drawer_recent">اخیر</string>
@@ -545,6 +547,7 @@
     <string name="board_column_empty">اینجا چیزی نیست</string>
     <string name="board_reopen_action">باز کردن دوباره</string>
     <string name="nav_home">خانه</string>
+    <string name="home_title">خانه</string>
     <string name="home_search_hint">یافتن نوشته</string>
     <string name="home_good_morning">صبح بخیر</string>
     <string name="home_good_afternoon">عصر بخیر</string>

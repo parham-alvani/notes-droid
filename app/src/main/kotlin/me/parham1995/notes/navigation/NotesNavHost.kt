@@ -4,6 +4,8 @@ import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
@@ -26,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
@@ -286,9 +289,15 @@ fun NotesNavHost(
     // value it was first composed with.
     val inTwoPanes = rememberUpdatedState(twoPane)
     var paneHeading by remember { mutableStateOf<String?>(null) }
+    // The home page in the pane beside the list, over the tab that is open:
+    // until the next note is opened, which closes it again.
+    var paneHome by rememberSaveable { mutableStateOf(false) }
+    // The list beside the note put away, for the note to have the width.
+    var listHidden by rememberSaveable { mutableStateOf(false) }
     val open =
         Opening { id, newTab, fresh, heading ->
             if (twoPane) {
+                paneHome = false
                 paneHeading = heading
                 resume.openInPane(id, inNewTab = newTab, fresh = fresh)
             } else {
@@ -497,7 +506,19 @@ fun NotesNavHost(
                                             StartScreen.SEARCH -> SearchRoute()
                                         },
                                 ) {
-                                    graph(navController, open, dailyPeriod, { inTwoPanes.value }) { openToday() }
+                                    graph(
+                                        navController,
+                                        open,
+                                        dailyPeriod,
+                                        twoPane = { inTwoPanes.value },
+                                        goHome = {
+                                            if (inTwoPanes.value) {
+                                                paneHome = true
+                                            } else {
+                                                navController.switchTab(HomeRoute)
+                                            }
+                                        },
+                                    ) { openToday() }
                                 }
                             }
                         }
@@ -508,23 +529,26 @@ fun NotesNavHost(
             } else {
                 val tabs by resume.open.collectAsStateWithLifecycle()
                 val navigator = rememberListDetailPaneScaffoldNavigator<Nothing>(scaffoldDirective = directive)
-                ListDetailPaneScaffold(
-                    directive = navigator.scaffoldDirective,
-                    value = navigator.scaffoldValue,
-                    modifier = placement,
-                    listPane = { AnimatedPane { host(Modifier) } },
-                    detailPane = {
-                        AnimatedPane {
-                            val tab = tabs.current
-                            if (tab == null) {
+                // The note, or the home page with none open. Movable, so that
+                // hiding the list beside it keeps the note as it is being read.
+                val detail =
+                    remember {
+                        movableContentOf { noteId: Long?, listShown: Boolean ->
+                            // Somewhere the list shows: the list comes back for it.
+                            fun inList(go: () -> Unit) {
+                                listHidden = false
+                                fullScreen.on = false
+                                go()
+                            }
+                            if (noteId == null) {
                                 // No tab open: the home page, as an empty window is on the Mac.
                                 HomeScreen(
                                     onOpenNote = { id, heading -> open.note(id, fresh = true, heading = heading) },
-                                    onSearch = { navController.search(it) },
+                                    onSearch = { inList { navController.search(it) } },
                                 )
                             } else {
                                 NoteScreen(
-                                    noteId = tab.noteId,
+                                    noteId = noteId,
                                     openInNewTab = false,
                                     heading = paneHeading,
                                     // Closing the last tab empties the pane; there
@@ -532,14 +556,39 @@ fun NotesNavHost(
                                     onBack = {},
                                     onOpenGraph = { navController.navigate(GraphRoute(it)) },
                                     onOpenNote = { open.note(it) },
-                                    onOpenFolder = { navController.navigate(BrowseRoute(it)) },
-                                    onSearch = { navController.search(it) },
-                                    onOpenTag = { vaultId, tag -> navController.navigate(TagsRoute(tag, vaultId)) },
+                                    onOpenFolder = { inList { navController.navigate(BrowseRoute(it)) } },
+                                    onSearch = { inList { navController.search(it) } },
+                                    onOpenTag = { vaultId, tag ->
+                                        inList { navController.navigate(TagsRoute(tag, vaultId)) }
+                                    },
+                                    listShown = listShown,
+                                    onToggleList = {
+                                        if (listShown) listHidden = true else inList {}
+                                    },
                                 )
                             }
                         }
-                    },
-                )
+                    }
+                val noteId = tabs.current?.noteId?.takeUnless { paneHome }
+                // The home page always has the list beside it: with no note
+                // there is nothing to give the width to.
+                val listShown = noteId == null || !(listHidden || fullScreen.on)
+                if (listShown) {
+                    ListDetailPaneScaffold(
+                        directive = navigator.scaffoldDirective,
+                        value = navigator.scaffoldValue,
+                        modifier = placement,
+                        listPane = { AnimatedPane { host(Modifier) } },
+                        detailPane = { AnimatedPane { detail(noteId, true) } },
+                    )
+                } else {
+                    Box(placement) {
+                        // Still composed, at no size: the list's screens and
+                        // where they were are kept for when it comes back.
+                        host(Modifier.requiredSize(0.dp))
+                        detail(noteId, false)
+                    }
+                }
             }
         }
     }
@@ -573,6 +622,7 @@ private fun NavGraphBuilder.graph(
     open: Opening,
     dailyPeriod: Period,
     twoPane: () -> Boolean,
+    goHome: () -> Unit,
     openToday: () -> Unit,
 ) {
     @Composable
@@ -591,6 +641,7 @@ private fun NavGraphBuilder.graph(
             onToday = { openToday() },
             todayPeriod = dailyPeriod,
             onOpenTags = { navController.navigate(TagsRoute()) },
+            onHome = goHome,
         )
     screen<HomeRoute> {
         if (twoPane()) {

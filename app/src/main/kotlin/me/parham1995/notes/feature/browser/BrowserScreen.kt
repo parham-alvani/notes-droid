@@ -84,6 +84,8 @@ fun BrowserScreen(
     onToday: () -> Unit,
     initialPath: String = "",
     onOpenTags: () -> Unit = {},
+    /** The home page; null where there is none to go to. */
+    onHome: (() -> Unit)? = null,
     /** How long a daily note covers, which is what [onToday] is labelled by. */
     todayPeriod: Period = Period.DAY,
     viewModel: BrowserViewModel = hiltViewModel(),
@@ -217,6 +219,16 @@ fun BrowserScreen(
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.browse_up),
+                            )
+                        }
+                    } else if (onHome != null) {
+                        // At the root there is no folder to go up to, so the
+                        // place is free for the way back to the home page.
+                        IconButton(onClick = onHome) {
+                            LucideGlyph(
+                                "house",
+                                size = 20.dp,
+                                contentDescription = stringResource(R.string.home_title),
                             )
                         }
                     }
