@@ -246,6 +246,28 @@ class HiddenFileStoreTest {
         }
 
     @Test
+    fun `the folder of a hidden note opened by a link can be browsed, without the note in it`() =
+        runTest {
+            aVaultWithHiddenFiles()
+
+            // What a tap on [[Learning/CLAUDE]] and then the drawer's folder
+            // button do: find the note, ask where it is, open its folder.
+            val guide = repository.find(vault, "Learning/CLAUDE")!!
+            val (inVault, path) = repository.locate(guide)!!
+            val folder = path.substringBeforeLast('/', "")
+
+            assertThat(inVault).isEqualTo(vault)
+            assertThat(folder).isEqualTo("Learning")
+            // The folder is there, as the browser draws it, and the note that
+            // led to it is still not listed in it.
+            assertThat(repository.childrenFlow(folder).first().map { it.name })
+                .containsExactly("Kafka", "MyCLAUDE", "chart.png")
+            // The one at the root opens the root.
+            val root = repository.locate(idOf("CLAUDE.md"))!!.second.substringBeforeLast('/', "")
+            assertThat(repository.childrenFlow(root).first().map { it.name }).containsExactly("Learning")
+        }
+
+    @Test
     fun `showing hidden files lists everything, and hiding them again puts it back`() =
         runTest {
             aVaultWithHiddenFiles()
