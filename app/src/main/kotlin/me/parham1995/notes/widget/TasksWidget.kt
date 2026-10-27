@@ -86,7 +86,7 @@ class TasksAppWidget : GlanceAppWidget() {
                 .getOrDefault(emptyList())
         val model = TasksModel(open.size, open.filter { TaskBuckets.of(it.actionableOn, today) in PRESSING }, today)
         provideContent {
-            GlanceTheme(colors) { TasksContent(model) }
+            GlanceTheme(entry.liveColors(colors)) { TasksContent(model) }
         }
     }
 

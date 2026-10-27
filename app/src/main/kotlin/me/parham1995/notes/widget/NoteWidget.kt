@@ -63,7 +63,7 @@ class NoteAppWidget : GlanceAppWidget() {
         val vault = pin?.let { runCatchingUnlessCancelled { entry.vaultRepository().vault(it.vaultId) }.getOrNull() }
         val model = NoteModel(widgetId, pin, note, vault?.label)
         provideContent {
-            GlanceTheme(colors) { NoteContent(model) }
+            GlanceTheme(entry.liveColors(colors)) { NoteContent(model) }
         }
     }
 

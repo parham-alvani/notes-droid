@@ -76,7 +76,7 @@ class QuoteAppWidget : GlanceAppWidget() {
             val today = LocalDate.now().toEpochDay()
             val skipped = QuoteSkips.read(currentState(), today, pin?.path)
             val quote = note?.let { Quotes.forDay(it.quotes, today, skipped) }
-            GlanceTheme(colors) { QuoteContent(QuoteModel(widgetId, pin, note, quote, vault?.label)) }
+            GlanceTheme(entry.liveColors(colors)) { QuoteContent(QuoteModel(widgetId, pin, note, quote, vault?.label)) }
         }
     }
 

@@ -41,7 +41,7 @@ class RecentNotesAppWidget : GlanceAppWidget() {
             runCatchingUnlessCancelled { entry.vaultRepository().recentlyOpened(MAX_ROWS).first() }
                 .getOrDefault(emptyList())
         provideContent {
-            GlanceTheme(colors) { RecentNotesContent(recent) }
+            GlanceTheme(entry.liveColors(colors)) { RecentNotesContent(recent) }
         }
     }
 }

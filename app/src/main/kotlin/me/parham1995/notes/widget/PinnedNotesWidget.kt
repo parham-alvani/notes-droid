@@ -66,7 +66,7 @@ class PinnedNotesAppWidget : GlanceAppWidget() {
         val pinned =
             runCatchingUnlessCancelled { entry.pinnedNotes().resolve(vaultId, MAX_PINS) }.getOrDefault(emptyList())
         provideContent {
-            GlanceTheme(colors) { PinnedNotesContent(pinned) }
+            GlanceTheme(entry.liveColors(colors)) { PinnedNotesContent(pinned) }
         }
     }
 

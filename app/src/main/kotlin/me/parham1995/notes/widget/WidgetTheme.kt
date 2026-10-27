@@ -1,9 +1,14 @@
 package me.parham1995.notes.widget
 
 import androidx.compose.material3.ColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.glance.color.ColorProviders
 import androidx.glance.material3.ColorProviders
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import me.parham1995.notes.data.ThemeChoice
 import me.parham1995.notes.data.runCatchingUnlessCancelled
 import me.parham1995.notes.ui.theme.DaylightScheme
@@ -40,6 +45,28 @@ internal fun widgetColors(
  */
 private fun ColorScheme.seeThrough(opacity: Int): ColorScheme =
     if (opacity >= 100) this else copy(background = background.copy(alpha = opacity.coerceIn(0, 100) / 100f))
+
+/**
+ * The colours, kept current while the widget's session lives.
+ *
+ * A widget's session reads [widgetColors] once, when it starts, and an
+ * update to a session that is still running only recomposes it -- so a theme
+ * or a background chosen a moment after the widget was drawn did not show
+ * until the session ended. [initial] is that first read, so the first frame
+ * is drawn in the right colours and does not wait for the settings to load.
+ */
+@Composable
+internal fun WidgetEntryPoint.liveColors(initial: ColorProviders): ColorProviders {
+    val live =
+        remember {
+            settingsStore()
+                .settings
+                .map { it.reading.theme to it.reading.widgetOpacity }
+                .distinctUntilChanged()
+                .map { (theme, opacity) -> widgetColors(theme, opacity) }
+        }
+    return live.collectAsState(initial).value
+}
 
 /** The settings as they stand, or the app's defaults when they cannot be read. */
 internal suspend fun WidgetEntryPoint.widgetColors(): ColorProviders {
