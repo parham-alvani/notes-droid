@@ -336,11 +336,12 @@ fun NoteScreen(
     // from rather than to whatever was opened last anywhere. With nothing
     // behind it in this tab the gesture falls through and leaves the reader,
     // which is the only way out; the button says so by being disabled.
-    // Not while the drawer is over the page. The drawer registers a handler of
-    // its own, but this one is composed inside the drawer's content slot and
-    // would win -- navigating the note underneath instead of shutting the
-    // drawer covering it.
+    // Not while the drawer is over the page: then back shuts the drawer. The
+    // sheet has no handler of its own, and without this one back fell through
+    // to whatever was under the note -- beside a list, the list moved and the
+    // drawer stayed open over the page.
     BackHandler(enabled = !drawer.isOpen && tabs.current?.canGoBack == true) { viewModel.back() }
+    BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
     LaunchedEffect(state.note?.id, state.note?.title) {
         val note = state.note
         if (note != null) viewModel.retitleTab(note.id, note.title)
