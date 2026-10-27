@@ -86,8 +86,9 @@ class VaultFilter(
          * 5: Obsidian bases (`.base`) and the property types they read.
          * 6: the Templates plugin's settings.
          * 7: the Beautitab plugin's settings, for the home page.
+         * 8: Obsidian's app settings, for the files it is told to exclude.
          */
-        const val VERSION = 7
+        const val VERSION = 8
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -135,7 +136,16 @@ class VaultFilter(
          */
         const val BEAUTITAB = ".obsidian/plugins/beautitab/data.json"
 
-        val DEFAULT_CONFIG_PATHS = setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES, BEAUTITAB)
+        /**
+         * Obsidian's own settings, for one of them: "Excluded files"
+         * (`userIgnoreFilters`), which the browser, search and the rest leave
+         * out as Obsidian does. Everything else in it is how the editor
+         * behaves and goes unread. A few hundred bytes.
+         */
+        const val APP = ".obsidian/app.json"
+
+        val DEFAULT_CONFIG_PATHS =
+            setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES, BEAUTITAB, APP)
 
         /**
          * Formats the reader draws itself. Everything else it can offer is in

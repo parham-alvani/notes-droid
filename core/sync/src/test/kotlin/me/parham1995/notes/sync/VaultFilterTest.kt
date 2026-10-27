@@ -80,6 +80,8 @@ class VaultFilterTest {
         assertThat(filter.kindOf(".obsidian/types.json")).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/templates.json")).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/plugins/beautitab/data.json")).isEqualTo(BlobKind.CONFIG)
+        // For its excluded files, which the lists leave out as Obsidian does.
+        assertThat(filter.kindOf(VaultFilter.APP)).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/plugins/beautitab/main.js")).isNull()
         assertThat(filter.kindOf(".obsidian/plugins/other/data.json")).isNull()
         // And nothing beside them: the rest of the editor's settings stay out.
@@ -92,7 +94,7 @@ class VaultFilterTest {
     fun `the exception is that one file and does not open up its directory`() {
         assertThat(filter.kindOf(".obsidian/plugins/iconic/manifest.json")).isNull()
         assertThat(filter.kindOf(".obsidian/plugins/iconic/data.json.bak")).isNull()
-        assertThat(filter.kindOf(".obsidian/app.json")).isNull()
+        assertThat(filter.kindOf(".obsidian/appearance.json")).isNull()
         assertThat(filter.kindOf(".obsidian/plugins/other/data.json")).isNull()
         // Not a prefix match either: a note that happens to be named this way
         // inside the vault proper is still a note.
