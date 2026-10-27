@@ -1,0 +1,1 @@
+A Home button at the top of Browse opens the home page. In landscape and on tablets, a button on the note bar hides the file list so the note uses the full width, and full-screen reading hides it too.
