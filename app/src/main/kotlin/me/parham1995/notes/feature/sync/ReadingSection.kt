@@ -118,6 +118,30 @@ internal fun ReadingCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        Text(stringResource(R.string.settings_widget_background), style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ReadingSettings.WIDGET_OPACITIES.forEach { percent ->
+                FilterChip(
+                    selected = reading.widgetOpacity == percent,
+                    onClick = { viewModel.setWidgetOpacity(percent) },
+                    label = {
+                        Text(
+                            when (percent) {
+                                100 -> stringResource(R.string.widget_background_solid)
+                                0 -> stringResource(R.string.widget_background_clear)
+                                else -> stringResource(R.string.settings_percent, percent)
+                            },
+                        )
+                    },
+                )
+            }
+        }
+        Text(
+            stringResource(R.string.help_widget_background),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         SwitchRow(
             title = stringResource(R.string.settings_persian_font),
             help = stringResource(R.string.help_persian_font),

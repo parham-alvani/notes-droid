@@ -105,6 +105,7 @@ class NotesApplication :
         VaultWriteRepository.afterWrite = ::refreshWidgets
         refreshPinsWhenTheyChange()
         keepHiddenFilesCurrent()
+        redrawWidgetsWhenTheyLookDifferent()
         // A force-stop forgets every alarm and leaves no broadcast to say so;
         // the next launch is the first chance to set them again.
         reminders.get().rearm(this)
@@ -158,6 +159,23 @@ class NotesApplication :
                 .collect {
                     if (hiddenFiles.get().applyAll() > 0) Widgets.refreshAll(this@NotesApplication)
                 }
+        }
+    }
+
+    /**
+     * Redraws every widget when the theme or the widget background changes,
+     * so the choice shows on the home screen as it is made rather than at the
+     * next sync. The first value is how they were drawn already, so skipped.
+     */
+    private fun redrawWidgetsWhenTheyLookDifferent() {
+        scope.launch {
+            settings
+                .get()
+                .settings
+                .map { it.reading.theme to it.reading.widgetOpacity }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { Widgets.refreshAll(this@NotesApplication) }
         }
     }
 

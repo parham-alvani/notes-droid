@@ -134,6 +134,10 @@
     <string name="help_digest">Two notifications from the last sync: what is due today, by name, and how many are overdue. Either can be silenced in the system\'s notification settings. Nothing is sent when there is nothing to report.</string>
     <string name="help_transport_rest">Markdown only. A refresh with nothing new costs one request.</string>
     <string name="help_transport_ssh">No token to rotate, but git cannot fetch a subset &#8212; full history and all attachments.</string>
+    <string name="settings_widget_background">Widget background</string>
+    <string name="widget_background_solid">Solid</string>
+    <string name="widget_background_clear">Clear</string>
+    <string name="help_widget_background">How much of the home screen widgets\' background is drawn. With less, the wallpaper shows through; the text keeps its colour, so choose a wallpaper it can be read on.</string>
     <string name="help_theme">naz is a dark colourscheme and defines no light palette, so light keeps its accents against paper rather than pretending to be it.</string>
     <string name="help_persian_font">Off uses the platform\'s Naskh, which has every glyph and draws them differently.</string>
     <string name="help_needs_token">Syncing over REST needs an access token. Add one above, or switch that repository to SSH.</string>

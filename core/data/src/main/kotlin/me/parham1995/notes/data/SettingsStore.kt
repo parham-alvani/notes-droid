@@ -229,10 +229,18 @@ data class ReadingSettings(
      * opens from a link either way; this is only whether lists offer it.
      */
     val showHiddenFiles: Boolean = false,
+    /**
+     * How much of the home-screen widgets' background is drawn, in percent:
+     * 100 is the solid card, 0 leaves only the text over the wallpaper. Solid
+     * by default, because text over an unknown wallpaper may not be readable;
+     * it is a choice for the person who knows what their wallpaper is.
+     */
+    val widgetOpacity: Int = 100,
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
         val LINE_SPACINGS = listOf(1f, 1.15f, 1.35f, 1.6f)
+        val WIDGET_OPACITIES = listOf(100, 75, 50, 25, 0)
     }
 }
 
@@ -420,6 +428,7 @@ class SettingsStore
                             homePicture = preferences[HOME_PICTURE].orEmpty(),
                             hideAgentFiles = preferences[HIDE_AGENT_FILES] ?: true,
                             showHiddenFiles = preferences[SHOW_HIDDEN_FILES] ?: false,
+                            widgetOpacity = (preferences[WIDGET_OPACITY] ?: 100).coerceIn(0, 100),
                         ),
                 )
             }
@@ -591,6 +600,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[SHOW_HIDDEN_FILES] = enabled }
         }
 
+        suspend fun setWidgetOpacity(percent: Int) {
+            context.settingsDataStore.edit { it[WIDGET_OPACITY] = percent.coerceIn(0, 100) }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -673,6 +686,7 @@ class SettingsStore
             val HOME_PICTURE = stringPreferencesKey("home_picture")
             val HIDE_AGENT_FILES = booleanPreferencesKey("hide_agent_files")
             val SHOW_HIDDEN_FILES = booleanPreferencesKey("show_hidden_files")
+            val WIDGET_OPACITY = intPreferencesKey("widget_opacity")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")

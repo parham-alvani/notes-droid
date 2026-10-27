@@ -134,6 +134,10 @@
     <string name="help_digest">دو اعلان از آخرین همگام‌سازی: کارهای امروز به نام، و شمار کارهای عقب‌افتاده. هر یک را می‌توان در تنظیمات اعلان سیستم بی‌صدا کرد. وقتی چیزی برای گفتن نباشد، چیزی هم فرستاده نمی‌شود.</string>
     <string name="help_transport_rest">فقط markdown. تازه‌سازی‌ای که چیز تازه‌ای ندارد، یک درخواست خرج برمی‌دارد.</string>
     <string name="help_transport_ssh">توکنی برای عوض کردن ندارد، اما git نمی‌تواند بخشی را بگیرد؛ کل تاریخچه و همه ضمیمه‌ها می‌آید.</string>
+    <string name="settings_widget_background">پس‌زمینه ویجت</string>
+    <string name="widget_background_solid">کامل</string>
+    <string name="widget_background_clear">شفاف</string>
+    <string name="help_widget_background">چه اندازه از پس‌زمینه ویجت‌های صفحه اصلی کشیده شود. با مقدار کمتر، تصویر زمینه از پشت آن دیده می‌شود؛ رنگ متن تغییر نمی‌کند، پس تصویر زمینه‌ای انتخاب کنید که متن روی آن خوانا باشد.</string>
     <string name="help_theme">naz یک پوسته تاریک است و پالت روشنی تعریف نکرده، پس حالت روشن همان رنگ‌های تاکیدی را روی زمینه کاغذی نگه می‌دارد.</string>
     <string name="help_persian_font">خاموش که باشد، نسخ خود اندروید استفاده می‌شود؛ همه حروف را دارد و جور دیگری می‌کشد.</string>
     <string name="help_needs_token">همگام‌سازی با REST به توکن نیاز دارد. بالا یکی اضافه کنید، یا آن مخزن را روی SSH بگذارید.</string>

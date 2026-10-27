@@ -323,6 +323,8 @@ class SyncViewModel
 
         fun setTheme(theme: ThemeChoice) = viewModelScope.launch { settingsStore.setTheme(theme) }
 
+        fun setWidgetOpacity(percent: Int) = viewModelScope.launch { settingsStore.setWidgetOpacity(percent) }
+
         fun setPersianFont(enabled: Boolean) = viewModelScope.launch { settingsStore.setPersianFont(enabled) }
 
         fun setStylusSpotlight(enabled: Boolean) = viewModelScope.launch { settingsStore.setStylusSpotlight(enabled) }
