@@ -86,7 +86,7 @@ fun MermaidBlockView(
     // Diagrams are routinely wider than a phone. Pinching in place used to be
     // the answer and was half of one: it made the diagram bigger without
     // letting it be moved, so the corner that was wanted stayed off screen.
-    // Tapping opens the same viewer an image opens, which pans and clamps.
+    // Tapping opens the same viewer an image opens, which pans and zooms.
     var opened by remember(code) { mutableStateOf(false) }
 
     Surface(

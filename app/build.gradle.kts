@@ -219,6 +219,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
     implementation(libs.coil.gif)
+    implementation(libs.telephoto.zoomable.image.coil3)
     implementation(libs.jlatexmath)
     implementation(libs.highlights)
     implementation(libs.androidx.webkit)

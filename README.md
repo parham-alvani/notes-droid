@@ -47,7 +47,7 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Today's note** — the Daily notes plugin's folder and date format, read from the vault, behind a button in the browser and a launcher shortcut. Weekly, monthly and yearly formats are understood as such, and a periodic note has arrows to the previous and next one that exist, and to the same week — or day, or month — in earlier years
 - **`obsidian://` links** — `open` and `search` links from other apps are followed in the vault they name, matched by its name here or its repository's
 - **Several vaults** — separate, each with its own files, index, search and tasks
-- **Attachments** — PDFs and pictures shown in place, zoomable; everything else opens in whatever app handles it
+- **Attachments** — PDFs and pictures shown in place, zoomable (a GIF plays, an SVG takes the page's theme); everything else opens in whatever app handles it
 - **Share as PDF** — a note printed to A4, headings, lists and quotes set as they read, Persian right to left, for someone who does not read markdown
 - **What's new** — once, after an update, the release's own notes
 - **In the system file picker** — each vault is a place of its own in Android's picker, so any app's upload or attach button can reach a note or an attachment; read-only, with image thumbnails and the notes you read last under Recent; `.git` and `.obsidian` stay out of it

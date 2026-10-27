@@ -2,7 +2,6 @@ package me.parham1995.notes.ui.image
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,30 +12,30 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import me.parham1995.notes.R
 import me.parham1995.notes.ui.Loading
 import me.parham1995.notes.ui.icon.LucideGlyph
-import kotlin.math.abs
+import me.saket.telephoto.zoomable.DoubleClickToZoomListener
+import me.saket.telephoto.zoomable.ZoomSpec
+import me.saket.telephoto.zoomable.ZoomableImageState
+import me.saket.telephoto.zoomable.ZoomableState
+import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
+import me.saket.telephoto.zoomable.rememberZoomableImageState
+import me.saket.telephoto.zoomable.rememberZoomableState
 
 /**
  * An embedded image, full screen and zoomable.
@@ -102,7 +101,7 @@ fun ZoomableViewer(
 
 /** The viewer itself, for a dialog or for a layer over the page. */
 @Composable
-private fun ZoomableContent(
+internal fun ZoomableContent(
     model: Any?,
     unavailable: String?,
     caption: String?,
@@ -111,26 +110,12 @@ private fun ZoomableContent(
     onOpenExternally: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val dark = pageIsDark()
-
-    var scale by remember(model) { mutableFloatStateOf(1f) }
-    var offsetX by remember(model) { mutableFloatStateOf(0f) }
-    var offsetY by remember(model) { mutableFloatStateOf(0f) }
-    var frame by remember { mutableStateOf(IntSize.Zero) }
-
-    fun clamp() {
-        offsetX = offsetX.coerceIn(-panLimit(frame.width, scale), panLimit(frame.width, scale))
-        offsetY = offsetY.coerceIn(-panLimit(frame.height, scale), panLimit(frame.height, scale))
-    }
-
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
             // Over a page, a tap on the black must not reach the page.
-            .pointerInput(Unit) { detectTapGestures { } }
-            .onSizeChanged { frame = it },
+            .pointerInput(Unit) { detectTapGestures { } },
         contentAlignment = Alignment.Center,
     ) {
         when (val loaded = model) {
@@ -141,60 +126,7 @@ private fun ZoomableContent(
                     Loading()
                 }
 
-            else ->
-                AsyncImage(
-                    // The page's theme, not the black behind the viewer: the
-                    // picture grows out of the page and must not change colour
-                    // on the way.
-                    model =
-                        ImageRequest
-                            .Builder(context)
-                            .data(loaded)
-                            .onPage(dark)
-                            .build(),
-                    contentDescription = contentDescription,
-                    contentScale = ContentScale.Fit,
-                    modifier =
-                        modifier
-                            .fillMaxSize()
-                            .graphicsLayer(
-                                scaleX = scale,
-                                scaleY = scale,
-                                translationX = offsetX,
-                                translationY = offsetY,
-                            ).pointerInput(model) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    scale = (scale * zoom).coerceIn(MIN_ZOOM, MAX_ZOOM)
-                                    // Panning at rest would slide a
-                                    // fitted image around inside a frame
-                                    // it already fits.
-                                    if (scale > 1f) {
-                                        offsetX += pan.x
-                                        offsetY += pan.y
-                                    } else {
-                                        offsetX = 0f
-                                        offsetY = 0f
-                                    }
-                                    clamp()
-                                }
-                            }.pointerInput(model) {
-                                detectTapGestures(
-                                    // Back to fitted if it is zoomed at
-                                    // all, rather than only from exactly
-                                    // 1x -- a double tap after pinching to
-                                    // 1.2x should still be the way out.
-                                    onDoubleTap = {
-                                        if (abs(scale - 1f) > ZOOM_EPSILON) {
-                                            scale = 1f
-                                            offsetX = 0f
-                                            offsetY = 0f
-                                        } else {
-                                            scale = DOUBLE_TAP_ZOOM
-                                        }
-                                    },
-                                )
-                            },
-                )
+            else -> ZoomablePicture(loaded, contentDescription, modifier)
         }
 
         // Over a page the layer runs under the status bar, so the
@@ -249,22 +181,93 @@ private fun ZoomableContent(
 }
 
 /**
- * How far the image may be pushed from centre, in pixels, before there is
- * nothing left of it to bring into view.
+ * The picture, zoomed by Telephoto.
  *
- * At a given scale only `(scale - 1)` of a frame's worth hangs outside it, half
- * on each side. Panning past that just loses the image off the edge, which
- * takes a deliberate gesture to undo and reads as it having vanished. At or
- * below fitted there is no slack at all, so the answer is zero rather than
- * something negative -- which `coerceIn` would throw on.
+ * The viewer used to scale a plain `AsyncImage` in a graphics layer, and it
+ * showed: a pinch zoomed about the middle of the screen rather than between
+ * the fingers, a double tap zoomed the middle rather than what was tapped, a
+ * pan stopped dead when the finger lifted, and the picture was decoded at the
+ * size of the screen, so a screenshot zoomed six times was a blur of it.
+ * Telephoto does all four: it zooms about the fingers and the tap, flings,
+ * and reads a large bitmap again in tiles at the resolution the zoom needs.
+ *
+ * Tiles are for still bitmaps only. A GIF or animated WebP, an AVIF and an SVG
+ * are drawn whole through Coil's painter -- Telephoto checks the file's header
+ * and steps aside -- so a GIF keeps playing under the zoom. An SVG is asked for
+ * as paths ([asVector]) rather than a bitmap, which the zoom then draws at its
+ * own scale, so a diagram is as sharp at 6x as at 1x.
  */
-internal fun panLimit(
-    frameSize: Int,
-    scale: Float,
-): Float = (frameSize * (scale - 1f) / 2f).coerceAtLeast(0f)
+@Composable
+internal fun ZoomablePicture(
+    model: Any,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    /** Where the zoom is, held outside only for a test to read. */
+    zoom: ZoomableImageState =
+        rememberZoomableImageState(rememberZoomableState(zoomSpec = ZoomSpec(maxZoomFactor = MAX_ZOOM))),
+) {
+    val context = LocalContext.current
+    val dark = pageIsDark()
+    val request =
+        remember(model, dark) {
+            ImageRequest
+                .Builder(context)
+                .data(model)
+                // The page's theme, not the black behind the viewer: the
+                // picture grows out of the page and must not change colour
+                // on the way.
+                .onPage(dark)
+                .asVector()
+                .build()
+        }
+    ZoomableAsyncImage(
+        model = request,
+        contentDescription = contentDescription,
+        state = zoom,
+        contentScale = ContentScale.Fit,
+        onDoubleClick = ZoomInOrOut,
+        modifier = modifier.fillMaxSize(),
+    )
+}
 
-private const val MIN_ZOOM = 1f
+/**
+ * A double tap zooms in on the point tapped, or back to fitted if the picture
+ * is zoomed at all -- not only from exactly the zoom a double tap gives. Back
+ * to fitted after pinching to 1.2x should still be one double tap, where
+ * Telephoto's own cycle would zoom in further.
+ */
+private val ZoomInOrOut =
+    object : DoubleClickToZoomListener {
+        override suspend fun onDoubleClick(
+            state: ZoomableState,
+            centroid: Offset,
+        ) {
+            val zoomed = state.zoomFraction ?: return
+            if (zoomed > ZOOMED_FRACTION) {
+                state.resetZoom()
+            } else {
+                state.zoomBy(zoomFactor = DOUBLE_TAP_ZOOM, centroid = centroid)
+            }
+        }
+    }
+
+/**
+ * Six times the picture's own pixels, in Telephoto's terms, or six times the
+ * screen for one that is smaller than the screen. A large screenshot fitted
+ * at a quarter of its size can be taken past every one of its pixels; a small
+ * one zooms as far as it did when the limit was six times fitted.
+ */
 private const val MAX_ZOOM = 6f
+
+/** Times what is on the screen, so the same step for a photo and an icon. */
 private const val DOUBLE_TAP_ZOOM = 2.5f
-private const val ZOOM_EPSILON = 0.01f
+
+/**
+ * How far from fitted, as a share of the way to [MAX_ZOOM], counts as zoomed:
+ * anything but rounding. The way is long for a large picture -- fitted at a
+ * quarter of its size, six times its pixels is 24 times the screen -- so a
+ * share of 1% let a pinch to 1.2x count as fitted, and a double tap zoomed in
+ * further instead of out.
+ */
+private const val ZOOMED_FRACTION = 0.001f
 private const val SCRIM = 0.5f

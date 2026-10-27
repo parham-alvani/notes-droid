@@ -34,6 +34,10 @@ serialization = "1.11.0"
 okhttp = "5.5.0"
 commonmark = "0.30.1"
 coil = "3.6.3"
+# Pinch, double tap and fling about the fingers, and a large picture read in
+# tiles as it is zoomed so it stays sharp. 0.19.0 asks for Coil 3.2 and
+# Compose 1.8 at least; both are older than what is here.
+telephoto = "0.19.0"
 jlatexmath = "0.2.0"
 webkit = "1.17.1"
 glance = "1.2.0"
@@ -123,6 +127,7 @@ coil-svg = { group = "io.coil-kt.coil3", name = "coil-svg", version.ref = "coil"
 # Animated GIF and WebP through the platform's ImageDecoder (API 28+).
 coil-gif = { group = "io.coil-kt.coil3", name = "coil-gif", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+telephoto-zoomable-image-coil3 = { group = "me.saket.telephoto", name = "zoomable-image-coil3", version.ref = "telephoto" }
 jlatexmath = { group = "ru.noties", name = "jlatexmath-android", version.ref = "jlatexmath" }
 # Tokenises code so it can be coloured with the vault's own palette.
 highlights = { group = "dev.snipme", name = "highlights", version.ref = "highlights" }
