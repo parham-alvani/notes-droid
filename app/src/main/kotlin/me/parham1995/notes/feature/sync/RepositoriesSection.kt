@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -236,6 +237,7 @@ internal fun TransportCard(
                         .fillMaxWidth()
                         .selectable(
                             selected = state.settings.transport == option,
+                            role = Role.RadioButton,
                             onClick = { viewModel.setTransport(option) },
                         ).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,

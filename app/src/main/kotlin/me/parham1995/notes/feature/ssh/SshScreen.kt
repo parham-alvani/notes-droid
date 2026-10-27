@@ -18,7 +18,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -42,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.git.StoredKey
+import me.parham1995.notes.feature.sync.SwitchRow
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.theme.Accents
 import java.text.DateFormat
@@ -137,21 +137,13 @@ fun SshScreen(
             }
 
             Card(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.ssh_port_443), style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            stringResource(R.string.help_port_443),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = state.overPort443, onCheckedChange = viewModel::setOverPort443)
-                }
+                SwitchRow(
+                    title = stringResource(R.string.ssh_port_443),
+                    help = stringResource(R.string.help_port_443),
+                    checked = state.overPort443,
+                    onCheckedChange = viewModel::setOverPort443,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
             }
         }
     }

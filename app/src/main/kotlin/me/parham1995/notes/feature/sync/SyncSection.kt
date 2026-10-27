@@ -15,7 +15,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
 import me.parham1995.notes.data.ImagePolicy
@@ -160,17 +160,11 @@ internal fun BackgroundSyncCard(
 ) {
     val context = LocalContext.current
     SectionCard(stringResource(R.string.card_background_sync)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(stringResource(R.string.settings_schedule), style = MaterialTheme.typography.bodyMedium)
-            Switch(
-                checked = state.settings.backgroundSync,
-                onCheckedChange = viewModel::setBackgroundSync,
-            )
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_schedule),
+            checked = state.settings.backgroundSync,
+            onCheckedChange = viewModel::setBackgroundSync,
+        )
 
         if (state.settings.backgroundSync) {
             Text(stringResource(R.string.settings_how_often), style = MaterialTheme.typography.labelMedium)
@@ -192,17 +186,11 @@ internal fun BackgroundSyncCard(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.settings_wifi_only), style = MaterialTheme.typography.bodyMedium)
-                Switch(
-                    checked = state.settings.syncOnWifiOnly,
-                    onCheckedChange = viewModel::setSyncOnWifiOnly,
-                )
-            }
+            SwitchRow(
+                title = stringResource(R.string.settings_wifi_only),
+                checked = state.settings.syncOnWifiOnly,
+                onCheckedChange = viewModel::setSyncOnWifiOnly,
+            )
 
             val exempt = remember { context.ignoresBatteryOptimisations() }
             if (!exempt) {
@@ -262,6 +250,7 @@ internal fun ImagesCard(
                         .fillMaxWidth()
                         .selectable(
                             selected = state.settings.imagePolicy == option,
+                            role = Role.RadioButton,
                             onClick = { viewModel.setImagePolicy(option) },
                         ).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,14 +39,11 @@ internal fun TaskDigestCard(
     viewModel: SyncViewModel,
 ) {
     SectionCard(stringResource(R.string.card_digest)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(stringResource(R.string.settings_digest), style = MaterialTheme.typography.bodyMedium)
-            Switch(checked = state.settings.taskDigest, onCheckedChange = viewModel::setTaskDigest)
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_digest),
+            checked = state.settings.taskDigest,
+            onCheckedChange = viewModel::setTaskDigest,
+        )
 
         if (state.settings.taskDigest) {
             Text(stringResource(R.string.digest_at), style = MaterialTheme.typography.labelMedium)

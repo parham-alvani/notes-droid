@@ -2,7 +2,6 @@ package me.parham1995.notes.feature.sync
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,10 +10,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -121,60 +118,33 @@ internal fun ReadingCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_persian_font), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.help_persian_font),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = reading.persianFont, onCheckedChange = viewModel::setPersianFont)
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_persian_font),
+            help = stringResource(R.string.help_persian_font),
+            checked = reading.persianFont,
+            onCheckedChange = viewModel::setPersianFont,
+        )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_stylus), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.settings_stylus_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = reading.stylusSpotlight, onCheckedChange = viewModel::setStylusSpotlight)
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_stylus),
+            help = stringResource(R.string.settings_stylus_note),
+            checked = reading.stylusSpotlight,
+            onCheckedChange = viewModel::setStylusSpotlight,
+        )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_hide_done), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.help_hide_done),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = reading.hideCompletedTasks,
-                onCheckedChange = viewModel::setHideCompletedTasks,
-            )
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_hide_done),
+            help = stringResource(R.string.help_hide_done),
+            checked = reading.hideCompletedTasks,
+            onCheckedChange = viewModel::setHideCompletedTasks,
+        )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_hold_to_define), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.help_hold_to_define),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = reading.holdToDefine, onCheckedChange = viewModel::setHoldToDefine)
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_hold_to_define),
+            help = stringResource(R.string.help_hold_to_define),
+            checked = reading.holdToDefine,
+            onCheckedChange = viewModel::setHoldToDefine,
+        )
     }
 
     SectionCard(stringResource(R.string.card_behaviour)) {
@@ -201,59 +171,36 @@ internal fun ReadingCard(
             }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_hide_agent_files), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.help_hide_agent_files),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            // Nothing is hidden while hidden files are shown, so this would
-            // be a switch that does nothing.
-            Switch(
-                checked = reading.hideAgentFiles,
-                onCheckedChange = viewModel::setHideAgentFiles,
-                enabled = !reading.showHiddenFiles,
-            )
-        }
+        // Nothing is hidden while hidden files are shown, so this would
+        // be a switch that does nothing.
+        SwitchRow(
+            title = stringResource(R.string.settings_hide_agent_files),
+            help = stringResource(R.string.help_hide_agent_files),
+            checked = reading.hideAgentFiles,
+            onCheckedChange = viewModel::setHideAgentFiles,
+            enabled = !reading.showHiddenFiles,
+        )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_show_hidden_files), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.help_show_hidden_files),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = reading.showHiddenFiles, onCheckedChange = viewModel::setShowHiddenFiles)
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_show_hidden_files),
+            help = stringResource(R.string.help_show_hidden_files),
+            checked = reading.showHiddenFiles,
+            onCheckedChange = viewModel::setShowHiddenFiles,
+        )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_keep_screen_on), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.help_keep_screen_on),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = reading.keepScreenOn, onCheckedChange = viewModel::setKeepScreenOn)
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_keep_screen_on),
+            help = stringResource(R.string.help_keep_screen_on),
+            checked = reading.keepScreenOn,
+            onCheckedChange = viewModel::setKeepScreenOn,
+        )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_tap_full_screen), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.help_tap_full_screen),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = reading.tapForFullScreen, onCheckedChange = viewModel::setTapForFullScreen)
-        }
+        SwitchRow(
+            title = stringResource(R.string.settings_tap_full_screen),
+            help = stringResource(R.string.help_tap_full_screen),
+            checked = reading.tapForFullScreen,
+            onCheckedChange = viewModel::setTapForFullScreen,
+        )
     }
 }
 

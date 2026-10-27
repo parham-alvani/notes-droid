@@ -6,12 +6,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
@@ -41,6 +45,55 @@ internal fun LabelledValue(
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Text(value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+    }
+}
+
+/**
+ * A setting that is on or off: its name, what it does, and a switch.
+ *
+ * The whole row is the control, not just the switch at its end. A switch
+ * alone is a 52dp target at the far edge of a card, and a tap on the words
+ * beside it -- the natural place to tap -- did nothing at all. The switch is
+ * given no handler of its own, so the row is one control to TalkBack too: it
+ * reads the title, the help and the state once, instead of the words and then
+ * an unnamed "switch, off" as a second stop.
+ *
+ * [enabled] covers the row as well as the switch, so a setting that would do
+ * nothing cannot be changed by tapping beside it either.
+ */
+@Composable
+internal fun SwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    help: String? = null,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .toggleable(
+                    value = checked,
+                    enabled = enabled,
+                    role = Role.Switch,
+                    onValueChange = onCheckedChange,
+                ).padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            if (help != null) {
+                Text(
+                    help,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
