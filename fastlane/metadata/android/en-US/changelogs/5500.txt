@@ -1,0 +1,1 @@
+GIF and animated WebP pictures move. SVG and AVIF files open in the app's own picture viewer. The viewer zooms where your fingers are, a double tap zooms where you tap, and large pictures stay sharp when you zoom in. A picture opened from the file browser shows over the folder, and Back closes it.
