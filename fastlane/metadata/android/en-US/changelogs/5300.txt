@@ -1,0 +1,1 @@
+Files that are not for people are hidden from the lists: the folders in Obsidian's Excluded files, such as uploads, and CLAUDE.md, AGENTS.md and GEMINI.md. Links and pictures in them still work. Two switches in Settings > Reading show them again. Links to CLAUDE.md files work again.
