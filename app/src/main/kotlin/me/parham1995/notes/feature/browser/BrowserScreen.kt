@@ -156,24 +156,6 @@ fun BrowserScreen(
         }
     }
 
-    viewing?.let { path ->
-        ImageViewer(
-            vaultId = state.activeVaultId,
-            path = path,
-            alt = null,
-            onDismiss = { viewing = null },
-            onOpenExternally = {
-                viewing = null
-                scope.launch {
-                    val file = viewModel.attachment(path)
-                    if (file == null || !Attachments.open(context, file)) {
-                        Toast.makeText(context, nothingOpens, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            },
-        )
-    }
-
     reading?.let { file ->
         PdfViewer(
             file = file,
@@ -201,6 +183,9 @@ fun BrowserScreen(
 
     // Inside a folder, back walks up the tree before it leaves the screen.
     BackHandler(enabled = state.path.isNotEmpty()) { viewModel.up() }
+    // A picture open over the folder is closed first. Composed after the
+    // folder's, so it is the one asked.
+    BackHandler(enabled = viewing != null) { viewing = null }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -411,6 +396,27 @@ fun BrowserScreen(
                 }
             }
         }
+    }
+
+    // After the Scaffold, so it is drawn over it. The viewer is a layer in
+    // this window rather than a dialog, and composed before the Scaffold it
+    // was drawn underneath it -- a tap on a picture opened nothing visible.
+    viewing?.let { path ->
+        ImageViewer(
+            vaultId = state.activeVaultId,
+            path = path,
+            alt = null,
+            onDismiss = { viewing = null },
+            onOpenExternally = {
+                viewing = null
+                scope.launch {
+                    val file = viewModel.attachment(path)
+                    if (file == null || !Attachments.open(context, file)) {
+                        Toast.makeText(context, nothingOpens, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+        )
     }
 }
 
