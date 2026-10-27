@@ -47,6 +47,7 @@ class AttachmentsTest {
         assertThat(Attachments.iconOf("archive.zip")).isEqualTo("file-archive")
         assertThat(Attachments.iconOf("Photo.JPG")).isEqualTo("image")
         assertThat(Attachments.iconOf("scan.heic")).isEqualTo("image")
+        assertThat(Attachments.iconOf("photo.avif")).isEqualTo("image")
         assertThat(Attachments.iconOf("mystery.wat")).isEqualTo("paperclip")
     }
 
@@ -54,8 +55,31 @@ class AttachmentsTest {
     fun `a picture is shown here and anything else is handed on`() {
         assertThat(Attachments.isImage("uploads/Photo.JPG")).isTrue()
         assertThat(Attachments.isImage("scan.heic")).isTrue()
-        assertThat(Attachments.isImage("diagram.svg")).isFalse()
         assertThat(Attachments.isImage("Manual.pdf")).isFalse()
         assertThat(Attachments.isImage("no-extension")).isFalse()
+        // The name of a folder with a dot in it is not the file's type.
+        assertThat(Attachments.isImage("v1.png/notes")).isFalse()
+    }
+
+    @Test
+    fun `an svg is shown here, in the page's theme, not handed to a browser`() {
+        assertThat(Attachments.isImage("uploads/diagram.svg")).isTrue()
+        assertThat(Attachments.isImage("uploads/DIAGRAM.SVG")).isTrue()
+    }
+
+    @Test
+    fun `an animated picture is shown here, where it plays`() {
+        assertThat(Attachments.isImage("loop.gif")).isTrue()
+        assertThat(Attachments.isImage("LOOP.GIF")).isTrue()
+        assertThat(Attachments.isImage("loop.webp")).isTrue()
+    }
+
+    @Test
+    fun `an avif is shown here only where the platform decodes it`() {
+        assertThat(Attachments.isImage("photo.avif", sdk = 31)).isTrue()
+        assertThat(Attachments.isImage("Photo.AVIF", sdk = 36)).isTrue()
+        // Android 11 and before cannot read it, so another app is asked.
+        assertThat(Attachments.isImage("photo.avif", sdk = 30)).isFalse()
+        assertThat(Attachments.isImage("photo.avif", sdk = 29)).isFalse()
     }
 }

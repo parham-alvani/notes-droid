@@ -2,6 +2,7 @@ package me.parham1995.notes.ui.render
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import java.io.File
@@ -72,16 +73,28 @@ object Attachments {
 
     /**
      * A picture Daftar can show itself, zoomable, rather than hand to another
-     * app. Not SVG: nothing here decodes it.
+     * app.
+     *
+     * SVG included: `VaultSvg` draws it, in the page's theme, and an SVG handed
+     * to another app went to a browser that drew it on white whatever the
+     * theme. GIF and animated WebP play (`coil-gif`). AVIF only from Android 12
+     * ([sdk] 31), where the platform's decoder learned it; before that it goes
+     * to whatever app claims it, the same as anything else this cannot draw.
      */
-    fun isImage(name: String): Boolean = name.substringAfterLast('.', "").lowercase(Locale.ROOT) in IMAGES
+    fun isImage(
+        name: String,
+        sdk: Int = Build.VERSION.SDK_INT,
+    ): Boolean {
+        val extension = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
+        return extension in IMAGES || (extension == "avif" && sdk >= Build.VERSION_CODES.S)
+    }
 
-    private val IMAGES = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif")
+    private val IMAGES = setOf("png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "heic", "heif")
 
     /** What Lucide glyph stands for this kind of file, in a listing. */
     fun iconOf(name: String): String =
         when (name.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
-            "png", "jpg", "jpeg", "gif", "webp", "heic", "bmp", "svg" -> "image"
+            "png", "jpg", "jpeg", "gif", "webp", "heic", "bmp", "svg", "avif" -> "image"
             "mp4", "mov", "mkv", "webm", "avi" -> "film"
             "mp3", "m4a", "ogg", "opus", "wav", "flac" -> "music"
             "zip", "tar", "gz", "7z" -> "file-archive"

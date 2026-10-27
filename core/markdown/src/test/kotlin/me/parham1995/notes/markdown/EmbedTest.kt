@@ -66,6 +66,13 @@ class EmbedTest {
     }
 
     @Test
+    fun `every picture Obsidian draws is drawn, an animated or AVIF one too`() {
+        for (name in listOf("loop.gif", "figure.svg", "photo.webp", "photo.avif", "PHOTO.AVIF")) {
+            assertThat(single("![[uploads/$name]]")).isInstanceOf(MdBlock.Image::class.java)
+        }
+    }
+
+    @Test
     fun `a file is still an attachment`() {
         assertThat(single("![[uploads/contract.pdf]]")).isInstanceOf(MdBlock.Attachment::class.java)
     }

@@ -51,6 +51,8 @@ class VaultFilterTest {
         assertThat(filter.kindOf("uploads/pic.jpg")).isEqualTo(BlobKind.IMAGE)
         assertThat(filter.kindOf("uploads/PIC.JPG")).isEqualTo(BlobKind.IMAGE)
         assertThat(filter.kindOf("uploads/diagram.svg")).isEqualTo(BlobKind.IMAGE)
+        assertThat(filter.kindOf("uploads/loop.gif")).isEqualTo(BlobKind.IMAGE)
+        assertThat(filter.kindOf("uploads/photo.AVIF")).isEqualTo(BlobKind.IMAGE)
     }
 
     @Test

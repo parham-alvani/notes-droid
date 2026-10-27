@@ -87,8 +87,9 @@ class VaultFilter(
          * 6: the Templates plugin's settings.
          * 7: the Beautitab plugin's settings, for the home page.
          * 8: Obsidian's app settings, for the files it is told to exclude.
+         * 9: AVIF pictures, which Obsidian shows and Android 12 decodes.
          */
-        const val VERSION = 8
+        const val VERSION = 9
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -151,7 +152,7 @@ class VaultFilter(
          * Formats the reader draws itself. Everything else it can offer is in
          * [ATTACHMENT_EXTENSIONS] and gets handed to another app instead.
          */
-        val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "svg", "webp")
+        val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "svg", "webp", "avif")
 
         /**
          * Files the vault holds that another app can open.

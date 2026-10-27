@@ -780,7 +780,13 @@ class BlockFlattener(
         /** `[c] ` at the very start: one character that is not a bracket or a space. */
         val CUSTOM_STATUS = Regex("""^\[([^\]\s])] """)
         val HTML_TAG = Regex("""<[^>]+>""")
-        val RENDERABLE_IMAGES = setOf("jpg", "jpeg", "png", "gif", "svg", "webp")
+
+        /**
+         * Embeds drawn as pictures, as Obsidian draws them. AVIF decodes from
+         * Android 12; an older phone draws nothing in its place, which is no
+         * worse than the card it would otherwise be for a file it cannot open.
+         */
+        val RENDERABLE_IMAGES = setOf("jpg", "jpeg", "png", "gif", "svg", "webp", "avif")
 
         /** Short and alphanumeric: `pdf`, `mp4`, `drawio`, `7z` -- not `2 notes`. */
         val FILE_EXTENSION = Regex("""[a-z0-9]{1,6}""")
