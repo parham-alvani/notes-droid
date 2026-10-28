@@ -1,0 +1,1 @@
+Find in note now scrolls to the word it found, not only to the top of its paragraph or list. In a long task list, only the hit the find bar is on is marked as the current one, and the arrows step through the items one by one.
