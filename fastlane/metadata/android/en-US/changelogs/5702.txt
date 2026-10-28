@@ -1,0 +1,1 @@
+A Persian quote on the home page now reads right to left in «», in the Persian font, and upright. The home picture can come from the vault: set it once in the Beautitab plugin, and every new install shows it.
