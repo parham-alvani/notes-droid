@@ -25,6 +25,7 @@ import me.parham1995.notes.markdown.MarkdownParser
 import me.parham1995.notes.markdown.ParsedNote
 import me.parham1995.notes.markdown.Slugs
 import me.parham1995.notes.markdown.TaskExtractor
+import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.obsidian.HiddenFiles
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -63,6 +64,12 @@ class VaultIndexer
          * listed for a moment first.
          */
         private val hidden: HiddenRules = HiddenRules.DEFAULT,
+        /**
+         * What each task status means in the vault -- the Tasks plugin's
+         * settings -- so a task's state and whether it is open are the
+         * vault's, `[r]` "In Review" under way as `[/]` is.
+         */
+        private val statusRules: TaskStatusRules = TaskStatusRules.DEFAULT,
     ) {
         data class Progress(
             val done: Int,
@@ -90,10 +97,11 @@ class VaultIndexer
             remove(vaultId, notes.allIds(vaultId).map { it.path }.filterNot { it in present })
 
             val rules = hidden.forVault(vaultId)
+            val statuses = statusRules.forVault(vaultId)
             var done = 0
             paths.chunked(BATCH).forEach { batch ->
                 val parsed = parseBatch(vaultId, batch)
-                writeBatch(vaultId, parsed, rules)
+                writeBatch(vaultId, parsed, rules, statuses)
                 done += batch.size
                 onProgress(Progress(done, paths.size))
             }
@@ -117,14 +125,31 @@ class VaultIndexer
             remove(vaultId, removed)
 
             val rules = hidden.forVault(vaultId)
+            val statuses = statusRules.forVault(vaultId)
             changed.chunked(BATCH).forEach { batch ->
-                writeBatch(vaultId, parseBatch(vaultId, batch), rules, ownWrite)
+                writeBatch(vaultId, parseBatch(vaultId, batch), rules, statuses, ownWrite)
             }
 
             // Cheaper than a full resolve and still correct: only links whose
             // target may have appeared or vanished need revisiting, and the
             // unresolved set is exactly those.
             resolveLinks(vaultId)
+        }
+
+        /**
+         * Brings every task of [vaultId] in line with what its status means
+         * now. The Tasks plugin's settings arrive with a sync like any file,
+         * and a status they redefine changes what every task written with it
+         * is, though not one note changed. One statement per status the vault
+         * uses, writing only the rows that read otherwise -- after a sync that
+         * did not touch the settings, none. Answers how many it changed.
+         */
+        suspend fun restate(vaultId: Long): Int {
+            val statuses = statusRules.forVault(vaultId)
+            return tasks.statusesIn(vaultId).sumOf { written ->
+                val status = statuses.of(written.singleOrNull() ?: ' ')
+                tasks.restate(vaultId, written, status.type.state.name, status.isOpen)
+            }
         }
 
         /** Drops notes with everything derived from them, search included. */
@@ -166,6 +191,7 @@ class VaultIndexer
             vaultId: Long,
             batch: List<Indexed>,
             rules: HiddenFiles,
+            statuses: TaskStatuses,
             ownWrite: Boolean = false,
         ) {
             if (batch.isEmpty()) return
@@ -228,15 +254,16 @@ class VaultIndexer
                                 },
                         tasks =
                             TaskExtractor.extract(indexed.note).map { task ->
+                                val status = statuses.of(task.status)
                                 TaskEntity(
                                     noteId = 0,
                                     text = task.text,
-                                    state = task.state.name,
+                                    state = status.type.state.name,
                                     section = task.section,
                                     blockIndex = task.blockIndex,
                                     line = task.line,
                                     ordinal = task.ordinal,
-                                    open = task.isOpen,
+                                    open = status.isOpen,
                                     actionableOn = task.actionableOn,
                                     scheduled = task.scheduled,
                                     due = task.due,
@@ -244,6 +271,8 @@ class VaultIndexer
                                     recurring = task.recurring,
                                     priority = task.priority,
                                     cancelled = task.cancelled,
+                                    status = task.status.toString(),
+                                    reason = task.reason,
                                 )
                             },
                         tags =
@@ -337,8 +366,11 @@ class VaultIndexer
              *    board; the rows already there have neither until reparsed.
              * 13: the guides are notes again, hidden from the lists rather
              *    than left out of the index, so a link to one opens it.
+             * 14: a task's status character and `[reason:: …]` are stored,
+             *    its text is without the reason, and its state follows the
+             *    vault's Tasks plugin settings.
              */
-            const val VERSION = 13
+            const val VERSION = 14
 
             /**
              * Large enough that commits are rare, small enough that a failure

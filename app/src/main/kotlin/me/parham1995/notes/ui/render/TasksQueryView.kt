@@ -38,8 +38,12 @@ import me.parham1995.notes.data.database.QueryTaskRow
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.QueryTask
 import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.markdown.isFinished
 import me.parham1995.notes.ui.LocalReading
+import me.parham1995.notes.ui.LocalTaskStatuses
+import me.parham1995.notes.ui.TaskReasonLine
+import me.parham1995.notes.ui.TaskStatusBadge
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 
@@ -51,8 +55,8 @@ data class TasksQueryResult(
     val groups: List<List<String>> = emptyList(),
 )
 
-/** How the index's stored state reads as a [QueryTask]. */
-fun QueryTaskRow.toQueryTask(): QueryTask =
+/** How the index's stored state reads as a [QueryTask], its status as [statuses] has it. */
+fun QueryTaskRow.toQueryTask(statuses: TaskStatuses = TaskStatuses.DEFAULT): QueryTask =
     QueryTask(
         text = text,
         state = state.toTaskState(),
@@ -62,6 +66,8 @@ fun QueryTaskRow.toQueryTask(): QueryTask =
         scheduled = scheduled,
         done = done,
         recurring = recurring,
+        status = statuses.of(symbol),
+        reason = reason,
     )
 
 private fun String.toTaskState(): TaskState = TaskState.entries.firstOrNull { it.name == this } ?: TaskState.UNCHECKED
@@ -205,6 +211,7 @@ private fun QueryTaskLine(
     actions: RenderActions,
 ) {
     val state = row.state.toTaskState()
+    val status = LocalTaskStatuses.current.of(row.symbol)
     val open = !state.isFinished
     val complete = actions.onCompleteQueryTask?.takeIf { open && row.line >= 0 }
     val haptics = LocalHapticFeedback.current
@@ -261,6 +268,8 @@ private fun QueryTaskLine(
                 color = if (open) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 textDecoration = if (state == TaskState.CHECKED) TextDecoration.LineThrough else null,
             )
+            if (!status.isDefault) TaskStatusBadge(status.name, Modifier.padding(vertical = 2.dp))
+            row.reason?.let { TaskReasonLine(it) }
             val date = row.due ?: row.scheduled
             Text(
                 text = listOfNotNull(row.noteTitle.ifBlank { row.notePath }, date).joinToString(" · "),

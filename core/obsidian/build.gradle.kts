@@ -4,6 +4,7 @@ plugins {
 }
 
 dependencies {
+    api(projects.core.markdown)
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)

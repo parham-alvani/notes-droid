@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.Rescheduling
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
@@ -22,6 +23,7 @@ import me.parham1995.notes.feature.tasks.describeMove
 import me.parham1995.notes.feature.tasks.taskSources
 import me.parham1995.notes.markdown.TaskBoard
 import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.ui.UiText
 import java.time.LocalDate
 import javax.inject.Inject
@@ -41,12 +43,19 @@ data class BoardUiState(
     val loading: Boolean = true,
     val message: UiText? = null,
     val undo: Rescheduling.Undo? = null,
+    /** The vault's task statuses, from its Tasks plugin settings. */
+    val statuses: TaskStatuses = TaskStatuses.DEFAULT,
 )
 
-/** What the board needs to know about a row, read off the index's columns. */
-internal fun QueryTaskRow.facts(): TaskBoard.Facts =
+/**
+ * What the board needs to know about a row, read off the index's columns; its
+ * status is what [statuses] says the character means.
+ */
+internal fun QueryTaskRow.facts(statuses: TaskStatuses = TaskStatuses.DEFAULT): TaskBoard.Facts =
     TaskBoard.Facts(
         state = TaskState.entries.firstOrNull { it.name == state } ?: TaskState.UNCHECKED,
+        status = statuses.of(symbol),
+        reason = reason,
         path = notePath,
         title = noteTitle,
         line = line,
@@ -69,7 +78,13 @@ class BoardViewModel
         private val repository: VaultRepository,
         private val writes: VaultWriteRepository,
         private val savedState: SavedStateHandle,
+        config: ObsidianConfigStore,
     ) : ViewModel() {
+        private val statuses: StateFlow<TaskStatuses> =
+            config
+                .taskStatuses(repository.activeVaultId)
+                .stateIn(viewModelScope, SharingStarted.Eagerly, TaskStatuses.DEFAULT)
+
         private data class Notice(
             val text: UiText,
             val undo: Rescheduling.Undo? = null,
@@ -101,11 +116,18 @@ class BoardViewModel
         fun move(
             row: QueryTaskRow,
             drop: TaskBoard.Drop,
+            reason: String? = null,
         ) = viewModelScope.launch {
             val task = row.toTaskRow()
             message.value =
                 when (drop) {
-                    is TaskBoard.Drop.Status -> Notice(writes.setTaskStatus(task, drop.status).describe())
+                    // A card already of the column's type keeps its own
+                    // status: `[r]` on In Progress stays "In Review".
+                    is TaskBoard.Drop.Status -> {
+                        val status =
+                            TaskBoard.statusFor(row.facts(statuses.value), drop, statuses.value) ?: return@launch
+                        Notice(writes.setTaskStatus(task, status, reason).describe())
+                    }
                     is TaskBoard.Drop.Day -> {
                         val date = drop.date
                         if (date == null) {
@@ -122,9 +144,27 @@ class BoardViewModel
         fun toggle(row: QueryTaskRow) =
             viewModelScope.launch {
                 val task = row.toTaskRow()
-                val result = if (row.facts().isOpen) writes.completeTask(task) else writes.setTaskStatus(task, ' ')
+                val result =
+                    if (row.facts(statuses.value).isOpen) writes.completeTask(task) else writes.setTaskStatus(task, ' ')
                 message.value = Notice(result.describe())
             }
+
+        /** [row] set to [status] from the card's menu, with the reason a cancel asked for. */
+        fun setStatus(
+            row: QueryTaskRow,
+            status: Char,
+            reason: String?,
+        ) = viewModelScope.launch {
+            message.value = Notice(writes.setTaskStatus(row.toTaskRow(), status, reason).describe())
+        }
+
+        /** [row]'s reason written, changed, or cleared when blank. */
+        fun setReason(
+            row: QueryTaskRow,
+            reason: String,
+        ) = viewModelScope.launch {
+            message.value = Notice(writes.setTaskReason(row.toTaskRow(), reason).describe())
+        }
 
         fun undo(undo: Rescheduling.Undo) =
             viewModelScope.launch {
@@ -137,13 +177,14 @@ class BoardViewModel
                 grouping,
                 allClosed,
                 selected,
-            ) { rows, by, all, chosen ->
+                statuses,
+            ) { rows, by, all, chosen, known ->
                 // Read here, not held: a board left open overnight moves on.
                 val today = LocalDate.now()
                 val grouped = TaskBoard.Grouping.entries.firstOrNull { it.name == by } ?: TaskBoard.Grouping.STATUS
                 val openByPath =
                     rows.groupBy { it.notePath }.mapValues { (_, theirs) ->
-                        theirs.count { it.facts().isOpen }
+                        theirs.count { it.facts(known).isOpen }
                     }
                 val sources = taskSources(openByPath)
                 val chosenPath = chosen?.takeIf { path -> sources.any { it.path == path } }
@@ -154,15 +195,16 @@ class BoardViewModel
                         grouped,
                         today,
                         closedWithin = if (all) null else TaskBoard.CLOSED_WITHIN,
-                    ) { it.facts() }
+                    ) { it.facts(known) }
                 BoardUiState(
                     columns = columns,
                     grouping = grouped,
                     allClosed = all,
                     sources = sources,
                     selectedPath = chosenPath,
-                    open = visible.count { it.facts().isOpen },
+                    open = visible.count { it.facts(known).isOpen },
                     loading = false,
+                    statuses = known,
                 )
             }.let { base ->
                 combine(base, writes.writable, repository.activeVaultId, message) { ui, writable, activeId, said ->

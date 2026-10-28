@@ -253,4 +253,61 @@ class TasksQueryTest {
             assertThat(query.notUnderstood).containsExactly(it)
         }
     }
+
+    private val review = TaskStatus('r', "In Review", 'x', StatusType.IN_PROGRESS)
+
+    private val withReasons =
+        listOf(
+            QueryTask(
+                "Deploy",
+                TaskState.CANCELLED,
+                "Ops.md",
+                "",
+                reason = "no budget left",
+                status = TaskStatuses.DEFAULT.of('-'),
+            ),
+            QueryTask("Ship", TaskState.IN_PROGRESS, "Ops.md", "", reason = "waiting on [[Amir]]", status = review),
+            QueryTask("Write", TaskState.UNCHECKED, "Ops.md", ""),
+            QueryTask("Start", TaskState.IN_PROGRESS, "Ops.md", ""),
+        )
+
+    private fun reasons(source: String): List<String> =
+        TasksQuery.parse(source).run(withReasons, today) { it }.map { it.text }
+
+    @Test
+    fun `has reason, no reason, and what it says`() {
+        assertThat(reasons("has reason")).containsExactly("Deploy", "Ship")
+        assertThat(reasons("no reason")).containsExactly("Write", "Start")
+        assertThat(reasons("reason includes budget")).containsExactly("Deploy")
+        assertThat(reasons("reason does not include budget")).containsExactly("Ship", "Write", "Start")
+        // The text is without the field, so the description does not see it.
+        assertThat(reasons("description includes budget")).isEmpty()
+    }
+
+    @Test
+    fun `a status by its name and by the type the settings give it`() {
+        assertThat(reasons("status.name is In Review")).containsExactly("Ship")
+        assertThat(reasons("status.name is not in review")).containsExactly("Deploy", "Write", "Start")
+        assertThat(reasons("status.name includes review")).containsExactly("Ship")
+        assertThat(reasons("status.type is in_progress")).containsExactly("Ship", "Start")
+        assertThat(reasons("status.type is non_task")).isEmpty()
+        assertThat(TasksQuery.parse("status.type is non_task").notUnderstood).isEmpty()
+    }
+
+    @Test
+    fun `an expression reads the reason and the status`() {
+        assertThat(reasons("filter by function task.reason && task.reason.includes('Amir')")).containsExactly("Ship")
+        assertThat(reasons("filter by function task.reason === null")).containsExactly("Write", "Start")
+        assertThat(reasons("filter by function task.status.symbol === 'r'")).containsExactly("Ship")
+        val query = TasksQuery.parse("group by function task.status.name")
+        assertThat(query.groupsOf(withReasons[1])).containsExactly("In Review")
+    }
+
+    @Test
+    fun `done follows the settings' closed rule`() {
+        val note = TaskStatus('n', "Note", ' ', StatusType.NON_TASK)
+        val tasks = listOf(QueryTask("Aside", TaskState.UNCHECKED, "a.md", "", status = note))
+        assertThat(TasksQuery.parse("done").run(tasks, today) { it }).hasSize(1)
+        assertThat(TasksQuery.parse("not done").run(tasks, today) { it }).isEmpty()
+    }
 }

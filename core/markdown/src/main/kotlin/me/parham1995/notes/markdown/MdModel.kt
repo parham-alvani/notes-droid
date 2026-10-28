@@ -191,6 +191,11 @@ data class MdListItem(
      * a forwarded task and a question are both open and look nothing alike.
      */
     val status: Char = ' ',
+    /**
+     * A task's `[reason:: …]` ([TaskReason]), taken out of its text and drawn
+     * after it; null when it gives none.
+     */
+    val reason: String? = null,
 )
 
 /** Text direction, detected per block from its first strong character. */

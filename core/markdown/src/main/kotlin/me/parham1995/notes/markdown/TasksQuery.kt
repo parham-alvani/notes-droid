@@ -22,6 +22,10 @@ data class QueryTask(
     val scheduled: String? = null,
     val done: String? = null,
     val recurring: String? = null,
+    /** What the status means in this vault's settings; the default rule for [state] when not given. */
+    val status: TaskStatus = TaskStatuses.DEFAULT.of(state.symbol),
+    /** Its `[reason:: …]`, which [text] is without. */
+    val reason: String? = null,
 )
 
 /**
@@ -209,12 +213,16 @@ class TasksQuery private constructor(
             return when (text.lowercase(Locale.ROOT)) {
                 // The plugin's "done" is anything no longer to be done:
                 // ticked or cancelled. "not done" is the rest.
-                "done" -> Filter { t, _ -> t.state.isFinished }
-                "not done" -> Filter { t, _ -> !t.state.isFinished }
+                "done" -> Filter { t, _ -> t.status.type.isClosed }
+                "not done" -> Filter { t, _ -> !t.status.type.isClosed }
+                "has reason" -> Filter { t, _ -> t.reason != null }
+                "no reason" -> Filter { t, _ -> t.reason == null }
                 "is recurring" -> Filter { t, _ -> t.recurring != null }
                 "is not recurring" -> Filter { t, _ -> t.recurring == null }
                 else ->
                     STATUS_TYPE.groups()?.let(::statusType)
+                        ?: STATUS_NAME.groups()?.let(::statusName)
+                        ?: REASON.groups()?.let(::reason)
                         ?: HAS_DATE.groups()?.let(::hasDate)
                         ?: DATE.groups()?.let(::date)
                         ?: TEXT.groups()?.let(::textFilter)
@@ -223,16 +231,32 @@ class TasksQuery private constructor(
         }
 
         private fun statusType(groups: List<String>): Filter? {
-            val wanted =
-                when (groups[2].lowercase(Locale.ROOT).replace(' ', '_')) {
-                    "todo" -> setOf(TaskState.UNCHECKED)
-                    "in_progress" -> setOf(TaskState.IN_PROGRESS)
-                    "done" -> setOf(TaskState.CHECKED)
-                    "cancelled" -> setOf(TaskState.CANCELLED)
-                    else -> return null
-                }
+            // By the type the vault's settings give, so `[r]` "In Review" is
+            // in progress as `[/]` is.
+            val wanted = StatusType.parse(groups[2]) ?: return null
             val negate = groups[1].isNotBlank()
-            return Filter { t, _ -> (t.state in wanted) != negate }
+            return Filter { t, _ -> (t.status.type == wanted) != negate }
+        }
+
+        /** `status.name is In Review`, `status.name includes review`, and their negations. */
+        private fun statusName(groups: List<String>): Filter {
+            val relation = groups[1].lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+            val value = groups[2]
+            return Filter { t, _ ->
+                when (relation) {
+                    "is" -> t.status.name.equals(value, ignoreCase = true)
+                    "is not" -> !t.status.name.equals(value, ignoreCase = true)
+                    "includes" -> t.status.name.contains(value, ignoreCase = true)
+                    else -> !t.status.name.contains(value, ignoreCase = true)
+                }
+            }
+        }
+
+        /** `reason includes …`; a task with no reason includes nothing. */
+        private fun reason(groups: List<String>): Filter {
+            val negate = groups[1].lowercase(Locale.ROOT).startsWith("does not")
+            val value = groups[2]
+            return Filter { t, _ -> t.reason.orEmpty().contains(value, ignoreCase = true) != negate }
         }
 
         private fun hasDate(groups: List<String>): Filter? {
@@ -300,7 +324,7 @@ class TasksQuery private constructor(
                     "scheduled" -> dates { it.scheduled }
                     "done" -> dates { it.done }
                     "happens" -> dates { listOfNotNull(it.scheduled, it.due).minOrNull() }
-                    "status" -> compareBy { it.state.isFinished }
+                    "status" -> compareBy { it.status.type.isClosed }
                     "path" -> compareBy { it.path.lowercase(Locale.ROOT) }
                     "filename" -> compareBy { it.path.substringAfterLast('/').lowercase(Locale.ROOT) }
                     "heading" -> compareBy { it.section.lowercase(Locale.ROOT) }
@@ -315,7 +339,7 @@ class TasksQuery private constructor(
             compareBy<QueryTask> { of(it) == null }.thenBy { of(it) }
 
         private val DEFAULT_ORDER: Comparator<QueryTask> =
-            compareBy<QueryTask> { it.state.isFinished }
+            compareBy<QueryTask> { it.status.type.isClosed }
                 .thenComparing(dates { it.due ?: it.scheduled })
 
         private val TAG_IN_TEXT = Regex("""(?<![\p{L}\p{N}_])#([\p{L}\p{N}_/-]*[\p{L}_/-][\p{L}\p{N}_/-]*)""")
@@ -331,7 +355,11 @@ class TasksQuery private constructor(
         private val PLACEHOLDER = Regex("""\{\{([^\}]*)\}\}""")
         private val LIMIT = Regex("""^limit (?:to )?(\d+)(?: tasks?)?$""")
         private val IGNORE_CASE = setOf(RegexOption.IGNORE_CASE)
-        private val STATUS_TYPE = Regex("""status\.type is( not)? (todo|in[_ ]progress|done|cancelled)""", IGNORE_CASE)
+        private val STATUS_TYPE =
+            Regex("""status\.type is( not)? (todo|in[_ ]progress|done|cancelled|non[_ ]task)""", IGNORE_CASE)
+        private val STATUS_NAME =
+            Regex("""status\.name (is not|is|includes|does not include)\s+(.+)""", IGNORE_CASE)
+        private val REASON = Regex("""reason (includes|does not include)\s+(.+)""", IGNORE_CASE)
         private val HAS_DATE = Regex("""(has|no) (due|scheduled|done|happens) date""", IGNORE_CASE)
         private val DATE =
             Regex(

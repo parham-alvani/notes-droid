@@ -192,7 +192,7 @@ interface TaskDao {
         """
         SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
                t.actionableOn, t.recurring, n.path AS notePath, n.title AS noteTitle,
-               n.vaultId AS vaultId
+               n.vaultId AS vaultId, t.status, t.reason
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
         WHERE t.open = 1 AND n.vaultId = :vaultId AND n.hidden = 0
@@ -211,7 +211,7 @@ interface TaskDao {
         SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
                t.actionableOn, t.recurring, t.scheduled, t.due, t.done,
                n.path AS notePath, n.title AS noteTitle, n.vaultId AS vaultId,
-               t.priority, t.cancelled
+               t.priority, t.cancelled, t.status, t.reason
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
         WHERE n.vaultId = :vaultId AND n.hidden = 0
@@ -228,7 +228,7 @@ interface TaskDao {
         """
         SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
                t.actionableOn, t.recurring, n.path AS notePath, n.title AS noteTitle,
-               n.vaultId AS vaultId
+               n.vaultId AS vaultId, t.status, t.reason
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
         WHERE t.noteId = :noteId
@@ -276,7 +276,7 @@ interface TaskDao {
         """
         SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
                t.actionableOn, t.recurring, n.path AS notePath, n.title AS noteTitle,
-               n.vaultId AS vaultId
+               n.vaultId AS vaultId, t.status, t.reason
         FROM tasks t
         JOIN notes n ON n.id = t.noteId
         WHERE t.open = 1 AND n.hidden = 0 AND t.actionableOn = :today
@@ -298,6 +298,28 @@ interface TaskDao {
         """,
     )
     fun openCountsByVault(): Flow<List<VaultTaskCount>>
+
+    /** The status characters one vault's tasks are written with. */
+    @Query("SELECT DISTINCT t.status FROM tasks t JOIN notes n ON n.id = t.noteId WHERE n.vaultId = :vaultId")
+    suspend fun statusesIn(vaultId: Long): List<String>
+
+    /**
+     * Makes every task of [vaultId] written with [status] read as [state],
+     * and open or not, touching only the rows that say otherwise.
+     */
+    @Query(
+        """
+        UPDATE tasks SET state = :state, open = :open
+        WHERE status = :status AND (state != :state OR open != :open)
+          AND noteId IN (SELECT id FROM notes WHERE vaultId = :vaultId)
+        """,
+    )
+    suspend fun restate(
+        vaultId: Long,
+        status: String,
+        state: String,
+        open: Boolean,
+    ): Int
 }
 
 @Dao

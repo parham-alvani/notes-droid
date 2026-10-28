@@ -23,15 +23,29 @@ object TaskLine {
 
     fun isTask(raw: String): Boolean = LINE.matches(raw)
 
-    fun isOpen(raw: String): Boolean =
+    fun isOpen(
+        raw: String,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
+    ): Boolean =
         LINE
             .find(raw)
             ?.groupValues
             ?.get(2)
-            ?.let { isOpenStatus(it) } ?: false
+            ?.let { statuses.isOpen(it.single()) } ?: false
 
-    /** Done is `x`, cancelled is `-`; everything else is still to do. */
-    private fun isOpenStatus(status: String): Boolean = status !in CLOSED
+    /** The character between the brackets, or null when [raw] is not a task. */
+    fun statusOf(raw: String): Char? =
+        LINE
+            .find(raw)
+            ?.groupValues
+            ?.get(2)
+            ?.single()
+
+    /** The task's reason ([TaskReason]), or null when it gives none. */
+    fun reasonOf(raw: String): String? {
+        val parts = parts(raw) ?: return null
+        return TaskReason.split(TaskMetadata.split(parts.rest).text).reason
+    }
 
     /** Whether completing it would drop a repeat rule the app cannot re-create. */
     fun isRecurring(raw: String): Boolean =
@@ -47,19 +61,20 @@ object TaskLine {
      *
      * The date goes on the end because that is where the Tasks plugin's
      * metadata lives and where every other completed line in this vault carries
-     * it.
+     * it. A reason goes: it belonged to the status the task had.
      */
     fun complete(
         raw: String,
         today: String,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
     ): String? {
         val match = LINE.find(raw) ?: return null
         val (prefix, state, whole) = match.destructured
-        if (!isOpenStatus(state)) return null
+        if (!statuses.isOpen(state.single())) return null
         if (whole.contains(DONE)) return null
         // A block id stays the line's last word: that is what makes it one.
         val (body, id) = splitBlockId(whole)
-        return "$prefix[x] ${body.trimEnd()} $DONE $today$id"
+        return "$prefix[x] ${reasonSetIn(body, null).trimEnd()} $DONE $today$id"
     }
 
     /**
@@ -82,14 +97,17 @@ object TaskLine {
     fun completeRecurring(
         raw: String,
         today: String,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
     ): List<String>? {
         val match = LINE.find(raw) ?: return null
         val (prefix, state, whole) = match.destructured
-        if (!isOpenStatus(state)) return null
+        if (!statuses.isOpen(state.single())) return null
         // The block id names the line that was there, which is the one being
         // finished; the next occurrence is a new line and gets none, since
-        // two lines cannot answer to one id.
-        val (body, id) = splitBlockId(whole)
+        // two lines cannot answer to one id. Neither keeps a reason: the next
+        // one has not been given any, and the finished one changed status.
+        val (written, id) = splitBlockId(whole)
+        val body = reasonSetIn(written, null)
 
         val split = TaskMetadata.split(body)
         val rule = split.meta.firstOrNull { it.emoji == RECUR }?.value ?: return null
@@ -114,40 +132,106 @@ object TaskLine {
 
     /**
      * The line with its status set to [status], as the board writes a task
-     * dropped on another column; null when it already has that status or is
-     * not a task.
+     * dropped on another column or a picker sets it; null when nothing would
+     * change or it is not a task.
      *
-     * To done from open is the tick, exactly as a tap makes it -- [complete],
-     * or [completeRecurring] for a repeat, which is null here when the rule is
-     * not one the app works out (the caller says so rather than dropping the
-     * repeat). Otherwise the status changes and the closing dates follow it:
-     * `✅` and `❌` come off, and a task done or cancelled from another closed
-     * state, or cancelled at all, is dated [today]. A block id stays last.
+     * The closing dates follow the type of the status, not its character, so
+     * `[r]` in a vault that calls it "In Review" is under way like `[/]`. To
+     * a done-typed status from an open one is the tick, exactly as a tap
+     * makes it -- [complete], or [completeRecurring] for a repeat, which is
+     * null here when the rule is not one the app works out (the caller says
+     * so rather than dropping the repeat) -- with [status] put in for `x`
+     * afterwards. Otherwise the status changes, and `✅` is kept when the task
+     * was already done-typed, dated [today] when it becomes so, and taken off
+     * when it does not stay so; `❌` likewise for cancelled. A block id stays
+     * last.
+     *
+     * A reason belongs to the status it was given with, so any change of
+     * status takes the old one off, and puts [reason] on when one is given.
+     * Asked for the status the task already has, only a given [reason]
+     * changes anything.
      */
     fun withStatus(
         raw: String,
         status: Char,
         today: String,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
+        reason: String? = null,
     ): List<String>? {
         val match = LINE.find(raw) ?: return null
         val current = match.groupValues[2].single()
-        if (current == status || (status == 'x' && current == 'X')) return null
-        if (status == 'x' && isOpenStatus(current.toString())) {
-            return if (isRecurring(raw)) completeRecurring(raw, today) else complete(raw, today)?.let(::listOf)
+        // `[X]` is done as `[x]` is; written by hand, it is not rewritten.
+        if (current == status ||
+            (status == 'x' && current == 'X')
+        ) {
+            return reason?.let { withReason(raw, it) }?.let(::listOf)
+        }
+        val was = statuses.of(current).type
+        val becomes = statuses.of(status).type
+        val at = match.groups[2]!!.range.first
+        if (becomes == StatusType.DONE && !was.isClosed) {
+            val ticked =
+                (
+                    if (isRecurring(
+                            raw,
+                        )
+                    ) {
+                        completeRecurring(raw, today, statuses)
+                    } else {
+                        complete(raw, today, statuses)?.let(::listOf)
+                    }
+                )
+                    ?: return null
+            // The finished line is the last; the tick wrote `[x]` where the
+            // status was, so the same place takes [status].
+            val done = ticked.last().replaceRange(at, at + 1, status.toString())
+            return ticked.dropLast(1) + (reason?.let { withReason(done, it) } ?: done)
         }
         val parts = parts(raw) ?: return null
-        val at = match.groups[2]!!.range.first
         val head = parts.head.replaceRange(at, at + 1, status.toString())
-        var rest = parts.rest
-        for (emoji in listOf(DONE, CANCELLED)) rest = withoutField(rest, emoji) ?: rest
-        val closing =
-            when (status) {
-                'x', 'X' -> DONE
-                '-' -> CANCELLED
-                else -> null
-            }
-        if (closing != null) rest = rest.trimEnd() + " " + closing + " " + today
+        var rest = reasonSetIn(parts.rest, reason)
+        for ((emoji, type) in listOf(DONE to StatusType.DONE, CANCELLED to StatusType.CANCELLED)) {
+            if (was == type && becomes == type) continue
+            rest = withoutField(rest, emoji) ?: rest
+            if (becomes == type) rest = rest.trimEnd() + " " + emoji + " " + today
+        }
         return listOf(head + rest + parts.tail)
+    }
+
+    /**
+     * The line with its reason set to [reason] -- written as
+     * [TaskReason.field] says, one space after the text and before the
+     * emoji -- or taken off when [reason] is blank; null when that is what it
+     * already says, or it is not a task. The status and every date stay.
+     */
+    fun withReason(
+        raw: String,
+        reason: String?,
+    ): String? {
+        val parts = parts(raw) ?: return null
+        val line = parts.head + reasonSetIn(parts.rest, reason) + parts.tail
+        return line.takeIf { it != raw }
+    }
+
+    /**
+     * [rest] -- a task's text and metadata, no block id -- with its reason
+     * replaced by [reason], or taken off when that is null or blank.
+     */
+    private fun reasonSetIn(
+        rest: String,
+        reason: String?,
+    ): String {
+        val text = TaskMetadata.split(rest).text
+        val signifiers = rest.substring(text.length)
+        val split = TaskReason.split(text)
+        val field = TaskReason.field(reason)
+        // A line with no field and none to add is left exactly as written.
+        if (split.range == null && field == null) return rest
+        val without =
+            split.range?.let { TaskReason.fold(text.substring(0, it.first), text.substring(it.last + 1)) }
+                ?: text.trimEnd()
+        val body = if (field == null) without else listOf(without, field).filter { it.isNotEmpty() }.joinToString(" ")
+        return body + signifiers
     }
 
     /** The task's text and metadata, and its trailing ` ^block-id` or nothing. */
@@ -169,10 +253,11 @@ object TaskLine {
         lines: List<String>,
         line: Int,
         text: String,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
     ): Int? {
         val at = lines.getOrNull(line)
         if (at != null && indexedText(at) == text) return line
-        return lines.indexOfFirst { isOpen(it) && indexedText(it) == text }.takeIf { it >= 0 }
+        return lines.indexOfFirst { isOpen(it, statuses) && indexedText(it) == text }.takeIf { it >= 0 }
     }
 
     /** A task moved to another day, and what it said before. */
@@ -357,8 +442,6 @@ object TaskLine {
         val note = MarkdownParser.parseNote(raw.trimStart())
         return TaskExtractor.extract(note).firstOrNull()?.text
     }
-
-    private val CLOSED = setOf("x", "X", "-")
 
     private const val DONE = "✅"
     private const val CANCELLED = "❌"

@@ -13,8 +13,11 @@ import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.NoteExists
 import me.parham1995.notes.markdown.RepeatNotWorkedOut
+import me.parham1995.notes.markdown.StatusType
 import me.parham1995.notes.markdown.TaskLine
 import me.parham1995.notes.markdown.TaskNotFound
+import me.parham1995.notes.markdown.TaskReason
+import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.markdown.VaultEdits
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
@@ -50,9 +53,18 @@ enum class EditKind {
      * Set a task's status, as the board moves it between columns. The anchor
      * is the task as the index read it, and the text is its recorded line,
      * the day it was asked on, and the status character last -- which can be
-     * a space, so it is the one field not split on.
+     * a space, so it is the one field not split on. A reason given with the
+     * status follows the character after a `:`; with none, the old one comes
+     * off all the same.
      */
     SET_STATUS,
+
+    /**
+     * Set a task's `[reason:: …]` alone. The anchor is the task as the index
+     * read it, and the text is its recorded line and the reason, empty to
+     * take it off.
+     */
+    SET_REASON,
 
     /** Write a generated note whole. The text is the note; there is no anchor. */
     REPLACE_FILE,
@@ -146,6 +158,8 @@ class VaultWriteRepository
         private val transports: VaultTransports,
         private val log: SyncLog,
         private val gate: VaultGate,
+        /** What each status means in a vault, so a status set is the vault's own. */
+        private val statusRules: TaskStatusRules = TaskStatusRules.DEFAULT,
     ) {
         /** How many edits have not reached the repository yet. */
         val queued: Flow<Int> = pending.count()
@@ -192,9 +206,10 @@ class VaultWriteRepository
             // finished. Where the rule is not one the app will act on it says
             // so rather than dropping the repeat, which would quietly turn a
             // standing job into a one-off.
+            val statuses = statusRules.forVault(vault.id)
             if (TaskLine.isRecurring(raw)) {
                 val both =
-                    TaskLine.completeRecurring(raw, today())
+                    TaskLine.completeRecurring(raw, today(), statuses)
                         ?: return WriteResult.Refused(
                             "this task repeats on a rule the app will not work out for itself - " +
                                 "ticking it here could drop the repeat. Obsidian does that part",
@@ -208,7 +223,7 @@ class VaultWriteRepository
                     summary = "docs(tasks): complete \"${task.text.take(SUBJECT)}\" and schedule the next",
                 )
             }
-            val completed = TaskLine.complete(raw, today()) ?: return WriteResult.Unchanged
+            val completed = TaskLine.complete(raw, today(), statuses) ?: return WriteResult.Unchanged
 
             return apply(
                 vault = vault,
@@ -273,10 +288,12 @@ class VaultWriteRepository
         }
 
         /**
-         * Sets [task]'s status to [status] -- ` `, `/`, `x` or `-` -- as the
-         * board does to a card moved to another column. To done from open is
-         * the tick [completeTask] makes, a repeat's next occurrence and all;
-         * the rule is [VaultEdits.setStatus].
+         * Sets [task]'s status to [status] -- any the vault's Tasks plugin
+         * knows, or ` `, `/`, `x`, `-` -- as the board does to a card moved to
+         * another column and the status menu does. To done from open is the
+         * tick [completeTask] makes, a repeat's next occurrence and all; the
+         * rule is [VaultEdits.setStatus]. The old reason comes off, and
+         * [reason] goes on when it is given -- what a cancel asks for.
          *
          * Found the way a tick finds it and queued the same way, as the task
          * and the status rather than the line to write, so a move made
@@ -285,6 +302,7 @@ class VaultWriteRepository
         suspend fun setTaskStatus(
             task: TaskRow,
             status: Char,
+            reason: String? = null,
         ): WriteResult {
             val vault = writableVault(task.vaultId) ?: return refusal(task.vaultId)
             val text =
@@ -294,19 +312,52 @@ class VaultWriteRepository
                 TaskLine.locate(text.lines(), task.line, task.text)
                     ?: return WriteResult.Refused(TaskNotFound(task.text).message.orEmpty())
             val verb =
-                when (status) {
-                    'x' -> "complete"
-                    '-' -> "cancel"
-                    '/' -> "start"
-                    else -> "reopen"
+                when (statusRules.forVault(vault.id).of(status).type) {
+                    StatusType.DONE -> "complete"
+                    StatusType.CANCELLED -> "cancel"
+                    StatusType.IN_PROGRESS -> "start"
+                    StatusType.NON_TASK -> "set aside"
+                    StatusType.TODO -> "reopen"
                 }
             return apply(
                 vault = vault,
                 path = task.notePath,
                 kind = EditKind.SET_STATUS,
                 anchor = task.text,
-                replacement = "$at ${today()} $status",
+                replacement =
+                    "$at ${today()} $status" + (reason?.let { ":" + TaskReason.clean(it).orEmpty() }.orEmpty()),
                 summary = "docs(tasks): $verb \"${task.text.take(SUBJECT)}\"",
+            )
+        }
+
+        /**
+         * Sets [task]'s `[reason:: …]` to [reason], or takes it off when that
+         * is blank; its status and dates stay ([VaultEdits.setReason]).
+         */
+        suspend fun setTaskReason(
+            task: TaskRow,
+            reason: String,
+        ): WriteResult {
+            val vault = writableVault(task.vaultId) ?: return refusal(task.vaultId)
+            val text =
+                files.readText(vault.id, task.notePath)
+                    ?: return WriteResult.Refused("${task.notePath} is not on the device")
+            val at =
+                TaskLine.locate(text.lines(), task.line, task.text)
+                    ?: return WriteResult.Refused(TaskNotFound(task.text).message.orEmpty())
+            val clean = TaskReason.clean(reason).orEmpty()
+            return apply(
+                vault = vault,
+                path = task.notePath,
+                kind = EditKind.SET_REASON,
+                anchor = task.text,
+                replacement = "$at $clean",
+                summary =
+                    if (clean.isEmpty()) {
+                        "docs(tasks): drop the reason of \"${task.text.take(SUBJECT)}\""
+                    } else {
+                        "docs(tasks): give a reason for \"${task.text.take(SUBJECT)}\""
+                    },
             )
         }
 
@@ -517,8 +568,9 @@ class VaultWriteRepository
             // has to wait for a refresh to finish with the files -- except it
             // does not wait. A sync of this vault is minutes; the edit goes in
             // the queue rather than freezing whoever typed it.
+            val statuses = statusRules.forVault(vault.id)
             return gate.tryWithVault {
-                val transform = transformFor(edit)
+                val transform = transformFor(edit, statuses)
                 val before = files.readText(vault.id, path)
                 val after =
                     try {
@@ -573,7 +625,7 @@ class VaultWriteRepository
                 note(edit, "waiting: ${vault.label} is read-only or no author is set")
                 return false
             }
-            val transform = transformFor(edit)
+            val transform = transformFor(edit, statusRules.forVault(vault.id))
             return try {
                 val outcome =
                     transports.writer(vault).write(
@@ -614,7 +666,10 @@ class VaultWriteRepository
         private fun PendingEditEntity.lastErrorOr(fallback: String) = lastError ?: fallback
 
         /** The pure transform this edit stands for. */
-        private fun transformFor(edit: PendingEditEntity): (String?) -> String? =
+        private fun transformFor(
+            edit: PendingEditEntity,
+            statuses: TaskStatuses,
+        ): (String?) -> String? =
             when (EditKind.parse(edit.kind)) {
                 // Split back out, because a repeat's replacement is two lines
                 // and the queue stores an edit as one string.
@@ -631,8 +686,15 @@ class VaultWriteRepository
                     )
                 }
                 EditKind.SET_STATUS -> {
-                    val (line, day, status) = edit.text.split(' ', limit = 3)
-                    VaultEdits.setStatus(line.toInt(), edit.anchor, status.single(), day)
+                    // The status is one character, so whatever follows it is
+                    // the reason given with it: `:` and the reason, or nothing.
+                    val (line, day, rest) = edit.text.split(' ', limit = 3)
+                    val reason = rest.drop(1).takeIf { it.startsWith(":") }?.drop(1)
+                    VaultEdits.setStatus(line.toInt(), edit.anchor, rest.first(), day, statuses, reason)
+                }
+                EditKind.SET_REASON -> {
+                    val (line, reason) = edit.text.split(' ', limit = 2).let { it[0] to it.getOrNull(1) }
+                    VaultEdits.setReason(line.toInt(), edit.anchor, reason, statuses)
                 }
                 EditKind.REPLACE_FILE -> VaultEdits.replaceFile(edit.text)
                 EditKind.CREATE_FILE -> VaultEdits.createFile(edit.text)

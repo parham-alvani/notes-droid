@@ -66,7 +66,10 @@ import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
 import me.parham1995.notes.ui.AutoDirection
+import me.parham1995.notes.ui.LocalTaskStatuses
 import me.parham1995.notes.ui.RescheduleSheet
+import me.parham1995.notes.ui.TaskReasonLine
+import me.parham1995.notes.ui.TaskStatusBadge
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.text
@@ -425,6 +428,9 @@ private fun TaskRowView(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            val status = LocalTaskStatuses.current.of(row.symbol)
+            if (!status.isDefault) TaskStatusBadge(status.name)
+            row.reason?.let { TaskReasonLine(it) }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Where it came from, because the same task text turns up under
                 // several projects and the file is what disambiguates it.

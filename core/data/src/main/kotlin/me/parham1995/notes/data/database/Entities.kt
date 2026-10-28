@@ -4,6 +4,8 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
+import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.markdown.symbol
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 
@@ -347,6 +349,14 @@ data class TaskEntity(
     val priority: String? = null,
     /** The `❌` date, which is how long a cancelled task stays on the board. */
     val cancelled: String? = null,
+    /**
+     * The character between the brackets, as written. [state] and [open] are
+     * what it means in the vault's Tasks plugin settings, and are worked out
+     * again from this when the settings change.
+     */
+    val status: String = " ",
+    /** Its `[reason:: …]`, which [text] is without; null for none. */
+    val reason: String? = null,
 )
 
 /** A task with the note it lives in, which is what a list actually shows. */
@@ -363,7 +373,13 @@ data class TaskRow(
     val notePath: String,
     val noteTitle: String,
     val vaultId: Long,
-)
+    /** As the index stored it; empty in a row made without one. */
+    val status: String = "",
+    val reason: String? = null,
+) {
+    /** The status character, or the one its state stands for when the row has none. */
+    val symbol: Char get() = symbolOf(status, state)
+}
 
 /**
  * A task as a ` ```tasks ` query reads it: a [TaskRow] and the dates a query
@@ -387,7 +403,13 @@ data class QueryTaskRow(
     val vaultId: Long,
     val priority: String? = null,
     val cancelled: String? = null,
+    /** As the index stored it; empty in a row made without one. */
+    val status: String = "",
+    val reason: String? = null,
 ) {
+    /** The status character, or the one its state stands for when the row has none. */
+    val symbol: Char get() = symbolOf(status, state)
+
     /** The row the write path takes, to tick this task. */
     fun toTaskRow(): TaskRow =
         TaskRow(
@@ -403,6 +425,8 @@ data class QueryTaskRow(
             notePath = notePath,
             noteTitle = noteTitle,
             vaultId = vaultId,
+            status = status,
+            reason = reason,
         )
 }
 
@@ -452,3 +476,8 @@ data class PendingEditEntity(
     val attempts: Int = 0,
     val lastError: String? = null,
 )
+
+private fun symbolOf(
+    status: String,
+    state: String,
+): Char = status.singleOrNull() ?: (TaskState.entries.firstOrNull { it.name == state } ?: TaskState.UNCHECKED).symbol

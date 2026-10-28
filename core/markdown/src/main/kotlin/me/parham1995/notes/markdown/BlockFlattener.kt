@@ -474,13 +474,15 @@ class BlockFlattener(
                 }
 
                 val meta = extractTaskMeta(item)
+                val (blocks, reason) = withoutReason(blocksOf(item.children()), state)
                 val built =
                     MdListItem(
-                        blocks = blocksOf(item.children()),
+                        blocks = blocks,
                         task = state,
                         taskMeta = meta,
                         line = item.sourceSpans.firstOrNull()?.lineIndex ?: -1,
                         status = status,
+                        reason = reason,
                     )
                 // An item's id names the item, and embedding it draws that
                 // item alone, as a list of one.
@@ -492,6 +494,22 @@ class BlockFlattener(
                 built
             }
         return MdBlock.ListBlock(self, ordered, start, items)
+    }
+
+    /**
+     * A task's blocks with its reason taken out of the first paragraph, and
+     * the reason. Only a task's: a plain bullet with `[reason:: …]` in it is
+     * prose, and stays as written.
+     */
+    private fun withoutReason(
+        blocks: List<MdBlock>,
+        state: TaskState,
+    ): Pair<List<MdBlock>, String?> {
+        val first = blocks.firstOrNull() as? MdBlock.Paragraph
+        if (state == TaskState.NONE || first == null) return blocks to null
+        val (inlines, reason) = TaskReason.extract(first.inlines)
+        if (inlines == first.inlines) return blocks to null
+        return (listOf(first.copy(inlines = inlines)) + blocks.drop(1)) to reason
     }
 
     private fun findTaskMarker(item: ListItem): TaskListItemMarker? =

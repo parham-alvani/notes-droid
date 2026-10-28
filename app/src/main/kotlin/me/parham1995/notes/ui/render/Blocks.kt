@@ -69,11 +69,15 @@ import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.MdDirection
 import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.markdown.MdListItem
+import me.parham1995.notes.markdown.StatusType
 import me.parham1995.notes.markdown.TaskMeta
 import me.parham1995.notes.markdown.TaskState
 import me.parham1995.notes.markdown.UnsupportedKind
 import me.parham1995.notes.markdown.isFinishedAndEmpty
 import me.parham1995.notes.ui.LocalReading
+import me.parham1995.notes.ui.LocalTaskStatuses
+import me.parham1995.notes.ui.TaskReasonLine
+import me.parham1995.notes.ui.TaskStatusBadge
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.theme.AccentColors
@@ -586,6 +590,7 @@ private fun ListBlockView(
                         val indent = if (child is MdBlock.ListBlock) NESTED_LIST_INDENT else 0.dp
                         MdBlockView(child, actions, brokenLinks, Modifier.padding(start = indent))
                     }
+                    if (item.task != TaskState.NONE) TaskStatusLine(item)
                     if (item.taskMeta.isNotEmpty()) TaskChips(item)
                 }
             }
@@ -613,14 +618,22 @@ private fun ItemMarker(
     // with it -- a bullet the size of a full stop beside a line twice as tall
     // reads as a mistake.
     val scale = LocalReading.current.textScale
-    val custom = item.customStatus(Markup.ListMarker, Accents)
+    // What the vault's Tasks plugin settings make of the status: `[r]` "In
+    // Review" is under way and draws as `[/]` does, rather than as a status
+    // nobody has heard of. A theme's glyph is for the to-do kind only.
+    val type = LocalTaskStatuses.current.of(item.status).type
+    val custom = item.customStatus(Markup.ListMarker, Accents)?.takeIf { type == StatusType.TODO }
     val icon =
-        when (item.task) {
-            TaskState.UNCHECKED -> custom?.icon ?: "square"
-            TaskState.CHECKED -> "square-check-big"
-            TaskState.CANCELLED -> "square-x"
-            TaskState.IN_PROGRESS -> "square-dot"
-            TaskState.NONE -> null
+        when {
+            item.task == TaskState.NONE -> null
+            custom != null -> custom.icon
+            else ->
+                when (type) {
+                    StatusType.TODO -> "square"
+                    StatusType.DONE -> "square-check-big"
+                    StatusType.CANCELLED, StatusType.NON_TASK -> "square-x"
+                    StatusType.IN_PROGRESS -> "square-dot"
+                }
         }
     if (icon == null) {
         Text(
@@ -634,7 +647,7 @@ private fun ItemMarker(
     // Only an open task, only where the line is known, and only where the vault
     // can be written to. A box that ticks in some notes and not others is worse
     // than one that never does, so the three conditions are checked together.
-    val open = item.task == TaskState.UNCHECKED || item.task == TaskState.IN_PROGRESS
+    val open = !type.isClosed
     val complete = onComplete?.takeIf { open && item.line >= 0 }
     // Held on the box rather than on the line: the text is in a selection
     // container, where holding is how a word is selected.
@@ -658,9 +671,9 @@ private fun ItemMarker(
                 // offers, so the state is said by hand.
                 .semantics {
                     toggleableState =
-                        when (item.task) {
-                            TaskState.CHECKED -> ToggleableState.On
-                            TaskState.CANCELLED -> ToggleableState.Indeterminate
+                        when (type) {
+                            StatusType.DONE -> ToggleableState.On
+                            StatusType.CANCELLED, StatusType.NON_TASK -> ToggleableState.Indeterminate
                             else -> ToggleableState.Off
                         }
                 }.combinedClickable(
@@ -680,13 +693,28 @@ private fun ItemMarker(
         LucideGlyph(
             name = icon,
             size = MARKER_ICON * scale,
-            tint = custom?.tint ?: item.markerColor(),
+            tint = custom?.tint ?: markerColor(type),
             contentDescription =
-                custom?.description ?: item.task.name
+                custom?.description ?: type.state.name
                     .lowercase()
                     .replace('_', ' '),
         )
     }
+}
+
+/**
+ * What a task says beyond its text: the name of a status the vault's settings
+ * define beyond the four -- "In Review" -- and its reason, quieter, with the
+ * speech balloon the desktop apps put there.
+ */
+@Composable
+private fun TaskStatusLine(item: MdListItem) {
+    val statuses = LocalTaskStatuses.current
+    // Only a status the settings name: one they do not is a theme's glyph,
+    // which already says what it is.
+    val named = statuses.all.firstOrNull { it.symbol == item.status }?.takeIf { !it.isDefault }
+    named?.let { TaskStatusBadge(it.name) }
+    item.reason?.let { TaskReasonLine(it, size = REASON_ICON * LocalReading.current.textScale) }
 }
 
 /**
@@ -939,11 +967,11 @@ private fun MdListItem.customStatus(
     }
 
 @Composable
-private fun MdListItem.markerColor(): Color =
-    when (task) {
-        TaskState.CHECKED, TaskState.CANCELLED -> MaterialTheme.colorScheme.outline
-        TaskState.IN_PROGRESS -> MaterialTheme.colorScheme.primary
-        else -> Markup.ListMarker
+private fun markerColor(type: StatusType): Color =
+    when (type) {
+        StatusType.DONE, StatusType.CANCELLED, StatusType.NON_TASK -> MaterialTheme.colorScheme.outline
+        StatusType.IN_PROGRESS -> MaterialTheme.colorScheme.primary
+        StatusType.TODO -> Markup.ListMarker
     }
 
 /**
@@ -1005,6 +1033,7 @@ private const val STRIPE_ALPHA = 0.35f
 private val ACCENT_BAR = 3.dp
 private val CALLOUT_ICON = 16.dp
 private val CHIP_ICON = 11.dp
+private val REASON_ICON = 13.dp
 private val ATTACHMENT_ICON = 22.dp
 private val MARKER_ICON = 16.dp
 private val COPY_ICON = 16.dp

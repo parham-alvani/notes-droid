@@ -42,8 +42,11 @@ object TaskBoard {
         val priority: String?,
         val done: String?,
         val cancelled: String?,
+        /** What its status means in this vault; the default rule for [state] when not given. */
+        val status: TaskStatus = TaskStatuses.DEFAULT.of(state.symbol),
+        val reason: String? = null,
     ) {
-        val isOpen: Boolean get() = state == TaskState.UNCHECKED || state == TaskState.IN_PROGRESS
+        val isOpen: Boolean get() = status.isOpen
     }
 
     data class Column<T>(
@@ -84,12 +87,14 @@ object TaskBoard {
                 val since = closedWithin?.let { today.minusDays(it.toLong()) }
 
                 fun recent(date: String?) = since == null || date?.toDateOrNull()?.let { !it.isBefore(since) } == true
-                val byState = known.groupBy { it.second.state }
+                // By type, so every status under way -- `[/]`, `[r]` "In
+                // Review" -- shares one column, and a non-task is in none.
+                val byType = known.groupBy { it.second.status.type }
 
                 fun closed(
-                    state: TaskState,
+                    type: StatusType,
                     date: (Facts) -> String?,
-                ) = byState[state]
+                ) = byType[type]
                     .orEmpty()
                     .filter { recent(date(it.second)) }
                     .sortedWith(
@@ -98,15 +103,15 @@ object TaskBoard {
                             .thenBy { it.second.line },
                     ).map { it.first }
                 listOf(
-                    Column("todo", "To Do", byState[TaskState.UNCHECKED].orEmpty().sortedOpen(), Drop.Status(' ')),
+                    Column("todo", "To Do", byType[StatusType.TODO].orEmpty().sortedOpen(), Drop.Status(' ')),
                     Column(
                         "doing",
                         "In Progress",
-                        byState[TaskState.IN_PROGRESS].orEmpty().sortedOpen(),
+                        byType[StatusType.IN_PROGRESS].orEmpty().sortedOpen(),
                         Drop.Status('/'),
                     ),
-                    Column("done", "Done", closed(TaskState.CHECKED) { it.done }, Drop.Status('x')),
-                    Column("cancelled", "Cancelled", closed(TaskState.CANCELLED) { it.cancelled }, Drop.Status('-')),
+                    Column("done", "Done", closed(StatusType.DONE) { it.done }, Drop.Status('x')),
+                    Column("cancelled", "Cancelled", closed(StatusType.CANCELLED) { it.cancelled }, Drop.Status('-')),
                 )
             }
 
@@ -152,6 +157,17 @@ object TaskBoard {
                     }
         }
     }
+
+    /**
+     * The status a card dropped on the column that writes [drop] is given,
+     * or null when it changes nothing: a card already of the column's type
+     * keeps its own symbol, so `[r]` dropped on In Progress stays `[r]`.
+     */
+    fun statusFor(
+        facts: Facts,
+        drop: Drop.Status,
+        statuses: TaskStatuses,
+    ): Char? = drop.status.takeUnless { statuses.of(it).type == facts.status.type }
 
     /** Where a priority sorts: highest first, none in the middle, as the Tasks plugin has it. */
     fun rank(priority: String?): Int =
