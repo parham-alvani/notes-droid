@@ -135,3 +135,14 @@ internal fun findNeedsScroll(
     top ?: return true
     return top > viewportStart + (viewportEnd - viewportStart) * 2 / 3
 }
+
+/**
+ * Whether a hit drawn from [top] to [bottom], in pixels from the top of a
+ * page [height] high, needs bringing on screen: above it, or in its lower
+ * third, where the eye does not look for it.
+ */
+internal fun findHitNeedsScroll(
+    top: Float,
+    bottom: Float,
+    height: Int,
+): Boolean = top < 0f || bottom > height * 2f / 3f

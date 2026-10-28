@@ -125,7 +125,14 @@ fun RichText(
     val onDefine = actions.onDefine.takeIf { LocalReading.current.holdToDefine }
     Text(
         text = marked,
-        modifier = modifier.hold(marked, { layout }, onDefine, actions.onPreviewLink),
+        modifier =
+            modifier
+                .hold(
+                    marked,
+                    { layout },
+                    onDefine,
+                    actions.onPreviewLink,
+                ).findReport(marked, find, layout),
         style = style,
         textAlign = textAlign,
         inlineContent = inlineContent,

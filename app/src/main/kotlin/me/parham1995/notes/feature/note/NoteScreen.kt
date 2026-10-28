@@ -12,6 +12,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -84,7 +85,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
 import me.parham1995.notes.data.runCatchingUnlessCancelled
@@ -393,14 +396,31 @@ fun NoteScreen(
     // The block at the top of the screen, by its position in the note.
     fun topBlock(): Int = state.shownBlocks.getOrElse(listState.firstVisibleItemIndex) { 0 }
 
+    // Where the current find hit is drawn, from the top of the page's list;
+    // null until the text that holds it tells.
+    val findHit = remember(noteId) { mutableStateOf<Pair<Float, Float>?>(null) }
+
     // A find hit brought on screen -- unless it already is, so stepping through
-    // three hits in one paragraph does not jerk the page under them.
+    // three hits in one paragraph does not jerk the page under them. The hit
+    // itself, not only its block: a long task list is one block, and its top
+    // on screen left a hit far down in it out of sight.
     suspend fun bringToFind(block: Int) {
+        findHit.value = null
         val position = viewModel.reveal(block)
         val info = listState.layoutInfo
-        val top = info.visibleItemsInfo.firstOrNull { it.index == position }?.offset
-        if (findNeedsScroll(top, info.viewportStartOffset, info.viewportEndOffset)) {
-            listState.animateScrollToItem(position)
+        if (info.visibleItemsInfo.none { it.index == position }) listState.scrollToItem(position)
+        // The text that holds the hit tells where it is once it is drawn with
+        // the new mark; a block drawn otherwise, a table, never does.
+        val hit = withTimeoutOrNull(FIND_REPORT_WAIT_MS) { snapshotFlow { findHit.value }.filterNotNull().first() }
+        val height = listState.layoutInfo.viewportSize.height
+        if (hit != null) {
+            if (findHitNeedsScroll(hit.first, hit.second, height)) listState.animateScrollBy(hit.first - height / 3f)
+        } else {
+            val after = listState.layoutInfo
+            val top = after.visibleItemsInfo.firstOrNull { it.index == position }?.offset
+            if (findNeedsScroll(top, after.viewportStartOffset, after.viewportEndOffset)) {
+                listState.animateScrollToItem(position)
+            }
         }
     }
 
@@ -991,6 +1011,7 @@ fun NoteScreen(
                                                             } else {
                                                                 null
                                                             },
+                                                        onFindHit = { top, bottom -> findHit.value = top to bottom },
                                                         find =
                                                             if (finding) {
                                                                 findTarget(
@@ -1268,6 +1289,10 @@ fun NoteScreen(
 /** How far the image viewer shrinks and fades at the end of a back gesture. */
 private const val BACK_SHRINK = 0.1f
 private const val BACK_FADE = 0.3f
+
+// How long a find hit's text has to say where it is drawn, from its block
+// coming on screen; a block that does not tell falls back to its top.
+private const val FIND_REPORT_WAIT_MS = 500L
 
 /** A picture shown full screen, by the vault it is in and its path there. */
 private data class ZoomedImage(

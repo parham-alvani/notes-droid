@@ -79,6 +79,15 @@ object NoteSearch {
     }
 
     /**
+     * How many hits [find] counts in [block]: what one piece of a list holds,
+     * so the page can tell which piece the bar's current hit is in.
+     */
+    fun count(
+        block: MdBlock,
+        query: String,
+    ): Int = ranges(block.searchableText(), query).size
+
+    /**
      * The text a reader can see in this block.
      *
      * Code is included -- a third of this vault's lines are inside fences, and

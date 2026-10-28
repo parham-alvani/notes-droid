@@ -51,4 +51,13 @@ class FindStepsTest {
         assertThat(findNeedsScroll(top = -300, viewportStart = 0, viewportEnd = 900)).isFalse()
         assertThat(findNeedsScroll(top = 800, viewportStart = 0, viewportEnd = 900)).isTrue()
     }
+
+    @Test
+    fun `a hit far down in a block on screen still brings the page to it`() {
+        // A page 900 high: a hit above it, or in its lower third, moves it.
+        assertThat(findHitNeedsScroll(top = 2400f, bottom = 2440f, height = 900)).isTrue()
+        assertThat(findHitNeedsScroll(top = -500f, bottom = -460f, height = 900)).isTrue()
+        assertThat(findHitNeedsScroll(top = 700f, bottom = 740f, height = 900)).isTrue()
+        assertThat(findHitNeedsScroll(top = 300f, bottom = 340f, height = 900)).isFalse()
+    }
 }

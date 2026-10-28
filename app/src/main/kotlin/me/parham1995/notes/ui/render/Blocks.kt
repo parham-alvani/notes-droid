@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -352,9 +353,16 @@ private fun CodeBlockView(
                     val find = LocalFind.current
                     val findColors = findColors()
                     val code = highlighted ?: AnnotatedString(block.code)
+                    val marked = remember(code, find, findColors) { code.withFindMarks(find, findColors) }
+                    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
                     Text(
-                        text = remember(code, find, findColors) { code.withFindMarks(find, findColors) },
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        text = marked,
+                        modifier =
+                            Modifier
+                                .horizontalScroll(
+                                    rememberScrollState(),
+                                ).findReport(marked, find, layout),
+                        onTextLayout = { layout = it },
                         fontFamily = FontFamily.Monospace,
                         // Code is text too: the reader's size reaches it, and
                         // the fixed line height is scaled with it, or the
@@ -564,6 +572,11 @@ private fun ListBlockView(
     // target after it -- it simply takes no room.
     if (visible.isEmpty()) return
 
+    // Each item's blocks get their own part of find's count, so only the
+    // hit the bar is on is drawn as the current one.
+    val find = LocalFind.current
+    val itemFind = remember(block, find) { find?.takeIf { it.current != null }?.forItems(block) }
+
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         visible.forEach { (index, item) ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -584,11 +597,13 @@ private fun ListBlockView(
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    item.blocks.forEach { child ->
+                    item.blocks.forEachIndexed { at, child ->
                         // A nested list indents; anything else sits flush with
                         // the item's own text.
                         val indent = if (child is MdBlock.ListBlock) NESTED_LIST_INDENT else 0.dp
-                        MdBlockView(child, actions, brokenLinks, Modifier.padding(start = indent))
+                        CompositionLocalProvider(LocalFind provides (itemFind?.get(index)?.get(at) ?: find)) {
+                            MdBlockView(child, actions, brokenLinks, Modifier.padding(start = indent))
+                        }
                     }
                     if (item.task != TaskState.NONE) TaskStatusLine(item)
                     if (item.taskMeta.isNotEmpty()) TaskChips(item)

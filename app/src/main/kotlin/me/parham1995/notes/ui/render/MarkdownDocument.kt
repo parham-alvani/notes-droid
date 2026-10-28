@@ -17,10 +17,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.markdown.HeadingFolds
@@ -65,6 +68,11 @@ fun MarkdownDocument(
      */
     find: FindTarget? = null,
     /**
+     * Told where find's current hit is drawn: its top and bottom, in pixels
+     * from the top of the page's list. Null, and nothing is told.
+     */
+    onFindHit: ((top: Float, bottom: Float) -> Unit)? = null,
+    /**
      * A tap on the page that nothing on it took -- not a link, a box, a
      * picture, a fold -- and that was not the start of a scroll or a hold.
      * Null leaves taps alone.
@@ -79,6 +87,20 @@ fun MarkdownDocument(
     // in order. The list is keyed by block id, so folding removes items rather
     // than re-composing everything under the fold.
     val shown = remember(blocks, folded) { HeadingFolds.visible(blocks, folded) }
+    // Where the list is placed, so a hit's place on screen can be told from
+    // the list's own top. Not state: it is read only when a hit is reported.
+    val list = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val findReport: ((Float, Float) -> Unit)? =
+        remember(onFindHit) {
+            onFindHit?.let { told ->
+                { top, bottom ->
+                    list[0]?.takeIf { it.isAttached }?.let {
+                        val origin = it.localToRoot(Offset.Zero).y
+                        told(top - origin, bottom - origin)
+                    }
+                }
+            }
+        }
     // Outside the SelectionContainer, so watching the pen cannot interfere
     // with the gesture that selects text.
     StylusSpotlight(
@@ -113,6 +135,7 @@ fun MarkdownDocument(
         // paragraph and the heading above it works.
         SelectionContainer {
             LazyColumn(
+                modifier = Modifier.onGloballyPositioned { list[0] = it },
                 state = listState,
                 contentPadding = contentPadding,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -136,7 +159,10 @@ fun MarkdownDocument(
                         } else {
                             null
                         }
-                    CompositionLocalProvider(LocalFind provides FindMarks.forBlock(find, index, block)) {
+                    CompositionLocalProvider(
+                        LocalFind provides FindMarks.forBlock(find, index, block),
+                        LocalFindReport provides findReport,
+                    ) {
                         Box(tint) { MdBlockView(block, actions, brokenLinks, fold = fold) }
                     }
                 }
