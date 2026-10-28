@@ -542,6 +542,9 @@ class SyncRepository
                 // The indexer marked what it wrote; a new `app.json` can
                 // hide or show notes this sync did not touch.
                 hidden.apply(vault.id)
+                // Likewise a new set of Tasks plugin statuses for tasks it
+                // did not reparse.
+                indexer.restate(vault.id)
                 vaults.update(
                     vault.copy(
                         headCommit = plan.headCommit.takeIf { it.isNotEmpty() } ?: vault.headCommit,

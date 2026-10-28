@@ -88,8 +88,9 @@ class VaultFilter(
          * 7: the Beautitab plugin's settings, for the home page.
          * 8: Obsidian's app settings, for the files it is told to exclude.
          * 9: AVIF pictures, which Obsidian shows and Android 12 decodes.
+         * 10: the Tasks plugin's settings, for the vault's own task statuses.
          */
-        const val VERSION = 9
+        const val VERSION = 10
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -145,8 +146,15 @@ class VaultFilter(
          */
         const val APP = ".obsidian/app.json"
 
+        /**
+         * The Tasks plugin's settings, for its statuses: which characters are
+         * done, cancelled or under way, and what each is called -- `[r]` "In
+         * Review". A few kilobytes.
+         */
+        const val TASKS = ".obsidian/plugins/obsidian-tasks-plugin/data.json"
+
         val DEFAULT_CONFIG_PATHS =
-            setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES, BEAUTITAB, APP)
+            setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES, BEAUTITAB, APP, TASKS)
 
         /**
          * Formats the reader draws itself. Everything else it can offer is in

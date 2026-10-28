@@ -26,14 +26,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import me.parham1995.notes.data.AppLock
+import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.VaultSettings
+import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.navigation.NotesNavHost
 import me.parham1995.notes.navigation.consumeLaunchRequest
 import me.parham1995.notes.navigation.launchRequest
 import me.parham1995.notes.ui.LocalReading
+import me.parham1995.notes.ui.LocalTaskStatuses
 import me.parham1995.notes.ui.WhatsNew
 import me.parham1995.notes.ui.icon.ProvideLucide
 import me.parham1995.notes.ui.lock.LockScreen
@@ -69,6 +74,26 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var appLock: AppLock
+
+    @Inject
+    lateinit var obsidianConfig: Provider<ObsidianConfigStore>
+
+    /**
+     * The active vault's task statuses, from its Tasks plugin settings, for
+     * every task drawn below -- the reader's checkboxes among them.
+     */
+    private val taskStatuses: StateFlow<TaskStatuses> by lazy {
+        obsidianConfig
+            .get()
+            .taskStatuses(
+                settingsStore
+                    .get()
+                    .settings
+                    .map { it.activeVaultId }
+                    .distinctUntilChanged(),
+            ).catch { emit(TaskStatuses.DEFAULT) }
+            .stateIn(lifecycleScope, SharingStarted.Eagerly, TaskStatuses.DEFAULT)
+    }
 
     /**
      * The settings, or null until they have first been read.
@@ -149,8 +174,12 @@ class MainActivity : ComponentActivity() {
                     }
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
+            val statuses by taskStatuses.collectAsStateWithLifecycle()
             NotesTheme(theme = current.reading.theme) {
-                CompositionLocalProvider(LocalReading provides current.reading) {
+                CompositionLocalProvider(
+                    LocalReading provides current.reading,
+                    LocalTaskStatuses provides statuses,
+                ) {
                     ProvideLucide {
                         NotesNavHost(
                             openScreen = openScreen,

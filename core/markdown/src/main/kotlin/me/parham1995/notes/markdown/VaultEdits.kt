@@ -223,30 +223,39 @@ object VaultEdits {
      * status but a repeat ticked done, whose next occurrence reads the same
      * as the task and sits where it was: that one is recognised by the
      * finished copy, dated [today], on the line under it.
+     *
+     * What each status means is [statuses]'s, the vault's own. The old
+     * reason comes off with the old status; [reason], when given, is the new
+     * one's ([TaskLine.withStatus]).
      */
     fun setStatus(
         line: Int,
         task: String,
         status: Char,
         today: String,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
+        reason: String? = null,
     ): (String?) -> String? {
-        require(status in STATUSES) { "not a board status: '$status'" }
+        require(status != '\n' && status != '\r' && status != ']') { "not a status: '$status'" }
         require(DATE.matches(today)) { "not a date: $today" }
         return { current ->
             val lines = current?.lines() ?: throw TaskNotFound(task)
-            val at = TaskLine.locate(lines, line, task) ?: throw TaskNotFound(task)
+            val at = TaskLine.locate(lines, line, task, statuses) ?: throw TaskNotFound(task)
             val raw = lines[at]
-            val repeat = status == 'x' && TaskLine.isOpen(raw) && TaskLine.isRecurring(raw)
+            val repeat =
+                statuses.of(status).type == StatusType.DONE &&
+                    TaskLine.isOpen(raw, statuses) &&
+                    TaskLine.isRecurring(raw)
             val finished = lines.getOrNull(at + 1)
             when {
                 repeat &&
                     finished != null &&
-                    !TaskLine.isOpen(finished) &&
+                    !TaskLine.isOpen(finished, statuses) &&
                     TaskLine.indexedText(finished.trim()) == task &&
                     finished.contains("✅ $today") -> null
                 else -> {
                     val becomes =
-                        TaskLine.withStatus(raw, status, today)
+                        TaskLine.withStatus(raw, status, today, statuses, reason)
                             ?: if (repeat) throw RepeatNotWorkedOut(task) else null
                     becomes?.let {
                         lines
@@ -260,6 +269,28 @@ object VaultEdits {
             }
         }
     }
+
+    /**
+     * Sets the reason of the task written on [line] -- reading [task] to the
+     * index -- to [reason], or takes it off when that is blank; the status and
+     * every date stay. Found as [setStatus] finds it, and a task that is not
+     * there throws [TaskNotFound]. Null when it already says so.
+     */
+    fun setReason(
+        line: Int,
+        task: String,
+        reason: String?,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
+    ): (String?) -> String? =
+        { current ->
+            val lines = current?.lines() ?: throw TaskNotFound(task)
+            val at = TaskLine.locate(lines, line, task, statuses) ?: throw TaskNotFound(task)
+            TaskLine
+                .withReason(
+                    lines[at],
+                    reason,
+                )?.let { lines.toMutableList().apply { set(at, it) }.joinToString("\n") }
+        }
 
     /**
      * Appends [additions] after the file's last non-blank line, separated by
@@ -339,9 +370,6 @@ object VaultEdits {
     private fun String.headingText(): String = trimStart().trimStart('#').trim()
 
     private val DATE = Regex("""\d{4}-\d{2}-\d{2}""")
-
-    /** What a board column can set: to do, under way, done, cancelled. */
-    private val STATUSES = setOf(' ', '/', 'x', '-')
 
     private const val FENCE_MIN = 3
     private const val MAX_HEADING_LEVEL = 6

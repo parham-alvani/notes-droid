@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.SyncStateDao
+import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.obsidian.Beautitab
 import me.parham1995.notes.obsidian.Bookmark
 import me.parham1995.notes.obsidian.Bookmarks
 import me.parham1995.notes.obsidian.DailyNotes
+import me.parham1995.notes.obsidian.TasksPlugin
 import me.parham1995.notes.obsidian.Templates
 import me.parham1995.notes.sync.VaultFilter
 import javax.inject.Inject
@@ -37,6 +39,21 @@ data class VaultBookmarks(
 }
 
 /**
+ * What each task status means in one vault, as of now.
+ *
+ * An interface for the indexer's sake, as [HiddenRules] is: its tests have no
+ * `.obsidian` to read the statuses from.
+ */
+fun interface TaskStatusRules {
+    suspend fun forVault(vaultId: Long): TaskStatuses
+
+    companion object {
+        /** The four every vault has, for a vault that says nothing of its own. */
+        val DEFAULT = TaskStatusRules { TaskStatuses.DEFAULT }
+    }
+}
+
+/**
  * Obsidian's own settings that say how a vault is meant to be got around:
  * the Bookmarks plugin's list and where the Daily notes plugin keeps a day.
  *
@@ -55,7 +72,7 @@ class ObsidianConfigStore
         private val notes: NoteDao,
         syncState: SyncStateDao,
         private val log: SyncLog,
-    ) {
+    ) : TaskStatusRules {
         private val synced: Flow<Long?> = syncState.observe().map { it?.lastSyncAt }.distinctUntilChanged()
 
         /** The bookmarks of whichever vault [vault] names, kept current across syncs. */
@@ -97,6 +114,21 @@ class ObsidianConfigStore
         /** The Templates plugin's settings for [vaultId]; its defaults, with no folder, when it has none. */
         suspend fun templates(vaultId: Long): Templates =
             read(vaultId, VaultFilter.TEMPLATES, "templates settings", Templates::parse) ?: Templates()
+
+        /** The task statuses of whichever vault [vault] names, kept current across syncs. */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        fun taskStatuses(vault: Flow<Long>): Flow<TaskStatuses> =
+            combine(vault, synced) { id, _ -> id }
+                .mapLatest { forVault(it) }
+                .distinctUntilChanged()
+                .flowOn(Dispatchers.IO)
+
+        /**
+         * The Tasks plugin's statuses for [vaultId]: the four defaults when it
+         * has no settings, or settings that cannot be read.
+         */
+        override suspend fun forVault(vaultId: Long): TaskStatuses =
+            read(vaultId, VaultFilter.TASKS, "Tasks plugin settings", TasksPlugin::statuses) ?: TaskStatuses.DEFAULT
 
         private suspend fun <T> read(
             vaultId: Long,

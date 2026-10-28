@@ -555,6 +555,12 @@
     <string name="board_move_action">انتقال به ستونی دیگر</string>
     <string name="board_column_empty">اینجا چیزی نیست</string>
     <string name="board_reopen_action">باز کردن دوباره</string>
+    <string name="board_set_status">علامت‌گذاری به‌عنوان %1$s</string>
+    <string name="board_edit_reason">دلیل…</string>
+    <string name="task_reason">دلیل</string>
+    <string name="task_reason_cancel_title">چرا لغوش می‌کنید؟</string>
+    <string name="task_reason_cancel_confirm">لغو کار</string>
+    <string name="task_reason_cancel_back">لغو نکن</string>
     <string name="nav_home">خانه</string>
     <string name="home_title">خانه</string>
     <string name="home_search_hint">یافتن نوشته</string>

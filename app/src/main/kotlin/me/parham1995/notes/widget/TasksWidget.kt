@@ -154,7 +154,9 @@ internal fun TasksContent(model: TasksModel) {
             MarkedRow(
                 marker = if (late) LATE_MARKER else DUE_MARKER,
                 markerColor = if (late) GlanceTheme.colors.error else GlanceTheme.colors.onSurfaceVariant,
-                line = directed(task.text),
+                // The reason after the text, as a task row draws it; the
+                // widget's one line has no room for a second.
+                line = directed(task.text + task.reason?.let { " \uD83D\uDCAC $it" }.orEmpty()),
             )
         }
     }

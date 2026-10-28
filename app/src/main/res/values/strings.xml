@@ -557,6 +557,12 @@
     <string name="board_move_action">Move to another column</string>
     <string name="board_column_empty">Nothing here</string>
     <string name="board_reopen_action">Open again</string>
+    <string name="board_set_status">Mark as %1$s</string>
+    <string name="board_edit_reason">Reason…</string>
+    <string name="task_reason">Reason</string>
+    <string name="task_reason_cancel_title">Why cancel it?</string>
+    <string name="task_reason_cancel_confirm">Cancel Task</string>
+    <string name="task_reason_cancel_back">Don\'t Cancel</string>
     <string name="nav_home">Home</string>
     <string name="home_title">Home</string>
     <string name="home_search_hint">Find a note</string>

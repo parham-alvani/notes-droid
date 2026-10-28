@@ -10,7 +10,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -20,6 +22,7 @@ import me.parham1995.notes.data.BaseAnswer
 import me.parham1995.notes.data.BaseRepository
 import me.parham1995.notes.data.Destinations
 import me.parham1995.notes.data.IconStore
+import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.PeriodNeighbours
 import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.RenderedNote
@@ -113,6 +116,7 @@ class NoteViewModel
         private val destinations: Destinations,
         private val scheduler: SyncScheduler,
         private val bases: BaseRepository,
+        private val config: ObsidianConfigStore,
     ) : ViewModel() {
         val tabs: StateFlow<TabsState> = openTabs.state
 
@@ -608,7 +612,8 @@ class NoteViewModel
         /**
          * Answers a ` ```tasks ` query written in the note at [path] of
          * [vaultId], from that vault's tasks alone, and again whenever the
-         * index changes -- a box ticked in the list comes back ticked.
+         * index changes -- a box ticked in the list comes back ticked. Each
+         * status means what that vault's Tasks plugin settings say.
          */
         fun tasksQuery(
             vaultId: Long,
@@ -616,16 +621,14 @@ class NoteViewModel
             source: String,
         ): Flow<TasksQueryResult> {
             val query = TasksQuery.parse(source, file = path)
-            return repository
-                .queryableTasks(vaultId)
-                .map { rows ->
-                    val answer = query.run(rows, LocalDate.now()) { it.toQueryTask() }
-                    TasksQueryResult(
-                        rows = answer,
-                        notUnderstood = query.notUnderstood,
-                        groups = answer.map { query.groupsOf(it.toQueryTask()) },
-                    )
-                }.flowOn(Dispatchers.Default)
+            return combine(repository.queryableTasks(vaultId), config.taskStatuses(flowOf(vaultId))) { rows, statuses ->
+                val answer = query.run(rows, LocalDate.now()) { it.toQueryTask(statuses) }
+                TasksQueryResult(
+                    rows = answer,
+                    notUnderstood = query.notUnderstood,
+                    groups = answer.map { query.groupsOf(it.toQueryTask(statuses)) },
+                )
+            }.flowOn(Dispatchers.Default)
         }
 
         /**

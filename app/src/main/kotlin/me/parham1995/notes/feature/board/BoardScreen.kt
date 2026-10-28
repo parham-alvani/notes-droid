@@ -74,9 +74,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.database.QueryTaskRow
+import me.parham1995.notes.markdown.StatusType
 import me.parham1995.notes.markdown.TaskBoard
-import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.ui.AutoDirection
+import me.parham1995.notes.ui.TaskReasonDialog
+import me.parham1995.notes.ui.TaskReasonLine
+import me.parham1995.notes.ui.TaskStatusBadge
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.text
@@ -172,6 +176,9 @@ fun BoardScreen(
                     onToggle = { viewModel.toggle(it) },
                     onOpen = { row -> onOpenNote(row.noteId, row.section.takeIf { it.isNotBlank() }) },
                     modifier = Modifier.weight(1f),
+                    statuses = state.statuses,
+                    onSetStatus = { row, status, reason -> viewModel.setStatus(row, status, reason) },
+                    onSetReason = { row, reason -> viewModel.setReason(row, reason) },
                 )
             }
         }
@@ -223,6 +230,11 @@ internal fun BoardControls(
  * Apart from the screen so it can be driven without a view model: what is
  * worth testing is that holding a card and choosing a column hands back that
  * card and that column's move.
+ *
+ * With [onSetStatus], the menu also lists every status of the vault by name
+ * and symbol, and anything that cancels -- a cancelled-typed status, the
+ * Cancelled column -- asks for the reason first. With [onSetReason] it offers
+ * to write, change or clear the reason, whatever the status.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -234,6 +246,9 @@ internal fun BoardColumns(
     onToggle: (QueryTaskRow) -> Unit,
     onOpen: (QueryTaskRow) -> Unit,
     modifier: Modifier = Modifier,
+    statuses: TaskStatuses = TaskStatuses.DEFAULT,
+    onSetStatus: ((QueryTaskRow, Char, String?) -> Unit)? = null,
+    onSetReason: ((QueryTaskRow, String) -> Unit)? = null,
 ) {
     val targets = columns.filter { it.drop != null }
     val listState = rememberLazyListState()
@@ -279,6 +294,9 @@ internal fun BoardColumns(
                             onMove = { drop -> onMove(row, drop) },
                             onToggle = if (canWrite) ({ onToggle(row) }) else null,
                             onOpen = { onOpen(row) },
+                            statuses = statuses,
+                            onSetStatus = onSetStatus?.takeIf { canWrite }?.let { set -> { s, r -> set(row, s, r) } },
+                            onSetReason = onSetReason?.takeIf { canWrite }?.let { set -> { r -> set(row, r) } },
                         )
                     }
                 }
@@ -336,9 +354,17 @@ private fun BoardCard(
     onMove: (TaskBoard.Drop) -> Unit,
     onToggle: (() -> Unit)?,
     onOpen: () -> Unit,
+    statuses: TaskStatuses = TaskStatuses.DEFAULT,
+    onSetStatus: ((Char, String?) -> Unit)? = null,
+    onSetReason: ((String) -> Unit)? = null,
 ) {
-    val facts = row.facts()
+    val facts = row.facts(statuses)
     var menu by remember { mutableStateOf(false) }
+    // The status a cancel is waiting on the reason for, or the reason alone
+    // being edited (a null status); nothing asked when the dialog is shut.
+    var asking by remember { mutableStateOf<Pair<Char?, Boolean>?>(null) }
+    val pickable = onSetStatus?.let { statuses.all.filter { it.symbol != facts.status.symbol } }.orEmpty()
+    val holdable = moves.isNotEmpty() || pickable.isNotEmpty() || onSetReason != null
     Box {
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainer,
@@ -349,15 +375,15 @@ private fun BoardCard(
                     .combinedClickable(
                         onClick = onOpen,
                         // Held rather than dragged: the phone's way to move a card.
-                        onLongClick = if (moves.isEmpty()) null else ({ menu = true }),
-                        onLongClickLabel = if (moves.isEmpty()) null else stringResource(R.string.board_move_action),
+                        onLongClick = if (!holdable) null else ({ menu = true }),
+                        onLongClickLabel = if (!holdable) null else stringResource(R.string.board_move_action),
                     ),
         ) {
             Row(Modifier.height(IntrinsicSize.Min)) {
                 Box(Modifier.width(3.dp).fillMaxHeight().background(color))
                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StatusBox(facts.state, color, onToggle)
+                        StatusBox(facts.status.type, color, onToggle)
                         AutoDirection(row.text) {
                             Text(
                                 text = row.text,
@@ -375,6 +401,9 @@ private fun BoardCard(
                             )
                         }
                     }
+                    // A status beyond the four, by its name; the reason, quieter.
+                    if (!facts.status.isDefault) TaskStatusBadge(facts.status.name)
+                    facts.reason?.let { TaskReasonLine(it) }
                     CardFooter(row, facts, today)
                 }
             }
@@ -385,29 +414,69 @@ private fun BoardCard(
                     text = { Text(stringResource(R.string.board_move_to, title)) },
                     onClick = {
                         menu = false
-                        onMove(drop)
+                        val cancels =
+                            drop is TaskBoard.Drop.Status && statuses.of(drop.status).type == StatusType.CANCELLED
+                        if (cancels && onSetStatus != null) {
+                            asking = drop.status to true
+                        } else {
+                            onMove(drop)
+                        }
+                    },
+                )
+            }
+            pickable.forEach { status ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.board_set_status, "${status.name} [${status.symbol}]")) },
+                    onClick = {
+                        menu = false
+                        if (status.type == StatusType.CANCELLED) {
+                            asking = status.symbol to true
+                        } else {
+                            onSetStatus?.invoke(status.symbol, null)
+                        }
+                    },
+                )
+            }
+            if (onSetReason != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.board_edit_reason)) },
+                    leadingIcon = { LucideGlyph("message-circle", size = 16.dp) },
+                    onClick = {
+                        menu = false
+                        asking = null to false
                     },
                 )
             }
         }
+    }
+    asking?.let { (status, cancelling) ->
+        TaskReasonDialog(
+            current = facts.reason,
+            cancelling = cancelling,
+            onDismiss = { asking = null },
+            onConfirm = { reason ->
+                asking = null
+                if (status != null) onSetStatus?.invoke(status, reason) else onSetReason?.invoke(reason)
+            },
+        )
     }
 }
 
 /** The checkbox, ticking as it does everywhere else, and only where a write can land. */
 @Composable
 private fun StatusBox(
-    state: TaskState,
+    type: StatusType,
     color: Color,
     onToggle: (() -> Unit)?,
 ) {
-    val open = state == TaskState.UNCHECKED || state == TaskState.IN_PROGRESS
+    val open = !type.isClosed
     LucideGlyph(
         name =
-            when (state) {
-                TaskState.IN_PROGRESS -> "square-dot"
-                TaskState.CHECKED -> "square-check"
-                TaskState.CANCELLED -> "square-x"
-                else -> "square"
+            when (type) {
+                StatusType.IN_PROGRESS -> "square-dot"
+                StatusType.DONE -> "square-check"
+                StatusType.CANCELLED, StatusType.NON_TASK -> "square-x"
+                StatusType.TODO -> "square"
             },
         tint = color,
         modifier =
@@ -429,9 +498,7 @@ private fun StatusBox(
                 ),
         contentDescription =
             stringResource(
-                if (state ==
-                    TaskState.IN_PROGRESS
-                ) {
+                if (type == StatusType.IN_PROGRESS) {
                     R.string.task_state_in_progress
                 } else {
                     R.string.task_state_open

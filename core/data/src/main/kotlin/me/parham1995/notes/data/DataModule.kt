@@ -61,6 +61,10 @@ object DataModule {
     @Provides
     fun hiddenRules(store: HiddenFileStore): HiddenRules = store
 
+    /** What each task status means, by which the indexer stores a task's state; see [ObsidianConfigStore]. */
+    @Provides
+    fun taskStatusRules(store: ObsidianConfigStore): TaskStatusRules = store
+
     @Provides
     fun blobDao(database: NotesDatabase): BlobDao = database.blobDao()
 

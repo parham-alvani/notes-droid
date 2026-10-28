@@ -29,6 +29,10 @@ data class ParsedTask(
     val recurring: String? = null,
     /** The priority mark as written -- `🔺 ⏫ 🔼 🔽 ⏬` -- or null for none. */
     val priority: String? = null,
+    /** The character between the brackets, as written. */
+    val status: Char = ' ',
+    /** Its `[reason:: …]`, which [text] is without; null for none. */
+    val reason: String? = null,
 ) {
     /** Still worth showing in a list of things to do. */
     val isOpen: Boolean get() = state == TaskState.UNCHECKED || state == TaskState.IN_PROGRESS
@@ -114,6 +118,8 @@ object TaskExtractor {
             cancelled = dates["cancelled"],
             recurring = dates["recurring"],
             priority = taskMeta.firstOrNull { TaskMetadata.meaningOf(it.emoji) == "priority" }?.emoji,
+            status = status,
+            reason = reason,
         )
     }
 

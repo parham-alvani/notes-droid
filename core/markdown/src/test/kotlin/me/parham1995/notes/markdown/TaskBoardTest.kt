@@ -15,6 +15,7 @@ class TaskBoardTest {
         raw: String,
         path: String = "Tasks/Work.md",
         line: Int = 0,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
     ): Pair<String, TaskBoard.Facts> {
         val parsed = TaskExtractor.extract(MarkdownParser.parseNote(raw)).single()
         val facts =
@@ -27,6 +28,8 @@ class TaskBoardTest {
                 priority = parsed.priority,
                 done = parsed.done,
                 cancelled = parsed.cancelled,
+                status = statuses.of(parsed.status),
+                reason = parsed.reason,
             )
         return parsed.text to facts
     }
@@ -189,5 +192,32 @@ class TaskBoardTest {
         assertThat(task("- [ ] Ship ⏫ 📅 2026-10-27").second.priority).isEqualTo("⏫")
         assertThat(task("- [ ] Ship").second.priority).isNull()
         assertThat(task("- [-] Drop ❌ 2026-10-24").second.cancelled).isEqualTo("2026-10-24")
+    }
+
+    @Test
+    fun `every status under way shares the In Progress column, and keeps its symbol there`() {
+        val statuses =
+            TaskStatuses.of(
+                emptyList(),
+                listOf(
+                    TaskStatus('r', "In Review", 'x', StatusType.IN_PROGRESS),
+                    TaskStatus('n', "Note", ' ', StatusType.NON_TASK),
+                ),
+            )
+        val tasks =
+            listOf(
+                task("- [/] Build", line = 0, statuses = statuses),
+                task("- [r] Ship [reason:: waiting on [[Amir]]]", line = 1, statuses = statuses),
+                task("- [n] An aside", line = 2, statuses = statuses),
+            )
+        val columns = board(tasks, Grouping.STATUS, closedWithin = null)
+        assertThat(
+            columns.texts(),
+        ).containsExactly(listOf<String>(), listOf("Build", "Ship"), listOf<String>(), listOf<String>())
+            .inOrder()
+        val review = tasks[1].second
+        assertThat(review.reason).isEqualTo("waiting on [[Amir]]")
+        assertThat(TaskBoard.statusFor(review, Drop.Status('/'), statuses)).isNull()
+        assertThat(TaskBoard.statusFor(review, Drop.Status('-'), statuses)).isEqualTo('-')
     }
 }

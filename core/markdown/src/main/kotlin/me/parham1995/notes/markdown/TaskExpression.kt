@@ -39,12 +39,14 @@ class TaskExpression private constructor(
          */
         private fun property(path: String): ((QueryTask) -> Any?)? =
             when (path) {
-                "status.type" -> { t -> t.state.type }
-                "status.name" -> { t -> t.state.statusName }
+                "status.type" -> { t -> t.status.type.name }
+                "status.name" -> { t -> t.status.name }
+                "status.symbol" -> { t -> t.status.symbol.toString() }
+                "reason" -> { t -> t.reason }
                 "description" -> { t -> t.text }
                 "heading" -> { t -> t.section.ifBlank { null } }
                 "hasHeading" -> { t -> t.section.isNotBlank() }
-                "isDone" -> { t -> t.state == TaskState.CHECKED }
+                "isDone" -> { t -> t.status.type == StatusType.DONE }
                 "isRecurring" -> { t -> t.recurring != null }
                 "file.path" -> { t -> t.path }
                 "file.filename" -> { t -> t.path.substringAfterLast('/') }
@@ -60,26 +62,6 @@ class TaskExpression private constructor(
                 is String -> value.isNotEmpty()
                 else -> true
             }
-
-        private val TaskState.type: String
-            get() =
-                when (this) {
-                    TaskState.UNCHECKED -> "TODO"
-                    TaskState.IN_PROGRESS -> "IN_PROGRESS"
-                    TaskState.CHECKED -> "DONE"
-                    TaskState.CANCELLED -> "CANCELLED"
-                    TaskState.NONE -> "NON_TASK"
-                }
-
-        private val TaskState.statusName: String
-            get() =
-                when (this) {
-                    TaskState.UNCHECKED -> "Todo"
-                    TaskState.IN_PROGRESS -> "In Progress"
-                    TaskState.CHECKED -> "Done"
-                    TaskState.CANCELLED -> "Cancelled"
-                    TaskState.NONE -> ""
-                }
 
         private fun tokens(source: String): List<String> {
             val out = mutableListOf<String>()

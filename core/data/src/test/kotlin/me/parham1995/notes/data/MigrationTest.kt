@@ -421,6 +421,40 @@ class MigrationTest {
         )
 
     @Test
+    fun `tasks gain the status their state was written with and no reason, and keep everything they had`() =
+        withData(
+            version = 17,
+            migration = NotesDatabase.MIGRATION_17_18,
+            seed = { connection ->
+                connection.execSQL(
+                    "INSERT INTO tasks (id, noteId, text, state, section, blockIndex, line, ordinal, open, " +
+                        "actionableOn, scheduled, due, done, recurring, priority, cancelled) VALUES " +
+                        "(1, 1, 'water the plants', 'UNCHECKED', 'Home', 0, 4, 0, 1, " +
+                        "'2026-10-25', '2026-10-25', NULL, NULL, NULL, '⏫', NULL), " +
+                        "(2, 2, 'water the plants', 'CANCELLED', 'Home', 0, 4, 0, 0, " +
+                        "NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-20'), " +
+                        "(3, 2, 'ship', 'CHECKED', 'Work', 0, 6, 1, 0, " +
+                        "NULL, NULL, NULL, '2026-10-21', NULL, NULL, NULL), " +
+                        "(4, 2, 'build', 'IN_PROGRESS', 'Work', 0, 7, 2, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL)",
+                )
+            },
+            check = { connection ->
+                assertThat(
+                    texts(
+                        connection,
+                        "SELECT id || ':' || state || ':[' || status || ']:' || IFNULL(reason, '-') || ':' || " +
+                            "IFNULL(priority, '-') || ':' || IFNULL(cancelled, '-') FROM tasks ORDER BY id",
+                    ),
+                ).containsExactly(
+                    "1:UNCHECKED:[ ]:-:⏫:-",
+                    "2:CANCELLED:[-]:-:-:2026-10-20",
+                    "3:CHECKED:[x]:-:-:-",
+                    "4:IN_PROGRESS:[/]:-:-:-",
+                ).inOrder()
+            },
+        )
+
+    @Test
     fun `every note starts out shown, and keeps everything it had`() =
         withData(
             version = 16,

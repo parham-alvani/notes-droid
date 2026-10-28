@@ -21,7 +21,7 @@ import androidx.sqlite.execSQL
         TagEntity::class,
         AliasEntity::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -554,6 +554,24 @@ abstract class NotesDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * A task's status character and its reason. The character is put back
+         * from the state for the four every vault has, so nothing reads
+         * differently before the reindex this comes with writes the real one;
+         * the reason starts empty until then.
+         */
+        val MIGRATION_17_18 =
+            object : Migration(17, 18) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `tasks` ADD COLUMN `status` TEXT NOT NULL DEFAULT ' '")
+                    connection.execSQL("ALTER TABLE `tasks` ADD COLUMN `reason` TEXT")
+                    connection.execSQL(
+                        "UPDATE `tasks` SET `status` = CASE `state` WHEN 'CHECKED' THEN 'x' " +
+                            "WHEN 'CANCELLED' THEN '-' WHEN 'IN_PROGRESS' THEN '/' ELSE ' ' END",
+                    )
+                }
+            }
+
         /** The tables derived from a note, exactly as the entities declare them. */
         private fun createNotes(connection: SQLiteConnection) {
             connection.execSQL(
@@ -645,6 +663,7 @@ abstract class NotesDatabase : RoomDatabase() {
                 MIGRATION_14_15,
                 MIGRATION_15_16,
                 MIGRATION_16_17,
+                MIGRATION_17_18,
             )
     }
 }

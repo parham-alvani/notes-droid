@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.calendar.PhoneEvent
 import me.parham1995.notes.data.database.TaskRow
+import me.parham1995.notes.ui.TaskReasonLine
 import me.parham1995.notes.ui.icon.LucideGlyph
 import java.time.Instant
 import java.time.LocalDate
@@ -250,6 +251,7 @@ private fun TaskRowView(
         LucideGlyph("square", size = 16.dp, modifier = Modifier.size(16.dp))
         Column(Modifier.weight(1f)) {
             Text(task.text, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            task.reason?.let { TaskReasonLine(it, maxLines = 1) }
             Text(
                 task.noteTitle,
                 style = MaterialTheme.typography.bodySmall,
