@@ -79,6 +79,18 @@ class BeautitabTest {
     }
 
     @Test
+    fun `a quote takes the marks of its script`() {
+        val persian = Beautitab.Quote("خورشید درست وقتی از دست می رود ….")
+        assertThat(persian.isRtl).isTrue()
+        assertThat(persian.quoted).isEqualTo("«خورشید درست وقتی از دست می رود ….»")
+        val english = Beautitab.Quote("Less, but better.")
+        assertThat(english.isRtl).isFalse()
+        assertThat(english.quoted).isEqualTo("“Less, but better.”")
+        // The first letter decides, as in a note's lines.
+        assertThat(Beautitab.Quote("Git یعنی").quoted).isEqualTo("“Git یعنی”")
+    }
+
+    @Test
     fun `quotes show only from the person's own and only when there is one`() {
         val quotes = """"customQuotes": [{"text": "x"}]"""
         assertThat(Beautitab.parse("""{"showQuote": true, $quotes}""").showQuote).isTrue()

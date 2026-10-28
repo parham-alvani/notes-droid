@@ -61,6 +61,7 @@ import me.parham1995.notes.R
 import me.parham1995.notes.obsidian.Beautitab
 import me.parham1995.notes.obsidian.Home
 import me.parham1995.notes.obsidian.PartOfDay
+import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 import java.time.LocalDateTime
@@ -383,20 +384,27 @@ private fun QuoteCard(quote: Beautitab.Quote) {
         modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
     ) {
         Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "“${quote.text}”",
-                style = MaterialTheme.typography.titleMedium.inScript(),
-                fontStyle = FontStyle.Italic,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (quote.author.isNotEmpty()) {
+            // Each line in its own direction and script: in a left-to-right
+            // line, the marks of a Persian quote land at the wrong ends.
+            // Persian has no italic, so it stays upright.
+            AutoDirection(quote.text) {
                 Text(
-                    "— ${quote.author}",
-                    style = MaterialTheme.typography.bodyMedium.inScript(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
+                    quote.quoted,
+                    style = MaterialTheme.typography.titleMedium.inScript(),
+                    fontStyle = if (quote.isRtl) FontStyle.Normal else FontStyle.Italic,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
+            }
+            if (quote.author.isNotEmpty()) {
+                AutoDirection(quote.author) {
+                    Text(
+                        "— ${quote.author}",
+                        style = MaterialTheme.typography.bodyMedium.inScript(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
             }
         }
     }

@@ -6,6 +6,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import me.parham1995.notes.markdown.MdDirection
+import me.parham1995.notes.markdown.TextDirection
 import java.util.Locale
 
 /**
@@ -38,7 +40,17 @@ data class Beautitab(
     data class Quote(
         val text: String,
         val author: String = "",
-    )
+    ) {
+        /** True when the quote reads right to left, by its first strong letter. */
+        val isRtl: Boolean get() = TextDirection.of(text) == MdDirection.RTL
+
+        /**
+         * The text in its own script's quotation marks: «…» for Persian, “…”
+         * for the rest. In a line of the text's own direction, the opening
+         * mark is at the side where the reading starts.
+         */
+        val quoted: String get() = if (isRtl) "«$text»" else "“$text”"
+    }
 
     /**
      * The first of [backgrounds] that is a picture in the vault, as a
