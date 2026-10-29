@@ -8,7 +8,7 @@ composeBom = "2026.09.00"
 # Ahead of the BOM, which still pins 1.4: Material 3 Expressive (the motion
 # scheme, LoadingIndicator, the floating toolbar, the search app bar) is
 # internal there and public from 1.5.
-material3 = "1.5.0-beta01"
+material3 = "1.5.0-beta02"
 adaptive = "1.3.0"
 benchmark = "1.5.0"
 profileinstaller = "1.4.1"
