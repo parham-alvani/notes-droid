@@ -39,7 +39,7 @@ coil = "3.6.3"
 # Compose 1.8 at least; both are older than what is here.
 telephoto = "0.19.0"
 jlatexmath = "0.2.0"
-webkit = "1.17.1"
+webkit = "1.18.0"
 glance = "1.2.0"
 jgit = "7.8.0.202609011348-r"
 eddsa = "0.3.0"
