@@ -32,7 +32,7 @@ coroutines = "1.11.0"
 serialization = "1.11.0"
 
 okhttp = "5.5.1"
-commonmark = "0.30.1"
+commonmark = "0.31.0"
 coil = "3.6.3"
 # Pinch, double tap and fling about the fingers, and a large picture read in
 # tiles as it is zoomed so it stays sharp. 0.19.0 asks for Coil 3.2 and
