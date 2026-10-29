@@ -41,6 +41,11 @@ internal fun Project.configureKotlinAndroid(commonExtension: CommonExtension) {
         // transport is SSH only -- so the class is present but unreachable.
         // The check cannot be scoped to our own sources, hence disabling it.
         disable += "TrustAllX509TrustManager"
+        // AGP 9.5's lint rejects the checks lifecycle 2.11 ships in its jar
+        // (they call a Kotlin PSI API that is gone) and skips them with this
+        // warning, which warningsAsErrors would turn fatal. Still reported,
+        // just not fatal; drop it once a lifecycle release rebuilds them.
+        informational += "ObsoleteLintCustomCheck"
     }
 
     extensions.configure<JavaPluginExtension> {
