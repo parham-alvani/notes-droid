@@ -142,6 +142,12 @@ interface NoteDao {
         block: Int,
     )
 
+    @Query("UPDATE notes SET outlineClosed = :closed WHERE id = :id")
+    suspend fun rememberOutline(
+        id: Long,
+        closed: String,
+    )
+
     @Query("UPDATE notes SET folds = :folds WHERE id = :id")
     suspend fun rememberFolds(
         id: Long,

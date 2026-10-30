@@ -173,6 +173,24 @@ object VaultEdits {
     fun sortTasks(): (String?) -> String? = { current -> current?.let(TaskSorter::sort) }
 
     /**
+     * Sorts the headings right under one by name, each with its section
+     * ([Sections.sortChildren]). The heading is the [occurrence]-th, from 0, of
+     * [level] that reads [text] in the outline ([Sections.find]), looked up in
+     * the file as it is when the edit lands. Null when they are in order, and
+     * when the heading is not there any more: nothing is left to sort.
+     */
+    fun sortSections(
+        level: Int,
+        text: String,
+        occurrence: Int,
+    ): (String?) -> String? =
+        { current ->
+            current?.let { note ->
+                Sections.find(Sections.headings(note), level, text, occurrence)?.let { Sections.sortChildren(note, it) }
+            }
+        }
+
+    /**
      * Moves the task written on [line] -- reading [task] to the index -- to
      * [date], or takes off the scheduled date an earlier move added when
      * [date] is null.

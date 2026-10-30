@@ -74,6 +74,13 @@ enum class EditKind {
 
     /** Sort a note's tasks done first, as the vault's `task-sorter` plugin does. No anchor, no text. */
     SORT_TASKS,
+
+    /**
+     * Sort the headings right under one by name, each with its section. The
+     * anchor is the heading as the outline shows it, and the text is its level
+     * and which of the headings of that level and text it is, from 0.
+     */
+    SORT_SECTIONS,
     ;
 
     companion object {
@@ -485,6 +492,31 @@ class VaultWriteRepository
         }
 
         /**
+         * Sorts the headings right under one of [path] in [vaultId] by name,
+         * each with its section ([VaultEdits.sortSections]): the [occurrence]-th
+         * heading of [level] that reads [text] in the outline.
+         * [WriteResult.Unchanged] when they are in that order already.
+         */
+        suspend fun sortSections(
+            vaultId: Long,
+            path: String,
+            level: Int,
+            text: String,
+            occurrence: Int,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            val name = path.substringAfterLast('/').removeSuffix(".md")
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.SORT_SECTIONS,
+                anchor = text,
+                replacement = "$level $occurrence",
+                summary = "docs: sort the sections of ${name.take(SUBJECT)}",
+            )
+        }
+
+        /**
          * Sends everything queued, oldest first.
          *
          * Called at the start of a sync rather than at the end: the pull that
@@ -699,6 +731,10 @@ class VaultWriteRepository
                 EditKind.REPLACE_FILE -> VaultEdits.replaceFile(edit.text)
                 EditKind.CREATE_FILE -> VaultEdits.createFile(edit.text)
                 EditKind.SORT_TASKS -> VaultEdits.sortTasks()
+                EditKind.SORT_SECTIONS -> {
+                    val (level, occurrence) = edit.text.split(' ').map(String::toInt)
+                    VaultEdits.sortSections(level, edit.anchor, occurrence)
+                }
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
 

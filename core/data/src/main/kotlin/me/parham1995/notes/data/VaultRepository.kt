@@ -87,6 +87,8 @@ data class RenderedNote(
     val scrollIndex: Int,
     /** The headings folded shut when it was last read, by block position. */
     val folded: Set<Int> = emptySet(),
+    /** The headings closed in the outline, as `level:text`. */
+    val outlineClosed: Set<String> = emptySet(),
     /** Raw wikilink target to note id, so a tap can navigate without re-resolving. */
     val linkTargets: Map<String, Long>,
     /**
@@ -376,6 +378,11 @@ class VaultRepository
                     headings = headings.byNote(entity.id),
                     scrollIndex = entity.scrollIndex,
                     folded = Folds.parse(entity.folds),
+                    outlineClosed =
+                        entity.outlineClosed
+                            .lines()
+                            .filter(String::isNotEmpty)
+                            .toSet(),
                     linkTargets = targets,
                     brokenTargets = allTargets - targets.keys,
                     blockRefs = parsed.blockRefs,
@@ -403,6 +410,12 @@ class VaultRepository
             id: Long,
             folded: Set<Int>,
         ) = notes.rememberFolds(id, Folds.format(folded))
+
+        /** Records which headings are closed in a note's outline. */
+        suspend fun rememberOutline(
+            id: Long,
+            closed: Set<String>,
+        ) = notes.rememberOutline(id, closed.sorted().joinToString("\n"))
 
         /** What one note is connected to, for the graph. */
         suspend fun neighbours(id: Long): Neighbours? {

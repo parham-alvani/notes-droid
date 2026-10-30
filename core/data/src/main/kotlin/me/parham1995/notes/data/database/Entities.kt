@@ -205,6 +205,12 @@ data class NoteEntity(
      */
     val folds: String = "",
     /**
+     * The headings closed in the outline, each as `level:text`, one to a line;
+     * empty when none are. The outline only: the note is not folded. Named by
+     * text rather than position, so they are kept through every reindex.
+     */
+    val outlineClosed: String = "",
+    /**
      * Kept out of the lists: the browser, search, tags, recents, the graph,
      * the tasks. It is still a note -- a link to it resolves and it opens --
      * it is just not offered.

@@ -509,6 +509,13 @@
     <string name="note_sort_tasks">Sort tasks</string>
     <string name="note_tasks_sorted">Tasks sorted, done first</string>
     <string name="note_tasks_in_order">The tasks are already in order</string>
+    <string name="note_sections_sorted">Headings sorted by name</string>
+    <string name="note_sections_in_order">The headings are already in order</string>
+    <string name="outline_close">Close</string>
+    <string name="outline_open">Open</string>
+    <string name="outline_close_level">Close every heading of this level</string>
+    <string name="outline_open_level">Open every heading of this level</string>
+    <string name="outline_sort">Sort headings under this</string>
     <string name="note_share_pdf_failed">Could not make a PDF of this note</string>
     <string name="places_title">Places in this note</string>
     <string name="places_none">No addresses in this note.</string>

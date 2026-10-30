@@ -1224,6 +1224,14 @@ fun NoteScreen(
                     scope.launch { listState.animateScrollToItem(viewModel.reveal(heading.blockIndex)) }
                 },
                 reading = remember(state.note) { state.note?.blocks?.let(ReadingTime::of) },
+                closed = state.outlineClosed,
+                onToggle = viewModel::toggleOutline,
+                onSort =
+                    if (state.writable && state.note?.isFolderNote == false) {
+                        { index -> viewModel.sortSections(index) }
+                    } else {
+                        null
+                    },
             )
         }
 

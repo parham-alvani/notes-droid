@@ -49,6 +49,7 @@ import me.parham1995.notes.markdown.HeadingPath
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteMatch
 import me.parham1995.notes.markdown.NoteSearch
+import me.parham1995.notes.markdown.OutlineTree
 import me.parham1995.notes.markdown.TasksQuery
 import me.parham1995.notes.markdown.Transclusion
 import me.parham1995.notes.markdown.footnotes
@@ -91,6 +92,11 @@ data class NoteUiState(
      * note: a fold is about this reading of this page.
      */
     val folded: Set<Int> = emptySet(),
+    /**
+     * Headings closed in the outline, as `level:text` ([OutlineTree.key]).
+     * The outline only: the note is not folded. Kept with the note.
+     */
+    val outlineClosed: Set<String> = emptySet(),
     /** A sync is running, from this screen or from anywhere else. */
     val syncing: Boolean = false,
 ) {
@@ -186,6 +192,60 @@ class NoteViewModel
             val folded = _state.value.folded
             setFolds(if (block in folded) folded - block else folded + block)
         }
+
+        /**
+         * Closes the outline's heading at [index] when it is open and opens it
+         * when it is closed; with [all], every heading of its level that has
+         * headings under it. Written through, as a fold is.
+         */
+        fun toggleOutline(
+            index: Int,
+            all: Boolean = false,
+        ) {
+            val current = _state.value
+            val headings = current.note?.headings?.sortedBy { it.ordinal } ?: return
+            val levels = headings.map { it.level }
+            val heading = headings.getOrNull(index) ?: return
+            val close = OutlineTree.key(heading.level, heading.text) !in current.outlineClosed
+            val targets =
+                if (all) {
+                    levels.indices.filter { levels[it] == heading.level && OutlineTree.hasChildren(levels, it) }
+                } else {
+                    listOf(index)
+                }
+            val keys = targets.map { OutlineTree.key(headings[it].level, headings[it].text) }
+            val closed = if (close) current.outlineClosed + keys else current.outlineClosed - keys.toSet()
+            if (closed == current.outlineClosed) return
+            _state.value = current.copy(outlineClosed = closed)
+            val id = current.note.id
+            viewModelScope.launch { repository.rememberOutline(id, closed) }
+        }
+
+        /**
+         * Sorts the headings right under the outline's heading at [index] by
+         * name, each with its section, in the file.
+         */
+        fun sortSections(index: Int) =
+            viewModelScope.launch {
+                val note = _state.value.note ?: return@launch
+                val headings = note.headings.sortedBy { it.ordinal }
+                val heading = headings.getOrNull(index) ?: return@launch
+                // Which of the headings of its level and text it is, for the
+                // file may have two of them.
+                val occurrence = headings.take(index).count { it.level == heading.level && it.text == heading.text }
+                val result = writes.sortSections(note.vaultId, note.path, heading.level, heading.text, occurrence)
+                _state.update {
+                    it.copy(
+                        message =
+                            when (result) {
+                                WriteResult.Pushed -> UiText.Resource(R.string.note_sections_sorted)
+                                WriteResult.Unchanged -> UiText.Resource(R.string.note_sections_in_order)
+                                else -> result.describe()
+                            },
+                    )
+                }
+                if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
+            }
 
         /**
          * Written through on every change rather than when the screen goes:
@@ -414,6 +474,7 @@ class NoteViewModel
                             backlinks = backlinks,
                             writable = writable,
                             folded = HeadingFolds.kept(note.blocks, current.folded),
+                            outlineClosed = current.outlineClosed,
                         )
                     }
                 }
@@ -468,6 +529,7 @@ class NoteViewModel
                             // As it was left, less any fold the file has since
                             // moved out from under.
                             folded = HeadingFolds.kept(note.blocks, note.folded),
+                            outlineClosed = note.outlineClosed,
                             periodic = destinations.neighbours(note.vaultId, note.path),
                             syncing = _state.value.syncing,
                             contents =

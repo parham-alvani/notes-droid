@@ -508,6 +508,13 @@
     <string name="note_sort_tasks">مرتب‌سازی کارها</string>
     <string name="note_tasks_sorted">کارها مرتب شد، انجام‌شده‌ها اول</string>
     <string name="note_tasks_in_order">کارها از قبل مرتب‌اند</string>
+    <string name="note_sections_sorted">سرفصل‌ها بر اساس نام مرتب شد</string>
+    <string name="note_sections_in_order">سرفصل‌ها از قبل مرتب‌اند</string>
+    <string name="outline_close">بستن</string>
+    <string name="outline_open">باز کردن</string>
+    <string name="outline_close_level">بستن همهٔ سرفصل‌های این سطح</string>
+    <string name="outline_open_level">باز کردن همهٔ سرفصل‌های این سطح</string>
+    <string name="outline_sort">مرتب کردن سرفصل‌های زیر این</string>
     <string name="note_share_pdf_failed">ساختن PDF از این یادداشت ممکن نشد</string>
     <string name="places_title">مکان‌های این یادداشت</string>
     <string name="places_none">نشانی‌ای در این یادداشت نیست.</string>

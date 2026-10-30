@@ -455,6 +455,29 @@ class MigrationTest {
         )
 
     @Test
+    fun `no heading starts out closed in an outline, and a note keeps everything it had`() =
+        withData(
+            version = 18,
+            migration = NotesDatabase.MIGRATION_18_19,
+            seed = { connection ->
+                connection.execSQL(
+                    "INSERT INTO notes (id, vaultId, path, parent, name, slug, title, blobSha, size, " +
+                        "isFolderNote, isRtl, hasMermaid, hasMath, indexedAt, openedAt, scrollIndex, " +
+                        "readSha, changedAt, folds, hidden) VALUES " +
+                        "(1, 1, 'Plan.md', '', 'Plan', 'plan', 'Plan', 'a', 1, 0, 0, 0, 0, 100, 7, 4, 'a', 100, '3', 0)",
+                )
+            },
+            check = { connection ->
+                assertThat(
+                    texts(
+                        connection,
+                        "SELECT id || ':' || scrollIndex || ':' || folds || ':[' || outlineClosed || ']' FROM notes",
+                    ),
+                ).containsExactly("1:4:3:[]")
+            },
+        )
+
+    @Test
     fun `every note starts out shown, and keeps everything it had`() =
         withData(
             version = 16,

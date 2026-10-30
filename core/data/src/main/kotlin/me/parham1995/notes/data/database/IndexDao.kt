@@ -58,7 +58,7 @@ abstract class IndexDao {
      * forgetting -- see [writeBatch].
      */
     @Query(
-        "SELECT id, blobSha, openedAt, scrollIndex, readSha, changedAt, folds FROM notes " +
+        "SELECT id, blobSha, openedAt, scrollIndex, readSha, changedAt, folds, outlineClosed FROM notes " +
             "WHERE vaultId = :vaultId AND path = :path",
     )
     abstract suspend fun stateOf(
@@ -142,6 +142,7 @@ abstract class IndexDao {
                         readSha = readShaAfter(state, write),
                         changedAt = if (state.blobSha == write.note.blobSha) state.changedAt else write.note.changedAt,
                         folds = foldsAfter(state, write),
+                        outlineClosed = state.outlineClosed,
                     )
                 }
             val existing = state?.id ?: 0
@@ -249,4 +250,5 @@ data class NoteState(
     val readSha: String?,
     val changedAt: Long,
     val folds: String,
+    val outlineClosed: String,
 )

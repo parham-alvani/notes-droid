@@ -21,7 +21,7 @@ import androidx.sqlite.execSQL
         TagEntity::class,
         AliasEntity::class,
     ],
-    version = 18,
+    version = 19,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -572,6 +572,14 @@ abstract class NotesDatabase : RoomDatabase() {
                 }
             }
 
+        /** The headings closed in a note's outline, none to start with. */
+        val MIGRATION_18_19 =
+            object : Migration(18, 19) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `notes` ADD COLUMN `outlineClosed` TEXT NOT NULL DEFAULT ''")
+                }
+            }
+
         /** The tables derived from a note, exactly as the entities declare them. */
         private fun createNotes(connection: SQLiteConnection) {
             connection.execSQL(
@@ -664,6 +672,7 @@ abstract class NotesDatabase : RoomDatabase() {
                 MIGRATION_15_16,
                 MIGRATION_16_17,
                 MIGRATION_17_18,
+                MIGRATION_18_19,
             )
     }
 }
