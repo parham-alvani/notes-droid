@@ -87,6 +87,12 @@ object NoteSearch {
         query: String,
     ): Int = ranges(block.searchableText(), query).size
 
+    /** How many hits [find] counts in a task's [reason]. */
+    fun count(
+        reason: String,
+        query: String,
+    ): Int = ranges(reason, query).size
+
     /**
      * The text a reader can see in this block.
      *
@@ -104,9 +110,11 @@ object NoteSearch {
             is MdBlock.Quote -> children.joinToString(" ") { it.searchableText() }
             is MdBlock.Callout ->
                 (title.plainText() + " " + children.joinToString(" ") { it.searchableText() }).trim()
+            // A task's reason is taken out of its text and drawn under it:
+            // it is read after the text, as the page shows it.
             is MdBlock.ListBlock ->
                 items.joinToString(" ") { item ->
-                    item.blocks.joinToString(" ") { it.searchableText() }
+                    (item.blocks.map { it.searchableText() } + listOfNotNull(item.reason)).joinToString(" ")
                 }
             is MdBlock.Table ->
                 (header + rows.flatten()).joinToString(" ") { it.plainText() }

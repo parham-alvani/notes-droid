@@ -605,7 +605,14 @@ private fun ListBlockView(
                             MdBlockView(child, actions, brokenLinks, Modifier.padding(start = indent))
                         }
                     }
-                    if (item.task != TaskState.NONE) TaskStatusLine(item)
+                    if (item.task != TaskState.NONE) {
+                        // The reason's marks come after its blocks', as find counts them.
+                        CompositionLocalProvider(
+                            LocalFind provides (itemFind?.get(index)?.getOrNull(item.blocks.size) ?: find),
+                        ) {
+                            TaskStatusLine(item)
+                        }
+                    }
                     if (item.taskMeta.isNotEmpty()) TaskChips(item)
                 }
             }
@@ -729,7 +736,13 @@ private fun TaskStatusLine(item: MdListItem) {
     // which already says what it is.
     val named = statuses.all.firstOrNull { it.symbol == item.status }?.takeIf { !it.isDefault }
     named?.let { TaskStatusBadge(it.name) }
-    item.reason?.let { TaskReasonLine(it, size = REASON_ICON * LocalReading.current.textScale) }
+    item.reason?.let {
+        TaskReasonLine(
+            it,
+            size = REASON_ICON * LocalReading.current.textScale,
+            marks = LocalFind.current,
+        )
+    }
 }
 
 /**

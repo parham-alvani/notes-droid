@@ -106,6 +106,41 @@ class FindRenderingTest {
     }
 
     @Test
+    fun `a task's reason gets its own part of the count, after its text`() {
+        val list =
+            MarkdownParser
+                .parseNote(
+                    "- [ ] pond [reason:: the pond is dry]\n- [ ] pond\n",
+                ).blocks
+                .single() as MdBlock.ListBlock
+
+        val marks = FindMarks("pond", current = 1).forItems(list)
+
+        // The first task: its text, then its reason, which holds hit 1.
+        assertThat(marks.map { item -> item.map { it.current } })
+            .containsExactly(listOf(null, 0), listOf(null))
+            .inOrder()
+    }
+
+    @Test
+    fun `the page is told where a hit in a task's reason is drawn`() {
+        val blocks = MarkdownParser.parseNote("- [-] Paint the fence [reason:: no budget left]\n").blocks
+        val hit = NoteSearch.find(blocks, "budget").single()
+        var told: Pair<Float, Float>? = null
+        compose.setContent {
+            MarkdownDocument(
+                blocks = blocks,
+                actions = RenderActions(),
+                find = FindTarget("budget", hit.blockIndex, 0),
+                onFindHit = { top, bottom -> told = top to bottom },
+            )
+        }
+        compose.waitForIdle()
+
+        assertThat(told).isNotNull()
+    }
+
+    @Test
     fun `the page is told where a hit far down a long list is drawn`() {
         val list = (1..80).joinToString("") { "- item $it${if (it == 70) " heron" else ""}\n" }
         val listBlocks = MarkdownParser.parseNote(list).blocks

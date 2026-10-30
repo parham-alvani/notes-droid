@@ -154,4 +154,17 @@ class NoteSearchTest {
 
         assertThat(marked).isEqualTo(counted.size)
     }
+
+    @Test
+    fun `a word only in a task's reason is found, after the task's text`() {
+        val note = "- [-] Paint the fence [reason:: no budget left] ❌ 2026-10-20\n- [ ] Buy paint\n"
+
+        val found = find(note, "budget")
+        assertThat(found).hasSize(1)
+        assertThat(found.single().preview).contains("no budget left")
+        // The text is counted first, then the reason, as the page draws them.
+        assertThat(find(note, "paint")).hasSize(2)
+        val list = MarkdownParser.parseNote(note).blocks.single()
+        assertThat(NoteSearch.count(list, "budget")).isEqualTo(1)
+    }
 }

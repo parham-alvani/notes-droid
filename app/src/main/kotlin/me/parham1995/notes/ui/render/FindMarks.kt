@@ -71,20 +71,23 @@ data class FindMarks(
 }
 
 /**
- * The marks for each block of each item of [list]: the current hit goes to the
- * one block that holds it, counted in the order `NoteSearch.find` counts, and
- * the others mark their hits plainly. A long task list is one block, and
- * stepping through its hits has to reach each item, not light them all up.
+ * The marks for each block of each item of [list], and for a task's reason
+ * last: the current hit goes to the one text that holds it, counted in the
+ * order `NoteSearch.find` counts, and the others mark their hits plainly. A
+ * long task list is one block, and stepping through its hits has to reach
+ * each item, not light them all up.
  */
 fun FindMarks.forItems(list: MdBlock.ListBlock): List<List<FindMarks>> {
     var before = 0
+
+    fun next(hits: Int): FindMarks {
+        val at = current?.minus(before)?.takeIf { it in 0 until hits }
+        before += hits
+        return copy(current = at)
+    }
     return list.items.map { item ->
-        item.blocks.map { child ->
-            val hits = NoteSearch.count(child, query)
-            val at = current?.minus(before)?.takeIf { it in 0 until hits }
-            before += hits
-            copy(current = at)
-        }
+        item.blocks.map { next(NoteSearch.count(it, query)) } +
+            listOfNotNull(item.reason?.let { next(NoteSearch.count(it, query)) })
     }
 }
 

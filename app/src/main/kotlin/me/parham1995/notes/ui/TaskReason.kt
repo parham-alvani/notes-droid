@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,6 +36,10 @@ import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
 import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.ui.icon.LucideGlyph
+import me.parham1995.notes.ui.render.FindMarks
+import me.parham1995.notes.ui.render.findColors
+import me.parham1995.notes.ui.render.findReport
+import me.parham1995.notes.ui.render.withFindMarks
 
 /**
  * The open vault's task statuses, from its Tasks plugin settings, for what
@@ -43,7 +49,8 @@ val LocalTaskStatuses = staticCompositionLocalOf { TaskStatuses.DEFAULT }
 
 /**
  * A task's reason after its text, quieter than it: `💬 no budget left`. The
- * same mark Daftar for Linux and the Mac put there.
+ * same mark Daftar for Linux and the Mac put there. In a note, find in note
+ * marks its hits ([marks]), all of it shown while one is the current hit.
  */
 @Composable
 fun TaskReasonLine(
@@ -51,7 +58,12 @@ fun TaskReasonLine(
     modifier: Modifier = Modifier,
     size: Dp = 13.dp,
     maxLines: Int = 2,
+    marks: FindMarks? = null,
 ) {
+    val colors = findColors()
+    val text = remember(reason, marks, colors) { AnnotatedString(reason).withFindMarks(marks, colors) }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val holdsCurrent = marks != null && (marks.everyCurrent || marks.current != null)
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -65,11 +77,13 @@ fun TaskReasonLine(
             contentDescription = stringResource(R.string.task_reason),
         )
         Text(
-            reason,
+            text,
+            modifier = Modifier.findReport(text, marks, layout),
             style = MaterialTheme.typography.bodySmall.inScript(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = maxLines,
+            maxLines = if (holdsCurrent) Int.MAX_VALUE else maxLines,
             overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layout = it },
         )
     }
 }
