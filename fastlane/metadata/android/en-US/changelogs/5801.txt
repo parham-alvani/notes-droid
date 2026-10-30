@@ -1,0 +1,1 @@
+Find in note now finds the words of a task's reason, the [reason:: …] field, and marks them on the reason line under the task.
