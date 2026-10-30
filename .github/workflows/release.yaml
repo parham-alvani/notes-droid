@@ -108,7 +108,25 @@ jobs:
           \`\`\`
           EOF
 
-          gh release create "$GITHUB_REF_NAME" "$APK" "$APK.sha256" \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file notes.md \
-            --generate-notes
+          # GitHub fails a call now and then for some minutes; the Mac's 0.9.0
+          # upload stopped half way and left an empty draft. Each call is
+          # tried again, and the release stays a draft until both files are
+          # there and checked: no one sees a release without its APK.
+          retry() {
+            for wait in 10 20 40 80 0; do
+              "$@" && return 0
+              [ "$wait" -eq 0 ] && return 1
+              echo "::warning::'$1 $2 $3' failed; trying again in ${wait}s"
+              sleep "$wait"
+            done
+          }
+          tag="$GITHUB_REF_NAME"
+          # A create that made the release and then failed is not made twice.
+          draft() { gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --verify-tag --title "$tag" --notes-file notes.md --generate-notes; }
+          retry draft
+          retry gh release upload "$tag" "$APK" "$APK.sha256" --clobber
+          for file in "$APK" "$APK.sha256"; do
+            want=$(sha256sum "$file" | cut -d' ' -f1)
+            retry sh -c "gh release view '$tag' --json assets -q '.assets[] | select(.name == \"$file\") | .digest' | grep -qx 'sha256:$want'"
+          done
+          retry gh release edit "$tag" --draft=false --latest
