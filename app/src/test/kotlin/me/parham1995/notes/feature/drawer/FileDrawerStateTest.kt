@@ -41,10 +41,23 @@ class FileDrawerStateTest {
     fun `a tap on a file that is not a note opens the file`() {
         assertThat(drawerTap(VaultItem("Papers/Lease.pdf", "Lease.pdf", isFolder = false)))
             .isEqualTo(DrawerTap.File("Papers/Lease.pdf"))
+        assertThat(
+            drawerTap(VaultItem("Tasks/Job Search.base", "Job Search.base", isFolder = false, isAttachment = true)),
+        ).isEqualTo(DrawerTap.File("Tasks/Job Search.base"))
         assertThat(drawerTap(VaultItem("Plants/Tomato.md", "Tomato", isFolder = false, noteId = 4)))
             .isEqualTo(DrawerTap.Note(4))
         // A folder with a landing page still opens as a folder; holding it opens the page.
         assertThat(drawerTap(VaultItem("Plants", "Plants", isFolder = true, noteId = 9)))
             .isEqualTo(DrawerTap.Folder("Plants"))
+    }
+
+    @Test
+    fun `the switcher finds a base by the words of its path`() {
+        val paths = listOf("Companies/Companies.base", "Tasks/Job Search.base")
+        assertThat(basesMatching("search job", paths)).containsExactly("Tasks/Job Search.base")
+        assertThat(basesMatching("TASKS", paths)).containsExactly("Tasks/Job Search.base")
+        assertThat(basesMatching("base", paths)).containsExactly(*paths.toTypedArray()).inOrder()
+        assertThat(basesMatching("  ", paths)).isEmpty()
+        assertThat(basesMatching("learning", paths)).isEmpty()
     }
 }

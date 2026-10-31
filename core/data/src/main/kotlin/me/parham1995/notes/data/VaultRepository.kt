@@ -39,6 +39,7 @@ import me.parham1995.notes.markdown.TagTree
 import me.parham1995.notes.markdown.TagTreeNode
 import me.parham1995.notes.obsidian.FolderLogos
 import me.parham1995.notes.obsidian.HiddenFiles
+import me.parham1995.notes.sync.BlobKind
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -212,7 +213,7 @@ class VaultRepository
                     combine(
                         notes.allParentsFlow(vaultId).distinctUntilChanged(),
                         notes.childrenOfFlow(vaultId, parent).distinctUntilChanged(),
-                        blobs.attachmentPaths(vaultId).distinctUntilChanged(),
+                        browsablePaths(vaultId).distinctUntilChanged(),
                         notes.folderNotesFlow(vaultId).distinctUntilChanged(),
                         hidden.rules(vaultId),
                     ) { parents, childNotes, attachments, folderNotes, rules ->
@@ -220,6 +221,17 @@ class VaultRepository
                     }
                 }.distinctUntilChanged()
                 .flowOn(Dispatchers.Default)
+
+        /**
+         * The files the tree lists beside the notes: the attachments, and the
+         * bases. A base syncs with the config, as it is read with the notes,
+         * but it is opened like a file, so it is listed like one.
+         */
+        private fun browsablePaths(vaultId: Long): Flow<List<String>> =
+            combine(
+                blobs.attachmentPaths(vaultId),
+                blobs.attachmentPaths(vaultId, listOf(BlobKind.CONFIG)),
+            ) { files, config -> (files + config.filter(Base::isBase)).sorted() }
 
         /** One level of the active vault's tree. */
         suspend fun children(parent: String): List<VaultItem> = children(active(), parent)
@@ -241,7 +253,7 @@ class VaultRepository
                     parent = parent,
                     parents = notes.allParents(vaultId),
                     childNotes = notes.childrenOf(vaultId, parent),
-                    attachmentPaths = blobs.attachmentPaths(vaultId).first(),
+                    attachmentPaths = browsablePaths(vaultId).first(),
                     folderNotes = notes.folderNotes(vaultId),
                     rules = hidden.forVault(vaultId),
                 )

@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.BaseAnswer
+import me.parham1995.notes.data.BaseRepository
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.IconStore
@@ -97,6 +99,7 @@ class BrowserViewModel
         private val savedState: SavedStateHandle,
         private val noteTemplates: NoteTemplates,
         writes: VaultWriteRepository,
+        private val bases: BaseRepository,
     ) : ViewModel() {
         /**
          * The templates a new note can start from, in the vault being read --
@@ -297,6 +300,12 @@ class BrowserViewModel
          * recorded it. Null when it cannot be had at all.
          */
         suspend fun attachment(path: String): File? = files.localFile(repository.activeVaultId.first(), path)
+
+        /** The base at [path] in [vaultId], opened on its own: its own `this`. */
+        suspend fun base(
+            vaultId: Long,
+            path: String,
+        ): BaseAnswer? = bases.runFile(vaultId, path, "")
 
         fun open(next: String) {
             savedState[KEY_FOLDER] = next

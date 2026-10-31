@@ -109,11 +109,21 @@ fun FileDrawerSheet(
 
         LazyColumn(Modifier.fillMaxWidth()) {
             if (state.filtering) {
-                if (state.matches.isEmpty()) {
+                if (state.matches.isEmpty() && state.baseMatches.isEmpty()) {
                     item { Empty(stringResource(R.string.search_no_match)) }
                 }
                 items(state.matches, key = { "match-${it.id}" }) { note ->
                     NoteRow(note, onOpenNote, onOpenNoteInNewTab)
+                }
+                // A base is opened as the file it is, in a sheet over the note.
+                items(state.baseMatches, key = { "base-$it" }) { path ->
+                    ItemRow(
+                        title = path.substringAfterLast('/').removeSuffix(".base"),
+                        subtitle = path.substringBeforeLast('/', "").ifEmpty { null },
+                        icon = null,
+                        defaultIcon = Attachments.iconOf(path),
+                        onClick = { onOpenFile(path) },
+                    )
                 }
                 return@LazyColumn
             }

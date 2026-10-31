@@ -31,6 +31,7 @@ import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.ItemRow
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.inScript
+import me.parham1995.notes.ui.render.Attachments
 import me.parham1995.notes.ui.text
 
 /**
@@ -46,6 +47,8 @@ internal fun FolderContents(
     onOpenNote: (Long) -> Unit,
     onOpenFolder: (String) -> Unit,
     onOpenGraph: (Long) -> Unit = {},
+    /** A file that is not a note, by its path: a base, a PDF, a picture. */
+    onOpenFile: (String) -> Unit = {},
 ) {
     if (rows.isEmpty()) {
         Text(
@@ -63,13 +66,24 @@ internal fun FolderContents(
                 title = item.name,
                 icon = row.icon,
                 logo = row.logo,
-                defaultIcon = if (item.isFolder) "folder" else "file-text",
-                iconDescription = if (item.isFolder) "Folder" else stringResource(R.string.note_kind),
+                defaultIcon =
+                    when {
+                        item.isFolder -> "folder"
+                        item.isAttachment -> Attachments.iconOf(item.path)
+                        else -> "file-text"
+                    },
+                iconDescription =
+                    when {
+                        item.isFolder -> "Folder"
+                        item.isAttachment -> stringResource(R.string.kind_file)
+                        else -> stringResource(R.string.note_kind)
+                    },
                 underline = item.isFolder && item.noteId != null,
                 onClick = {
                     val note = item.noteId
                     when {
                         note != null -> onOpenNote(note)
+                        item.isAttachment -> onOpenFile(item.path)
                         else -> onOpenFolder(item.path)
                     }
                 },

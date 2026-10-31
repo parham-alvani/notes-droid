@@ -566,6 +566,21 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `a base is listed in its folder as a file, and the rest of the config is not`() =
+        runTest {
+            // A base syncs as config, so the tree never showed one: there was
+            // no way to open it but a link from a note.
+            config("Tasks/Job Search.base")
+            config(me.parham1995.notes.sync.VaultFilter.ICONIC_CONFIG)
+            attachment("Tasks/plan.pdf")
+
+            assertThat(repository.children("").map { it.name }).containsExactly("Tasks")
+            val tasks = repository.children("Tasks")
+            assertThat(tasks.map { it.name }).containsExactly("Job Search.base", "plan.pdf").inOrder()
+            assertThat(tasks.all { it.isAttachment && !it.isFolder }).isTrue()
+        }
+
+    @Test
     fun `a folder guide is a note, but not one that is listed`() =
         runTest {
             // Synced and indexed like anything else -- this is only about

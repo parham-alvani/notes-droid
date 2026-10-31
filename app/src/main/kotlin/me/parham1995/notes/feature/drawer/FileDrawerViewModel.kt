@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.parham1995.notes.data.BaseAnswer
+import me.parham1995.notes.data.BaseRepository
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.VaultBookmarks
@@ -28,6 +30,16 @@ import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.folderListing
 import java.io.File
 import javax.inject.Inject
+
+/** The [paths] of bases with every word of [query] in them, in any order and any case. */
+internal fun basesMatching(
+    query: String,
+    paths: List<String>,
+): List<String> {
+    val words = query.lowercase().split(' ').filter { it.isNotEmpty() }
+    if (words.isEmpty()) return emptyList()
+    return paths.filter { path -> words.all { it in path.lowercase() } }
+}
 
 /** One note, as the drawer lists it. */
 data class DrawerNote(
@@ -52,6 +64,8 @@ data class FileDrawerUiState(
     val activeVaultId: Long = 0,
     val query: String = "",
     val matches: List<DrawerNote> = emptyList(),
+    /** The bases whose path has every word typed, after the notes. */
+    val baseMatches: List<String> = emptyList(),
     val tabs: List<DrawerTab> = emptyList(),
     val recent: List<DrawerNote> = emptyList(),
     /** The folder being shown, relative to the vault root. */
@@ -85,6 +99,7 @@ class FileDrawerViewModel
         icons: IconStore,
         configs: ObsidianConfigStore,
         private val savedState: SavedStateHandle,
+        private val bases: BaseRepository,
     ) : ViewModel() {
         /**
          * A file the drawer lists that is not a note -- a PDF, a picture --
@@ -169,10 +184,24 @@ class FileDrawerViewModel
                         } else {
                             repository.quickSwitch(query).map { it.asDrawerNote() }
                         }
-                    _state.update { it.copy(matches = found) }
+                    val bases = if (query.isBlank()) emptyList() else matchingBases(query)
+                    _state.update { it.copy(matches = found, baseMatches = bases) }
                 }
             }
         }
+
+        /**
+         * The bases the switcher offers for [query]: a `.base` file is no
+         * note, so the notes' index does not know it, and a vault has a few.
+         */
+        private suspend fun matchingBases(query: String): List<String> =
+            basesMatching(query, bases.paths(repository.activeVaultId.first())).take(BASE_LIMIT)
+
+        /** The base at [path] in [vaultId], opened on its own: its own `this`. */
+        suspend fun base(
+            vaultId: Long,
+            path: String,
+        ): BaseAnswer? = bases.runFile(vaultId, path, "")
 
         fun setQuery(text: String) {
             _state.update { it.copy(query = text) }
@@ -222,6 +251,7 @@ class FileDrawerViewModel
 
         private companion object {
             const val RECENT = 8
+            const val BASE_LIMIT = 5
             const val DEBOUNCE_MS = 150L
             const val KEY_FOLDER = "drawer_folder"
             const val STOP_AFTER_MS = 5_000L

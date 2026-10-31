@@ -55,6 +55,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.feature.note.BaseSheet
+import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.obsidian.Period
 import me.parham1995.notes.ui.BookmarkActions
 import me.parham1995.notes.ui.ItemRow
@@ -134,9 +136,13 @@ fun BrowserScreen(
     var reading by remember { mutableStateOf<File?>(null) }
     // A picture, by its path in the vault being browsed, shown here zoomable.
     var viewing by remember { mutableStateOf<String?>(null) }
+    // A `.base` file, shown in a sheet as a link to one is in a note.
+    var base by remember { mutableStateOf<String?>(null) }
 
     val openAttachment: (String) -> Unit = { path ->
-        if (Attachments.isImage(path)) {
+        if (Base.isBase(path)) {
+            base = path
+        } else if (Attachments.isImage(path)) {
             viewing = path
         } else {
             scope.launch {
@@ -154,6 +160,21 @@ fun BrowserScreen(
                 message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
             }
         }
+    }
+
+    base?.let { path ->
+        val vault = state.activeVaultId
+        BaseSheet(
+            title = path.substringAfterLast('/').removeSuffix(".base"),
+            view = null,
+            vaultId = vault,
+            run = { viewModel.base(vault, path) },
+            onDismiss = { base = null },
+            onOpen = { id ->
+                base = null
+                onOpenNote(id)
+            },
+        )
     }
 
     reading?.let { file ->

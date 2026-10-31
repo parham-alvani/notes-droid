@@ -101,6 +101,7 @@ object Attachments {
             "xls", "xlsx", "ods", "csv" -> "file-spreadsheet"
             "ppt", "pptx", "odp" -> "presentation"
             "epub" -> "book-open-text"
+            "base" -> "table"
             "pdf", "doc", "docx", "odt", "rtf", "txt" -> "file-text"
             else -> "paperclip"
         }

@@ -67,7 +67,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.toClipEntry
@@ -158,6 +160,8 @@ fun NoteScreen(
     val linkNotFound = stringResource(R.string.link_not_found)
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
     // The bar slides away as the note is read down and comes back on the
     // first scroll up. On a phone it is a seventh of the screen, and nothing
@@ -215,6 +219,8 @@ fun NoteScreen(
     var previewing by remember { mutableStateOf<Pair<LinkTarget, Transcluded>?>(null) }
     // A `[[x.base]]` link that was followed: the base and the view it named.
     var baseSheet by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    // A `.base` file opened from a list rather than a link: its vault and path.
+    var baseFile by remember { mutableStateOf<Pair<Long, String>?>(null) }
     val haptics = LocalHapticFeedback.current
     // A heading to land on once the note it belongs to has loaded.
     var pendingHeading by remember { mutableStateOf<String?>(null) }
@@ -313,6 +319,10 @@ fun NoteScreen(
     }
 
     fun closeThen(action: () -> Unit) {
+        // The switcher's field keeps the keyboard up after the drawer shuts,
+        // over the note it opened.
+        focusManager.clearFocus(force = true)
+        keyboard?.hide()
         scope.launch { drawer.close() }
         action()
     }
@@ -664,7 +674,14 @@ fun NoteScreen(
                 onOpenNoteInNewTab = { id -> closeThen { viewModel.openTab(id, inNewTab = true) } },
                 onBrowseFolder = { path -> closeThen { onOpenFolder(path) } },
                 onOpenFile = { path ->
-                    closeThen { openAttachment(path, files::attachment, drawerState.activeVaultId.takeIf { it != 0L }) }
+                    closeThen {
+                        val vault = drawerState.activeVaultId.takeIf { it != 0L }
+                        if (Base.isBase(path) && vault != null) {
+                            baseFile = vault to path
+                        } else {
+                            openAttachment(path, files::attachment, vault)
+                        }
+                    }
                 },
                 onOpenHeading = { id, text ->
                     closeThen {
@@ -965,7 +982,21 @@ fun NoteScreen(
                             }
 
                             if (showContents) {
-                                FolderContents(state.contents, onOpenNote, onOpenFolder)
+                                FolderContents(
+                                    state.contents,
+                                    onOpenNote,
+                                    onOpenFolder,
+                                    onOpenFile = { path ->
+                                        val vault = state.note?.vaultId
+                                        if (Base.isBase(path) &&
+                                            vault != null
+                                        ) {
+                                            baseFile = vault to path
+                                        } else {
+                                            openAttachment(path)
+                                        }
+                                    },
+                                )
                             } else {
                                 // The column held to a reading width on a wide window.
                                 BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -1141,6 +1172,20 @@ fun NoteScreen(
                     },
                 )
             }
+        }
+
+        baseFile?.let { (vault, path) ->
+            BaseSheet(
+                title = path.substringAfterLast('/').removeSuffix(".base"),
+                view = null,
+                vaultId = vault,
+                run = { files.base(vault, path) },
+                onDismiss = { baseFile = null },
+                onOpen = { id ->
+                    baseFile = null
+                    viewModel.openTab(id, inNewTab = false)
+                },
+            )
         }
 
         previewing?.let { (target, content) ->

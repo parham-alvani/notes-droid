@@ -63,6 +63,14 @@ class BaseRepository
             return LinkResolver(bases).resolve(target.trim(), from)
         }
 
+        /** Every `.base` file in [vaultId], for the switcher to offer. */
+        suspend fun paths(vaultId: Long): List<String> =
+            blobs
+                .files(vaultId)
+                .map { it.path }
+                .filter { Base.isBase(it) }
+                .sorted()
+
         /** Runs the `.base` file [target] names, as embedded in the note at [from]. */
         suspend fun runFile(
             vaultId: Long,
