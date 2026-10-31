@@ -30,7 +30,16 @@ data class Base(
         val sort: List<Pair<String, Boolean>> = emptyList(),
         val groupBy: Pair<String, Boolean>? = null,
         val limit: Int? = null,
-    )
+        val layout: BaseLayout = BaseLayout(),
+    ) {
+        /** `table`, `cards` or `list`: how the view is drawn. Any other type is a table. */
+        val kind: String
+            get() =
+                when (type) {
+                    "cards", "list" -> type
+                    else -> "table"
+                }
+    }
 
     companion object {
         fun parse(source: String): Base {
@@ -66,6 +75,7 @@ data class Base(
                             },
                         groupBy = groupProperty?.let { it to (group?.get("direction")?.string?.uppercase() != "DESC") },
                         limit = node["limit"]?.string?.toIntOrNull(),
+                        layout = BaseLayout.of(node),
                     )
             }
             return Base(
@@ -78,6 +88,73 @@ data class Base(
 
         fun isBase(path: String): Boolean = path.lowercase().endsWith(".base")
     }
+}
+
+/**
+ * The options of a `cards` or a `list` view, as Obsidian writes them in the
+ * view: [image], [imageFit], [imageAspectRatio] and [cardSize] for cards;
+ * [markers], [indentProperties] and [separator] for a list. A value out of
+ * range or of the wrong kind keeps the default.
+ */
+data class BaseLayout(
+    /** The property whose value is a card's cover: a picture in the vault, a web address or a `#hex` colour. */
+    val image: String? = null,
+    /** `cover` crops the picture to fill the cover; `contain` shows all of it. */
+    val imageFit: String = "cover",
+    /** The cover's height over its width. */
+    val imageAspectRatio: Double = 1.0,
+    /** The width of a card, in points. */
+    val cardSize: Double = 200.0,
+    /** `bullet`, `number` or `none`. */
+    val markers: String = "bullet",
+    /** Each property on its own line under the name, not on one line. */
+    val indentProperties: Boolean = false,
+    val separator: String = ",",
+) {
+    companion object {
+        internal fun of(node: YamlNode): BaseLayout {
+            fun text(key: String) = node[key]?.string
+
+            fun number(key: String) = text(key)?.trim()?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }
+            val defaults = BaseLayout()
+            return BaseLayout(
+                image = text("image")?.takeIf { it.isNotEmpty() },
+                imageFit =
+                    text("imageFit")?.lowercase()?.takeIf { it == "cover" || it == "contain" } ?: defaults.imageFit,
+                imageAspectRatio =
+                    number("imageAspectRatio")?.coerceIn(MIN_RATIO, MAX_RATIO) ?: defaults.imageAspectRatio,
+                cardSize = number("cardSize")?.coerceIn(MIN_CARD, MAX_CARD) ?: defaults.cardSize,
+                markers =
+                    when (text("markers")?.lowercase()) {
+                        "number", "numbers" -> "number"
+                        "none" -> "none"
+                        else -> defaults.markers
+                    },
+                indentProperties = text("indentProperties").equals("true", ignoreCase = true),
+                separator = text("separator")?.takeIf { it.isNotEmpty() } ?: defaults.separator,
+            )
+        }
+
+        private const val MIN_RATIO = 0.1
+        private const val MAX_RATIO = 10.0
+        private const val MIN_CARD = 50.0
+        private const val MAX_CARD = 1000.0
+    }
+}
+
+/** A card's cover: a picture in the vault, one on the web, or a colour. */
+sealed interface BaseImage {
+    data class File(
+        val path: String,
+    ) : BaseImage
+
+    data class Url(
+        val url: String,
+    ) : BaseImage
+
+    data class Color(
+        val hex: String,
+    ) : BaseImage
 }
 
 /** `filters:` -- one statement, or `and`, `or` and `not` over a list of them. */
@@ -128,10 +205,14 @@ sealed interface BaseFilter {
 /** What a view shows: the columns, then the rows in their groups. */
 data class BaseTable(
     val name: String,
+    /** The view's `type` as written. */
     val type: String,
     val columns: List<String>,
     val groups: List<Group>,
     val count: Int,
+    /** `table`, `cards` or `list`: how it is drawn. */
+    val kind: String = "table",
+    val layout: BaseLayout = BaseLayout(),
 ) {
     data class Group(
         /** Null when the view has no `groupBy`. */
@@ -142,6 +223,8 @@ data class BaseTable(
     data class Row(
         val path: String,
         val cells: List<BaseCell>,
+        /** The card's cover, in a `cards` view with an `image`. */
+        val image: BaseImage? = null,
     )
 }
 
@@ -270,9 +353,17 @@ class BaseEngine(
         view.limit?.takeIf { it >= 0 }?.let { paths = paths.take(it) }
         val order = view.order.ifEmpty { listOf("file.name") }
         val columns = order.map(::column)
+        val cover =
+            view.layout.image
+                ?.takeIf { view.kind == "cards" }
+                ?.let(::column)
         val tableRows =
             paths.map { path ->
-                BaseTable.Row(path, order.zip(columns).map { (id, expression) -> cell(id, expression, path) })
+                BaseTable.Row(
+                    path,
+                    order.zip(columns).map { (id, expression) -> cell(id, expression, path) },
+                    cover?.let { image(value(it, path), path) },
+                )
             }
         val groups =
             view.groupBy?.let { (property, ascending) ->
@@ -295,7 +386,46 @@ class BaseEngine(
             columns = order.map { base.displayNames[it] ?: label(it) },
             groups = groups,
             count = tableRows.size,
+            kind = view.kind,
+            layout = view.layout,
         )
+    }
+
+    /**
+     * A cover from a property's value: a link to a picture, a path or a name
+     * the vault resolves, a web address, or a `#hex` colour. The first of a
+     * list. A link to a note is no cover.
+     */
+    private fun image(
+        value: BaseValue,
+        from: String,
+    ): BaseImage? {
+        fun picture(file: String) =
+            BaseImage.File(file).takeIf { file.substringAfterLast('.', "").lowercase() in IMAGE_TYPES }
+        return when (value) {
+            is BaseValue.File -> picture(value.path)
+            is BaseValue.Link ->
+                if (value.path !=
+                    null
+                ) {
+                    picture(value.path)
+                } else {
+                    image(BaseValue.Text(value.target), from)
+                }
+            is BaseValue.ListValue -> value.items.firstOrNull()?.let { image(it, from) }
+            is BaseValue.Text -> {
+                var text = value.value.trim()
+                if (HEX_COLOR.matches(text)) return BaseImage.Color(text)
+                val lowered = text.lowercase()
+                if (lowered.startsWith("https://") || lowered.startsWith("http://")) return BaseImage.Url(text)
+                text = text.removePrefix("!")
+                if (text.startsWith("[[") && text.endsWith("]]")) {
+                    text = text.substring(2, text.length - 2).substringBefore('|').substringBefore('#')
+                }
+                index.resolve(text, from)?.let(::picture)
+            }
+            else -> null
+        }
     }
 
     // Filters and columns
@@ -1372,6 +1502,9 @@ class BaseEngine(
                 "November",
                 "December",
             )
+        private val IMAGE_TYPES =
+            setOf("png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif", "heic", "tif", "tiff")
+        private val HEX_COLOR = Regex("^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
         private val WEEKDAYS = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
 
         private const val HOUR_MS = 3_600_000.0

@@ -1,5 +1,6 @@
 package me.parham1995.notes.ui.render
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -31,8 +32,14 @@ import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.roborazziSystemPropertyOutputDirectory
 import kotlinx.coroutines.runBlocking
+import me.parham1995.notes.data.BaseAnswer
 import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.ThemeChoice
+import me.parham1995.notes.markdown.BaseCell
+import me.parham1995.notes.markdown.BaseImage
+import me.parham1995.notes.markdown.BaseLayout
+import me.parham1995.notes.markdown.BaseResult
+import me.parham1995.notes.markdown.BaseTable
 import me.parham1995.notes.markdown.MarkdownParser
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.ui.LocalReading
@@ -182,6 +189,74 @@ class RendererScreenshotTest {
         pond: still
         ```
         """.trimIndent()
+
+    /** A made-up base of three shops, drawn as [kind] with [layout]. */
+    private fun shops(
+        kind: String,
+        layout: BaseLayout,
+    ): BaseAnswer {
+        fun cell(text: String) = BaseCell(listOf(BaseCell.Part(text)))
+        val rows =
+            listOf(
+                Triple("Shops/Bakery.md", "open", "#e0a458"),
+                Triple("Shops/Cafe.md", "closed", "#5b8e7d"),
+                Triple("Shops/کتاب‌فروشی.md", "open", "#8e5b7d"),
+            ).map { (path, stage, colour) ->
+                BaseTable.Row(
+                    path,
+                    listOf(
+                        BaseCell(listOf(BaseCell.Part(path.substringAfterLast('/').removeSuffix(".md"), path))),
+                        cell(stage),
+                        BaseCell(check = stage == "open"),
+                        BaseCell(listOf(BaseCell.Part("4.5")), numeric = true),
+                    ),
+                    BaseImage.Color(colour),
+                )
+            }
+        val table =
+            BaseTable(
+                name = "Shops",
+                type = kind,
+                columns = listOf("file name", "stage", "busy", "rating"),
+                groups = listOf(BaseTable.Group(null, rows)),
+                count = rows.size,
+                kind = kind,
+                layout = layout,
+            )
+        return BaseAnswer(BaseResult(listOf(table), emptyList()))
+    }
+
+    @Test
+    fun `a base as cards`() {
+        page {
+            BaseTables(
+                title = "Shops",
+                answer =
+                    Result.success(
+                        shops("cards", BaseLayout(image = "note.cover", imageAspectRatio = 0.4, cardSize = 150.0)),
+                    ),
+                onlyView = null,
+                onOpen = {},
+            )
+        }
+        capture("base_cards")
+    }
+
+    @Test
+    fun `a base as a list`() {
+        page(theme = ThemeChoice.LIGHT) {
+            Column {
+                BaseTables("Shops", Result.success(shops("list", BaseLayout(separator = "|"))), null, {})
+                BaseTables(
+                    "Shops",
+                    Result.success(shops("list", BaseLayout(markers = "number", indentProperties = true))),
+                    null,
+                    {},
+                )
+            }
+        }
+        capture("base_list")
+    }
 
     /**
      * Find in the note: every hit tinted, the one the bar is on solid, in

@@ -158,6 +158,7 @@ private val PREVIEW_HEIGHT = 480.dp
 internal fun BaseSheet(
     title: String,
     view: String?,
+    vaultId: Long,
     run: suspend () -> BaseAnswer?,
     onDismiss: () -> Unit,
     onOpen: (Long) -> Unit,
@@ -168,6 +169,7 @@ internal fun BaseSheet(
             title = title,
             answer = answer,
             onlyView = view,
+            vaultId = vaultId,
             onOpen = { path ->
                 answer
                     ?.getOrNull()

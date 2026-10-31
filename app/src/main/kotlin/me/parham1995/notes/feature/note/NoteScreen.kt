@@ -1132,6 +1132,7 @@ fun NoteScreen(
                 BaseSheet(
                     title = target.substringAfterLast('/').removeSuffix(".base"),
                     view = view,
+                    vaultId = note.vaultId,
                     run = { viewModel.runBase(note.vaultId, note.path, MdBlock.BaseView(-1, target = target)) },
                     onDismiss = { baseSheet = null },
                     onOpen = { id ->

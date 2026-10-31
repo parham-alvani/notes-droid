@@ -46,8 +46,9 @@ import me.parham1995.notes.ui.icon.LucideGlyph
 import me.parham1995.notes.ui.inScript
 
 /**
- * An Obsidian base, answered: one table per view, behind tabs when there are
- * several, every view type drawn as a table. A filter that could not be read
+ * An Obsidian base, answered: one view per tab when there are several, each
+ * a table, a grid of cards or a list as its `type` says; any other type is
+ * drawn as a table. A filter that could not be read
  * is said above the table and left out, as on the Mac -- a filter dropped
  * quietly would list files the base was written to leave out.
  */
@@ -79,6 +80,7 @@ internal fun BaseBlockView(
         title = block.target?.substringAfterLast('/')?.removeSuffix(".base") ?: stringResource(R.string.base_title),
         answer = answer,
         onlyView = block.view,
+        vaultId = actions.vaultId,
         onOpen = { path ->
             answer
                 ?.getOrNull()
@@ -91,9 +93,9 @@ internal fun BaseBlockView(
 }
 
 /**
- * The tables of a base. [answer] is null while it runs, a null answer when the
+ * The views of a base. [answer] is null while it runs, a null answer when the
  * base is not in the vault, and [onlyView] names the one view an embed asked
- * for.
+ * for. A card's cover from the vault needs [vaultId].
  */
 @Composable
 internal fun BaseTables(
@@ -102,6 +104,7 @@ internal fun BaseTables(
     onlyView: String?,
     onOpen: (path: String) -> Unit,
     modifier: Modifier = Modifier,
+    vaultId: Long? = null,
 ) {
     val reading = LocalReading.current
     val outline = MaterialTheme.colorScheme.outlineVariant
@@ -131,7 +134,12 @@ internal fun BaseTables(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             LucideGlyph(
-                name = "table",
+                name =
+                    when (table?.kind) {
+                        "cards" -> "layout-grid"
+                        "list" -> if (table.layout.markers == "number") "list-ordered" else "list"
+                        else -> "table"
+                    },
                 size = HEADER_ICON * reading.textScale,
                 tint = MaterialTheme.colorScheme.primary,
             )
@@ -170,12 +178,18 @@ internal fun BaseTables(
                 }
             }
         }
-        table?.let { Table(it, onOpen) }
+        table?.let {
+            when (it.kind) {
+                "cards" -> BaseCards(it, vaultId, onOpen)
+                "list" -> BaseList(it, onOpen)
+                else -> Table(it, onOpen)
+            }
+        }
     }
 }
 
 @Composable
-private fun Note(
+internal fun Note(
     text: String,
     error: Boolean,
 ) {
@@ -276,7 +290,7 @@ private fun Cell(
 }
 
 /** Every row is composed at once inside the note's lazy list, so a whole vault would stall a frame. */
-private const val MAX_ROWS = 150
+internal const val MAX_ROWS = 150
 private const val MAX_CELL_LINES = 3
 private val HEADER_ICON = 18.dp
 private val BOX_ICON = 16.dp

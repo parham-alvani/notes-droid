@@ -259,6 +259,77 @@ class BasesTest {
     }
 
     @Test
+    fun `cards and list options`() {
+        val base =
+            Base.parse(
+                """
+                views:
+                  - type: cards
+                    name: Gallery
+                    image: note.cover
+                    imageFit: contain
+                    imageAspectRatio: 0.75
+                    cardSize: 260
+                  - type: list
+                    name: Lines
+                    markers: number
+                    indentProperties: true
+                    separator: "|"
+                  - type: cards
+                    name: Odd
+                    imageFit: stretch
+                    imageAspectRatio: -1
+                    cardSize: wide
+                  - type: kanban
+                    name: Plugin
+                """.trimIndent(),
+            )
+        assertThat(base.views.map { it.kind }).containsExactly("cards", "list", "cards", "table").inOrder()
+        assertThat(base.views[0].layout)
+            .isEqualTo(
+                BaseLayout(image = "note.cover", imageFit = "contain", imageAspectRatio = 0.75, cardSize = 260.0),
+            )
+        val list = base.views[1].layout
+        assertThat(Triple(list.markers, list.indentProperties, list.separator)).isEqualTo(Triple("number", true, "|"))
+        // A value the app cannot read keeps the default.
+        assertThat(base.views[2].layout).isEqualTo(BaseLayout())
+        assertThat(base.views[3].type).isEqualTo("kanban")
+    }
+
+    @Test
+    fun `a cards cover is a picture, a web address or a colour`() {
+        val notes =
+            FixtureIndex(
+                now,
+                mapOf(
+                    "A.md" to ("---\ncover: \"[[map.png]]\"\n---\n" to 0),
+                    "B.md" to ("---\ncover: https://example.com/b.jpg\n---\n" to 0),
+                    "C.md" to ("---\ncover: \"#ff5070\"\n---\n" to 0),
+                    "D.md" to ("---\ncover: \"[[A]]\"\n---\n" to 0),
+                    "E.md" to ("---\ncover: uploads/map.png\n---\n" to 0),
+                ),
+                extra = setOf("uploads/map.png"),
+            )
+        val base =
+            Base.parse(
+                "filters: file.ext == \"md\"\nviews:\n  - type: cards\n    name: C\n    image: note.cover\n" +
+                    "  - type: table\n    name: T\n    image: note.cover\n",
+            )
+        val tables = BaseEngine(notes, now, zone = ZoneOffset.UTC).run(base, "")
+        assertThat(tables[0].kind).isEqualTo("cards")
+        assertThat(tables[0].groups[0].rows.map { it.image })
+            .containsExactly(
+                BaseImage.File("uploads/map.png"),
+                BaseImage.Url("https://example.com/b.jpg"),
+                BaseImage.Color("#ff5070"),
+                null,
+                BaseImage.File("uploads/map.png"),
+            ).inOrder()
+        // A table has no covers.
+        assertThat(tables[1].groups[0].rows.all { it.image == null }).isTrue()
+    }
+
+    @Test
     fun `a base with no views has one`() {
         val tables = engine().run(Base.parse("filters: file.name == \"Home.md\""), "")
         assertThat(tables).hasSize(1)
@@ -340,7 +411,7 @@ internal class FixtureIndex(
     private val parsed = notes.mapValues { (_, value) -> MarkdownParser.parseNote(value.first) { it } }
     private val properties = notes.mapValues { (_, value) -> FrontMatter.parse(value.first) }
     private val modified = notes.mapValues { (_, value) -> now - value.second * 86_400_000L }
-    private val resolver = LinkResolver(notes.keys)
+    private val resolver = LinkResolver(notes.keys + extra)
 
     override val files: Collection<String> = notes.keys + extra
 
