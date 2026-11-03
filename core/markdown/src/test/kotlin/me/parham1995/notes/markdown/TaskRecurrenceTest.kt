@@ -68,6 +68,51 @@ class TaskRecurrenceTest {
         ).isNull()
 
         val far = TaskRecurrence.parse("every 10000 years")!!
-        assertThat(TaskRecurrence.next(LocalDate.of(2026, 1, 1), far, LocalDate.of(2026, 1, 1)).year).isEqualTo(12026)
+        assertThat(TaskRecurrence.next(LocalDate.of(2026, 1, 1), far, LocalDate.of(2026, 1, 1))?.year).isEqualTo(12026)
+    }
+
+    @Test
+    fun `reads the jalali months and years`() {
+        assertThat(TaskRecurrence.parse("every jalali month"))
+            .isEqualTo(Recurrence(1, RecurrenceUnit.JALALI_MONTH, whenDone = false))
+        assertThat(TaskRecurrence.parse("Every 3 Jalali Months when done"))
+            .isEqualTo(Recurrence(3, RecurrenceUnit.JALALI_MONTH, whenDone = true))
+        assertThat(TaskRecurrence.parse("every jalali year"))
+            .isEqualTo(Recurrence(1, RecurrenceUnit.JALALI_YEAR, whenDone = false))
+        assertThat(TaskRecurrence.parse("every 2 jalali years"))
+            .isEqualTo(Recurrence(2, RecurrenceUnit.JALALI_YEAR, whenDone = false))
+        assertThat(TaskRecurrence.parse("every  2   jalali   months"))
+            .isEqualTo(Recurrence(2, RecurrenceUnit.JALALI_MONTH, whenDone = false))
+        assertThat(TaskRecurrence.parse("every month"))
+            .isEqualTo(Recurrence(1, RecurrenceUnit.MONTH, whenDone = false))
+    }
+
+    @Test
+    fun `refuses a jalali rule it would have to guess at`() {
+        listOf(
+            "every jalali week",
+            "every jalali day",
+            "every jalali",
+            "every 0 jalali months",
+            "every jalali month on the 10th",
+            "every persian month",
+            "every 10001 jalali months",
+        ).forEach { assertThat(TaskRecurrence.parse(it)).isNull() }
+    }
+
+    @Test
+    fun `a jalali month keeps the day of the jalali month`() {
+        val rule = Recurrence(1, RecurrenceUnit.JALALI_MONTH, whenDone = false)
+
+        // Dey 10 to Bahman 10; every month would give 2027-01-31.
+        assertThat(TaskRecurrence.next(LocalDate.of(2026, 12, 31), rule, LocalDate.of(2026, 12, 31)))
+            .isEqualTo(LocalDate.of(2027, 1, 30))
+    }
+
+    @Test
+    fun `a step off the jalali calendar is no next day, not a crash`() {
+        val far = TaskRecurrence.parse("every 9000 jalali years")!!
+
+        assertThat(TaskRecurrence.next(LocalDate.of(2026, 12, 31), far, LocalDate.of(2026, 12, 31))).isNull()
     }
 }

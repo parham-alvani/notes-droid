@@ -111,6 +111,53 @@ class TaskLineTest {
     }
 
     @Test
+    fun `a jalali repeat keeps the day of the jalali month`() {
+        fun next(
+            line: String,
+            today: String,
+        ): String? = TaskLine.completeRecurring(line, today)?.first()
+
+        // Dey 10 to Bahman 10; every month would give 2027-01-31.
+        assertThat(next("- [ ] Pay 🔁 every jalali month ⏳ 2026-12-31", "2026-12-31"))
+            .isEqualTo("- [ ] Pay 🔁 every jalali month ⏳ 2027-01-30")
+        // Shahrivar 31 to Mehr 30.
+        assertThat(next("- [ ] Pay 🔁 every jalali month ⏳ 2026-09-22", "2026-09-22"))
+            .isEqualTo("- [ ] Pay 🔁 every jalali month ⏳ 2026-10-22")
+        // 1403-12-30 to 1404-12-29: 1404 is not leap.
+        assertThat(next("- [ ] Pay 🔁 every jalali year ⏳ 2025-03-20", "2025-03-20"))
+            .isEqualTo("- [ ] Pay 🔁 every jalali year ⏳ 2026-03-20")
+        // Shahrivar 10, stepped past Mehr 10 and Aban 10 to Azar 10.
+        assertThat(next("- [ ] Pay 🔁 every jalali month ⏳ 2026-09-01", "2026-11-03"))
+            .isEqualTo("- [ ] Pay 🔁 every jalali month ⏳ 2026-12-01")
+        // From today, Aban 10, to Azar 10.
+        assertThat(next("- [ ] Pay 🔁 every jalali month when done ⏳ 2026-10-01", "2026-11-01"))
+            .isEqualTo("- [ ] Pay 🔁 every jalali month when done ⏳ 2026-12-01")
+        // 📅 leads, Dey 12 to Bahman 12, 30 days; ⏳ moves by the same 30; ➕ never moves.
+        assertThat(next("- [ ] Pay 🔁 every jalali month ➕ 2026-12-01 ⏳ 2026-12-31 📅 2027-01-02", "2026-12-31"))
+            .isEqualTo("- [ ] Pay 🔁 every jalali month ➕ 2026-12-01 ⏳ 2027-01-30 📅 2027-02-01")
+        // Dey 10 1405 to Farvardin 10 1406.
+        assertThat(next("- [ ] Pay 🔁 every 3 jalali months ⏳ 2026-12-31", "2026-12-31"))
+            .isEqualTo("- [ ] Pay 🔁 every 3 jalali months ⏳ 2027-03-30")
+
+        assertThat(TaskLine.completeRecurring("- [ ] Pay 🔁 every jalali month ⏳ 2026-12-31", "2026-12-31")!!.last())
+            .isEqualTo("- [x] Pay 🔁 every jalali month ⏳ 2026-12-31 ✅ 2026-12-31")
+    }
+
+    @Test
+    fun `a jalali repeat off the calendar is finished without a next one`() {
+        assertThat(TaskLine.completeRecurring("- [ ] Far 🔁 every 9000 jalali years ⏳ 2026-12-31", "2026-12-31"))
+            .containsExactly("- [x] Far 🔁 every 9000 jalali years ⏳ 2026-12-31 ✅ 2026-12-31")
+        assertThat(TaskLine.withStatus("- [ ] Far 🔁 every 9000 jalali years ⏳ 2026-12-31", 'x', "2026-12-31"))
+            .containsExactly("- [x] Far 🔁 every 9000 jalali years ⏳ 2026-12-31 ✅ 2026-12-31")
+    }
+
+    @Test
+    fun `a jalali week or day is refused, as any rule the app will not work out`() {
+        assertThat(TaskLine.completeRecurring("- [ ] Pay 🔁 every jalali week ⏳ 2026-12-31", "2026-12-31")).isNull()
+        assertThat(TaskLine.completeRecurring("- [ ] Pay 🔁 every jalali day ⏳ 2026-12-31", "2026-12-31")).isNull()
+    }
+
+    @Test
     fun `indentation of a nested repeat is kept on both lines`() {
         val out = TaskLine.completeRecurring("    - [ ] child 🔁 every day ⏳ 2026-09-19", "2026-09-20")
 

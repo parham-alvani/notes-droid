@@ -87,7 +87,9 @@ object TaskLine {
      * Null when this is not a repeating task, when its rule is not one the app
      * will act on, or when it carries no date to move: a repeat with no dates
      * has no next occurrence to describe, and copying the line unchanged would
-     * only duplicate it.
+     * only duplicate it. A Jalali step that runs off the end of that calendar
+     * is not null: the task is finished, alone, with no next occurrence, as
+     * `jalali-recurrence.md` in notes-linux's `docs/specs/` has it.
      *
      * Every date on the line moves by the same number of days. The rule decides
      * how far the *leading* date travels -- due, else scheduled, else start --
@@ -118,7 +120,9 @@ object TaskLine {
         val now = today.toDateOrNull() ?: return null
 
         val from = if (recurrence.whenDone) now else leading
-        val shift = ChronoUnit.DAYS.between(leading, TaskRecurrence.next(from, recurrence, now))
+        val done = prefix + "[x] " + body.trimEnd() + " " + DONE + " " + today + id
+        val nextDate = TaskRecurrence.next(from, recurrence, now) ?: return listOf(done)
+        val shift = ChronoUnit.DAYS.between(leading, nextDate)
 
         val moved =
             split.meta.map { meta ->
@@ -126,7 +130,6 @@ object TaskLine {
                 if (meta.emoji in MOVED && date != null) meta.copy(value = date.plusDays(shift).toString()) else meta
             }
         val next = prefix + "[ ] " + rebuild(split.text, moved)
-        val done = prefix + "[x] " + body.trimEnd() + " " + DONE + " " + today + id
         return listOf(next, done)
     }
 

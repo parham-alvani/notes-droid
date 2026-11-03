@@ -43,7 +43,7 @@ object Contacts {
                 val digits =
                     match.value
                         .filter { it.isDigit() }
-                        .map { asciiDigit(it) }
+                        .map { Jalali.latinDigit(it) }
                         .joinToString("")
                 val international = match.value.startsWith("+")
                 when {
@@ -77,11 +77,4 @@ object Contacts {
         }
         return kept
     }
-
-    private fun asciiDigit(c: Char): Char =
-        when (c) {
-            in '۰'..'۹' -> '0' + (c - '۰')
-            in '٠'..'٩' -> '0' + (c - '٠')
-            else -> c
-        }
 }

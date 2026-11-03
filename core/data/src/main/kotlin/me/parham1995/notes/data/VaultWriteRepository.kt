@@ -221,13 +221,16 @@ class VaultWriteRepository
                             "this task repeats on a rule the app will not work out for itself - " +
                                 "ticking it here could drop the repeat. Obsidian does that part",
                         )
+                // A Jalali step off the end of that calendar finishes the task
+                // with no next one.
+                val scheduled = if (both.size > 1) " and schedule the next" else ""
                 return apply(
                     vault = vault,
                     path = task.notePath,
                     kind = EditKind.REPLACE_LINE,
                     anchor = raw,
                     replacement = both.joinToString(LINES),
-                    summary = "docs(tasks): complete \"${task.text.take(SUBJECT)}\" and schedule the next",
+                    summary = "docs(tasks): complete \"${task.text.take(SUBJECT)}\"$scheduled",
                 )
             }
             val completed = TaskLine.complete(raw, today(), statuses) ?: return WriteResult.Unchanged
