@@ -1,0 +1,1 @@
+A task can now repeat by the Jalali calendar, on the same day of the Solar Hijri month: 🔁 every jalali month, every 3 jalali months or every jalali year, with when done too. A task due on Dey 10 comes back on Bahman 10, where every month would drift off it by a day or two. The Mac and Linux apps repeat by the same rule, to the same day.
