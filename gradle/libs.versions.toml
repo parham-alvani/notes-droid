@@ -52,7 +52,7 @@ robolectric = "4.17"
 # Screenshot tests on the same Robolectric compositions. Checked against AGP 9
 # and Gradle 9 by use, not by a compatibility table: the plugin finds the
 # variant's unit-test task and adds record/verify flavours of it.
-roborazzi = "1.76.0"
+roborazzi = "1.77.0"
 androidxTest = "1.7.0"
 
 [libraries]
