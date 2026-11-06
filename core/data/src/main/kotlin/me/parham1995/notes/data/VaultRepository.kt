@@ -102,6 +102,8 @@ data class RenderedNote(
     val blockRefs: Map<String, Int> = emptyMap(),
     /** What an embed of each `^block-id` draws. */
     val blockTargets: Map<String, MdBlock> = emptyMap(),
+    /** When the note last changed, as far as this device saw it, in epoch milliseconds; 0 when unknown. */
+    val changedAt: Long = 0,
 )
 
 /**
@@ -399,6 +401,7 @@ class VaultRepository
                     brokenTargets = allTargets - targets.keys,
                     blockRefs = parsed.blockRefs,
                     blockTargets = parsed.blockTargets,
+                    changedAt = entity.changedAt,
                 )
             }
 

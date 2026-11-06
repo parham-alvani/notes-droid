@@ -530,7 +530,9 @@
     <string name="read_aloud_now">در حال خواندن</string>
     <string name="whats_new_title">تازه‌های %1$s</string>
     <string name="whats_new_ok">فهمیدم</string>
-    <string name="note_share_pdf">اشتراک به‌صورت PDF</string>
+    <string name="note_share_pdf">خروجی PDF</string>
+    <string name="pdf_changed">تغییر در %1$s</string>
+    <string name="pdf_exported">خروجی در %1$s</string>
     <string name="note_sort_tasks">مرتب‌سازی کارها</string>
     <string name="note_tasks_sorted">کارها مرتب شد، انجام‌شده‌ها اول</string>
     <string name="note_tasks_in_order">کارها از قبل مرتب‌اند</string>

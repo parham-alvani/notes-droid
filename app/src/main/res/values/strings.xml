@@ -531,7 +531,9 @@
     <string name="read_aloud_now">Reading aloud</string>
     <string name="whats_new_title">New in %1$s</string>
     <string name="whats_new_ok">Got it</string>
-    <string name="note_share_pdf">Share as PDF</string>
+    <string name="note_share_pdf">Export as PDF</string>
+    <string name="pdf_changed">Changed %1$s</string>
+    <string name="pdf_exported">Exported %1$s</string>
     <string name="note_sort_tasks">Sort tasks</string>
     <string name="note_tasks_sorted">Tasks sorted, done first</string>
     <string name="note_tasks_in_order">The tasks are already in order</string>

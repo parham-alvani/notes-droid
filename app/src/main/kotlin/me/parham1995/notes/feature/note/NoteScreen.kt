@@ -129,6 +129,8 @@ import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Markup
 import me.parham1995.notes.widget.NoteWidget
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -903,9 +905,24 @@ fun NoteScreen(
                                         scope.launch {
                                             runCatchingUnlessCancelled {
                                                 NotePdf.share(
-                                                    context,
-                                                    note.title,
-                                                    note.blocks,
+                                                    context = context,
+                                                    head =
+                                                        NotePdf.Head(
+                                                            title = note.title,
+                                                            folder =
+                                                                note.path
+                                                                    .substringBeforeLast('/', "")
+                                                                    .substringAfterLast('/'),
+                                                            changed =
+                                                                note.changedAt.takeIf { it > 0 }?.let {
+                                                                    Instant
+                                                                        .ofEpochMilli(it)
+                                                                        .atZone(ZoneId.systemDefault())
+                                                                        .toLocalDate()
+                                                                },
+                                                        ),
+                                                    blocks = note.blocks,
+                                                    picture = viewModel::attachment,
                                                 )
                                             }.onFailure {
                                                 Toast
