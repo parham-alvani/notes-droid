@@ -54,6 +54,34 @@ class VaultEditsTest {
     }
 
     @Test
+    fun `windows line endings are kept by every line edit`() {
+        val note = "## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second\r\n"
+        val today = "2026-10-02"
+
+        assertThat(VaultEdits.replaceLine("- [ ] second", "- [x] second ✅ $today")(note))
+            .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [x] second ✅ $today\r\n")
+        assertThat(VaultEdits.setStatus(3, "second", 'x', today)(note))
+            .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [x] second ✅ $today\r\n")
+        assertThat(VaultEdits.setReason(3, "second", "waiting")(note))
+            .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second [reason:: waiting]\r\n")
+        assertThat(VaultEdits.reschedule(2, "first", "2026-10-05")(note))
+            .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-05\r\n- [ ] second\r\n")
+        assertThat(VaultEdits.addUnder("Alpha", "- [ ] third")(note))
+            .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second\r\n- [ ] third\r\n")
+        assertThat(VaultEdits.addUnder("Beta", "- [ ] third")(note))
+            .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second\r\n\r\n## Beta\r\n\r\n- [ ] third\r\n")
+        assertThat(VaultEdits.append("10:00\n\na thought")(note))
+            .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second\r\n\r\n10:00\r\n\r\na thought\r\n")
+    }
+
+    @Test
+    fun `a capture already at the end of a windows note is not written twice`() {
+        val note = "# Scratch\r\n\r\n10:00\r\n\r\na thought\r\n"
+
+        assertThat(VaultEdits.append("10:00\n\na thought")(note)).isNull()
+    }
+
+    @Test
     fun `adds a task at the end of its section, not the top`() {
         val note =
             """

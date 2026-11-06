@@ -68,7 +68,7 @@ object VaultEdits {
                             .apply {
                                 removeAt(at)
                                 addAll(at, becomes.map { indent + it })
-                            }.joinToString("\n")
+                            }.joinToString(lineEnding(current))
                     }
                 }
             }
@@ -101,11 +101,11 @@ object VaultEdits {
                     // Blank line after the new heading: markdownlint requires
                     // one, and this vault runs it over every commit.
                     val opening = if (wanted.isEmpty()) emptyList() else listOf("## $wanted", "")
-                    appendLines(lines, opening + entry)
+                    appendLines(lines, opening + entry, lineEnding(text))
                 } else {
                     val end = sectionEnd(lines, start, headings)
                     lines.add(end, entry)
-                    lines.joinToString("\n")
+                    lines.joinToString(lineEnding(text))
                 }
             }
         }
@@ -133,14 +133,14 @@ object VaultEdits {
         return { current ->
             if (body.isEmpty()) {
                 null
-            } else if (current != null && current.trimEnd().endsWith(body)) {
+            } else if (current != null && current.trimEnd().replace("\r\n", "\n").endsWith(body)) {
                 null
             } else if (current.isNullOrBlank()) {
                 listOfNotNull(heading?.takeIf { it.isNotBlank() }?.let { "# $it" }, "", body, "")
                     .joinToString("\n")
                     .trimStart('\n')
             } else {
-                appendLines(current.lines().toMutableList(), listOf(body))
+                appendLines(current.lines().toMutableList(), body.lines(), lineEnding(current))
             }
         }
     }
@@ -230,7 +230,7 @@ object VaultEdits {
                     undated -> TaskLine.undate(lines[at])
                     else -> TaskLine.unschedule(lines[at])
                 }
-            moved?.let { lines.toMutableList().apply { set(at, it) }.joinToString("\n") }
+            moved?.let { lines.toMutableList().apply { set(at, it) }.joinToString(lineEnding(current)) }
         }
     }
 
@@ -289,7 +289,7 @@ object VaultEdits {
                             .apply {
                                 removeAt(at)
                                 addAll(at, it)
-                            }.joinToString("\n")
+                            }.joinToString(lineEnding(current))
                     }
                 }
             }
@@ -315,7 +315,7 @@ object VaultEdits {
                 .withReason(
                     lines[at],
                     reason,
-                )?.let { lines.toMutableList().apply { set(at, it) }.joinToString("\n") }
+                )?.let { lines.toMutableList().apply { set(at, it) }.joinToString(lineEnding(current)) }
         }
 
     /**
@@ -329,6 +329,7 @@ object VaultEdits {
     private fun appendLines(
         lines: MutableList<String>,
         additions: List<String>,
+        ending: String,
     ): String {
         while (lines.isNotEmpty() && lines.last().isBlank()) lines.removeAt(lines.size - 1)
         // No blank between two list items: it would split one list into two and
@@ -338,8 +339,17 @@ object VaultEdits {
         if (lines.isNotEmpty() && !joins) lines.add("")
         lines.addAll(additions)
         lines.add("")
-        return lines.joinToString("\n")
+        return lines.joinToString(ending)
     }
+
+    /**
+     * The line ending [text] is written with: `\r\n` when its first line
+     * ends so, else `\n`. Every edit splits with `lines()`, which takes either,
+     * and joins with this, so a note written on Windows is changed on the lines
+     * the edit is about rather than rewritten whole.
+     */
+    private fun lineEnding(text: String?): String =
+        if (text != null && text.substringBefore('\n', "").endsWith('\r')) "\r\n" else "\n"
 
     private fun String.isListItem(): Boolean {
         val body = trimStart()
