@@ -1,6 +1,7 @@
 package me.parham1995.notes.markdown
 
 import com.google.common.truth.Truth.assertThat
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class VaultEditsTest {
@@ -45,9 +46,11 @@ class VaultEditsTest {
     }
 
     @Test
-    fun `an anchor that is no longer there is not applicable`() {
-        assertThat(VaultEdits.replaceLine("- [ ] gone", "- [x] gone")("- [ ] something else")).isNull()
-        assertThat(VaultEdits.replaceLine("- [ ] gone", "- [x] gone")(null)).isNull()
+    fun `an anchor that is no longer there is not found, not done`() {
+        assertThrows(TaskNotFound::class.java) {
+            VaultEdits.replaceLine("- [ ] gone", "- [x] gone")("- [ ] something else")
+        }
+        assertThrows(TaskNotFound::class.java) { VaultEdits.replaceLine("- [ ] gone", "- [x] gone")(null) }
     }
 
     @Test

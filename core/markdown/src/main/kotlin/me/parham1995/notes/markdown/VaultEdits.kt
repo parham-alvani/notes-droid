@@ -22,6 +22,11 @@ object VaultEdits {
      * between reading a task and writing it back the note may well have grown a
      * paragraph above it. Trimmed on both sides so a sub-task indented two
      * levels still matches the line that was read.
+     *
+     * Null when the file already holds what the edit makes; a file with
+     * neither the line nor that throws [TaskNotFound]. Ticks are no longer
+     * queued this way ([setStatus] finds a task by its line); this is kept
+     * for edits queued before that.
      */
     fun replaceLine(
         anchor: String,
@@ -44,7 +49,7 @@ object VaultEdits {
         if (becomes.isEmpty()) return { null }
         return { current ->
             when {
-                current == null -> null
+                current == null -> throw TaskNotFound(wanted)
                 // Already said: the last line is the one a second run would
                 // produce, so finding it means the edit has happened.
                 current.lines().any { it.trim() == becomes.last() } -> null
@@ -52,7 +57,10 @@ object VaultEdits {
                     val lines = current.lines()
                     val at = lines.indexOfFirst { it.trim() == wanted }
                     if (at < 0) {
-                        null
+                        // Neither the line nor what it was to become: the task
+                        // was rewritten or deleted at the desk, and calling
+                        // that done would drop the edit without a word.
+                        throw TaskNotFound(wanted)
                     } else {
                         val indent = lines[at].takeWhile { it == ' ' || it == '\t' }
                         lines
