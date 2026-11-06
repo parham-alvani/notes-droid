@@ -130,7 +130,7 @@ fun PropertiesSheet(
                         PropertyRow(
                             property = property,
                             type = state.typeOf(property.key, property.value),
-                            enabled = !state.writing,
+                            enabled = !state.writing && !state.waiting,
                             onEdit = edit,
                         )
                     }
@@ -139,7 +139,7 @@ fun PropertiesSheet(
                             viewModel.loadNames()
                             adding = true
                         },
-                        enabled = !state.writing,
+                        enabled = !state.writing && !state.waiting,
                     ) {
                         LucideGlyph("plus", size = 18.dp)
                         Text(stringResource(R.string.properties_add), Modifier.padding(start = 8.dp))

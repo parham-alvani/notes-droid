@@ -36,6 +36,12 @@ data class PropertiesState(
     val names: List<String> = emptyList(),
     /** A write is on its way. */
     val writing: Boolean = false,
+    /**
+     * An edit waits behind a refresh and is not in the file yet, so the form
+     * shows what was there before it. Another edit would be anchored on that
+     * and refused when the queue runs, so the form takes no more.
+     */
+    val waiting: Boolean = false,
     val message: UiText? = null,
 ) {
     /** The type [key] is shown as: the one picked for it, else Obsidian's. */
@@ -118,7 +124,7 @@ class PropertiesViewModel
             onWritten: () -> Unit = {},
         ) {
             val sheet = _state.value.form?.sheet ?: return
-            if (_state.value.writing) return
+            if (_state.value.writing || _state.value.waiting) return
             _state.update { state ->
                 state.copy(
                     writing = true,
@@ -140,6 +146,10 @@ class PropertiesViewModel
                 _state.update {
                     it.copy(
                         writing = false,
+                        // Queued offline, the edit is in the file already and the form shows it;
+                        // queued behind a refresh, the front matter read again is the old one.
+                        waiting =
+                            it.waiting || (result is WriteResult.Queued && it.form?.sheet?.original == sheet.original),
                         message =
                             when (result) {
                                 WriteResult.Pushed -> null

@@ -590,7 +590,9 @@ class PropertySheet private constructor(
                 }
                 current.append(c)
             }
-            items += current.toString().trim(' ', '\t')
+            // YAML lets a flow list end in a comma: `[a, b,]` is two items, not a third empty one.
+            val last = current.toString().trim(' ', '\t')
+            if (last.isNotEmpty() || items.isEmpty()) items += last
             return items
         }
 

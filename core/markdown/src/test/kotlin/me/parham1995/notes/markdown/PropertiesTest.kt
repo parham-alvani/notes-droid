@@ -78,6 +78,15 @@ class PropertiesTest {
     }
 
     @Test
+    fun `a flow list that ends in a comma has no empty item`() {
+        val note = "---\ntags: [one, two,]\n---\n"
+        val sheet = form(note)
+        assertThat(sheet.properties.single().value).isEqualTo(Items(listOf("one", "two")))
+        sheet.set("tags", Items(listOf("one", "two", "three")))
+        assertThat(sheet.applied(note)).isEqualTo("---\ntags: [one, two, three]\n---\n")
+    }
+
+    @Test
     fun `an edit keeps the style of every other line`() {
         val note =
             "---\ntitle: 'Single'\ntags: [one, \"two\"]\naliases:\n    - First\n    - \"Second\"\ncount: 3\n---\n" +
