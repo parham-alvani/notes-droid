@@ -11,6 +11,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.net.URLEncoder
+import java.time.Instant
 import java.util.Base64
 import kotlin.coroutines.resumeWithException
 
@@ -313,6 +314,54 @@ class GitHubClient(
             )
         }
 
+    /**
+     * The commits that changed [path], newest first, reachable from [ref]:
+     * at most [perPage] of them, as `git log -- path` lists them. A rename
+     * ends the list, which is where [renamedFrom] picks up.
+     */
+    suspend fun commits(
+        path: String,
+        ref: String,
+        perPage: Int = HISTORY_PAGE,
+    ): List<NoteVersion> =
+        call(
+            request(url("/commits?path=${encodePath(path)}&sha=${encodePath(ref)}&per_page=$perPage")),
+            "commits/$path",
+        ) { response ->
+            json.decodeFromString<List<CommitDto>>(response.body.string()).map { it.toVersion(path) }
+        }
+
+    /**
+     * Where [path] was before [commit], when that commit renamed it there:
+     * the old path and the commit before, to go on listing from. Null when
+     * the commit made the file, or changed it in place.
+     */
+    suspend fun renamedFrom(
+        commit: String,
+        path: String,
+    ): Pair<String, String>? =
+        call(request(url("/commits/$commit")), "commits/$commit") { response ->
+            val dto = json.decodeFromString<CommitDto>(response.body.string())
+            val parent = dto.parents.firstOrNull()?.sha ?: return@call null
+            dto.files
+                .firstOrNull { it.filename == path && it.status == "renamed" }
+                ?.previousFilename
+                ?.let { it to parent }
+        }
+
+    private fun CommitDto.toVersion(path: String) =
+        NoteVersion(
+            commit = sha,
+            date = commit.author?.date?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: Instant.EPOCH,
+            author = commit.author?.name.orEmpty(),
+            subject =
+                commit.message
+                    .lineSequence()
+                    .firstOrNull()
+                    .orEmpty(),
+            path = path,
+        )
+
     /** The raw bytes of one blob. */
     suspend fun blob(sha: String): ByteArray =
         call(
@@ -406,6 +455,7 @@ class GitHubClient(
 
     private companion object {
         const val BODY_PEEK = 512L
+        const val HISTORY_PAGE = 100
         const val DEFAULT_BACKOFF_SECONDS = 60L
         const val STALE_SHA = "does not match"
 

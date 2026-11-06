@@ -6,10 +6,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.data.git.GitNoteHistory
 import me.parham1995.notes.data.git.GitSshVaultSync
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.sync.GitHubClient
 import me.parham1995.notes.sync.GitHubConfig
+import me.parham1995.notes.sync.NoteHistory
+import me.parham1995.notes.sync.RestNoteHistory
 import me.parham1995.notes.sync.RestVaultSync
 import me.parham1995.notes.sync.RestVaultWriter
 import me.parham1995.notes.sync.VaultFilter
@@ -153,6 +156,20 @@ open class VaultTransports
                     }
                     ssh(vault)
                 }
+            }
+
+        /**
+         * A note's history in this vault, over the transport it syncs with:
+         * GitHub's API for a REST vault, its own clone for an SSH one.
+         */
+        open suspend fun history(vault: VaultEntity): NoteHistory =
+            when (SyncTransport.parse(vault.transport)) {
+                SyncTransport.REST -> {
+                    val client = client(vault)
+                    RestNoteHistory(client, vault.branch ?: client.repository().defaultBranch)
+                }
+
+                SyncTransport.SSH -> GitNoteHistory(files.rootOf(vault.id), vault.branch ?: DEFAULT_BRANCH)
             }
 
         private companion object {
