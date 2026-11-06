@@ -373,6 +373,11 @@ class NoteViewModel
             if (opened == null || result is WriteResult.Queued) _state.update { it.copy(message = result.describe()) }
         }
 
+        /** Reads the note again, after a write made elsewhere on this screen -- a property, a restore. */
+        fun refresh() {
+            viewModelScope.launch { reload() }
+        }
+
         private suspend fun reload() {
             val id = _state.value.note?.id ?: return
             val note = repository.note(id) ?: return

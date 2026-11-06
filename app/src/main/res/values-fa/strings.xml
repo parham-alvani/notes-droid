@@ -36,6 +36,13 @@
     <string name="note_kind">یادداشت</string>
     <string name="note_no_headings">سرتیتری ندارد</string>
     <string name="note_find">جستجو در یادداشت</string>
+    <string name="note_history">تاریخچه</string>
+    <string name="history_none">هیچ کامیتی این یادداشت را تغییر نداده است.</string>
+    <string name="history_failed">تاریخچه خوانده نشد: %1$s</string>
+    <string name="history_not_there">این یادداشت در آن کامیت نیست.</string>
+    <string name="history_restore">بازگرداندن این نسخه</string>
+    <string name="history_restored">به نسخهٔ %1$s بازگردانده شد</string>
+    <string name="history_was_at">آن زمان در %1$s</string>
     <string name="properties_add">افزودن ویژگی</string>
     <string name="properties_none">هنوز ویژگی‌ای نیست.</string>
     <string name="properties_raw">این فرم نمی‌تواند این فرانت‌متر را نشان دهد: %1$s همان‌طور که نوشته شده نشان داده می‌شود.</string>

@@ -478,6 +478,30 @@ fun NoteScreen(
     }
 
     var showPlaces by remember(noteId) { mutableStateOf(false) }
+    var showProperties by remember(noteId) { mutableStateOf(false) }
+    var showHistory by remember(noteId) { mutableStateOf(false) }
+    if (showProperties) {
+        state.note?.let { note ->
+            PropertiesSheet(
+                noteId = note.id,
+                vaultId = note.vaultId,
+                path = note.path,
+                onWritten = viewModel::refresh,
+                onDismiss = { showProperties = false },
+            )
+        }
+    }
+    if (showHistory) {
+        state.note?.let { note ->
+            HistorySheet(
+                vaultId = note.vaultId,
+                path = note.path,
+                writable = state.writable,
+                onWritten = viewModel::refresh,
+                onDismiss = { showHistory = false },
+            )
+        }
+    }
     if (showPlaces) {
         state.note?.let { note -> PlacesSheet(note.blocks, onDismiss = { showPlaces = false }) }
     }
@@ -867,6 +891,13 @@ fun NoteScreen(
                                     } else {
                                         null
                                     },
+                                onProperties =
+                                    if (state.writable && state.note?.isFolderNote == false) {
+                                        { showProperties = true }
+                                    } else {
+                                        null
+                                    },
+                                onHistory = { showHistory = true },
                                 onSharePdf = {
                                     state.note?.let { note ->
                                         scope.launch {

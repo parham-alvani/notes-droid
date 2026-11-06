@@ -35,6 +35,13 @@
     <string name="note_kind">Note</string>
     <string name="note_no_headings">No headings</string>
     <string name="note_find">Find in note</string>
+    <string name="note_history">History</string>
+    <string name="history_none">No commit has changed this note.</string>
+    <string name="history_failed">Could not read the history: %1$s</string>
+    <string name="history_not_there">The note is not in that commit.</string>
+    <string name="history_restore">Restore this version</string>
+    <string name="history_restored">Restored as of %1$s</string>
+    <string name="history_was_at">Then at %1$s</string>
     <string name="properties_add">Add property</string>
     <string name="properties_none">No properties yet.</string>
     <string name="properties_raw">The form cannot show this front matter: %1$s It is shown as written.</string>
