@@ -97,10 +97,12 @@ class TaskRecurrenceTest {
         // Ticked with no next occurrence, never a crash.
         assertThat(TaskLine.completeRecurring("- [ ] Far 🔁 every 999999999 years 📅 2026-01-01", "2026-01-01"))
             .containsExactly("- [x] Far 🔁 every 999999999 years 📅 2026-01-01 ✅ 2026-01-01")
-        assertThat(VaultEdits.setStatus(0, "Far", 'x', "2026-01-01")("- [ ] Far 🔁 every 999999999 years 📅 2026-01-01"))
+        val setDone = VaultEdits.setStatus(0, "Far", 'x', "2026-01-01")
+        assertThat(setDone("- [ ] Far 🔁 every 999999999 years 📅 2026-01-01"))
             .isEqualTo("- [x] Far 🔁 every 999999999 years 📅 2026-01-01 ✅ 2026-01-01")
-        assertThat(TaskLine.completeRecurring("- [ ] Far 🔁 every 10000 years 📅 2026-01-01", "2026-01-01")!!.first())
-            .isEqualTo("- [ ] Far 🔁 every 10000 years 📅 12026-01-01")
+        // The limit itself is read; a step of 10,000 days stays in four-digit years.
+        assertThat(TaskLine.completeRecurring("- [ ] Far 🔁 every 10000 days 📅 2026-01-01", "2026-01-01")!!.first())
+            .isEqualTo("- [ ] Far 🔁 every 10000 days 📅 2053-05-19")
 
         val far = TaskRecurrence.parse("every 10000 years")!!
         assertThat(TaskRecurrence.next(LocalDate.of(2026, 1, 1), far, LocalDate.of(2026, 1, 1))?.year).isEqualTo(12026)

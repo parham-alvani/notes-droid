@@ -155,9 +155,11 @@ class TaskLineTest {
     }
 
     @Test
-    fun `a jalali week or day is refused, as any rule the app will not work out`() {
-        assertThat(TaskLine.completeRecurring("- [ ] Pay 🔁 every jalali week ⏳ 2026-12-31", "2026-12-31")).isNull()
-        assertThat(TaskLine.completeRecurring("- [ ] Pay 🔁 every jalali day ⏳ 2026-12-31", "2026-12-31")).isNull()
+    fun `a jalali week or day is refused, so the task is finished with no next one`() {
+        assertThat(TaskLine.completeRecurring("- [ ] Pay 🔁 every jalali week ⏳ 2026-12-31", "2026-12-31"))
+            .containsExactly("- [x] Pay 🔁 every jalali week ⏳ 2026-12-31 ✅ 2026-12-31")
+        assertThat(TaskLine.completeRecurring("- [ ] Pay 🔁 every jalali day ⏳ 2026-12-31", "2026-12-31"))
+            .containsExactly("- [x] Pay 🔁 every jalali day ⏳ 2026-12-31 ✅ 2026-12-31")
     }
 
     @Test
