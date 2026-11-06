@@ -70,6 +70,7 @@ import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.MdDirection
 import me.parham1995.notes.markdown.MdInline
 import me.parham1995.notes.markdown.MdListItem
+import me.parham1995.notes.markdown.RemoteImages
 import me.parham1995.notes.markdown.StatusType
 import me.parham1995.notes.markdown.TaskMeta
 import me.parham1995.notes.markdown.TaskState
@@ -192,6 +193,9 @@ fun MdBlockView(
             is MdBlock.Quote -> QuoteView(block, actions, brokenLinks, modifier)
             is MdBlock.ListBlock -> ListBlockView(block, actions, brokenLinks, modifier)
             is MdBlock.Table -> TableView(block, actions, brokenLinks, modifier)
+            // From the web, or written into the note: no file of the vault.
+            is MdBlock.Image if (block.path.startsWith("data:") || RemoteImages.isRemote(block.path)) ->
+                WebImage(block.path, block.alt, modifier, block.width, block.height)
             is MdBlock.Image ->
                 VaultImage(
                     vaultId = actions.vaultId,

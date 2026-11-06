@@ -534,6 +534,9 @@
     <string name="shortcut_define_short">Dictionary</string>
     <string name="shortcut_define_long">Look up a word</string>
     <string name="settings_hold_to_define">Hold a word to look it up</string>
+    <string name="settings_remote_images">Pictures from the web</string>
+    <string name="help_remote_images">Off, a picture a note takes from another site is not asked for until you tap it, so opening a note tells no site that it was read.</string>
+    <string name="remote_image_load">Load the picture from %1$s</string>
     <string name="help_hold_to_define">Keeping a finger on an English word in a note opens the dictionary. The word is selected too, for copying.</string>
     <string name="note_fold">Fold section</string>
     <string name="note_unfold">Unfold section</string>

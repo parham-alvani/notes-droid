@@ -532,6 +532,9 @@
     <string name="shortcut_define_short">واژه‌نامه</string>
     <string name="shortcut_define_long">معنی یک واژه</string>
     <string name="settings_hold_to_define">نگه‌داشتن انگشت روی واژه برای دیدن معنی</string>
+    <string name="settings_remote_images">تصویرهای وب</string>
+    <string name="help_remote_images">اگر خاموش باشد، تصویری که یادداشت از سایت دیگری می‌آورد تا وقتی رویش نزنید درخواست نمی‌شود؛ پس باز کردن یادداشت به هیچ سایتی خبر نمی‌دهد که خوانده شده.</string>
+    <string name="remote_image_load">بارگیری تصویر از %1$s</string>
     <string name="help_hold_to_define">با نگه‌داشتن انگشت روی یک واژهٔ انگلیسی در نوشته، واژه‌نامه باز می‌شود. واژه برای رونوشت هم انتخاب می‌شود.</string>
     <string name="note_fold">بستن بخش</string>
     <string name="note_unfold">باز کردن بخش</string>

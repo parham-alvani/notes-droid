@@ -168,6 +168,13 @@ internal fun ReadingCard(
             checked = reading.holdToDefine,
             onCheckedChange = viewModel::setHoldToDefine,
         )
+
+        SwitchRow(
+            title = stringResource(R.string.settings_remote_images),
+            help = stringResource(R.string.help_remote_images),
+            checked = reading.remoteImages,
+            onCheckedChange = viewModel::setRemoteImages,
+        )
     }
 
     SectionCard(stringResource(R.string.card_behaviour)) {
