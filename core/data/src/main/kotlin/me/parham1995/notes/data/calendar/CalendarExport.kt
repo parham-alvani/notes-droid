@@ -28,7 +28,10 @@ class CalendarExport
         private val writes: VaultWriteRepository,
         private val log: SyncLog,
     ) {
-        /** How many week notes changed. Zero when the export is off or not permitted. */
+        /**
+         * How many week notes changed. Zero when the export is off, not
+         * permitted, or none of the chosen calendars is on the phone.
+         */
         suspend fun run(
             today: LocalDate = LocalDate.now(),
             zone: ZoneId = ZoneId.systemDefault(),
@@ -39,8 +42,21 @@ class CalendarExport
                 log.warn("calendar export is on, but calendar access is not granted")
                 return 0
             }
+            // A week note is written whole, so an export with no calendar to
+            // read writes every week empty over the meetings it held. That is
+            // what a calendar chosen on a phone it is no longer on -- an
+            // account removed, a new phone -- would do, so it is skipped.
+            val present = calendars.calendars().mapTo(mutableSetOf()) { it.id }
+            val chosen = current.calendars intersect present
+            if (chosen.isEmpty()) {
+                log.warn(
+                    "calendar export is on, but none of the chosen calendars is on this phone - " +
+                        "the week notes are left as they are",
+                )
+                return 0
+            }
             val weeks = CalendarWeeks.weeks(today)
-            val events = calendars.events(current.calendars, current.busyOnly, CalendarWeeks.span(weeks, zone))
+            val events = calendars.events(chosen, current.busyOnly, CalendarWeeks.span(weeks, zone))
             val notes =
                 CalendarWeeks.export(
                     CalendarWeeks.DEFAULT_FOLDER,
