@@ -1,6 +1,8 @@
 package me.parham1995.notes.markdown
 
+import java.time.DateTimeException
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 /** How often a task comes back. */
 data class Recurrence(
@@ -83,20 +85,42 @@ object TaskRecurrence {
      * Kept stepping until it lands in the future, rather than adding one
      * interval and stopping. A daily task ticked off ten days late would
      * otherwise come back yesterday -- still overdue, and overdue again on the
-     * next tick, for ever.
+     * next tick, for ever. Days and weeks get there in one jump, however late;
+     * months and years a step at a time, as each clamps from the day the last
+     * one reached (a 31st that went to a 30th stays on the 30th).
      *
      * Null when a step runs off the Jalali calendar, which ends with its year
-     * 3177: there is no next day to write, and the tick finishes the task
-     * without one rather than failing.
+     * 3177, or when months and years would take more than [MAX_STEPS]: there
+     * is no next day to write, and the tick finishes the task without one
+     * rather than failing or writing one already overdue. The rule is
+     * `jalali-recurrence.md`'s, in notes-linux's `docs/specs/`.
      */
     fun next(
         from: LocalDate,
         rule: Recurrence,
         notBefore: LocalDate,
     ): LocalDate? {
+        val days =
+            when (rule.unit) {
+                RecurrenceUnit.DAY -> rule.amount
+                RecurrenceUnit.WEEK -> rule.amount * DAYS_IN_WEEK
+                else -> null
+            }
+        if (days != null) {
+            val behind = ChronoUnit.DAYS.between(from, notBefore)
+            val steps = if (behind < 0) 1L else behind / days + 1
+            return try {
+                from.plusDays(Math.multiplyExact(steps, days))
+            } catch (_: ArithmeticException) {
+                null
+            } catch (_: DateTimeException) {
+                null
+            }
+        }
         var date = step(from, rule) ?: return null
         var guard = 0
-        while (!date.isAfter(notBefore) && guard++ < MAX_STEPS) {
+        while (!date.isAfter(notBefore)) {
+            if (guard++ == MAX_STEPS) return null
             date = step(date, rule) ?: return null
         }
         return date
@@ -118,7 +142,8 @@ object TaskRecurrence {
     private const val WHEN_DONE = "when done"
     private const val MAX_AMOUNT = 10_000L
     private const val MONTHS_IN_YEAR = 12L
+    private const val DAYS_IN_WEEK = 7L
 
-    /** A daily rule on a task abandoned for years still terminates. */
+    /** The most chained steps of a month or a year: 333 years of months. */
     private const val MAX_STEPS = 4000
 }
