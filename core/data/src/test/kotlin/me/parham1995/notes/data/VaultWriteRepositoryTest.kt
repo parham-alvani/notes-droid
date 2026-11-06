@@ -503,7 +503,7 @@ class VaultWriteRepositoryTest {
         }
 
     @Test
-    fun `a repeat moved to done is ticked as a tap ticks it, and a rule the app cannot follow is refused`() =
+    fun `a repeat moved to done is ticked as a tap ticks it, and a rule the app cannot follow has no next`() =
         runTest {
             val path = "Tasks/Home.md"
             val task = seedTask(path, "- [ ] water the plants 🔁 every week 📅 2026-10-25\n")
@@ -519,8 +519,9 @@ class VaultWriteRepositoryTest {
 
             files.clear()
             val odd = seedTask("Tasks/Odd.md", "- [ ] water the fern 🔁 when the soil is dry 📅 2026-10-25\n")
-            assertThat(writes.setTaskStatus(odd, 'x')).isInstanceOf(WriteResult.Refused::class.java)
-            assertThat(database.pendingEditDao().all()).isEmpty()
+            assertThat(writes.completeTask(odd)).isEqualTo(WriteResult.Pushed)
+            assertThat(transport.content)
+                .isEqualTo("- [x] water the fern 🔁 when the soil is dry 📅 2026-10-25 ✅ $today\n")
         }
 
     @Test

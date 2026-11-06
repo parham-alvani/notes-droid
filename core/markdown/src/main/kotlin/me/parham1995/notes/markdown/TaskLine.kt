@@ -84,11 +84,11 @@ object TaskLine {
      * comes back. The new one goes first, which is where the Tasks plugin puts
      * it, so the open task stays above the record of the finished one.
      *
-     * Null when this is not a repeating task, when its rule is not one the app
-     * will act on, or when it carries no date to move: a repeat with no dates
-     * has no next occurrence to describe, and copying the line unchanged would
-     * only duplicate it. A Jalali step that runs off the end of that calendar
-     * is not null: the task is finished, alone, with no next occurrence, as
+     * Null when this is not an open repeating task. When its rule is not one
+     * the app will act on, when it carries no date to move (a repeat with no
+     * dates has no next occurrence to describe, and copying the line unchanged
+     * would only duplicate it), or when a step runs off the end of the
+     * calendar, the task is finished alone, with no next occurrence, as
      * `jalali-recurrence.md` in notes-linux's `docs/specs/` has it.
      *
      * Every date on the line moves by the same number of days. The rule decides
@@ -113,14 +113,14 @@ object TaskLine {
 
         val split = TaskMetadata.split(body)
         val rule = split.meta.firstOrNull { it.emoji == RECUR }?.value ?: return null
-        val recurrence = TaskRecurrence.parse(rule) ?: return null
-
-        val dates = split.meta.mapNotNull { meta -> meta.date()?.let { meta.emoji to it } }.toMap()
-        val leading = MOVED.firstNotNullOfOrNull { dates[it] } ?: return null
         val now = today.toDateOrNull() ?: return null
+        val done = prefix + "[x] " + body.trimEnd() + " " + DONE + " " + today + id
+
+        val recurrence = TaskRecurrence.parse(rule) ?: return listOf(done)
+        val dates = split.meta.mapNotNull { meta -> meta.date()?.let { meta.emoji to it } }.toMap()
+        val leading = MOVED.firstNotNullOfOrNull { dates[it] } ?: return listOf(done)
 
         val from = if (recurrence.whenDone) now else leading
-        val done = prefix + "[x] " + body.trimEnd() + " " + DONE + " " + today + id
         val nextDate = TaskRecurrence.next(from, recurrence, now) ?: return listOf(done)
         val shift = ChronoUnit.DAYS.between(leading, nextDate)
 
@@ -141,13 +141,12 @@ object TaskLine {
      * The closing dates follow the type of the status, not its character, so
      * `[r]` in a vault that calls it "In Review" is under way like `[/]`. To
      * a done-typed status from an open one is the tick, exactly as a tap
-     * makes it -- [complete], or [completeRecurring] for a repeat, which is
-     * null here when the rule is not one the app works out (the caller says
-     * so rather than dropping the repeat) -- with [status] put in for `x`
-     * afterwards. Otherwise the status changes, and `✅` is kept when the task
-     * was already done-typed, dated [today] when it becomes so, and taken off
-     * when it does not stay so; `❌` likewise for cancelled. A block id stays
-     * last.
+     * makes it -- [completeRecurring] for a repeat, which finishes one whose
+     * rule the app does not work out with no next occurrence, else
+     * [complete] -- with [status] put in for `x` afterwards. Otherwise the
+     * status changes, and `✅` is kept when the task was already done-typed,
+     * dated [today] when it becomes so, and taken off when it does not stay
+     * so; `❌` likewise for cancelled. A block id stays last.
      *
      * A reason belongs to the status it was given with, so any change of
      * status takes the old one off, and puts [reason] on when one is given.
@@ -174,16 +173,8 @@ object TaskLine {
         val at = match.groups[2]!!.range.first
         if (becomes == StatusType.DONE && !was.isClosed) {
             val ticked =
-                (
-                    if (isRecurring(
-                            raw,
-                        )
-                    ) {
-                        completeRecurring(raw, today, statuses)
-                    } else {
-                        complete(raw, today, statuses)?.let(::listOf)
-                    }
-                )
+                (if (isRecurring(raw)) completeRecurring(raw, today, statuses) else null)
+                    ?: complete(raw, today, statuses)?.let(::listOf)
                     ?: return null
             // The finished line is the last; the tick wrote `[x]` where the
             // status was, so the same place takes [status].

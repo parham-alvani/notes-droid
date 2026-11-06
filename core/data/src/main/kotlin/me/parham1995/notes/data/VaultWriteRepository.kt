@@ -12,7 +12,6 @@ import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.NoteExists
-import me.parham1995.notes.markdown.RepeatNotWorkedOut
 import me.parham1995.notes.markdown.StatusType
 import me.parham1995.notes.markdown.TaskLine
 import me.parham1995.notes.markdown.TaskNotFound
@@ -601,8 +600,6 @@ class VaultWriteRepository
                         // Said now, while the person is looking, rather than
                         // queued to fail five times out of sight.
                         return@tryWithVault WriteResult.Refused(gone.message.orEmpty())
-                    } catch (repeat: RepeatNotWorkedOut) {
-                        return@tryWithVault WriteResult.Refused(repeat.message.orEmpty())
                     } catch (taken: NoteExists) {
                         return@tryWithVault WriteResult.Refused(taken.message.orEmpty())
                     } ?: return@tryWithVault WriteResult.Unchanged

@@ -242,8 +242,8 @@ object VaultEdits {
      *
      * Found by [TaskLine.locate], and a task that is not there throws
      * [TaskNotFound], as [reschedule] does. A repeat whose rule the app does
-     * not work out throws [RepeatNotWorkedOut] rather than being ticked into
-     * a one-off.
+     * not work out is ticked with no next occurrence, as
+     * `jalali-recurrence.md` in notes-linux's `docs/specs/` has it.
      *
      * Run twice, it changes nothing the second time. That is free for every
      * status but a repeat ticked done, whose next occurrence reads the same
@@ -280,9 +280,7 @@ object VaultEdits {
                     TaskLine.indexedText(finished.trim()) == task &&
                     finished.contains("✅ $today") -> null
                 else -> {
-                    val becomes =
-                        TaskLine.withStatus(raw, status, today, statuses, reason)
-                            ?: if (repeat) throw RepeatNotWorkedOut(task) else null
+                    val becomes = TaskLine.withStatus(raw, status, today, statuses, reason)
                     becomes?.let {
                         lines
                             .toMutableList()
@@ -418,16 +416,5 @@ class TaskNotFound(
 
 /** A new note asked for where a note already is. */
 class NoteExists : IllegalStateException("a note of that name is already there - pick another title")
-
-/**
- * A repeating task asked to be done, on a rule the app will not work out for
- * itself -- ticking it here would drop the repeat.
- */
-class RepeatNotWorkedOut(
-    val task: String,
-) : IllegalStateException(
-        "\"${task.take(TASK_IN_MESSAGE)}\" repeats on a rule the app will not work out for itself - " +
-            "ticking it here could drop the repeat. Obsidian does that part",
-    )
 
 private const val TASK_IN_MESSAGE = 60

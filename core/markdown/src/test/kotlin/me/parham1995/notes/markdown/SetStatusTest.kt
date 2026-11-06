@@ -87,10 +87,13 @@ class SetStatusTest {
     }
 
     @Test
-    fun `a repeat on a rule the app does not work out is refused, not made a one-off`() {
-        assertThrows(
-            RepeatNotWorkedOut::class.java,
-        ) { set("- [ ] Water 🔁 when the soil is dry 📅 2026-10-25", 0, 'x') }
+    fun `a repeat on a rule the app does not work out is ticked with no next occurrence`() {
+        val note = "- [ ] Water 🔁 when the soil is dry 📅 2026-10-25"
+        val edit = VaultEdits.setStatus(0, "Water", 'x', today)
+        val once = edit(note)
+
+        assertThat(once).isEqualTo("- [x] Water 🔁 when the soil is dry 📅 2026-10-25 ✅ $today")
+        assertThat(edit(once)).isNull()
     }
 
     @Test
