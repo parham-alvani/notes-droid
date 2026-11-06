@@ -197,51 +197,38 @@ class VaultWriteRepository
          * paragraph above a task between one sync and the next. When the number
          * no longer points at the right line the whole file is searched for one
          * that reads the same, and only if that fails does the edit refuse.
+         *
+         * Queued as a status set to done ([VaultEdits.setStatus]) on that line,
+         * never as a search for its text: two tasks can read the same -- "- [ ]
+         * follow up" under two headings -- and a tick matched by text alone
+         * landed on the first of them. A repeat becomes two lines, the next
+         * occurrence and the one just finished; a rule the app does not work
+         * out is finished with no next one, as `jalali-recurrence.md` in
+         * notes-linux's `docs/specs/` has it.
          */
         suspend fun completeTask(task: TaskRow): WriteResult {
             val vault = writableVault(task.vaultId) ?: return refusal(task.vaultId)
             val text =
                 files.readText(vault.id, task.notePath)
                     ?: return WriteResult.Refused("${task.notePath} is not on the device")
-
-            val raw =
-                locate(text, task)
+            val statuses = statusRules.forVault(vault.id)
+            val lines = text.lines()
+            val at =
+                TaskLine.locate(lines, task.line, task.text, statuses)
                     ?: return WriteResult.Refused(
                         "that task is not in ${task.notePath} any more - refresh and try again",
                     )
-            // A repeat becomes two lines: the next occurrence and the one just
-            // finished. Where the rule is not one the app will act on it says
-            // so rather than dropping the repeat, which would quietly turn a
-            // standing job into a one-off.
-            val statuses = statusRules.forVault(vault.id)
-            if (TaskLine.isRecurring(raw)) {
-                val both =
-                    TaskLine.completeRecurring(raw, today(), statuses)
-                        ?: return WriteResult.Refused(
-                            "this task repeats on a rule the app will not work out for itself - " +
-                                "ticking it here could drop the repeat. Obsidian does that part",
-                        )
-                // A Jalali step off the end of that calendar finishes the task
-                // with no next one.
-                val scheduled = if (both.size > 1) " and schedule the next" else ""
-                return apply(
-                    vault = vault,
-                    path = task.notePath,
-                    kind = EditKind.REPLACE_LINE,
-                    anchor = raw,
-                    replacement = both.joinToString(LINES),
-                    summary = "docs(tasks): complete \"${task.text.take(SUBJECT)}\"$scheduled",
-                )
-            }
-            val completed = TaskLine.complete(raw, today(), statuses) ?: return WriteResult.Unchanged
-
+            if (!TaskLine.isOpen(lines[at], statuses)) return WriteResult.Unchanged
+            val day = today()
+            val ticked = TaskLine.withStatus(lines[at], DONE, day, statuses)
+            val scheduled = if ((ticked?.size ?: 0) > 1) " and schedule the next" else ""
             return apply(
                 vault = vault,
                 path = task.notePath,
-                kind = EditKind.REPLACE_LINE,
-                anchor = raw,
-                replacement = completed,
-                summary = "docs(tasks): complete \"${task.text.take(SUBJECT)}\"",
+                kind = EditKind.SET_STATUS,
+                anchor = task.text,
+                replacement = "$at $day $DONE",
+                summary = "docs(tasks): complete \"${task.text.take(SUBJECT)}\"$scheduled",
             )
         }
 
@@ -775,15 +762,6 @@ class VaultWriteRepository
             )
         }
 
-        /** Finds the line a stored task came from; see [TaskLine.locate]. */
-        private fun locate(
-            text: String,
-            task: TaskRow,
-        ): String? {
-            val lines = text.lines()
-            return TaskLine.locate(lines, task.line, task.text)?.let { lines[it] }
-        }
-
         private suspend fun writableVault(vaultId: Long): VaultEntity? =
             vaults.byId(vaultId)?.takeIf { it.canWrite && settings.current().write.hasAuthor }
 
@@ -826,6 +804,10 @@ class VaultWriteRepository
             /** How a multi-line replacement is held in one stored field. */
             const val LINES = "\n"
             const val SCHEDULE_DAYS = 3L
+
+            /** The status a tick sets. */
+            const val DONE = 'x'
+
             const val SUBJECT = 60
             const val SHORT_SHA = 7
         }

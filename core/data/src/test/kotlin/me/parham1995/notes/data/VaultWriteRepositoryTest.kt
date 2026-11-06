@@ -209,6 +209,28 @@ class VaultWriteRepositoryTest {
         }
 
     @Test
+    fun `ticking the second of two tasks that read the same ticks that one`() =
+        runTest {
+            val path = "Tasks/Work.md"
+            val today = java.time.LocalDate.now()
+            files.write(vaultId, path, "## Alpha\n\n- [ ] follow up\n\n## Beta\n\n- [ ] follow up\n".toByteArray())
+            indexer.indexAll(vaultId, listOf(PathAndSha(path, "sha-seed")))
+            transport.content = files.readText(vaultId, path)
+            val second =
+                database
+                    .taskDao()
+                    .open(vaultId)
+                    .first()
+                    .single { it.line == 6 }
+
+            assertThat(writes.completeTask(second)).isEqualTo(WriteResult.Pushed)
+
+            assertThat(files.readText(vaultId, path))
+                .isEqualTo("## Alpha\n\n- [ ] follow up\n\n## Beta\n\n- [x] follow up ✅ $today\n")
+            assertThat(transport.content).isEqualTo(files.readText(vaultId, path))
+        }
+
+    @Test
     fun `a read-only vault is refused, and nothing is queued`() =
         runTest {
             database.vaultDao().update(database.vaultDao().byId(vaultId)!!.copy(canWrite = false))
