@@ -236,6 +236,14 @@ data class ReadingSettings(
      * it is a choice for the person who knows what their wallpaper is.
      */
     val widgetOpacity: Int = 100,
+    /**
+     * Show a picture a note takes from the web, `![](https://…)`. Off, such
+     * a picture is not asked for until it is tapped, so opening a note tells
+     * no site that it was read -- `appearance.remote_images` in the other
+     * apps' config, `remote-images.md` in notes-linux's `docs/specs/`. On by
+     * default, as there.
+     */
+    val remoteImages: Boolean = true,
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
@@ -429,6 +437,7 @@ class SettingsStore
                             hideAgentFiles = preferences[HIDE_AGENT_FILES] ?: true,
                             showHiddenFiles = preferences[SHOW_HIDDEN_FILES] ?: false,
                             widgetOpacity = (preferences[WIDGET_OPACITY] ?: 100).coerceIn(0, 100),
+                            remoteImages = preferences[REMOTE_IMAGES] ?: true,
                         ),
                 )
             }
@@ -604,6 +613,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[WIDGET_OPACITY] = percent.coerceIn(0, 100) }
         }
 
+        suspend fun setRemoteImages(enabled: Boolean) {
+            context.settingsDataStore.edit { it[REMOTE_IMAGES] = enabled }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -687,6 +700,7 @@ class SettingsStore
             val HIDE_AGENT_FILES = booleanPreferencesKey("hide_agent_files")
             val SHOW_HIDDEN_FILES = booleanPreferencesKey("show_hidden_files")
             val WIDGET_OPACITY = intPreferencesKey("widget_opacity")
+            val REMOTE_IMAGES = booleanPreferencesKey("reading_remote_images")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")
