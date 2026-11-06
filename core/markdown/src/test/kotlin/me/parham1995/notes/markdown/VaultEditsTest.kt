@@ -69,7 +69,10 @@ class VaultEditsTest {
         assertThat(VaultEdits.addUnder("Alpha", "- [ ] third")(note))
             .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second\r\n- [ ] third\r\n")
         assertThat(VaultEdits.addUnder("Beta", "- [ ] third")(note))
-            .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second\r\n\r\n## Beta\r\n\r\n- [ ] third\r\n")
+            .isEqualTo(
+                "## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second\r\n" +
+                    "\r\n## Beta\r\n\r\n- [ ] third\r\n",
+            )
         assertThat(VaultEdits.append("10:00\n\na thought")(note))
             .isEqualTo("## Alpha\r\n\r\n- [ ] first 📅 2026-10-01\r\n- [ ] second\r\n\r\n10:00\r\n\r\na thought\r\n")
     }
