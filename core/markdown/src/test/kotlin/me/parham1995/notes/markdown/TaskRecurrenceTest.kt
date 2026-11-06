@@ -52,6 +52,30 @@ class TaskRecurrenceTest {
     }
 
     @Test
+    fun `a task ticked years late comes back after today`() {
+        val next = { line: String, today: String -> TaskLine.completeRecurring(line, today)!!.first() }
+
+        assertThat(next("- [ ] Water 🔁 every day 📅 1990-01-01", "2026-11-06"))
+            .isEqualTo("- [ ] Water 🔁 every day 📅 2026-11-07")
+        assertThat(next("- [ ] Bins 🔁 every 2 weeks 📅 1990-01-01", "2026-11-06"))
+            .isEqualTo("- [ ] Bins 🔁 every 2 weeks 📅 2026-11-16")
+        assertThat(next("- [ ] Rent 🔁 every month 📅 1990-01-31", "2026-11-06"))
+            .isEqualTo("- [ ] Rent 🔁 every month 📅 2026-11-28")
+        assertThat(next("- [ ] Early 🔁 every day 📅 2026-12-01", "2026-11-06"))
+            .isEqualTo("- [ ] Early 🔁 every day 📅 2026-12-02")
+    }
+
+    @Test
+    fun `months too many steps behind have no next occurrence rather than an overdue one`() {
+        val monthly = Recurrence(1, RecurrenceUnit.MONTH, whenDone = false)
+
+        // 4,000 steps from 1600 reach 1933, still before today.
+        assertThat(TaskRecurrence.next(LocalDate.of(1600, 1, 1), monthly, LocalDate.of(2026, 11, 6))).isNull()
+        assertThat(TaskLine.completeRecurring("- [ ] Old 🔁 every month 📅 1600-01-01", "2026-11-06"))
+            .containsExactly("- [x] Old 🔁 every month 📅 1600-01-01 ✅ 2026-11-06")
+    }
+
+    @Test
     fun `a monthly rule lands on the same day of the month`() {
         val rule = Recurrence(1, RecurrenceUnit.MONTH, whenDone = false)
 
