@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.graphics.text.LineBreaker
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextDirectionHeuristics
@@ -180,7 +181,7 @@ object NotePdf {
                 .setLineSpacing(0f, LINE_SPACING)
                 .apply {
                     if (prose) {
-                        setJustificationMode(Layout.JUSTIFICATION_MODE_INTER_WORD)
+                        setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD)
                         setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NORMAL)
                     }
                 }.build()
@@ -389,17 +390,17 @@ object NotePdf {
     /** Level 1 to 6 are the note's headings. */
     private val HEADING_SIZES = listOf(20f, 17f, 15f, 13f, 12f, 11f, 11f)
 
-    // The light theme's colours.
-    private val ACCENT = Color.rgb(0x3B, 0x6E, 0xA8)
-    private val GREY = Color.rgb(0x80, 0x80, 0x80)
-    private val RULE_COLOR = Color.rgb(0xD0, 0xD0, 0xD0)
-    private val CODE_BACKGROUND = Color.rgb(0xF2, 0xF2, 0xF2)
-    private val QUOTE_BAR = Color.rgb(0xC0, 0xC0, 0xC0)
-    private val BLUE = Color.rgb(0x3B, 0x6E, 0xA8)
-    private val GREEN = Color.rgb(0x2E, 0x8B, 0x57)
-    private val AMBER = Color.rgb(0xC8, 0x8A, 0x12)
-    private val RED = Color.rgb(0xC0, 0x39, 0x2B)
-    private val PURPLE = Color.rgb(0x7B, 0x4F, 0xB0)
+    // The light theme's colours, as ARGB: plain numbers, so a JVM test can compare them.
+    private val ACCENT = 0xFF3B6EA8.toInt()
+    private val GREY = 0xFF808080.toInt()
+    private val RULE_COLOR = 0xFFD0D0D0.toInt()
+    private val CODE_BACKGROUND = 0xFFF2F2F2.toInt()
+    private val QUOTE_BAR = 0xFFC0C0C0.toInt()
+    private val BLUE = 0xFF3B6EA8.toInt()
+    private val GREEN = 0xFF2E8B57.toInt()
+    private val AMBER = 0xFFC88A12.toInt()
+    private val RED = 0xFFC0392B.toInt()
+    private val PURPLE = 0xFF7B4FB0.toInt()
 
     /** The only part of the cache the file provider exposes. */
     const val SHARED_DIR = "shared"
