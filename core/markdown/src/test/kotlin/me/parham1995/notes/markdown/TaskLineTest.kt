@@ -94,14 +94,17 @@ class TaskLineTest {
     }
 
     @Test
-    fun `a rule it will not act on is refused rather than guessed at`() {
-        assertThat(TaskLine.completeRecurring("- [ ] standup 🔁 every weekday ⏳ 2026-09-19", "2026-09-20")).isNull()
-        assertThat(TaskLine.completeRecurring("- [ ] x 🔁 every week on Sunday ⏳ 2026-09-19", "2026-09-20")).isNull()
+    fun `a rule it will not act on is ticked with no next occurrence rather than guessed at`() {
+        assertThat(TaskLine.completeRecurring("- [ ] standup 🔁 every weekday ⏳ 2026-09-19", "2026-09-20"))
+            .containsExactly("- [x] standup 🔁 every weekday ⏳ 2026-09-19 ✅ 2026-09-20")
+        assertThat(TaskLine.completeRecurring("- [ ] x 🔁 every jalali week ⏳ 2026-09-19 ^id", "2026-09-20"))
+            .containsExactly("- [x] x 🔁 every jalali week ⏳ 2026-09-19 ✅ 2026-09-20 ^id")
     }
 
     @Test
     fun `a repeat with no date has no next occurrence to describe`() {
-        assertThat(TaskLine.completeRecurring("- [ ] someday 🔁 every week", "2026-09-20")).isNull()
+        assertThat(TaskLine.completeRecurring("- [ ] someday 🔁 every week", "2026-09-20"))
+            .containsExactly("- [x] someday 🔁 every week ✅ 2026-09-20")
     }
 
     @Test
