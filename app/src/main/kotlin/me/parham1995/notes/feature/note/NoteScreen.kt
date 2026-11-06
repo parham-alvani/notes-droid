@@ -129,6 +129,8 @@ import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Markup
 import me.parham1995.notes.widget.NoteWidget
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -478,6 +480,30 @@ fun NoteScreen(
     }
 
     var showPlaces by remember(noteId) { mutableStateOf(false) }
+    var showProperties by remember(noteId) { mutableStateOf(false) }
+    var showHistory by remember(noteId) { mutableStateOf(false) }
+    if (showProperties) {
+        state.note?.let { note ->
+            PropertiesSheet(
+                noteId = note.id,
+                vaultId = note.vaultId,
+                path = note.path,
+                onWritten = viewModel::refresh,
+                onDismiss = { showProperties = false },
+            )
+        }
+    }
+    if (showHistory) {
+        state.note?.let { note ->
+            HistorySheet(
+                vaultId = note.vaultId,
+                path = note.path,
+                writable = state.writable,
+                onWritten = viewModel::refresh,
+                onDismiss = { showHistory = false },
+            )
+        }
+    }
     if (showPlaces) {
         state.note?.let { note -> PlacesSheet(note.blocks, onDismiss = { showPlaces = false }) }
     }
@@ -867,14 +893,36 @@ fun NoteScreen(
                                     } else {
                                         null
                                     },
+                                onProperties =
+                                    if (state.writable && state.note?.isFolderNote == false) {
+                                        { showProperties = true }
+                                    } else {
+                                        null
+                                    },
+                                onHistory = { showHistory = true },
                                 onSharePdf = {
                                     state.note?.let { note ->
                                         scope.launch {
                                             runCatchingUnlessCancelled {
                                                 NotePdf.share(
-                                                    context,
-                                                    note.title,
-                                                    note.blocks,
+                                                    context = context,
+                                                    head =
+                                                        NotePdf.Head(
+                                                            title = note.title,
+                                                            folder =
+                                                                note.path
+                                                                    .substringBeforeLast('/', "")
+                                                                    .substringAfterLast('/'),
+                                                            changed =
+                                                                note.changedAt.takeIf { it > 0 }?.let {
+                                                                    Instant
+                                                                        .ofEpochMilli(it)
+                                                                        .atZone(ZoneId.systemDefault())
+                                                                        .toLocalDate()
+                                                                },
+                                                        ),
+                                                    blocks = note.blocks,
+                                                    picture = viewModel::attachment,
                                                 )
                                             }.onFailure {
                                                 Toast

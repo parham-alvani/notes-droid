@@ -6,6 +6,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.markdown.FrontMatterForm
+import me.parham1995.notes.markdown.PropertyEdit
+import me.parham1995.notes.markdown.PropertySheet
+import me.parham1995.notes.markdown.PropertyValue
 import me.parham1995.notes.sync.Author
 import me.parham1995.notes.sync.TextEdit
 import me.parham1995.notes.sync.VaultWriter
@@ -632,5 +636,63 @@ class VaultWriteRepositoryTest {
             val result = writes.createNote(vaultId, "New.md", "text")
             assertThat(result).isInstanceOf(WriteResult.Refused::class.java)
             assertThat(files.readText(vaultId, "New.md")).isNull()
+        }
+
+    @Test
+    fun `a property set keeps every other line, and lands on the file as it is when it goes up`() =
+        runTest {
+            val path = "Work/Plan.md"
+            val note = "---\ntitle: 'Plan'\ntags: [a, b]\n---\nbody\n"
+            files.write(vaultId, path, note.toByteArray())
+            transport.content = note
+            transport.offline = true
+            val frontMatter = (PropertySheet.read(note) as FrontMatterForm.Form).sheet.original
+
+            val queued =
+                writes.setProperty(
+                    vaultId,
+                    path,
+                    frontMatter,
+                    PropertyEdit.Set("title", PropertyValue.Text("New")),
+                )
+
+            assertThat(queued).isInstanceOf(WriteResult.Queued::class.java)
+            assertThat(files.readText(vaultId, path)).isEqualTo("---\ntitle: 'New'\ntags: [a, b]\n---\nbody\n")
+            // The body changed at the desk meanwhile; the front matter did not.
+            transport.offline = false
+            transport.content = "---\ntitle: 'Plan'\ntags: [a, b]\n---\nbody, and more\n"
+            assertThat(writes.flush()).isEqualTo(1)
+            assertThat(transport.content).isEqualTo("---\ntitle: 'New'\ntags: [a, b]\n---\nbody, and more\n")
+            assertThat(transport.messages.single()).isEqualTo("docs: set title in Plan")
+        }
+
+    @Test
+    fun `a property edit is refused when the front matter changed since the form read it`() =
+        runTest {
+            val path = "Work/Plan.md"
+            files.write(vaultId, path, "---\ntitle: changed\n---\nbody\n".toByteArray())
+            transport.content = files.readText(vaultId, path)
+
+            val result =
+                writes.setProperty(vaultId, path, "---\ntitle: old\n---\n", PropertyEdit.Remove("title"))
+
+            assertThat(result).isEqualTo(WriteResult.Refused(PropertySheet.CHANGED))
+            assertThat(files.readText(vaultId, path)).isEqualTo("---\ntitle: changed\n---\nbody\n")
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun `a restore is an ordinary write, and the same text again is no commit`() =
+        runTest {
+            val path = "Work/Plan.md"
+            files.write(vaultId, path, "now\n".toByteArray())
+            transport.content = "now\n"
+
+            assertThat(writes.restore(vaultId, path, "0123456789abcdef", "then\n")).isEqualTo(WriteResult.Pushed)
+
+            assertThat(transport.content).isEqualTo("then\n")
+            assertThat(files.readText(vaultId, path)).isEqualTo("then\n")
+            assertThat(transport.messages.single()).isEqualTo("docs: restore Plan as of 0123456")
+            assertThat(writes.restore(vaultId, path, "0123456789abcdef", "then\n")).isEqualTo(WriteResult.Unchanged)
         }
 }

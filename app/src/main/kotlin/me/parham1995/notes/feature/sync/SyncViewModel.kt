@@ -334,6 +334,8 @@ class SyncViewModel
 
         fun setHoldToDefine(enabled: Boolean) = viewModelScope.launch { settingsStore.setHoldToDefine(enabled) }
 
+        fun setRemoteImages(enabled: Boolean) = viewModelScope.launch { settingsStore.setRemoteImages(enabled) }
+
         // The notes are marked again by the application, which watches both:
         // a change made anywhere else -- adb, a restore -- is followed too.
         fun setHideAgentFiles(enabled: Boolean) = viewModelScope.launch { settingsStore.setHideAgentFiles(enabled) }

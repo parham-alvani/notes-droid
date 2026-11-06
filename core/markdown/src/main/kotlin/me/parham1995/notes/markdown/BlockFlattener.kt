@@ -612,10 +612,31 @@ class BlockFlattener(
 
     private fun htmlBlock(node: HtmlBlock): List<MdBlock> {
         val text = node.literal.replace(HTML_TAG, "").trim()
-        if (text.isEmpty()) return emptyList()
+        if (text.isEmpty()) return htmlImages(node.literal)
         plain.append(text).append('\n')
         return listOf(MdBlock.Paragraph(id(), listOf(MdInline.Text(text)), TextDirection.of(text)))
     }
+
+    /**
+     * The pictures of a block of HTML that holds nothing else -- a `<p
+     * align="center"><img …></p>` a note centres a picture with -- with the
+     * size its `width` and `height` ask for, as `![[x.png|300x200]]` does.
+     */
+    private fun htmlImages(html: String): List<MdBlock> =
+        HtmlTree.parse(html).descendants("img").mapNotNull { img ->
+            val src = img.attr("src")?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val alt = img.attr("alt")?.trim()?.takeIf { it.isNotEmpty() }
+            links += ParsedLink(LinkKind.IMAGE, src, alt)
+            MdBlock.Image(id(), imageResolver(src), alt, pixels(img.attr("width")), pixels(img.attr("height")))
+        }
+
+    /** `300` or `300px`; a percentage or anything else is no size. */
+    private fun pixels(value: String?): Int? =
+        value
+            ?.trim()
+            ?.removeSuffix("px")
+            ?.toIntOrNull()
+            ?.takeIf { it > 0 }
 
     // -- inline conversion ------------------------------------------------
 

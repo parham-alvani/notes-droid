@@ -155,6 +155,33 @@ object VaultEdits {
     fun replaceFile(text: String): (String?) -> String? = { current -> text.takeIf { it != current } }
 
     /**
+     * Restores a note to [text], as it was at a commit of its history. An
+     * ordinary write, over whatever the file says now: the commit it makes
+     * keeps what it replaced in the history, so nothing is lost. Null when the
+     * note already reads [text].
+     */
+    fun restore(text: String): (String?) -> String? = replaceFile(text)
+
+    /**
+     * Makes one change of the Properties form ([PropertyEdit.encode]d as
+     * [edit]) to a note's front matter, read again from the note as it is
+     * now -- and only while that front matter is still [frontMatter], the one
+     * the form was read from; otherwise [PropertyFailure] says it changed.
+     * Every line the change does not touch prints as it was, and the body is
+     * never touched (`properties.md` in notes-linux's `docs/specs/`). Null
+     * when the note already says this.
+     */
+    fun setProperty(
+        frontMatter: String,
+        edit: String,
+    ): (String?) -> String? =
+        { current ->
+            val change = PropertyEdit.decode(edit) ?: throw PropertyFailure("that change to a property cannot be read")
+            val note = current ?: throw PropertyFailure("the note is not there any more")
+            PropertySheet.edit(note, change, frontMatter).takeIf { it != note }
+        }
+
+    /**
      * Makes a new note that reads [text].
      *
      * A note is never written over: a file already there with other words in

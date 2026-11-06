@@ -19,6 +19,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,6 +48,7 @@ import me.parham1995.notes.markdown.BaseCell
 import me.parham1995.notes.markdown.BaseImage
 import me.parham1995.notes.markdown.BaseLayout
 import me.parham1995.notes.markdown.BaseTable
+import me.parham1995.notes.markdown.RemoteImages
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.image.onPage
 import me.parham1995.notes.ui.image.pageIsDark
@@ -166,13 +170,21 @@ private fun Cover(
     val behind = MaterialTheme.colorScheme.surfaceVariant
     when (image) {
         is BaseImage.Color -> hexColor(image.hex)?.let { Box(box.background(it)) }
-        is BaseImage.Url ->
-            AsyncImage(
-                model = image.url,
-                contentDescription = null,
-                contentScale = fit,
-                modifier = box.background(behind),
-            )
+        is BaseImage.Url -> {
+            // A cover from the web is asked of its site only when the
+            // setting allows, or when it is tapped.
+            var asked by rememberSaveable(image.url) { mutableStateOf(false) }
+            if (asked || !RemoteImages.isRemote(image.url) || LocalReading.current.remoteImages) {
+                AsyncImage(
+                    model = image.url,
+                    contentDescription = null,
+                    contentScale = fit,
+                    modifier = box.background(behind),
+                )
+            } else {
+                RemoteImagePlaceholder(image.url, alt = null, onLoad = { asked = true }, modifier = box)
+            }
+        }
         is BaseImage.File -> {
             if (vaultId == null) return
             val context = LocalContext.current

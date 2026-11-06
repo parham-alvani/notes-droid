@@ -17,6 +17,7 @@ import me.parham1995.notes.markdown.BaseStat
 import me.parham1995.notes.markdown.FrontMatter
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
+import me.parham1995.notes.markdown.PropertyNames
 import me.parham1995.notes.obsidian.PropertyTypes
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.VaultFilter
@@ -84,6 +85,38 @@ class BaseRepository
             return run(vaultId, source, from.ifEmpty { path }).copy(path = path)
         }
 
+        /** `.obsidian/types.json` of [vaultId]: each property's type, by name. Empty when there is none. */
+        suspend fun propertyTypes(vaultId: Long): Map<String, String> =
+            withContext(Dispatchers.IO) {
+                files
+                    .readText(vaultId, VaultFilter.PROPERTY_TYPES)
+                    ?.let { text ->
+                        runCatching { PropertyTypes.parse(text) }
+                            .onFailure {
+                                log.warn(
+                                    "could not read the property types of vault $vaultId: ${it.message}",
+                                )
+                            }.getOrNull()
+                    }.orEmpty()
+            }
+
+        /**
+         * Every property name the notes of [vaultId] use, the most used
+         * first: what a new property's name is completed from. Each note's
+         * front matter alone is read, not the note.
+         */
+        suspend fun propertyNames(vaultId: Long): List<String> =
+            withContext(Dispatchers.IO) {
+                PropertyNames.ranked(
+                    notes.stats(vaultId).flatMap { note ->
+                        FrontMatter
+                            .parse(
+                                VaultBaseIndex.frontMatterOf(files.fileFor(vaultId, note.path)),
+                            ).map { it.key }
+                    },
+                )
+            }
+
         /** Runs the YAML of a base written in [context], the note `this` names. */
         suspend fun run(
             vaultId: Long,
@@ -92,17 +125,7 @@ class BaseRepository
         ): BaseAnswer =
             withContext(Dispatchers.IO) {
                 val index = load(vaultId)
-                val types =
-                    files
-                        .readText(vaultId, VaultFilter.PROPERTY_TYPES)
-                        ?.let { text ->
-                            runCatching { PropertyTypes.parse(text) }
-                                .onFailure {
-                                    log.warn(
-                                        "could not read the property types of vault $vaultId: ${it.message}",
-                                    )
-                                }.getOrNull()
-                        }.orEmpty()
+                val types = propertyTypes(vaultId)
                 val engine = BaseEngine(index, System.currentTimeMillis(), types)
                 val tables = engine.run(Base.parse(source), context)
                 BaseAnswer(BaseResult(tables, engine.problems), noteIds = index.noteIds)

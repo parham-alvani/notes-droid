@@ -12,6 +12,8 @@ import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.NoteExists
+import me.parham1995.notes.markdown.PropertyEdit
+import me.parham1995.notes.markdown.PropertyFailure
 import me.parham1995.notes.markdown.StatusType
 import me.parham1995.notes.markdown.TaskLine
 import me.parham1995.notes.markdown.TaskNotFound
@@ -80,6 +82,20 @@ enum class EditKind {
      * and which of the headings of that level and text it is, from 0.
      */
     SORT_SECTIONS,
+
+    /**
+     * Change one property of the note's front matter, as the Properties form
+     * does. The anchor is the front matter the form was read from, and the
+     * text the [PropertyEdit], encoded: refused when the front matter is no
+     * longer that one.
+     */
+    SET_PROPERTY,
+
+    /**
+     * Put a note back as it was at a commit of its history. The anchor is
+     * the commit, for the record, and the text the note as it was then.
+     */
+    RESTORE,
     ;
 
     companion object {
@@ -506,6 +522,59 @@ class VaultWriteRepository
         }
 
         /**
+         * Makes [edit] to the front matter of [path] in [vaultId], as the
+         * Properties form asks: only while the front matter is still
+         * [frontMatter], the one the form was read from, and refused with
+         * the reason otherwise ([VaultEdits.setProperty]).
+         */
+        suspend fun setProperty(
+            vaultId: Long,
+            path: String,
+            frontMatter: String,
+            edit: PropertyEdit,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            val name = path.substringAfterLast('/').removeSuffix(".md")
+            val what =
+                when (edit) {
+                    is PropertyEdit.Set -> "set ${edit.key} in"
+                    is PropertyEdit.Add -> "add ${edit.key} to"
+                    is PropertyEdit.Remove -> "remove ${edit.key} from"
+                    is PropertyEdit.Rename -> "rename ${edit.key} in"
+                }
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.SET_PROPERTY,
+                anchor = frontMatter,
+                replacement = edit.encode(),
+                summary = "docs: $what ${name.take(SUBJECT)}".take(SUBJECT * 2),
+            )
+        }
+
+        /**
+         * Puts [path] in [vaultId] back to [text], as it was at [commit] --
+         * an ordinary write, so the commit it makes keeps what it replaced.
+         */
+        suspend fun restore(
+            vaultId: Long,
+            path: String,
+            commit: String,
+            text: String,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            val name = path.substringAfterLast('/').removeSuffix(".md")
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.RESTORE,
+                anchor = commit,
+                replacement = text,
+                summary = "docs: restore ${name.take(SUBJECT)} as of ${commit.take(SHORT_SHA)}",
+            )
+        }
+
+        /**
          * Sends everything queued, oldest first.
          *
          * Called at the start of a sync rather than at the end: the pull that
@@ -602,6 +671,8 @@ class VaultWriteRepository
                         return@tryWithVault WriteResult.Refused(gone.message.orEmpty())
                     } catch (taken: NoteExists) {
                         return@tryWithVault WriteResult.Refused(taken.message.orEmpty())
+                    } catch (refused: PropertyFailure) {
+                        return@tryWithVault WriteResult.Refused(refused.message.orEmpty())
                     } ?: return@tryWithVault WriteResult.Unchanged
 
                 val id = pending.insert(edit)
@@ -722,6 +793,8 @@ class VaultWriteRepository
                     val (level, occurrence) = edit.text.split(' ').map(String::toInt)
                     VaultEdits.sortSections(level, edit.anchor, occurrence)
                 }
+                EditKind.SET_PROPERTY -> VaultEdits.setProperty(edit.anchor, edit.text)
+                EditKind.RESTORE -> VaultEdits.restore(edit.text)
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
 

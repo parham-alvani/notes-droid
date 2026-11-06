@@ -369,8 +369,11 @@ class VaultIndexer
              * 14: a task's status character and `[reason:: …]` are stored,
              *    its text is without the reason, and its state follows the
              *    vault's Tasks plugin settings.
+             * 15: a block of HTML that is only pictures (`<img src=…>`) is
+             *    those pictures, where it was no block at all, so every
+             *    block after one moves along.
              */
-            const val VERSION = 14
+            const val VERSION = 15
 
             /**
              * Large enough that commits are rare, small enough that a failure

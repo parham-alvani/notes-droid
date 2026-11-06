@@ -38,7 +38,8 @@ import javax.inject.Inject
  * rarely, so both live here instead of taking two more buttons' worth of the
  * title.
  *
- * [onSortTasks] is null where the note cannot be written, which hides it.
+ * [onSortTasks] and [onProperties] are null where the note cannot be
+ * written, which hides them.
  */
 @Composable
 fun NoteMenu(
@@ -54,6 +55,8 @@ fun NoteMenu(
     syncing: Boolean = false,
     onSync: () -> Unit = {},
     onSortTasks: (() -> Unit)? = null,
+    onProperties: (() -> Unit)? = null,
+    onHistory: () -> Unit = {},
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -105,6 +108,24 @@ fun NoteMenu(
                     },
                 )
             }
+            onProperties?.let { edit ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.note_properties)) },
+                    leadingIcon = { LucideGlyph("sliders-horizontal", size = 18.dp) },
+                    onClick = {
+                        open = false
+                        edit()
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.note_history)) },
+                leadingIcon = { LucideGlyph("history", size = 18.dp) },
+                onClick = {
+                    open = false
+                    onHistory()
+                },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.places_title)) },
                 leadingIcon = { LucideGlyph("map-pin", size = 18.dp) },

@@ -95,4 +95,16 @@ class SettingsStoreTest {
             assertThat(reading.hideAgentFiles).isFalse()
             assertThat(reading.showHiddenFiles).isTrue()
         }
+
+    /** `remote-images.md` in notes-linux's `docs/specs/`: on when never written, off only when set off. */
+    @Test
+    fun `pictures from the web are shown by default, and the switch survives a round trip`() =
+        runTest {
+            assertThat(store.current().reading.remoteImages).isTrue()
+
+            store.setRemoteImages(false)
+            assertThat(store.current().reading.remoteImages).isFalse()
+            store.setRemoteImages(true)
+            assertThat(store.current().reading.remoteImages).isTrue()
+        }
 }

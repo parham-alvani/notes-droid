@@ -116,3 +116,24 @@ internal data class CommitShaDto(
 internal data class ContentShaDto(
     val sha: String,
 )
+
+@Serializable
+internal data class CommitDto(
+    val sha: String,
+    val commit: CommitDetailDto,
+    val parents: List<CommitShaDto> = emptyList(),
+    /** Only on a single commit, not in a listing. */
+    val files: List<CompareFileDto> = emptyList(),
+)
+
+@Serializable
+internal data class CommitDetailDto(
+    val author: CommitPersonDto? = null,
+    val message: String = "",
+)
+
+@Serializable
+internal data class CommitPersonDto(
+    val name: String = "",
+    val date: String? = null,
+)
