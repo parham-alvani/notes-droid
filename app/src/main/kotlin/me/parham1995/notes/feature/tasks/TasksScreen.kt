@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,7 +21,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -42,8 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -53,8 +47,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -65,6 +57,7 @@ import me.parham1995.notes.data.TaskReminders
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
+import me.parham1995.notes.ui.AddTaskDialog
 import me.parham1995.notes.ui.AutoDirection
 import me.parham1995.notes.ui.LocalTaskStatuses
 import me.parham1995.notes.ui.RescheduleSheet
@@ -135,10 +128,12 @@ fun TasksScreen(
 
     if (adding) {
         AddTaskDialog(
-            state = state,
+            files = state.sources.map { it.name to it.path },
+            initialPath = state.selectedPath ?: state.sources.first().path,
+            sectionsOf = { state.sectionsByPath[it].orEmpty() },
             onDismiss = { adding = false },
-            onAdd = { path, section, text ->
-                viewModel.addTask(path, section, text)
+            onAdd = { path, section, text, created ->
+                viewModel.addTask(path, section, text, created)
                 adding = false
             },
         )
@@ -549,102 +544,3 @@ private val FILTER_MENU_WIDTH = 220.dp
 
 /** Widens the checkbox to something a thumb can hit without opening the note. */
 private val CHECKBOX_TAP = 6.dp
-
-/**
- * Adds a task to a file that already has some.
- *
- * File and project are offered from what the vault already contains rather than
- * typed: this vault keeps one file per context and one heading per project, and
- * a task filed under a heading that does not quite match an existing one is a
- * task nobody finds again.
- */
-@Composable
-private fun AddTaskDialog(
-    state: TasksUiState,
-    onDismiss: () -> Unit,
-    onAdd: (path: String, section: String, text: String) -> Unit,
-) {
-    var path by remember { mutableStateOf(state.selectedPath ?: state.sources.first().path) }
-    var section by remember { mutableStateOf("") }
-    var text by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.tasks_add)) },
-        confirmButton = {
-            TextButton(onClick = { onAdd(path, section, text) }, enabled = text.isNotBlank()) {
-                Text(stringResource(R.string.action_add))
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
-        text = {
-            // The task is what the dialog is for, so the keyboard is up for it
-            // as it opens. Here rather than around the dialog: this runs once
-            // the field is in its window, which is when it can take focus.
-            val focus = remember { FocusRequester() }
-            LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text(stringResource(R.string.tasks_add_text)) },
-                    keyboardOptions =
-                        KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
-                    // Done adds it, as the button does, once there is something to add.
-                    keyboardActions = KeyboardActions(onDone = { if (text.isNotBlank()) onAdd(path, section, text) }),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                )
-                ChoiceField(
-                    label = stringResource(R.string.tasks_add_file),
-                    value = state.sources.firstOrNull { it.path == path }?.name ?: path,
-                    options = state.sources.map { it.name to it.path },
-                    onChoose = { chosen ->
-                        path = chosen
-                        // A project heading belongs to a file, so it cannot
-                        // survive the file changing underneath it.
-                        section = ""
-                    },
-                )
-                ChoiceField(
-                    label = stringResource(R.string.tasks_add_section),
-                    value = section.ifBlank { stringResource(R.string.tasks_add_section_end) },
-                    options = state.sectionsByPath[path].orEmpty().map { it to it },
-                    onChoose = { section = it },
-                )
-            }
-        },
-    )
-}
-
-/** A read-only field that opens a menu, for choosing from what exists. */
-@Composable
-private fun ChoiceField(
-    label: String,
-    value: String,
-    options: List<Pair<String, String>>,
-    onChoose: (String) -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-
-    Column {
-        Text(label, style = MaterialTheme.typography.labelMedium)
-        Box {
-            TextButton(onClick = { open = true }, enabled = options.isNotEmpty()) {
-                Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, false))
-                LucideGlyph("chevron-down", size = 16.dp, contentDescription = null)
-            }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                options.forEach { (name, chosen) ->
-                    DropdownMenuItem(
-                        text = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        onClick = {
-                            onChoose(chosen)
-                            open = false
-                        },
-                    )
-                }
-            }
-        }
-    }
-}

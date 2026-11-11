@@ -52,6 +52,7 @@ import me.parham1995.notes.markdown.NoteSearch
 import me.parham1995.notes.markdown.OutlineTree
 import me.parham1995.notes.markdown.TasksQuery
 import me.parham1995.notes.markdown.Transclusion
+import me.parham1995.notes.markdown.VaultEdits
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.markdown.plainText
 import me.parham1995.notes.obsidian.Templates
@@ -325,6 +326,41 @@ class NoteViewModel
             }
             val result = writes.rescheduleTask(row, date.toString()).result
             _state.update { it.copy(message = result.describeMove(date.toString())) }
+            if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
+        }
+
+        /**
+         * What the New task dialog opens with for this note: its sections, as
+         * `VaultEdits.addUnder` finds them in the file, and the one the
+         * heading [headingId] -- the one being read -- names, or none (the
+         * end of the note). The index keeps a heading's words without their
+         * markup, so a section is found by its place when the file and the
+         * index list as many headings, and by its words otherwise.
+         */
+        suspend fun taskDraft(headingId: Long?): TaskDraft? {
+            val note = _state.value.note ?: return null
+            val text = files.bytes(note.vaultId, note.path)?.decodeToString().orEmpty()
+            val sections = VaultEdits.sections(text)
+            val headings = note.headings.sortedBy { it.ordinal }
+            val at = headings.indexOfFirst { it.id == headingId }
+            val section =
+                when {
+                    at < 0 -> ""
+                    sections.size == headings.size -> sections[at]
+                    else -> sections.firstOrNull { it.trim() == headings[at].text.trim() }.orEmpty()
+                }
+            return TaskDraft(path = note.path, title = note.title, sections = sections, section = section)
+        }
+
+        /** Adds a task to this note, as the Tasks screen's New task does. */
+        fun addTask(
+            section: String,
+            text: String,
+            created: String?,
+        ) = viewModelScope.launch {
+            val note = _state.value.note ?: return@launch
+            val result = writes.addTask(note.vaultId, note.path, section, text, created)
+            _state.update { it.copy(message = result.describe()) }
             if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
         }
 
@@ -792,3 +828,11 @@ internal fun blockForHeading(
     val ordered = headings.sortedBy { it.ordinal }
     return HeadingPath.find(ordered.map { it.level to it.text }, wanted)?.let { ordered[it].blockIndex }
 }
+
+/** A new task's place in the note on screen ([NoteViewModel.taskDraft]). */
+data class TaskDraft(
+    val path: String,
+    val title: String,
+    val sections: List<String>,
+    val section: String,
+)
