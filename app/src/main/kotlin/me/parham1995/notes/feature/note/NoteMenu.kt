@@ -38,8 +38,8 @@ import javax.inject.Inject
  * rarely, so both live here instead of taking two more buttons' worth of the
  * title.
  *
- * [onSortTasks] and [onProperties] are null where the note cannot be
- * written, which hides them.
+ * [onSortTasks], [onAddTask] and [onProperties] are null where the note
+ * cannot be written, which hides them.
  */
 @Composable
 fun NoteMenu(
@@ -55,6 +55,7 @@ fun NoteMenu(
     syncing: Boolean = false,
     onSync: () -> Unit = {},
     onSortTasks: (() -> Unit)? = null,
+    onAddTask: (() -> Unit)? = null,
     onProperties: (() -> Unit)? = null,
     onHistory: () -> Unit = {},
 ) {
@@ -98,6 +99,16 @@ fun NoteMenu(
             )
             // Only where the vault can be written: it is the one item here
             // that changes the note.
+            onAddTask?.let { add ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.tasks_add)) },
+                    leadingIcon = { LucideGlyph("list-plus", size = 18.dp) },
+                    onClick = {
+                        open = false
+                        add()
+                    },
+                )
+            }
             onSortTasks?.let { sort ->
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.note_sort_tasks)) },

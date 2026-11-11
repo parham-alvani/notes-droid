@@ -142,9 +142,10 @@ class TasksViewModel
             path: String,
             section: String,
             text: String,
+            created: String?,
         ) = viewModelScope.launch {
             val vaultId = repository.activeVaultId.first()
-            message.value = Notice(writes.addTask(vaultId, path, section, text).describe())
+            message.value = Notice(writes.addTask(vaultId, path, section, text, created).describe())
         }
 
         fun switchTo(vaultId: Long) {

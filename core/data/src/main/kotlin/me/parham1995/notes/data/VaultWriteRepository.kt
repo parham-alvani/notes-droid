@@ -15,6 +15,7 @@ import me.parham1995.notes.markdown.NoteExists
 import me.parham1995.notes.markdown.PropertyEdit
 import me.parham1995.notes.markdown.PropertyFailure
 import me.parham1995.notes.markdown.StatusType
+import me.parham1995.notes.markdown.TaskFields
 import me.parham1995.notes.markdown.TaskLine
 import me.parham1995.notes.markdown.TaskNotFound
 import me.parham1995.notes.markdown.TaskReason
@@ -377,18 +378,27 @@ class VaultWriteRepository
 
         /**
          * Adds a task under [section] in [path], with this vault's own default
-         * dates -- created today, scheduled three days out.
+         * dates -- created on [created] (today unless the person picked
+         * another day; null for none), scheduled three days out.
          */
         suspend fun addTask(
             vaultId: Long,
             path: String,
             section: String,
             text: String,
+            created: String? = today(),
         ): WriteResult {
             val vault = writableVault(vaultId) ?: return refusal(vaultId)
-            val body = text.trim()
-            if (body.isEmpty()) return WriteResult.Unchanged
-            val line = "- [ ] $body ➕ ${today()} ⏳ ${today(SCHEDULE_DAYS)}"
+            val line =
+                TaskLine.written(TaskFields(text = text, created = created, scheduled = today(SCHEDULE_DAYS)))
+                    ?: return WriteResult.Unchanged
+            // The commit names the task by its words, not its dates.
+            val body =
+                text
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .joinToString(" ")
 
             return apply(
                 vault = vault,

@@ -104,6 +104,7 @@ import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
+import me.parham1995.notes.ui.AddTaskDialog
 import me.parham1995.notes.ui.Loading
 import me.parham1995.notes.ui.LocalFullScreen
 import me.parham1995.notes.ui.LocalReading
@@ -202,6 +203,8 @@ fun NoteScreen(
     }
 
     var showOutline by remember { mutableStateOf(false) }
+    // New task: where it goes in this note, once the file has been read for its sections.
+    var taskDraft by remember { mutableStateOf<TaskDraft?>(null) }
     var showBacklinks by remember { mutableStateOf(false) }
     // Reset per note, so following a link from a folder note's contents does
     // not land on the next note with the wrong tab selected.
@@ -899,6 +902,16 @@ fun NoteScreen(
                                     } else {
                                         null
                                     },
+                                onAddTask =
+                                    if (state.writable && state.note?.isFolderNote == false) {
+                                        {
+                                            // The section being read when the menu was opened.
+                                            val reading = currentHeading(state.note?.headings.orEmpty(), topBlock())
+                                            scope.launch { taskDraft = viewModel.taskDraft(reading) }
+                                        }
+                                    } else {
+                                        null
+                                    },
                                 onHistory = { showHistory = true },
                                 onSharePdf = {
                                     state.note?.let { note ->
@@ -1302,6 +1315,20 @@ fun NoteScreen(
                 actions = closing,
                 brokenLinks = state.brokenLinks,
                 onDismiss = { footnote = null },
+            )
+        }
+
+        taskDraft?.let { draft ->
+            AddTaskDialog(
+                files = listOf(draft.title to draft.path),
+                initialPath = draft.path,
+                sectionsOf = { draft.sections },
+                initialSection = draft.section,
+                onDismiss = { taskDraft = null },
+                onAdd = { _, section, text, created ->
+                    viewModel.addTask(section, text, created)
+                    taskDraft = null
+                },
             )
         }
 

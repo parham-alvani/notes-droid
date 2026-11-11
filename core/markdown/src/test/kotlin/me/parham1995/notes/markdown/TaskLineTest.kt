@@ -169,4 +169,21 @@ class TaskLineTest {
         assertThat(out!!).hasSize(2)
         assertThat(out.all { it.startsWith("    - [") }).isTrue()
     }
+
+    @Test
+    fun `a new task is written from its fields`() {
+        assertThat(TaskLine.written(TaskFields())).isNull()
+        assertThat(TaskLine.written(TaskFields(text = "  \n "))).isNull()
+        var fields = TaskFields(text = "  Call Sara\n about the trip ")
+        assertThat(TaskLine.written(fields)).isEqualTo("- [ ] Call Sara about the trip")
+        fields =
+            fields.copy(priority = "⏫", created = "2026-11-11", scheduled = "2026-11-14", recurring = "every week")
+        assertThat(TaskLine.written(fields))
+            .isEqualTo("- [ ] Call Sara about the trip ⏫ 🔁 every week ➕ 2026-11-11 ⏳ 2026-11-14")
+        // What it writes is a task the rest of the app reads as one.
+        val line = TaskLine.written(fields)!!
+        assertThat(TaskLine.isTask(line)).isTrue()
+        assertThat(TaskLine.indexedText(line)).isEqualTo("Call Sara about the trip")
+        assertThat(TaskLine.written(fields.copy(status = '/'))).startsWith("- [/] Call")
+    }
 }
