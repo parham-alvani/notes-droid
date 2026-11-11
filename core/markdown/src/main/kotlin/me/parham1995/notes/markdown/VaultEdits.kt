@@ -112,6 +112,16 @@ object VaultEdits {
     }
 
     /**
+     * The section names [addUnder] finds in [text]: each ATX heading's text as
+     * written, outside fenced code, in order. What a "which section" choice
+     * offers, so the name it hands back is one [addUnder] matches.
+     */
+    fun sections(text: String): List<String> {
+        val lines = text.lines()
+        return headingLines(lines).map { lines[it].headingText() }
+    }
+
+    /**
      * Appends [block] to the end of the file, creating it with [heading] when
      * it is not there at all.
      *

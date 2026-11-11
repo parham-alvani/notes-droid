@@ -437,6 +437,32 @@ object TaskLine {
         return TaskExtractor.extract(note).firstOrNull()?.text
     }
 
+    /**
+     * A new task's line from [fields]: `- [ ] text` and its signifiers in the
+     * Tasks plugin's order (priority, repeat rule, then ➕ 🛫 ⏳ 📅). Null
+     * when there is no text. A task is one line, so line breaks in the text
+     * become spaces. The Mac's `TaskLine.written`, by the same name.
+     */
+    fun written(fields: TaskFields): String? {
+        val text =
+            fields.text
+                .lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .joinToString(" ")
+        if (text.isEmpty()) return null
+        val status = fields.status.takeUnless { it == '\n' || it == ']' } ?: ' '
+        val parts = mutableListOf(text)
+        fields.priority?.takeIf { it.isNotBlank() }?.let { parts += it }
+        fields.recurring
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { parts += "$RECUR $it" }
+        listOf("➕" to fields.created, "🛫" to fields.start, SCHEDULED to fields.scheduled, DUE to fields.due)
+            .forEach { (emoji, value) -> value?.trim()?.takeIf { it.isNotEmpty() }?.let { parts += "$emoji $it" } }
+        return "- [$status] " + parts.joinToString(" ")
+    }
+
     private const val DONE = "✅"
     private const val CANCELLED = "❌"
     private const val RECUR = "🔁"
@@ -452,3 +478,20 @@ object TaskLine {
     /** The dates that describe when a task happens, and so travel with it. */
     private val MOVED = listOf("📅", "⏳", "🛫")
 }
+
+/**
+ * What a new task is written from ([TaskLine.written]): its text, status,
+ * priority emoji (🔺 ⏫ 🔼 🔽 ⏬), repeat rule and dates as `YYYY-MM-DD`.
+ * Null is a part left out. The Mac's `TaskFields`, less what Android does
+ * not write.
+ */
+data class TaskFields(
+    val text: String = "",
+    val status: Char = ' ',
+    val priority: String? = null,
+    val recurring: String? = null,
+    val created: String? = null,
+    val start: String? = null,
+    val scheduled: String? = null,
+    val due: String? = null,
+)

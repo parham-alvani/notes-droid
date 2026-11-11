@@ -162,6 +162,23 @@ class VaultWriteRepositoryTest {
         }
 
     @Test
+    fun `a task added carries the created day it was given`() =
+        runTest {
+            val path = "Tasks/Work.md"
+            files.write(vaultId, path, "## Alpha\n\n- [ ] first\n".toByteArray())
+            indexer.indexAll(vaultId, listOf(PathAndSha(path, "sha-seed")))
+            transport.content = files.readText(vaultId, path)
+
+            writes.addTask(vaultId, path, "Alpha", "second\nline", created = "2026-10-28")
+            writes.addTask(vaultId, path, "Alpha", "third", created = null)
+
+            val lines = files.readText(vaultId, path)!!.lines()
+            assertThat(lines.single { "second" in it }).startsWith("- [ ] second line ➕ 2026-10-28 ⏳ ")
+            assertThat(lines.single { "third" in it }).doesNotContain("➕")
+            assertThat(lines.single { "third" in it }).contains("⏳ ")
+        }
+
+    @Test
     fun `a write during a refresh is queued rather than blocked`() =
         runTest {
             val gate = VaultGate()

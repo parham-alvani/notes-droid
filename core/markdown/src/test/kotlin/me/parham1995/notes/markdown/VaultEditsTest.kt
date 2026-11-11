@@ -197,4 +197,14 @@ class VaultEditsTest {
         assertThat(create("# New\n")).isNull()
         org.junit.Assert.assertThrows(NoteExists::class.java) { create("written at the desk\n") }
     }
+
+    @Test
+    fun `the sections offered are the ones addUnder finds`() {
+        val note = "# Week\n## **Work**\n- [ ] A\n\n### Later\n```sh\n# not a heading\n```\n"
+        val sections = VaultEdits.sections(note)
+        assertThat(sections).containsExactly("Week", "**Work**", "Later").inOrder()
+        // The name as written finds its section rather than making a new one.
+        assertThat(VaultEdits.addUnder(sections[1], "- [ ] B")(note))
+            .isEqualTo("# Week\n## **Work**\n- [ ] A\n- [ ] B\n\n### Later\n```sh\n# not a heading\n```\n")
+    }
 }
