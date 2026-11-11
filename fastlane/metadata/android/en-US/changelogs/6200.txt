@@ -1,0 +1,1 @@
+Add a task from a note's menu, under the heading you are reading. The add-task dialog has a Created date: today by default, another day, or none. Dependencies upgraded.
