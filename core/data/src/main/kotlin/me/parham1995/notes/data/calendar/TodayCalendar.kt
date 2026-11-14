@@ -16,6 +16,7 @@ import me.parham1995.notes.obsidian.CalendarWeeks
 import me.parham1995.notes.obsidian.WeekDay
 import me.parham1995.notes.obsidian.WeekMeeting
 import me.parham1995.notes.obsidian.WeekNotes
+import me.parham1995.notes.obsidian.WorkingHours
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
@@ -29,6 +30,10 @@ data class TodayCalendar(
     val tomorrowStarts: WeekMeeting? = null,
     /** Read from the phone's calendars rather than from a week note. */
     val live: Boolean = false,
+    /** Yesterday, for a meeting that runs past midnight into today on the timeline. */
+    val yesterday: WeekDay? = null,
+    /** The working day, `calendar.hours`, which the timeline counts free time in. */
+    val hours: WorkingHours = WorkingHours(),
 )
 
 /**
@@ -69,7 +74,8 @@ class TodayCalendarSource
             zone: ZoneId = ZoneId.systemDefault(),
         ): TodayCalendar {
             val tomorrow = today.plusDays(1)
-            val mondays = listOf(CalendarWeeks.mondayOf(today), CalendarWeeks.mondayOf(tomorrow)).distinct()
+            val yesterday = today.minusDays(1)
+            val mondays = listOf(yesterday, today, tomorrow).map(CalendarWeeks::mondayOf).distinct()
             val live = calendar.calendars.isNotEmpty() && calendars.permitted()
             val weeks =
                 if (live) {
@@ -94,6 +100,8 @@ class TodayCalendarSource
                 today = days.firstOrNull { it.date == today },
                 tomorrowStarts = days.firstOrNull { it.date == tomorrow }?.meetings?.firstOrNull { !it.allDay },
                 live = live,
+                yesterday = days.firstOrNull { it.date == yesterday },
+                hours = calendar.hours,
             )
         }
     }

@@ -84,6 +84,8 @@ import java.time.LocalDateTime
 fun TasksScreen(
     onOpenNote: (Long) -> Unit,
     onOpenBoard: () -> Unit = {},
+    /** A note at a heading, for the timeline's tasks: the nearest place to the task's line. */
+    onOpenHeading: (Long, String?) -> Unit = { id, _ -> onOpenNote(id) },
     viewModel: TasksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -253,7 +255,18 @@ fun TasksScreen(
             // file is about that file, not the day.
             header =
                 if (state.selectedPath == null) {
-                    { TodayCard(today, TodayCounts.of(state.groups)) }
+                    {
+                        Column {
+                            TodayCard(today, TodayCounts.of(state.groups))
+                            TodayTimeline(
+                                calendar = today,
+                                tasks = state.groups.flatMap { it.rows },
+                                canWrite = state.canWrite,
+                                onComplete = { viewModel.complete(it) },
+                                onOpen = { onOpenHeading(it.noteId, it.section.takeIf(String::isNotBlank)) },
+                            )
+                        }
+                    }
                 } else {
                     null
                 },

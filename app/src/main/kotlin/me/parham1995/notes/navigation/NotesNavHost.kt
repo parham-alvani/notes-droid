@@ -667,6 +667,7 @@ private fun NavGraphBuilder.graph(
         TasksScreen(
             onOpenNote = { open.note(it, fresh = true) },
             onOpenBoard = { navController.navigate(BoardRoute) { launchSingleTop = true } },
+            onOpenHeading = { id, heading -> open.note(id, fresh = true, heading = heading) },
         )
     }
     screen<BoardRoute> {
