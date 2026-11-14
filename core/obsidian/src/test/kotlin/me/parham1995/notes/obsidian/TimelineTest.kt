@@ -67,8 +67,10 @@ class TimelineTest {
         assertThat(TaskTime.parse("23:50 Late")).isEqualTo(TaskTime(1430, 1440, "Late"))
         assertThat(TaskTime.parse("12:00")).isEqualTo(TaskTime(720, 750, ""))
         assertThat(TaskTime.parse("10:00-09:00 Back")).isEqualTo(TaskTime(600, 630, "Back"))
+        // A dash with no time after it is no range: the start counts alone when a space follows it.
+        assertThat(TaskTime.parse("10:00 - later")).isEqualTo(TaskTime(600, 630, "- later"))
 
-        for (none in listOf("10:00am Coffee", "9:3 x", "24:00 x", "Call at 09:30", "12:60 x", "")) {
+        for (none in listOf("10:00am Coffee", "9:3 x", "24:00 x", "Call at 09:30", "12:60 x", "", "10:00-x", "10:00-25:00 x")) {
             assertThat(TaskTime.parse(none)).isNull()
         }
     }
