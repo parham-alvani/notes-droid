@@ -283,6 +283,8 @@
     <string name="today_all_day">تمام روز</string>
     <string name="today_overlaps">هم‌زمان با %1$s</string>
     <string name="today_join">پیوستن</string>
+    <string name="today_timeline">خط زمانی</string>
+    <string name="today_timeline_calendars">تقویم‌ها: %1$s</string>
     <string name="template_new">یادداشت تازه از الگو</string>
     <string name="template_in">در %1$s</string>
     <string name="template_title">عنوان</string>

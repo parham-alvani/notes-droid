@@ -284,6 +284,8 @@
     <string name="today_all_day">All day</string>
     <string name="today_overlaps">Overlaps %1$s</string>
     <string name="today_join">Join</string>
+    <string name="today_timeline">Timeline</string>
+    <string name="today_timeline_calendars">Calendars: %1$s</string>
     <string name="template_new">New note from template</string>
     <string name="template_in">In %1$s</string>
     <string name="template_title">Title</string>
