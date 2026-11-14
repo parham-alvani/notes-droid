@@ -70,8 +70,10 @@ class TimelineTest {
         // A dash with no time after it is no range: the start counts alone when a space follows it.
         assertThat(TaskTime.parse("10:00 - later")).isEqualTo(TaskTime(600, 630, "- later"))
 
-        for (none in listOf("10:00am Coffee", "9:3 x", "24:00 x", "Call at 09:30", "12:60 x", "", "10:00-x", "10:00-25:00 x")) {
-            assertThat(TaskTime.parse(none)).isNull()
+        val none =
+            listOf("10:00am Coffee", "9:3 x", "24:00 x", "Call at 09:30", "12:60 x", "", "10:00-x", "10:00-25:00 x")
+        for (text in none) {
+            assertThat(TaskTime.parse(text)).isNull()
         }
     }
 
