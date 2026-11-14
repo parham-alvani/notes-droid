@@ -1,0 +1,1 @@
+Today has a timeline: the day's meetings and the tasks that start with a time (09:30 Call Sara) on one axis of hours, with the free time between them and a line at now. Tap a meeting to join it, tick a task in place.
