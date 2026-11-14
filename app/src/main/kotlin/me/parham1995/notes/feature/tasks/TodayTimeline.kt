@@ -216,7 +216,12 @@ private fun Axis(
             )
         }
 
-        BoxWithConstraints(Modifier.padding(start = GUTTER).fillMaxWidth().height(MINUTE * span + margin * 2)) {
+        BoxWithConstraints(
+            Modifier
+                .padding(start = GUTTER)
+                .fillMaxWidth()
+                .height(MINUTE * span + margin * 2),
+        ) {
             val width = maxWidth
             timeline.free.forEach { FreeBand(it, y(it.start), line) }
             // In order of start, so a later box is drawn over an earlier one it overlaps.
@@ -245,7 +250,13 @@ private fun Axis(
             }
             timeline.now?.let { minute ->
                 val at = y(minute)
-                Box(Modifier.offset(y = at - NOW_LINE / 2).fillMaxWidth().height(NOW_LINE).background(red))
+                Box(
+                    Modifier
+                        .offset(y = at - NOW_LINE / 2)
+                        .fillMaxWidth()
+                        .height(NOW_LINE)
+                        .background(red),
+                )
                 Box(
                     Modifier
                         .offset(x = -NOW_DOT / 2, y = at - NOW_DOT / 2)
@@ -343,7 +354,14 @@ private fun MeetingBox(
             ),
     ) {
         Bar(color)
-        BoxText(meeting.title, span, line, color, MaterialTheme.colorScheme.onSurface, Modifier.padding(start = BAR_WIDTH))
+        BoxText(
+            title = meeting.title,
+            span = span,
+            line = line,
+            accent = color,
+            ink = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = BAR_WIDTH),
+        )
         DropdownMenu(expanded = details, onDismissRequest = { details = false }) {
             Column(
                 Modifier.widthIn(max = DETAILS_WIDTH).padding(horizontal = 16.dp, vertical = 8.dp),
