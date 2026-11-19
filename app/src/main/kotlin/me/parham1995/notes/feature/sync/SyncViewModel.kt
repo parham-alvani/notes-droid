@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.BrowserSort
 import me.parham1995.notes.data.CrashLog
+import me.parham1995.notes.data.FoldSections
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.LineWidth
 import me.parham1995.notes.data.SettingsStore
@@ -335,6 +336,8 @@ class SyncViewModel
         fun setHoldToDefine(enabled: Boolean) = viewModelScope.launch { settingsStore.setHoldToDefine(enabled) }
 
         fun setRemoteImages(enabled: Boolean) = viewModelScope.launch { settingsStore.setRemoteImages(enabled) }
+
+        fun setFoldSections(choice: FoldSections) = viewModelScope.launch { settingsStore.setFoldSections(choice) }
 
         // The notes are marked again by the application, which watches both:
         // a change made anywhere else -- adb, a restore -- is followed too.

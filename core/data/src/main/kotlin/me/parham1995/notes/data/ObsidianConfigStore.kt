@@ -14,6 +14,7 @@ import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.obsidian.Beautitab
 import me.parham1995.notes.obsidian.Bookmark
 import me.parham1995.notes.obsidian.Bookmarks
+import me.parham1995.notes.obsidian.DaftarConfig
 import me.parham1995.notes.obsidian.DailyNotes
 import me.parham1995.notes.obsidian.TasksPlugin
 import me.parham1995.notes.obsidian.Templates
@@ -114,6 +115,14 @@ class ObsidianConfigStore
         /** The Templates plugin's settings for [vaultId]; its defaults, with no folder, when it has none. */
         suspend fun templates(vaultId: Long): Templates =
             read(vaultId, VaultFilter.TEMPLATES, "templates settings", Templates::parse) ?: Templates()
+
+        /**
+         * What [vaultId] says of itself in the `.daftar.toml` at its root:
+         * the defaults when it has none. Not Obsidian's file, but one the
+         * vault carries the same way, so it is read here with the rest.
+         */
+        suspend fun daftar(vaultId: Long): DaftarConfig =
+            read(vaultId, VaultFilter.DAFTAR, "Daftar settings", DaftarConfig::parse) ?: DaftarConfig()
 
         /** The task statuses of whichever vault [vault] names, kept current across syncs. */
         @OptIn(ExperimentalCoroutinesApi::class)

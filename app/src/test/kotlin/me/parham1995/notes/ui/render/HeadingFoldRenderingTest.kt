@@ -4,9 +4,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import me.parham1995.notes.markdown.HeadingFolds
@@ -55,6 +60,12 @@ class HeadingFoldRenderingTest {
 
     private val note = "## First\n\none\n\n## Second\n\ntwo\n"
 
+    /**
+     * The text [text] as the note's own, not as a shut heading's hint: a
+     * folded heading says how its section begins, and here that is all of it.
+     */
+    private fun body(text: String) = compose.onAllNodes(hasText(text) and !hasTestTag(FOLD_HINT_TAG))
+
     @Test
     fun `tapping a heading's chevron hides its section and nothing else`() {
         render(note)
@@ -62,7 +73,9 @@ class HeadingFoldRenderingTest {
 
         compose.onAllNodesWithContentDescription("Fold section")[0].performClick()
 
-        compose.onNodeWithText("one").assertDoesNotExist()
+        body("one").assertCountEquals(0)
+        // The heading says what was folded away instead.
+        compose.onNodeWithTag(FOLD_HINT_TAG).assertTextEquals("one")
         compose.onNodeWithText("First").assertExists()
         compose.onNodeWithText("two").assertExists()
         // The chevron now offers the way back.
@@ -76,6 +89,7 @@ class HeadingFoldRenderingTest {
         compose.onNodeWithContentDescription("Unfold section").performClick()
 
         compose.onNodeWithText("one").assertExists()
+        compose.onAllNodesWithTag(FOLD_HINT_TAG).assertCountEquals(0)
         compose.onAllNodesWithContentDescription("Fold section").assertCountEquals(2)
     }
 
@@ -96,7 +110,7 @@ class HeadingFoldRenderingTest {
     fun `a fold the model says is shut is drawn shut`() {
         folded = setOf(HeadingFolds.visible(MarkdownParser.parseNote(note).blocks, emptySet()).first())
         render(note)
-        compose.onNodeWithText("one").assertDoesNotExist()
+        body("one").assertCountEquals(0)
         compose.onNodeWithText("two").assertExists()
     }
 }

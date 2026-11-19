@@ -99,4 +99,46 @@ class HeadingFoldsTest {
         // Second is block 6, but with First folded it is the fourth thing drawn.
         assertThat(HeadingFolds.visible(note, setOf(2)).indexOf(6)).isEqualTo(3)
     }
+
+    @Test
+    fun `every heading with something under it is shut where notes open folded`() {
+        // Title, First, Deeper and Second all hold something.
+        assertThat(HeadingFolds.all(note)).containsExactly(0, 2, 4, 6)
+        // Only the note's own heading is left on the page.
+        assertThat(HeadingFolds.visible(note, HeadingFolds.all(note))).containsExactly(0)
+        // A heading with nothing under it has no fold.
+        assertThat(HeadingFolds.all(blocks("# One\n\ntext\n\n# Two\n"))).containsExactly(0)
+        assertThat(HeadingFolds.all(blocks("just text\n"))).isEmpty()
+    }
+
+    @Test
+    fun `opening one section shows the next level, still shut`() {
+        val opened = HeadingFolds.all(note) - 0
+        // Title, intro, First and Second: what is under First and Second stays away.
+        assertThat(HeadingFolds.visible(note, opened)).containsExactly(0, 1, 2, 6).inOrder()
+    }
+
+    @Test
+    fun `a note with no list kept opens as the settings say`() {
+        assertThat(HeadingFolds.opening(note, kept = null, opensFolded = true)).containsExactly(0, 2, 4, 6)
+        assertThat(HeadingFolds.opening(note, kept = null, opensFolded = false)).isEmpty()
+    }
+
+    @Test
+    fun `a note with a list kept opens with exactly those shut, whatever the settings say`() {
+        assertThat(HeadingFolds.opening(note, kept = setOf(2), opensFolded = true)).containsExactly(2)
+        assertThat(HeadingFolds.opening(note, kept = setOf(2), opensFolded = false)).containsExactly(2)
+        // None shut, kept on purpose: a note the person opened whole stays open.
+        assertThat(HeadingFolds.opening(note, kept = emptySet(), opensFolded = true)).isEmpty()
+        // A kept fold the file moved out from under is dropped, not replaced by all of them.
+        assertThat(HeadingFolds.opening(note, kept = setOf(1, 99), opensFolded = true)).isEmpty()
+    }
+
+    @Test
+    fun `a place inside shut sections opens the ones that hold it and no others`() {
+        // "deep" is under Deeper, under First, under Title.
+        val opened = HeadingFolds.revealing(note, HeadingFolds.all(note), 5)
+        assertThat(opened).containsExactly(6)
+        assertThat(HeadingFolds.visible(note, opened)).contains(5)
+    }
 }

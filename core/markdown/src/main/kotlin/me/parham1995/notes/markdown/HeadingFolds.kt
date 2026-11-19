@@ -37,6 +37,31 @@ object HeadingFolds {
     ): Boolean = blocks.getOrNull(heading) is MdBlock.Heading && sectionEnd(blocks, heading) > heading + 1
 
     /**
+     * Every heading with something under it: how a note opens where notes
+     * open folded. At every level, so the page shows the note's top headings
+     * only, and opening one shows its text and its own headings, shut.
+     */
+    fun all(blocks: List<MdBlock>): Set<Int> = blocks.indices.filterTo(LinkedHashSet()) { hasSection(blocks, it) }
+
+    /**
+     * The folds a note opens with. [kept] is what the person left shut there,
+     * less what the file has since moved out from under, and it wins whatever
+     * the settings say -- an empty list too, which is a note they opened
+     * whole. Null is a note they never folded or opened, and it opens as the
+     * settings say: every section shut when [opensFolded], none otherwise.
+     */
+    fun opening(
+        blocks: List<MdBlock>,
+        kept: Collection<Int>?,
+        opensFolded: Boolean,
+    ): Set<Int> =
+        when {
+            kept != null -> kept(blocks, kept)
+            opensFolded -> all(blocks)
+            else -> emptySet()
+        }
+
+    /**
      * The positions still shown when the headings in [folded] are folded.
      *
      * A folded heading is kept; what it owns is dropped. A heading inside a

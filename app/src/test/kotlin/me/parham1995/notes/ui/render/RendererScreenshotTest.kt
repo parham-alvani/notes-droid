@@ -82,7 +82,7 @@ class RendererScreenshotTest {
     /**
      * Fixture markdown, all of it made up: a heading of every weight that
      * matters, prose with the inline marks, three task states, a section that
-     * is folded away, and a callout.
+     * is folded away (its heading says how it begins), and a callout.
      */
     private val note =
         """

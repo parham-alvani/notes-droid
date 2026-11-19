@@ -93,6 +93,10 @@
         <item quantity="one">%1$d word</item>
         <item quantity="other">%1$d words</item>
     </plurals>
+    <plurals name="note_sections">
+        <item quantity="one">%1$d section</item>
+        <item quantity="other">%1$d sections</item>
+    </plurals>
     <plurals name="note_minutes">
         <item quantity="one">%1$d min read</item>
         <item quantity="other">%1$d min read</item>
@@ -573,6 +577,11 @@
     <string name="help_hold_to_define">Keeping a finger on an English word in a note opens the dictionary. The word is selected too, for copying.</string>
     <string name="note_fold">Fold section</string>
     <string name="note_unfold">Unfold section</string>
+    <string name="settings_fold_sections">Open notes with their sections folded</string>
+    <string name="fold_sections_vault">as the vault says</string>
+    <string name="fold_sections_always">always</string>
+    <string name="fold_sections_never">never</string>
+    <string name="help_fold_sections">Folded, a note opens as its own table of contents: every section shut, each heading saying what is under it. A vault asks for it with folded = true under [reader] in its .daftar.toml. A note whose sections you fold or open yourself is kept as you left it.</string>
     <string name="settings_tap_full_screen">Tap the page for full screen</string>
     <string name="help_tap_full_screen">On a tablet or a phone on its side, a tap on a note hides the bars and a second tap brings them back. A tap on a link, a box or a picture still does what it did.</string>
     <string name="settings_hide_agent_files">Hide files for AI agents</string>
