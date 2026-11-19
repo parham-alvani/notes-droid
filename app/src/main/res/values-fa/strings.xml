@@ -93,6 +93,10 @@
         <item quantity="one">%1$d واژه</item>
         <item quantity="other">%1$d واژه</item>
     </plurals>
+    <plurals name="note_sections">
+        <item quantity="one">%1$d بخش</item>
+        <item quantity="other">%1$d بخش</item>
+    </plurals>
     <plurals name="note_minutes">
         <item quantity="one">%1$d دقیقه خواندن</item>
         <item quantity="other">%1$d دقیقه خواندن</item>
@@ -571,6 +575,11 @@
     <string name="help_hold_to_define">با نگه‌داشتن انگشت روی یک واژهٔ انگلیسی در نوشته، واژه‌نامه باز می‌شود. واژه برای رونوشت هم انتخاب می‌شود.</string>
     <string name="note_fold">بستن بخش</string>
     <string name="note_unfold">باز کردن بخش</string>
+    <string name="settings_fold_sections">باز شدن یادداشت‌ها با بخش‌های بسته</string>
+    <string name="fold_sections_vault">به گفتهٔ دفتر</string>
+    <string name="fold_sections_always">همیشه</string>
+    <string name="fold_sections_never">هرگز</string>
+    <string name="help_fold_sections">یادداشتی که بسته باز شود فهرست خودش است: همهٔ بخش‌ها بسته‌اند و هر سرتیتر می‌گوید زیرش چیست. دفتر این را با folded = true زیر [reader] در .daftar.toml می‌خواهد. یادداشتی که بخش‌هایش را خودتان ببندید یا باز کنید همان‌طور که گذاشته‌اید می‌ماند.</string>
     <string name="settings_tap_full_screen">تمام‌صفحه با یک ضربه روی صفحه</string>
     <string name="help_tap_full_screen">روی تبلت یا گوشی افقی، یک ضربه روی یادداشت نوارها را پنهان می‌کند و ضربهٔ دوم آن‌ها را برمی‌گرداند. ضربه روی پیوند، جعبه یا تصویر همان کار همیشگی را می‌کند.</string>
     <string name="settings_hide_agent_files">پنهان کردن فایل‌های دستیارهای هوش مصنوعی</string>

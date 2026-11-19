@@ -128,6 +128,34 @@ enum class ThemeChoice {
 }
 
 /**
+ * Whether a note opens with its sections folded, each heading saying what is
+ * under it: as the vault says ([VAULT], the default), [ALWAYS] or [NEVER].
+ *
+ * `appearance.fold_sections` in the other apps' config, which Android has no
+ * file for (`folded-sections.md` in notes-linux's `docs/specs/`). It is about
+ * a note the person has not folded or opened themselves; one they have is
+ * kept as they left it.
+ */
+enum class FoldSections {
+    VAULT,
+    ALWAYS,
+    NEVER,
+    ;
+
+    /** Whether notes open folded, given what the [vault] says of itself (`reader.folded`). */
+    fun folds(vault: Boolean): Boolean =
+        when (this) {
+            VAULT -> vault
+            ALWAYS -> true
+            NEVER -> false
+        }
+
+    companion object {
+        fun parse(raw: String?): FoldSections = entries.firstOrNull { it.name == raw } ?: VAULT
+    }
+}
+
+/**
  * How long a line of a note may run.
  *
  * A phone held upright is narrower than all of these, so this only ever shows
@@ -244,6 +272,8 @@ data class ReadingSettings(
      * default, as there.
      */
     val remoteImages: Boolean = true,
+    /** Whether a note opens with its sections folded: as the vault says, always or never. */
+    val foldSections: FoldSections = FoldSections.VAULT,
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
@@ -438,6 +468,7 @@ class SettingsStore
                             showHiddenFiles = preferences[SHOW_HIDDEN_FILES] ?: false,
                             widgetOpacity = (preferences[WIDGET_OPACITY] ?: 100).coerceIn(0, 100),
                             remoteImages = preferences[REMOTE_IMAGES] ?: true,
+                            foldSections = FoldSections.parse(preferences[FOLD_SECTIONS]),
                         ),
                 )
             }
@@ -617,6 +648,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[REMOTE_IMAGES] = enabled }
         }
 
+        suspend fun setFoldSections(choice: FoldSections) {
+            context.settingsDataStore.edit { it[FOLD_SECTIONS] = choice.name }
+        }
+
         suspend fun setStartScreen(screen: StartScreen) {
             context.settingsDataStore.edit { it[START_SCREEN] = screen.name }
         }
@@ -701,6 +736,7 @@ class SettingsStore
             val SHOW_HIDDEN_FILES = booleanPreferencesKey("show_hidden_files")
             val WIDGET_OPACITY = intPreferencesKey("widget_opacity")
             val REMOTE_IMAGES = booleanPreferencesKey("reading_remote_images")
+            val FOLD_SECTIONS = stringPreferencesKey("reading_fold_sections")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
             val LOCK_PICKER = booleanPreferencesKey("app_lock_picker")

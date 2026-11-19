@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -93,6 +95,19 @@ data class NoteUiState(
      * note: a fold is about this reading of this page.
      */
     val folded: Set<Int> = emptySet(),
+    /**
+     * Whether [folded] is the person's own: they shut or opened a section of
+     * this note, or the page opened one to show them something. A note whose
+     * folds are not kept opens as the settings say, and follows them when
+     * they change under it.
+     */
+    val foldsKept: Boolean = false,
+    /**
+     * Whether a note with no folds kept opens with every section shut: what
+     * the vault says in its `.daftar.toml`, unless the app's own setting says
+     * always or never.
+     */
+    val opensFolded: Boolean = false,
     /**
      * Headings closed in the outline, as `level:text` ([OutlineTree.key]).
      * The outline only: the note is not folded. Kept with the note.
@@ -256,9 +271,38 @@ class NoteViewModel
         private fun setFolds(folded: Set<Int>) {
             val current = _state.value
             if (folded == current.folded) return
-            _state.value = current.copy(folded = folded)
+            // Where notes open folded, none shut is a choice and is kept, so
+            // a note opened whole stays open; where they do not, it is the
+            // default again.
+            val explicit = current.opensFolded
+            _state.value = current.copy(folded = folded, foldsKept = folded.isNotEmpty() || explicit)
             val id = current.note?.id ?: return
-            viewModelScope.launch { repository.rememberFolds(id, folded) }
+            viewModelScope.launch { repository.rememberFolds(id, folded, explicit) }
+        }
+
+        /** Whether the notes of [vaultId] open folded: the vault's word, and the app's over it. */
+        private suspend fun opensFolded(vaultId: Long): Boolean =
+            settings
+                .current()
+                .reading.foldSections
+                .folds(config.daftar(vaultId).folded)
+
+        /**
+         * Draws the note on screen as the settings now say, when they moved
+         * under it: a sync brought another `.daftar.toml`, or the app's own
+         * choice changed. A note the person folded or opened stays as it is.
+         */
+        private suspend fun followFoldSetting() {
+            val vaultId = _state.value.note?.vaultId ?: return
+            val opens = opensFolded(vaultId)
+            _state.update {
+                val note = it.note
+                when {
+                    note == null || note.vaultId != vaultId -> it
+                    it.foldsKept -> it.copy(opensFolded = opens)
+                    else -> it.copy(opensFolded = opens, folded = HeadingFolds.opening(note.blocks, null, opens))
+                }
+            }
         }
 
         /**
@@ -447,6 +491,14 @@ class NoteViewModel
 
         init {
             viewModelScope.launch {
+                settings.settings
+                    .map { it.reading.foldSections }
+                    .distinctUntilChanged()
+                    // The first is what the note was loaded with.
+                    .drop(1)
+                    .collect { followFoldSetting() }
+            }
+            viewModelScope.launch {
                 scheduler.observe().collect { infos ->
                     // Only RUNNING counts, as in the browser: a job backing
                     // off between retries is not a sync in progress.
@@ -506,6 +558,8 @@ class NoteViewModel
             if (id != null && note != null) {
                 val backlinks = repository.backlinks(id)
                 val writable = writes.canWrite(note.vaultId).first()
+                // The sync may have brought another `.daftar.toml`.
+                val opensFolded = opensFolded(note.vaultId)
                 _state.update {
                     if (it.note?.id != id) {
                         it
@@ -514,7 +568,15 @@ class NoteViewModel
                             note = note,
                             backlinks = backlinks,
                             writable = writable,
-                            folded = HeadingFolds.kept(note.blocks, current.folded),
+                            // The person's own folds, less what moved; a note
+                            // they never folded is drawn as the settings say.
+                            folded =
+                                HeadingFolds.opening(
+                                    note.blocks,
+                                    current.folded.takeIf { current.foldsKept },
+                                    opensFolded,
+                                ),
+                            opensFolded = opensFolded,
                             outlineClosed = current.outlineClosed,
                         )
                     }
@@ -560,6 +622,7 @@ class NoteViewModel
                     repository.markOpened(id)
                     val assignments = icons.config.first()
                     val writable = writes.canWrite(note.vaultId).first()
+                    val opensFolded = opensFolded(note.vaultId)
                     _state.value =
                         NoteUiState(
                             loading = false,
@@ -568,8 +631,11 @@ class NoteViewModel
                             icon = assignments.forFile(note.vaultId, note.path),
                             writable = writable,
                             // As it was left, less any fold the file has since
-                            // moved out from under.
-                            folded = HeadingFolds.kept(note.blocks, note.folded),
+                            // moved out from under; a note never folded or
+                            // opened by hand opens as the settings say.
+                            folded = HeadingFolds.opening(note.blocks, note.folded, opensFolded),
+                            foldsKept = note.folded != null,
+                            opensFolded = opensFolded,
                             outlineClosed = note.outlineClosed,
                             periodic = destinations.neighbours(note.vaultId, note.path),
                             syncing = _state.value.syncing,

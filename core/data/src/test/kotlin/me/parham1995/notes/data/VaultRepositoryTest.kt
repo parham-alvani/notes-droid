@@ -566,6 +566,43 @@ class VaultRepositoryTest {
         }
 
     @Test
+    fun `the vault's settings for Daftar are not a file in the tree`() =
+        runTest {
+            index("Plan.md" to "text")
+            config(me.parham1995.notes.sync.VaultFilter.DAFTAR)
+
+            assertThat(repository.children("").map { it.name }).containsExactly("Plan")
+            assertThat(repository.quickSwitch("daftar")).isEmpty()
+        }
+
+    /** `folded-sections.md` in notes-linux's `docs/specs/`. */
+    @Test
+    fun `no folds kept and none shut on purpose are told apart, and still are when read again`() =
+        runTest {
+            index("A.md" to "# One\n\ntext\n\n# Two\n\nmore\n", "B.md" to "# One\n\ntext\n")
+            val a = database.noteDao().idOf(first, "A.md")!!
+            val b = database.noteDao().idOf(first, "B.md")!!
+            // Never folded or opened: it opens as the settings say.
+            assertThat(repository.note(a)!!.folded).isNull()
+
+            repository.rememberFolds(a, setOf(2))
+            assertThat(repository.note(a)!!.folded).containsExactly(2)
+
+            // Where notes open unfolded, none shut is the default again.
+            repository.rememberFolds(a, emptySet())
+            assertThat(repository.note(a)!!.folded).isNull()
+
+            // Where notes open folded, a note opened whole stays open.
+            repository.rememberFolds(a, emptySet(), explicit = true)
+            assertThat(repository.note(a)!!.folded).isEmpty()
+            assertThat(repository.note(b)!!.folded).isNull()
+
+            // And it is kept through a reindex of a file that did not change.
+            index("A.md" to "# One\n\ntext\n\n# Two\n\nmore\n", "B.md" to "# One\n\ntext\n")
+            assertThat(repository.note(a)!!.folded).isEmpty()
+        }
+
+    @Test
     fun `a base is listed in its folder as a file, and the rest of the config is not`() =
         runTest {
             // A base syncs as config, so the tree never showed one: there was

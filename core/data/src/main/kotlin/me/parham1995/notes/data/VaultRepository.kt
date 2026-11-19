@@ -86,8 +86,12 @@ data class RenderedNote(
     val headings: List<HeadingEntity>,
     /** The block this note was last left at, so reopening it resumes. */
     val scrollIndex: Int,
-    /** The headings folded shut when it was last read, by block position. */
-    val folded: Set<Int> = emptySet(),
+    /**
+     * The headings left shut when it was last read, by block position: empty
+     * for a note opened whole on purpose, and null when no list was ever
+     * kept, which opens as the settings say ([FoldSections]).
+     */
+    val folded: Set<Int>? = null,
     /** The headings closed in the outline, as `level:text`. */
     val outlineClosed: Set<String> = emptySet(),
     /** Raw wikilink target to note id, so a tap can navigate without re-resolving. */
@@ -420,11 +424,16 @@ class VaultRepository
             block: Int,
         ) = notes.rememberScroll(id, block)
 
-        /** Records which headings a note is folded at, so opening it again keeps them. */
+        /**
+         * Records which headings a note is folded at, so opening it again
+         * keeps them. With [explicit], none shut is kept as well: where notes
+         * open folded, a note the person opened whole stays open.
+         */
         suspend fun rememberFolds(
             id: Long,
             folded: Set<Int>,
-        ) = notes.rememberFolds(id, Folds.format(folded))
+            explicit: Boolean = false,
+        ) = notes.rememberFolds(id, Folds.format(folded, explicit))
 
         /** Records which headings are closed in a note's outline. */
         suspend fun rememberOutline(

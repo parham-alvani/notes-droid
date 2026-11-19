@@ -16,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
 import me.parham1995.notes.data.BrowserSort
+import me.parham1995.notes.data.FoldSections
 import me.parham1995.notes.data.LineWidth
 import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.StartScreen
@@ -201,6 +202,22 @@ internal fun ReadingCard(
             }
         }
 
+        Text(stringResource(R.string.settings_fold_sections), style = MaterialTheme.typography.labelMedium)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FoldSections.entries.forEach { choice ->
+                FilterChip(
+                    selected = reading.foldSections == choice,
+                    onClick = { viewModel.setFoldSections(choice) },
+                    label = { Text(stringResource(choice.label)) },
+                )
+            }
+        }
+        Text(
+            stringResource(R.string.help_fold_sections),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         // Nothing is hidden while hidden files are shown, so this would
         // be a switch that does nothing.
         SwitchRow(
@@ -265,6 +282,15 @@ private val StartScreen.label: Int
             StartScreen.BROWSE -> R.string.nav_browse
             StartScreen.TASKS -> R.string.tasks_title
             StartScreen.SEARCH -> R.string.nav_search
+        }
+
+@get:StringRes
+private val FoldSections.label: Int
+    get() =
+        when (this) {
+            FoldSections.VAULT -> R.string.fold_sections_vault
+            FoldSections.ALWAYS -> R.string.fold_sections_always
+            FoldSections.NEVER -> R.string.fold_sections_never
         }
 
 @get:StringRes

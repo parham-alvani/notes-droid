@@ -194,8 +194,9 @@ data class NoteEntity(
      */
     val changedAt: Long = 0,
     /**
-     * The headings folded shut, as block positions joined by commas; empty
-     * when none are.
+     * The headings folded shut, as block positions joined by commas
+     * ([me.parham1995.notes.data.Folds]); empty when no list is kept, and
+     * `-` for a note opened whole where notes open folded.
      *
      * Obsidian remembers folds per file, and a fold is worth the same here:
      * a long note is read in pieces, and the pieces already read stay shut

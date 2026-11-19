@@ -71,6 +71,16 @@ class VaultFilterTest {
     }
 
     @Test
+    fun `the vault's own settings for Daftar come through, at its root only`() {
+        assertThat(filter.kindOf(".daftar.toml")).isEqualTo(BlobKind.CONFIG)
+        // Not a note, a picture or an attachment, so no list offers it.
+        assertThat(filter.kindOf("alpha/.daftar.toml")).isNull()
+        assertThat(filter.kindOf(".prettierrc")).isNull()
+        assertThat(filter.kindOf(".markdownlint.jsonc")).isNull()
+        assertThat(filter.kindOf("daftar.toml")).isNull()
+    }
+
+    @Test
     fun `the icon assignments come through despite living under a dot-directory`() {
         assertThat(filter.kindOf(VaultFilter.ICONIC_CONFIG)).isEqualTo(BlobKind.CONFIG)
     }

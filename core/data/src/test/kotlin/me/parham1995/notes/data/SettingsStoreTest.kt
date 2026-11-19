@@ -107,4 +107,18 @@ class SettingsStoreTest {
             store.setRemoteImages(true)
             assertThat(store.current().reading.remoteImages).isTrue()
         }
+
+    /** `folded-sections.md` in notes-linux's `docs/specs/`: as the vault says until chosen otherwise. */
+    @Test
+    fun `notes open folded as the vault says by default, and the choice survives a round trip`() =
+        runTest {
+            assertThat(store.current().reading.foldSections).isEqualTo(FoldSections.VAULT)
+
+            store.setFoldSections(FoldSections.ALWAYS)
+            assertThat(store.current().reading.foldSections).isEqualTo(FoldSections.ALWAYS)
+            store.setFoldSections(FoldSections.NEVER)
+            assertThat(store.current().reading.foldSections).isEqualTo(FoldSections.NEVER)
+            store.setFoldSections(FoldSections.VAULT)
+            assertThat(store.current().reading.foldSections).isEqualTo(FoldSections.VAULT)
+        }
 }

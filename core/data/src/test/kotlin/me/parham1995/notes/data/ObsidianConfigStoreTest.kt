@@ -124,4 +124,21 @@ class ObsidianConfigStoreTest {
             assertThat(store.dailyNotes(1L)).isEqualTo(DailyNotes("Journal", "YYYY/MM/DD"))
             assertThat(store.dailyNotes(2L)).isEqualTo(DailyNotes())
         }
+
+    /** `folded-sections.md` in notes-linux's `docs/specs/`. */
+    @Test
+    fun `a vault says whether its notes open folded, and one with no file does not`() =
+        runTest {
+            config(1L, VaultFilter.DAFTAR, "memory = true\n\n[reader]\nfolded = true\n")
+            // The key of another section is not this one.
+            config(3L, VaultFilter.DAFTAR, "[audit]\nfolded = true\n")
+
+            assertThat(store.daftar(1L).folded).isTrue()
+            assertThat(store.daftar(2L).folded).isFalse()
+            assertThat(store.daftar(3L).folded).isFalse()
+
+            // Read again when asked again: a sync brought another file.
+            config(1L, VaultFilter.DAFTAR, "[reader]\nfolded = false\n")
+            assertThat(store.daftar(1L).folded).isFalse()
+        }
 }

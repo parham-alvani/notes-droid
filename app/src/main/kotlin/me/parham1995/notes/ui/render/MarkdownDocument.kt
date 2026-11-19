@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import me.parham1995.notes.markdown.FoldHint
 import me.parham1995.notes.markdown.HeadingFolds
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.ui.LocalReading
@@ -155,7 +156,16 @@ fun MarkdownDocument(
                     // one with nothing to hide would fold to no visible effect.
                     val fold =
                         if (onToggleFold != null && HeadingFolds.hasSection(blocks, index)) {
-                            Fold(folded = index in folded, toggle = { onToggleFold(index) })
+                            val shut = index in folded
+                            Fold(
+                                folded = shut,
+                                toggle = { onToggleFold(index) },
+                                // A shut heading says what it holds. Counted
+                                // when it is drawn and once for these blocks:
+                                // a long note opens with dozens shut, most of
+                                // them never scrolled to.
+                                hint = if (shut) remember(blocks, index) { FoldHint.of(blocks, index) } else null,
+                            )
                         } else {
                             null
                         }

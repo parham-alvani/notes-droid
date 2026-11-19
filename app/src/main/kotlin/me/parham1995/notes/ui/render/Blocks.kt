@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalContentColor
@@ -42,8 +43,11 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -55,6 +59,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -64,6 +69,7 @@ import me.parham1995.notes.R
 import me.parham1995.notes.data.BaseAnswer
 import me.parham1995.notes.data.database.QueryTaskRow
 import me.parham1995.notes.markdown.CalloutKind
+import me.parham1995.notes.markdown.FoldHint
 import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MdAlign
 import me.parham1995.notes.markdown.MdBlock
@@ -241,17 +247,21 @@ private fun HeadingView(
         // rather than floating between two sections.
         Spacer(Modifier.height(if (block.level <= 2) 18.dp else 12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RichText(
-                inlines = block.inlines,
-                // A heading to a screen reader too, so it can be jumped between
-                // the way the outline jumps between them.
-                modifier = Modifier.weight(1f).semantics { heading() },
-                // naz gives @markup.heading.1 through .4 their own colours, and
-                // this follows them rather than picking a scale.
-                style = style.copy(color = Markup.heading(block.level)).inScript(),
-                actions = actions.inline,
-                brokenLinks = brokenLinks,
-            )
+            Column(Modifier.weight(1f)) {
+                RichText(
+                    inlines = block.inlines,
+                    // A heading to a screen reader too, so it can be jumped between
+                    // the way the outline jumps between them.
+                    modifier = Modifier.fillMaxWidth().semantics { heading() },
+                    // naz gives @markup.heading.1 through .4 their own colours, and
+                    // this follows them rather than picking a scale.
+                    style = style.copy(color = Markup.heading(block.level)).inScript(),
+                    actions = actions.inline,
+                    brokenLinks = brokenLinks,
+                )
+                // Shut, the heading says what it holds.
+                fold?.hint?.let { FoldHintLine(it) }
+            }
             // Obsidian's reading view folds a section from a chevron beside
             // its heading, and so does this. At the end of the line rather
             // than in a gutter: the margin is where a thumb already is, and
@@ -276,7 +286,56 @@ private fun HeadingView(
 data class Fold(
     val folded: Boolean,
     val toggle: () -> Unit,
+    /** What the section holds, said under the heading while it is shut. Null, and nothing is said. */
+    val hint: FoldHint.Parts? = null,
 )
+
+/**
+ * What a shut heading holds: how its text begins, and how many words and
+ * headings are under it ([FoldHint]).
+ *
+ * Its own line under the heading's text rather than the rest of the heading's
+ * line, as the desktop apps have it: a phone's line holds a heading and
+ * little else. Its own node too, so it is not the heading -- a screen reader
+ * says the heading, then this as a sentence with the counts set apart by
+ * commas, then the chevron -- and outside the selection, so copying a
+ * heading does not take the hint with it.
+ */
+@Composable
+private fun FoldHintLine(hint: FoldHint.Parts) {
+    // Counted in the phone's language; the beginning is the note's own words.
+    val words = hint.words?.let { pluralStringResource(R.plurals.note_words, it, it) }
+    val sections = hint.sections?.let { pluralStringResource(R.plurals.note_sections, it, it) }
+    val spoken = hint.join(words, sections, separator = ", ")
+    DisableSelection {
+        Text(
+            hint.join(words, sections),
+            modifier =
+                Modifier
+                    .padding(top = 2.dp)
+                    .testTag(FOLD_HINT_TAG)
+                    .then(
+                        if (hint.isEmpty) {
+                            // Three dots say nothing aloud.
+                            Modifier.clearAndSetSemantics { }
+                        } else {
+                            Modifier.semantics { contentDescription = spoken }
+                        },
+                    ),
+            style = MaterialTheme.typography.bodySmall.inScript(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = FOLD_HINT_ALPHA),
+            maxLines = FOLD_HINT_LINES,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** The hint under a shut heading, for tests to find. */
+const val FOLD_HINT_TAG = "fold-hint"
+private const val FOLD_HINT_ALPHA = 0.8f
+
+/** The longest hint is some ninety characters: two lines on a narrow phone, a third at a large text size. */
+private const val FOLD_HINT_LINES = 3
 
 @Composable
 private fun FoldChevron(fold: Fold) {
