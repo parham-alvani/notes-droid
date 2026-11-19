@@ -195,6 +195,18 @@ The guides used to be left out at index time instead (`VaultIndexer.GUIDES`), wh
 
 Do not solve this in `VaultFilter` instead. That decides what reaches the device, and narrowing it has never been exercised -- every `VERSION` bump widened it, so whether a re-plan removes rows that stopped being eligible is unverified. It syncs `app.json` for this, and nothing else from it is read.
 
+## Notes that open folded
+
+A vault says its notes open with every section shut, each heading saying what is under it, with `folded = true` under `[reader]` in the `.daftar.toml` at its root. The rules are `folded-sections.md` in notes-linux's `docs/specs/`, which Daftar for Linux and the Mac follow too; change one here and theirs have to follow.
+
+- **`.daftar.toml` is the one dotfile that syncs.** It is in `VaultFilter.DEFAULT_CONFIG_PATHS` by its exact name (`VERSION` 11), a `CONFIG` blob like the `.obsidian` files, so it is fetched with the markdown and no list offers it. `DaftarConfig` (core/obsidian) reads it line by line for that one key and cannot throw; it is not a TOML parser, and `daftar-cli`'s own sections in the file go unread. `ObsidianConfigStore.daftar` reads it from disk when asked.
+- **The app's word is `FoldSections`** (Settings → Reading): as the vault says, always, never. `FoldSections.folds(vault)` is the whole decision.
+- **No list kept is not an empty list kept.** `notes.folds` holds block positions; the empty string is a note the person never folded or opened, which opens as the settings say, and `-` (`Folds.NONE_SHUT`) is a note they opened whole, which stays open. `-` is written only while notes open folded. No migration: the empty string is what every note already had. `HeadingFolds.opening` turns the kept list and the settings into the folds a note opens with.
+- **`NoteViewModel.setFolds` is the only place a list is written**, and `reveal` goes through it, so a note that lands inside a shut section (where it was being read, a link to a heading, a find hit) opens the sections that hold the place and keeps the list. `foldsKept` in the state is what lets a note with no list follow the settings when a sync brings another `.daftar.toml` or the choice changes in Settings.
+- **The other apps keep `level:text` keys; this one keeps positions**, as it did before, and drops them when the file changes underneath (`IndexDao.foldsAfter`). So here a note that changed upstream has no list again and opens as the settings say.
+- **The hint is `FoldHint` (core/markdown)**: `parts` cuts the beginning and decides which counts are said, `say()` is the spec's English, which the spec's table is tested against, and `of` counts a section from the parsed blocks. `FoldHintLine` in `Blocks.kt` draws it on a line of its own under the heading's text, not on the heading's line as the desktop apps do: a phone's line holds a heading and little else. The counts are said through plurals, so a Persian phone reads them in Persian. It is its own semantics node after the heading, described with commas for TalkBack, and outside the selection; `MdBlock.Heading.text`, which links, the outline and the printed note go by, never holds it.
+- **The words are counted from the blocks, not from a drawn page**, so a section holding an embed, a query or a diagram can count a few words fewer than the Mac does for the same note.
+
 ## Public-repo hygiene
 
 - **All test fixtures are synthetic.** Real vault paths leak plenty on their own — folder names alone disclose employers, relationships and where someone lives.
