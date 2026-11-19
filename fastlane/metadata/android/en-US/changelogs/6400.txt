@@ -1,0 +1,3 @@
+Notes can open folded: each section is shut and its heading says how the text begins, how many words and how many sections are under it, so a note reads as its own table of contents.
+A vault says so with folded = true under [reader] in its .daftar.toml, and Settings, Reading has the choice to follow the vault, always fold or never fold.
+A note whose sections you fold or open yourself opens as you left it.
