@@ -24,8 +24,9 @@ class VaultFilter(
      */
     private val excludedRoots: Set<String> = DEFAULT_EXCLUDED_ROOTS,
     /**
-     * Files under a dot-directory that are content anyway. Matched exactly, so
-     * this cannot widen into "sync `.obsidian`".
+     * Files under a dot-directory, or named with a dot themselves, that are
+     * content anyway. Matched exactly, so this cannot widen into "sync
+     * `.obsidian`".
      */
     private val configPaths: Set<String> = DEFAULT_CONFIG_PATHS,
 ) {
@@ -89,8 +90,9 @@ class VaultFilter(
          * 8: Obsidian's app settings, for the files it is told to exclude.
          * 9: AVIF pictures, which Obsidian shows and Android 12 decodes.
          * 10: the Tasks plugin's settings, for the vault's own task statuses.
+         * 11: the vault's `.daftar.toml`, for whether its notes open folded.
          */
-        const val VERSION = 10
+        const val VERSION = 11
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -153,8 +155,17 @@ class VaultFilter(
          */
         const val TASKS = ".obsidian/plugins/obsidian-tasks-plugin/data.json"
 
+        /**
+         * What the vault says about itself to Daftar on every device, at its
+         * root: `folded` under `[reader]`, whether its notes open with their
+         * sections folded. The one dotfile that is content, and named exactly:
+         * every other file whose name starts with a dot stays out. `daftar-cli`
+         * keeps its own sections in the same file, which go unread here.
+         */
+        const val DAFTAR = ".daftar.toml"
+
         val DEFAULT_CONFIG_PATHS =
-            setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES, BEAUTITAB, APP, TASKS)
+            setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES, BEAUTITAB, APP, TASKS, DAFTAR)
 
         /**
          * Formats the reader draws itself. Everything else it can offer is in
