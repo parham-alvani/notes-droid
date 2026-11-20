@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.data.git.AndroidGitEnvironment
+import me.parham1995.notes.data.git.CloneConfig
 import me.parham1995.notes.data.git.GitNoteHistory
 import me.parham1995.notes.data.git.GitSshVaultSync
 import me.parham1995.notes.data.git.SshKeyStore
@@ -65,12 +67,38 @@ open class VaultTransports
          * GitHub answers SSH on 443 as well as 22, which is the way round a
          * network that blocks 22 -- otherwise the clone just hangs.
          */
-        suspend fun sshUrl(vault: VaultEntity): String =
-            if (settings.current().sshOverPort443) {
+        suspend fun sshUrl(vault: VaultEntity): String = sshUrl(vault, settings.current().sshOverPort443)
+
+        private fun sshUrl(
+            vault: VaultEntity,
+            overPort443: Boolean,
+        ): String =
+            if (overPort443) {
                 "ssh://git@ssh.github.com:443/" + vault.owner + "/" + vault.repo + ".git"
             } else {
                 "git@github.com:" + vault.owner + "/" + vault.repo + ".git"
             }
+
+        /**
+         * Keeps a clone's address in step with "Connect over port 443".
+         *
+         * Once there is a clone, its own `remote.<name>.url` is where it
+         * pulls from, so the switch has to reach that or it moves the
+         * reachability check and nothing else. Only an address that is this
+         * repository's other GitHub form is rewritten: one a person set
+         * themselves, a mirror, is theirs and stays.
+         */
+        private suspend fun followPortSwitch(
+            vault: VaultEntity,
+            workTree: File,
+        ) {
+            val over443 = settings.current().sshOverPort443
+            withContext(Dispatchers.IO) {
+                if (CloneConfig.address(workTree) == sshUrl(vault, !over443)) {
+                    CloneConfig.setAddress(workTree, sshUrl(vault, over443))
+                }
+            }
+        }
 
         /**
          * Moves keys named after the old scheme to the one keyed by vault id.
@@ -84,11 +112,13 @@ open class VaultTransports
 
         suspend fun ssh(vault: VaultEntity): GitSshVaultSync {
             adoptLegacyKeys()
+            AndroidGitEnvironment.install(File(context.filesDir, "git"))
+            followPortSwitch(vault, files.rootOf(vault.id))
             return GitSshVaultSync(
                 // Each repository gets its own working tree, which is what lets
                 // one key serve all of them without their histories colliding.
                 workTree = files.rootOf(vault.id),
-                remoteUrl = sshUrl(vault),
+                cloneUrl = sshUrl(vault),
                 branch = vault.branch ?: DEFAULT_BRANCH,
                 keys = sshKeys,
                 vaultId = vault.id,

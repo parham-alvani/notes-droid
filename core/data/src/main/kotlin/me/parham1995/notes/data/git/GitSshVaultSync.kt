@@ -7,6 +7,8 @@ import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.describeChain
 import me.parham1995.notes.sync.Author
 import me.parham1995.notes.sync.LocalState
+import me.parham1995.notes.sync.ReadOnlyFailure
+import me.parham1995.notes.sync.ReadOnlyVault
 import me.parham1995.notes.sync.Rename
 import me.parham1995.notes.sync.SyncBase
 import me.parham1995.notes.sync.SyncPlan
@@ -21,10 +23,13 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.api.TransportConfigCallback
 import org.eclipse.jgit.diff.DiffEntry
+import org.eclipse.jgit.dircache.DirCacheCheckout
+import org.eclipse.jgit.errors.CheckoutConflictException
 import org.eclipse.jgit.errors.MissingObjectException
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.PersonIdent
+import org.eclipse.jgit.lib.RefUpdate
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.transport.PushResult
@@ -62,7 +67,8 @@ import java.net.Socket
  */
 class GitSshVaultSync(
     private val workTree: File,
-    private val remoteUrl: String,
+    /** Where a new clone comes from. Once there is a clone, its own address is the one used ([remoteUrl]). */
+    private val cloneUrl: String,
     private val branch: String,
     private val keys: SshKeyStore,
     configDir: File,
@@ -80,6 +86,25 @@ class GitSshVaultSync(
         // Must happen before any other JGit call touches configuration.
         AndroidGitEnvironment.install(configDir)
     }
+
+    /**
+     * The remote this clone pulls from and pushes to: the one of the branch's
+     * upstream, else `origin` ([CloneConfig.remoteName]).
+     */
+    private val remote: String get() = CloneConfig.remoteName(workTree)
+
+    /**
+     * The vault's address: the clone's own `remote.<name>.url` once there is
+     * a clone, since that is what a person changes to move it to a mirror,
+     * and [cloneUrl] before.
+     */
+    private val remoteUrl: String get() = CloneConfig.address(workTree) ?: cloneUrl
+
+    /** Where the branch's upstream is tracked. */
+    private val tracking: String get() = "${Constants.R_REMOTES}$remote/$branch"
+
+    /** Whether this clone only pulls: `daftar.readonly` in its own config. */
+    private val readOnly: Boolean get() = CloneConfig.isReadOnly(workTree)
 
     /**
      * This vault's own SSH sessions, offering this vault's own key.
@@ -127,13 +152,22 @@ class GitSshVaultSync(
             }
 
             openGit().use { git ->
+                val tracking = tracking
                 if (!fresh) {
+                    val pullOnly = readOnly
+                    val before = git.repository.resolve(tracking)
                     log("fetching $branch")
                     fetch(git)
+                    // A read-only clone is moved here, by a fast-forward and
+                    // nothing else, and not in apply(): a pull that changes
+                    // no file the vault tracks has an empty plan, which is
+                    // never applied, and the clone would fall behind the tip
+                    // it has already been told about.
+                    if (pullOnly) pull(git.repository, before, tracking)
                 }
 
                 val head =
-                    git.repository.resolve("$REMOTE_PREFIX$branch") ?: git.repository.resolve(Constants.HEAD)
+                    git.repository.resolve(tracking) ?: git.repository.resolve(Constants.HEAD)
                         ?: return@withContext SyncPlan(base.commit, base.commit.orEmpty())
                 val headSha = head.name
 
@@ -159,14 +193,18 @@ class GitSshVaultSync(
         onProgress: (done: Int, total: Int) -> Unit,
     ) = withContext(Dispatchers.IO) {
         progress.bindTo(coroutineContext[Job])
-        openGit().use { git ->
-            // Git writes the working tree itself, so "applying" is a checkout
-            // plus recording what is now on disk. Nothing is downloaded twice.
-            git
-                .reset()
-                .setMode(ResetCommand.ResetType.HARD)
-                .setRef("$REMOTE_PREFIX$branch")
-                .call()
+        // A read-only clone was fast-forwarded when it was planned, and is
+        // never reset: what another tool left in it stays.
+        if (!readOnly) {
+            openGit().use { git ->
+                // Git writes the working tree itself, so "applying" is a checkout
+                // plus recording what is now on disk. Nothing is downloaded twice.
+                git
+                    .reset()
+                    .setMode(ResetCommand.ResetType.HARD)
+                    .setRef(tracking)
+                    .call()
+            }
         }
 
         val total = plan.adds.size + plan.modifies.size + plan.deletes.size + plan.renames.size
@@ -269,14 +307,18 @@ class GitSshVaultSync(
         edit: TextEdit,
     ): WriteOutcome =
         withContext(Dispatchers.IO) {
+            // Before the file is read, the clone fetched or anything reset.
+            if (readOnly) throw ReadOnlyFailure.ReadOnly(workTree.name)
             progress.bindTo(coroutineContext[Job])
             openGit().use { git ->
+                val remote = remote
+                val tracking = tracking
                 repeat(PUSH_ATTEMPTS) {
                     fetch(git)
                     git
                         .reset()
                         .setMode(ResetCommand.ResetType.HARD)
-                        .setRef("$REMOTE_PREFIX$branch")
+                        .setRef(tracking)
                         .call()
 
                     // From the commit, never from the working tree.
@@ -288,7 +330,7 @@ class GitSshVaultSync(
                     // scribble -- the edit looked already applied, reported
                     // "nothing to send", and left the queue without ever
                     // reaching the repository.
-                    val head = git.repository.resolve("$REMOTE_PREFIX$branch")
+                    val head = git.repository.resolve(tracking)
                     val current = head?.let { contentAt(git.repository, it, path) }
                     val file = File(workTree, path)
                     val updated = edit.applyTo(current) ?: return@withContext WriteOutcome.NotApplicable
@@ -307,15 +349,28 @@ class GitSshVaultSync(
                             .call()
 
                     val results =
-                        git
-                            .push()
-                            .setRemote(Constants.DEFAULT_REMOTE_NAME)
-                            .setRefSpecs(RefSpec("HEAD:$REFS_HEADS$branch"))
-                            .setTransportConfigCallback(sshConfig)
-                            .setTimeout(TIMEOUT_SECONDS)
-                            .call()
+                        try {
+                            git
+                                .push()
+                                .setRemote(remote)
+                                .setRefSpecs(RefSpec("HEAD:$REFS_HEADS$branch"))
+                                .setTransportConfigCallback(sshConfig)
+                                .setTimeout(TIMEOUT_SECONDS)
+                                .call()
+                        } catch (failure: Exception) {
+                            // A key that may only read, named as that. The
+                            // commit just made stays where it is.
+                            val said = failure.describeChain()
+                            if (ReadOnlyVault.pushRefusedReadOnly(said)) {
+                                throw ReadOnlyFailure.PushRefusedReadOnly(failure.message ?: said)
+                            }
+                            throw failure
+                        }
                     val rejection = results.firstNotNullOfOrNull { it.rejection() }
                     if (rejection == null) return@withContext WriteOutcome.Written(commit.name, updated)
+                    if (ReadOnlyVault.pushRefusedReadOnly(rejection)) {
+                        throw ReadOnlyFailure.PushRefusedReadOnly(rejection)
+                    }
                     log("push rejected ($rejection) - re-reading and applying the edit again")
                     if (SHALLOW_REFUSED in rejection) {
                         throw IOException(
@@ -328,6 +383,65 @@ class GitSshVaultSync(
             }
             throw IOException("could not push $path after $PUSH_ATTEMPTS attempts")
         }
+
+    /**
+     * `git pull --ff-only`, after the fetch: moves a read-only clone to the
+     * tip just fetched when that is a fast-forward, and otherwise fails with
+     * [ReadOnlyFailure.ReadOnlyDiverged] and changes nothing. No commit, no
+     * stash, no reset and no rebase: a clone with commits or changes of its
+     * own is for the person to mend.
+     *
+     * This clone is one commit deep, and a fetch that deep brings the new tip
+     * without the commits between, so git itself could not tell that the tip
+     * descends from where the clone is. A shallow clone still standing on
+     * the tip it last pulled ([before]) has nothing of its own, and following
+     * the remote from there is the fast-forward.
+     */
+    private suspend fun pull(
+        repository: Repository,
+        before: ObjectId?,
+        tracking: String,
+    ) {
+        val tip = repository.resolve(tracking) ?: return
+        val head = repository.resolve(Constants.HEAD) ?: return
+        if (head == tip) return
+        RevWalk(repository).use { walk ->
+            val mine = walk.parseCommit(head)
+            val theirs = walk.parseCommit(tip)
+            // Only ahead: nothing to pull, and the commits it has stay.
+            if (walk.isMergedInto(theirs, mine)) return
+            val descends = walk.isMergedInto(mine, theirs)
+            val shallow = File(repository.directory, SHALLOW).isFile
+            if (!descends && !(shallow && head == before)) {
+                throw ReadOnlyFailure.ReadOnlyDiverged(changesOfItsOwn(repository))
+            }
+            val checkout = DirCacheCheckout(repository, mine.tree, repository.lockDirCache(), theirs.tree)
+            checkout.setFailOnConflict(true)
+            try {
+                checkout.checkout()
+            } catch (_: CheckoutConflictException) {
+                // A file changed here that the pull changes too.
+                throw ReadOnlyFailure.ReadOnlyDiverged(checkout.conflicts.orEmpty())
+            }
+            val update = repository.updateRef(Constants.HEAD)
+            update.setNewObjectId(theirs)
+            update.setExpectedOldObjectId(mine)
+            // The fast-forward was decided above; a shallow clone cannot show it to JGit.
+            update.isForceUpdate = true
+            update.setRefLogMessage("pull: Fast-forward", false)
+            val result = update.update(walk)
+            if (result !in MOVED) throw IOException("could not move ${Constants.HEAD} to ${tip.name}: $result")
+            log("pulled ${head.name.take(SHORT_SHA)} -> ${tip.name.take(SHORT_SHA)}")
+        }
+    }
+
+    /** What `git status` would name: the files this clone changed and did not get from the remote. */
+    private fun changesOfItsOwn(repository: Repository): List<String> =
+        runCatching {
+            Git(repository).status().call().let { status ->
+                (status.modified + status.changed + status.added + status.removed + status.missing).sorted()
+            }
+        }.getOrDefault(emptyList())
 
     /** One file's text as of [commit], or null when it is not in that tree. */
     private fun contentAt(
@@ -396,7 +510,7 @@ class GitSshVaultSync(
         prepareCloneTarget(workTree)
         Git
             .cloneRepository()
-            .setURI(remoteUrl)
+            .setURI(cloneUrl)
             .setDirectory(workTree)
             .setBranch(branch)
             .setBranchesToClone(listOf("$REFS_HEADS$branch"))
@@ -414,7 +528,7 @@ class GitSshVaultSync(
     private fun fetch(git: Git) {
         git
             .fetch()
-            .setRemote(Constants.DEFAULT_REMOTE_NAME)
+            .setRemote(remote)
             // Zero means no limit. Depth is about the size of a transfer over
             // the network; a transport that cannot serve a shallow fetch at all
             // -- a repository on the same disk, say -- has nothing to trim.
@@ -546,6 +660,7 @@ class GitSshVaultSync(
 
     /** Host and port from either the scp-style or the ssh:// form of the URL. */
     private fun endpoint(): Pair<String, Int> {
+        val remoteUrl = remoteUrl
         if (remoteUrl.startsWith("ssh://")) {
             val authority = remoteUrl.removePrefix("ssh://").substringBefore('/')
             val hostPart = authority.substringAfter('@', authority)
@@ -559,7 +674,7 @@ class GitSshVaultSync(
 
     private fun openGit(): Git = Git.open(workTree)
 
-    private val overSsh: Boolean get() = !remoteUrl.startsWith("file:")
+    private val overSsh: Boolean get() = remoteUrl.let { !it.startsWith("file:") && !it.startsWith("/") }
 
     private fun filesAt(
         repository: Repository,
@@ -683,7 +798,19 @@ class GitSshVaultSync(
         const val AUTH_TIMEOUT_MS = 20_000
         const val CHAIN_DEPTH = 8
         const val DEFAULT_SSH_PORT = 22
-        const val REMOTE_PREFIX = "refs/remotes/origin/"
+        const val SHORT_SHA = 7
+
+        /** The file a clone lists its cut-off commits in; there only when it is shallow. */
+        const val SHALLOW = "shallow"
+
+        /** What moving a ref says when it moved, or already was there. */
+        val MOVED =
+            setOf(
+                RefUpdate.Result.FAST_FORWARD,
+                RefUpdate.Result.FORCED,
+                RefUpdate.Result.NEW,
+                RefUpdate.Result.NO_CHANGE,
+            )
         const val REFS_HEADS = "refs/heads/"
         const val MILLIS_PER_SECOND = 1000
         const val PUSH_ATTEMPTS = 3

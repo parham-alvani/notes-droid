@@ -44,7 +44,7 @@ class GitNoteHistory(
         path: String,
     ): List<NoteVersion> {
         val start =
-            repository.resolve(Constants.R_REMOTES + Constants.DEFAULT_REMOTE_NAME + "/" + branch)
+            repository.resolve(Constants.R_REMOTES + CloneConfig.remoteName(workTree) + "/" + branch)
                 ?: repository.resolve(Constants.HEAD)
                 ?: return emptyList()
         return RevWalk(repository).use { walk ->
