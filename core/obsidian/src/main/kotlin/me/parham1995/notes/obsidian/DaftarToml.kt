@@ -67,6 +67,94 @@ object DaftarToml {
         return out
     }
 
+    /**
+     * [text] with [key] set to [value], and every other line byte for byte:
+     * comments, order and blank lines stay. A key that is there has the
+     * value of its line changed and keeps the comment after it. One that is
+     * not is added at the end of its section, and a section that is not
+     * there at the end of the file, with one blank line before it. Null
+     * [text] is a vault with no `.daftar.toml` yet.
+     */
+    fun set(
+        text: String?,
+        key: String,
+        value: TomlValue,
+    ): String = setWritten(text, key, written(value))
+
+    /** [set] with the value as the file writes it already ([written]): how a change waits in a queue. */
+    fun setWritten(
+        text: String?,
+        key: String,
+        written: String,
+    ): String {
+        val source = text.orEmpty()
+        val eol = if (source.contains("\r\n")) "\r\n" else "\n"
+        val lines = if (source.isEmpty()) mutableListOf() else source.removeSuffix(eol).split(eol).toMutableList()
+        val section = key.substringBeforeLast('.', "")
+        val name = key.substringAfterLast('.')
+
+        var table = ""
+        var last = -1
+        var at = 0
+        while (at < lines.size) {
+            val line = lines[at]
+            val bare = uncommented(line).trim()
+            val start = at
+            at++
+            if (bare.isEmpty()) continue
+            if (bare.startsWith("[")) {
+                table = bare.trim('[', ']').split('.').joinToString(".") { unquoted(it) }
+                if (table == section) last = start
+                continue
+            }
+            val equals = line.indexOf('=')
+            if (equals <= 0) continue
+            val path = line.substring(0, equals).split('.').joinToString(".") { unquoted(it) }
+            // An array left open runs on to the line that closes it.
+            var held = uncommented(line.substring(equals + 1)).trim()
+            while (held.startsWith("[") && !closed(held) && at < lines.size) {
+                held = "$held " + uncommented(lines[at]).trim()
+                at++
+            }
+            if (table == section) last = at - 1
+            if ((if (table.isEmpty()) path else "$table.$path") != key) continue
+            // Only the value changes: the key as written, the space after `=`, and the comment stay.
+            val after = line.substring(equals + 1)
+            val lead = after.takeWhile { it == ' ' || it == '\t' }
+            val said = uncommented(after)
+            val tail = if (at - 1 == start) after.substring(said.trimEnd().length) else ""
+            repeat(at - 1 - start) { lines.removeAt(start + 1) }
+            lines[start] = line.substring(0, equals + 1) + lead.ifEmpty { " " } + written + tail
+            return lines.joinToString(eol) + eol
+        }
+        when {
+            // A key at the top goes before the first section.
+            section.isEmpty() -> {
+                val first = lines.indexOfFirst { uncommented(it).trim().startsWith("[") }
+                lines.add(if (first < 0) lines.size else first, "$name = $written")
+            }
+            last >= 0 -> lines.add(last + 1, "$name = $written")
+            else -> {
+                if (lines.isNotEmpty() && lines.last().isNotBlank()) lines += ""
+                lines += "[$section]"
+                lines += "$name = $written"
+            }
+        }
+        return lines.joinToString(eol) + eol
+    }
+
+    /** [value] as the file writes it. */
+    fun written(value: TomlValue): String =
+        when (value) {
+            is TomlValue.Text -> quoted(value.value)
+            is TomlValue.Whole -> value.value.toString()
+            is TomlValue.Flag -> value.value.toString()
+            is TomlValue.Texts -> value.value.joinToString(", ", "[", "]") { quoted(it) }
+            is TomlValue.Other -> value.raw
+        }
+
+    private fun quoted(text: String): String = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
     private fun valueOf(raw: String): TomlValue {
         string(raw)?.let { return TomlValue.Text(it) }
         if (raw == "true") return TomlValue.Flag(true)

@@ -23,6 +23,7 @@ import me.parham1995.notes.data.FoldSections
 import me.parham1995.notes.data.ImagePolicy
 import me.parham1995.notes.data.LineWidth
 import me.parham1995.notes.data.SettingsStore
+import me.parham1995.notes.data.SettingsWriter
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.data.SyncLog
 import me.parham1995.notes.data.SyncRepository
@@ -33,12 +34,14 @@ import me.parham1995.notes.data.ThemeChoice
 import me.parham1995.notes.data.TokenStore
 import me.parham1995.notes.data.VaultClones
 import me.parham1995.notes.data.VaultFileStore
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.data.database.PendingEditEntity
 import me.parham1995.notes.data.database.SyncLogEntity
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
+import me.parham1995.notes.obsidian.HiddenFiles
 import me.parham1995.notes.ui.UiText
 import javax.inject.Inject
 
@@ -105,6 +108,7 @@ class SyncViewModel
         private val crashLog: CrashLog,
         private val writes: VaultWriteRepository,
         private val vaultClones: VaultClones,
+        private val writer: SettingsWriter,
     ) : ViewModel() {
         private val local = MutableStateFlow(LocalState())
 
@@ -185,10 +189,19 @@ class SyncViewModel
                 // five, and the vararg form loses every type in the lambda.
                 repository.vaults(),
                 sshKeyRows,
-                writes.queue(),
+                // With whether a changed setting can go to the vault being read.
+                combine(writes.queue(), writes.writable) { queued, writable -> queued to writable },
                 vaultClones.clones,
-            ) { base, vaults, keys, queued, clones ->
-                base.copy(vaults = vaults, sshKeys = keys, queuedEdits = queued, clones = clones)
+            ) { base, vaults, keys, (queued, writable), clones ->
+                val active = vaults.firstOrNull { it.id == base.settings.activeVaultId } ?: vaults.firstOrNull()
+                val fromVault = base.settings.fromVault.copy(writable = active != null && active.id in writable)
+                base.copy(
+                    settings = base.settings.copy(fromVault = fromVault),
+                    vaults = vaults,
+                    sshKeys = keys,
+                    queuedEdits = queued,
+                    clones = clones,
+                )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SyncUiState())
 
         init {
@@ -276,7 +289,25 @@ class SyncViewModel
         fun setScratchpad(
             path: String,
             vaultId: Long,
-        ) = viewModelScope.launch { settingsStore.setScratchpad(path, vaultId) }
+        ) = viewModelScope.launch {
+            // The path is a setting a vault may hold; which vault holds the scratchpad is this phone's.
+            writer.set(VaultOverlay.scratchpad, path)
+            settingsStore.setScratchpadVault(vaultId)
+        }
+
+        /**
+         * Keep on This Device: the key is declined, and its value in use is
+         * written to this phone, so the vault's line no longer decides it.
+         */
+        fun keepOnDevice(key: String) =
+            viewModelScope.launch {
+                VaultOverlay.BINDINGS.firstOrNull { it.id == key }?.let { writer.keepOnDevice(it) }
+                    ?: settingsStore.setVaultKeyDeclined(key, declined = true)
+            }
+
+        /** Follow the Vault: the key is no longer declined. */
+        fun followVault(key: String) =
+            viewModelScope.launch { settingsStore.setVaultKeyDeclined(key, declined = false) }
 
         /** Who Mark as Verified names; empty for the author's own name in the email. */
         fun setOkfActor(actor: String) = viewModelScope.launch { settingsStore.setOkfActor(actor) }
@@ -349,60 +380,75 @@ class SyncViewModel
 
         fun setTransport(transport: SyncTransport) = viewModelScope.launch { settingsStore.setTransport(transport) }
 
-        fun setSshOverPort443(enabled: Boolean) = viewModelScope.launch { settingsStore.setSshOverPort443(enabled) }
+        fun setSshOverPort443(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.sshPort443, enabled) }
 
-        fun setImagePolicy(policy: ImagePolicy) = viewModelScope.launch { settingsStore.setImagePolicy(policy) }
+        fun setImagePolicy(policy: ImagePolicy) = viewModelScope.launch { writer.set(VaultOverlay.imagePolicy, policy) }
 
-        fun setBackgroundSync(enabled: Boolean) = viewModelScope.launch { settingsStore.setBackgroundSync(enabled) }
+        fun setBackgroundSync(enabled: Boolean) =
+            viewModelScope.launch {
+                // One key in the vault, minutes between syncs, for the switch and the hours both: 0 is off.
+                writer.set(VaultOverlay.syncInterval, if (enabled) settingsStore.current().syncIntervalHours else 0)
+            }
 
-        fun setSyncIntervalHours(hours: Int) = viewModelScope.launch { settingsStore.setSyncIntervalHours(hours) }
+        fun setSyncIntervalHours(hours: Int) = viewModelScope.launch { writer.set(VaultOverlay.syncInterval, hours) }
 
-        fun setSyncOnWifiOnly(enabled: Boolean) = viewModelScope.launch { settingsStore.setSyncOnWifiOnly(enabled) }
+        fun setSyncOnWifiOnly(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.wifiOnly, enabled) }
 
-        fun setTaskDigest(enabled: Boolean) = viewModelScope.launch { settingsStore.setTaskDigest(enabled) }
+        fun setTaskDigest(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.digest, enabled) }
 
         fun setAppLock(enabled: Boolean) = viewModelScope.launch { settingsStore.setAppLock(enabled) }
 
         fun setLockPicker(enabled: Boolean) = viewModelScope.launch { settingsStore.setLockPicker(enabled) }
 
-        fun setTaskDigestHour(hour: Int) = viewModelScope.launch { settingsStore.setTaskDigestHour(hour) }
+        fun setTaskDigestHour(hour: Int) = viewModelScope.launch { writer.set(VaultOverlay.digestHour, hour) }
 
-        fun setTextScale(scale: Float) = viewModelScope.launch { settingsStore.setTextScale(scale) }
+        fun setTextScale(scale: Float) = viewModelScope.launch { writer.setWhenStill(VaultOverlay.textSize, scale) }
 
-        fun setLineSpacing(spacing: Float) = viewModelScope.launch { settingsStore.setLineSpacing(spacing) }
+        fun setLineSpacing(spacing: Float) =
+            viewModelScope.launch { writer.setWhenStill(VaultOverlay.lineSpacing, spacing) }
 
-        fun setLineWidth(width: LineWidth) = viewModelScope.launch { settingsStore.setLineWidth(width) }
+        fun setLineWidth(width: LineWidth) =
+            viewModelScope.launch { writer.setWhenStill(VaultOverlay.lineWidth, width) }
 
-        fun setTheme(theme: ThemeChoice) = viewModelScope.launch { settingsStore.setTheme(theme) }
+        fun setTheme(theme: ThemeChoice) = viewModelScope.launch { writer.set(VaultOverlay.theme, theme) }
 
-        fun setWidgetOpacity(percent: Int) = viewModelScope.launch { settingsStore.setWidgetOpacity(percent) }
+        fun setWidgetOpacity(percent: Int) =
+            viewModelScope.launch { writer.setWhenStill(VaultOverlay.widgetOpacity, percent) }
 
-        fun setPersianFont(enabled: Boolean) = viewModelScope.launch { settingsStore.setPersianFont(enabled) }
+        fun setPersianFont(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.persianFont, enabled) }
 
-        fun setStylusSpotlight(enabled: Boolean) = viewModelScope.launch { settingsStore.setStylusSpotlight(enabled) }
+        fun setStylusSpotlight(enabled: Boolean) =
+            viewModelScope.launch { writer.set(VaultOverlay.stylusSpotlight, enabled) }
 
         fun setHideCompletedTasks(enabled: Boolean) =
-            viewModelScope.launch { settingsStore.setHideCompletedTasks(enabled) }
+            viewModelScope.launch { writer.set(VaultOverlay.hideCompleted, enabled) }
 
-        fun setHoldToDefine(enabled: Boolean) = viewModelScope.launch { settingsStore.setHoldToDefine(enabled) }
+        fun setHoldToDefine(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.holdToDefine, enabled) }
 
-        fun setRemoteImages(enabled: Boolean) = viewModelScope.launch { settingsStore.setRemoteImages(enabled) }
+        fun setRemoteImages(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.remoteImages, enabled) }
 
-        fun setFoldSections(choice: FoldSections) = viewModelScope.launch { settingsStore.setFoldSections(choice) }
+        fun setFoldSections(choice: FoldSections) =
+            viewModelScope.launch { writer.set(VaultOverlay.foldSections, choice) }
 
         // The notes are marked again by the application, which watches both:
         // a change made anywhere else -- adb, a restore -- is followed too.
-        fun setHideAgentFiles(enabled: Boolean) = viewModelScope.launch { settingsStore.setHideAgentFiles(enabled) }
+        fun setHideAgentFiles(enabled: Boolean) =
+            viewModelScope.launch {
+                // In the vault it is the list of names: the agents' files, or none.
+                writer.set(VaultOverlay.hiddenFiles, if (enabled) HiddenFiles.AGENT_FILES else emptySet())
+            }
 
-        fun setShowHiddenFiles(enabled: Boolean) = viewModelScope.launch { settingsStore.setShowHiddenFiles(enabled) }
+        fun setShowHiddenFiles(enabled: Boolean) =
+            viewModelScope.launch { writer.set(VaultOverlay.showHidden, enabled) }
 
-        fun setKeepScreenOn(enabled: Boolean) = viewModelScope.launch { settingsStore.setKeepScreenOn(enabled) }
+        fun setKeepScreenOn(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.keepScreenOn, enabled) }
 
-        fun setTapForFullScreen(enabled: Boolean) = viewModelScope.launch { settingsStore.setTapForFullScreen(enabled) }
+        fun setTapForFullScreen(enabled: Boolean) =
+            viewModelScope.launch { writer.set(VaultOverlay.tapFullScreen, enabled) }
 
-        fun setStartScreen(screen: StartScreen) = viewModelScope.launch { settingsStore.setStartScreen(screen) }
+        fun setStartScreen(screen: StartScreen) = viewModelScope.launch { writer.set(VaultOverlay.startScreen, screen) }
 
-        fun setBrowserSort(sort: BrowserSort) = viewModelScope.launch { settingsStore.setBrowserSort(sort) }
+        fun setBrowserSort(sort: BrowserSort) = viewModelScope.launch { writer.set(VaultOverlay.browserSort, sort) }
 
         /**
          * The private half never leaves the device; only this public line does,

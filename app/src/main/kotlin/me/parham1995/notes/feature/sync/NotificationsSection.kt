@@ -43,20 +43,21 @@ internal fun TaskDigestCard(
     SectionCard(stringResource(R.string.card_digest)) {
         SwitchRow(
             title = stringResource(R.string.settings_digest),
+            vault = state.vaultKey(VaultOverlay.DIGEST, viewModel),
             checked = state.settings.taskDigest,
             onCheckedChange = viewModel::setTaskDigest,
-            enabled = VaultOverlay.DIGEST !in fromVault,
+            enabled = !fromVault.locks(VaultOverlay.DIGEST),
         )
         FromVaultNote(fromVault, VaultOverlay.DIGEST, VaultOverlay.DIGEST_TIME)
 
         if (state.settings.taskDigest) {
-            Text(stringResource(R.string.digest_at), style = MaterialTheme.typography.labelMedium)
+            SettingLabel(stringResource(R.string.digest_at), state.vaultKey(VaultOverlay.DIGEST_TIME, viewModel))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 VaultSettings.DIGEST_HOUR_CHOICES.forEach { hour ->
                     FilterChip(
                         selected = state.settings.taskDigestHour == hour,
                         onClick = { viewModel.setTaskDigestHour(hour) },
-                        enabled = VaultOverlay.DIGEST_TIME !in fromVault,
+                        enabled = !fromVault.locks(VaultOverlay.DIGEST_TIME),
                         label = { Text(stringResource(R.string.settings_hour, hour)) },
                     )
                 }

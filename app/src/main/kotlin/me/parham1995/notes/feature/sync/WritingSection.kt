@@ -152,7 +152,7 @@ internal fun ScratchpadCard(
 ) {
     val stored = state.settings.write
     var path by remember(stored.scratchpadPath) { mutableStateOf(stored.scratchpadPath) }
-    val pathFromVault = VaultOverlay.CAPTURE_TARGET in state.settings.fromVault
+    val pathFromVault = state.settings.fromVault.locks(VaultOverlay.CAPTURE_TARGET)
     val chosen =
         stored.scratchpadVaultId.takeIf { id -> state.vaults.any { it.id == id } }
             ?: state.vaults.firstOrNull()?.id

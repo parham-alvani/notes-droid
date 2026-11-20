@@ -32,9 +32,11 @@ import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.SearchHit
 import me.parham1995.notes.data.SettingsStore
+import me.parham1995.notes.data.SettingsWriter
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.VaultFileSource
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.data.WriteResult
@@ -149,6 +151,7 @@ class NoteViewModel
         private val bases: BaseRepository,
         private val config: ObsidianConfigStore,
         private val readOnly: ReadOnlyRules,
+        private val settingsWriter: SettingsWriter,
     ) : ViewModel() {
         val tabs: StateFlow<TabsState> = openTabs.state
 
@@ -215,7 +218,9 @@ class NoteViewModel
                 val current = settings.current().reading.textScale
                 val wanted = current * factor
                 val nearest = ReadingSettings.TEXT_SCALES.minBy { kotlin.math.abs(it - wanted) }
-                if (nearest != current) settings.setTextScale(nearest)
+                // A change like any made in Settings, to the vault where it holds the
+                // size: shown at once, and written once, when the pinch is over.
+                if (nearest != current) settingsWriter.setWhenStill(VaultOverlay.textSize, nearest)
             }
         }
 

@@ -178,6 +178,21 @@ internal fun vaultKeyLabel(key: String): Int =
         VaultOverlay.HIDDEN_FILES -> R.string.settings_hidden_names
         VaultOverlay.SHOW_HIDDEN -> R.string.settings_show_hidden_files
         VaultOverlay.HOME_IMAGE -> R.string.settings_home_picture
+        VaultOverlay.LINE_SPACING -> R.string.settings_line_spacing
+        VaultOverlay.PERSIAN_FONT -> R.string.settings_persian_font
+        VaultOverlay.START_SCREEN -> R.string.settings_open_on
+        VaultOverlay.STYLUS_SPOTLIGHT -> R.string.settings_stylus
+        VaultOverlay.HIDE_COMPLETED -> R.string.settings_hide_done
+        VaultOverlay.HOLD_TO_DEFINE -> R.string.settings_hold_to_define
+        VaultOverlay.KEEP_SCREEN_ON -> R.string.settings_keep_screen_on
+        VaultOverlay.TAP_FULL_SCREEN -> R.string.settings_tap_full_screen
+        VaultOverlay.WIDGET_OPACITY -> R.string.settings_widget_background
+        VaultOverlay.BROWSER_SORT -> R.string.settings_folder_order
+        VaultOverlay.WIFI_ONLY -> R.string.settings_wifi_only
+        VaultOverlay.SSH_PORT_443 -> R.string.card_transport
+        VaultOverlay.IMAGE_POLICY -> R.string.card_images
+        VaultOverlay.WORK_START -> R.string.calendar_work_start
+        VaultOverlay.WORK_END -> R.string.calendar_work_end
         else -> R.string.card_vault_settings
     }
 
@@ -190,9 +205,20 @@ internal fun FromVaultNote(
     fromVault: FromVault,
     vararg key: String,
 ) {
+    if (key.any { fromVault.keeps(it) }) {
+        Text(
+            stringResource(R.string.kept_on_this_device),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
     if (key.none { it in fromVault }) return
     Text(
-        stringResource(R.string.help_from_vault),
+        // Where the vault can be written the control works, and the change goes to the vault.
+        stringResource(
+            if (key.any { fromVault.locks(it) }) R.string.help_from_vault else R.string.help_from_vault_shared,
+        ),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.tertiary,
     )

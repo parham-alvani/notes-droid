@@ -381,6 +381,17 @@ interface PendingEditDao {
         kind: String,
     )
 
+    /** Drops the queued edits of one [kind] to one file that have [anchor]: a newer one of the same key. */
+    @Query(
+        "DELETE FROM pending_edits WHERE vaultId = :vaultId AND path = :path AND kind = :kind AND anchor = :anchor",
+    )
+    suspend fun deleteForAnchor(
+        vaultId: Long,
+        path: String,
+        kind: String,
+        anchor: String,
+    )
+
     @Query("DELETE FROM pending_edits WHERE vaultId = :vaultId")
     suspend fun clearVault(vaultId: Long)
 }

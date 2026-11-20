@@ -161,10 +161,11 @@ internal fun BackgroundSyncCard(
     viewModel: SyncViewModel,
 ) {
     val context = LocalContext.current
-    val scheduleFromVault = VaultOverlay.SYNC_INTERVAL in state.settings.fromVault
+    val scheduleFromVault = state.settings.fromVault.locks(VaultOverlay.SYNC_INTERVAL)
     SectionCard(stringResource(R.string.card_background_sync)) {
         SwitchRow(
             title = stringResource(R.string.settings_schedule),
+            vault = state.vaultKey(VaultOverlay.SYNC_INTERVAL, viewModel),
             checked = state.settings.backgroundSync,
             onCheckedChange = viewModel::setBackgroundSync,
             enabled = !scheduleFromVault,
@@ -172,7 +173,10 @@ internal fun BackgroundSyncCard(
         FromVaultNote(state.settings.fromVault, VaultOverlay.SYNC_INTERVAL)
 
         if (state.settings.backgroundSync) {
-            Text(stringResource(R.string.settings_how_often), style = MaterialTheme.typography.labelMedium)
+            SettingLabel(
+                stringResource(R.string.settings_how_often),
+                state.vaultKey(VaultOverlay.SYNC_INTERVAL, viewModel),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 VaultSettings.INTERVAL_CHOICES.forEach { hours ->
                     FilterChip(
@@ -194,9 +198,11 @@ internal fun BackgroundSyncCard(
 
             SwitchRow(
                 title = stringResource(R.string.settings_wifi_only),
+                vault = state.vaultKey(VaultOverlay.WIFI_ONLY, viewModel),
                 checked = state.settings.syncOnWifiOnly,
                 onCheckedChange = viewModel::setSyncOnWifiOnly,
             )
+            FromVaultNote(state.settings.fromVault, VaultOverlay.WIFI_ONLY)
 
             val exempt = remember { context.ignoresBatteryOptimisations() }
             if (!exempt) {
