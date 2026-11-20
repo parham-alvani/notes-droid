@@ -22,10 +22,12 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.BaseAnswer
 import me.parham1995.notes.data.BaseRepository
+import me.parham1995.notes.data.ConceptNotice
 import me.parham1995.notes.data.Destinations
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.PeriodNeighbours
+import me.parham1995.notes.data.ReadOnlyRules
 import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.SearchHit
@@ -86,6 +88,13 @@ data class NoteUiState(
     val missing: Boolean = false,
     /** Whether this note's vault can be written to, and an author is set. */
     val writable: Boolean = false,
+    /**
+     * The note's vault is a read-only clone: the actions that write are
+     * shown, off, a task's box says so instead of ticking, and sync is a pull.
+     */
+    val readOnly: Boolean = false,
+    /** What is said above the text of a deprecated or stale concept; null for any other note. */
+    val concept: ConceptNotice? = null,
     /** The last thing a write had to say, shown once and dismissed. */
     val message: UiText? = null,
     /** The journal either side, when this note is one of its vault's daily notes. */
@@ -139,8 +148,22 @@ class NoteViewModel
         private val scheduler: SyncScheduler,
         private val bases: BaseRepository,
         private val config: ObsidianConfigStore,
+        private val readOnly: ReadOnlyRules,
     ) : ViewModel() {
         val tabs: StateFlow<TabsState> = openTabs.state
+
+        /** The notes whose reader has been told the vault is read-only: it is said once per note. */
+        private val toldReadOnly = mutableSetOf<Long>()
+
+        /**
+         * A task's box was tapped in a read-only vault: it does not tick,
+         * and the first tap in each note says why.
+         */
+        fun tickRefused() {
+            val id = _state.value.note?.id ?: return
+            if (!toldReadOnly.add(id)) return
+            _state.update { it.copy(message = UiText.Resource(R.string.read_only_notice)) }
+        }
 
         fun openTab(
             noteId: Long,
@@ -530,6 +553,11 @@ class NoteViewModel
                                             ?.outputData
                                             ?.getString(SyncWorker.KEY_ERROR),
                                     succeeded = infos.any { it.state == WorkInfo.State.SUCCEEDED },
+                                    changed =
+                                        infos
+                                            .firstOrNull { it.state == WorkInfo.State.SUCCEEDED }
+                                            ?.outputData
+                                            ?.let { data -> CHANGE_KEYS.sumOf { data.getInt(it, 0) } > 0 } == true,
                                 )
                             }
                         }
@@ -549,6 +577,7 @@ class NoteViewModel
         private suspend fun afterSync(
             workError: String?,
             succeeded: Boolean,
+            changed: Boolean,
         ) {
             val asked = syncAsked
             syncAsked = false
@@ -558,6 +587,8 @@ class NoteViewModel
             if (id != null && note != null) {
                 val backlinks = repository.backlinks(id)
                 val writable = writes.canWrite(note.vaultId).first()
+                val pullsOnly = readOnly.isReadOnly(note.vaultId)
+                val notice = repository.conceptNotice(note.vaultId, note.path)
                 // The sync may have brought another `.daftar.toml`.
                 val opensFolded = opensFolded(note.vaultId)
                 _state.update {
@@ -568,6 +599,8 @@ class NoteViewModel
                             note = note,
                             backlinks = backlinks,
                             writable = writable,
+                            readOnly = pullsOnly,
+                            concept = notice,
                             // The person's own folds, less what moved; a note
                             // they never folded is drawn as the settings say.
                             folded =
@@ -586,7 +619,14 @@ class NoteViewModel
             if (asked) {
                 _state.update {
                     it.copy(
-                        message = if (succeeded) UiText.Resource(R.string.note_synced) else failure(workError),
+                        message =
+                            when {
+                                !succeeded -> failure(workError)
+                                // A read-only vault was pulled, and nothing else.
+                                !it.readOnly -> UiText.Resource(R.string.note_synced)
+                                changed -> UiText.Resource(R.string.sync_pulled)
+                                else -> UiText.Resource(R.string.sync_up_to_date)
+                            },
                     )
                 }
             }
@@ -622,6 +662,8 @@ class NoteViewModel
                     repository.markOpened(id)
                     val assignments = icons.config.first()
                     val writable = writes.canWrite(note.vaultId).first()
+                    val pullsOnly = readOnly.isReadOnly(note.vaultId)
+                    val notice = repository.conceptNotice(note.vaultId, note.path)
                     val opensFolded = opensFolded(note.vaultId)
                     _state.value =
                         NoteUiState(
@@ -630,6 +672,8 @@ class NoteViewModel
                             backlinks = repository.backlinks(id),
                             icon = assignments.forFile(note.vaultId, note.path),
                             writable = writable,
+                            readOnly = pullsOnly,
+                            concept = notice,
                             // As it was left, less any fold the file has since
                             // moved out from under; a note never folded or
                             // opened by hand opens as the settings say.
@@ -902,3 +946,7 @@ data class TaskDraft(
     val sections: List<String>,
     val section: String,
 )
+
+/** What a finished sync says it changed, by the worker's own keys. */
+private val CHANGE_KEYS =
+    listOf(SyncWorker.KEY_ADDED, SyncWorker.KEY_MODIFIED, SyncWorker.KEY_RENAMED, SyncWorker.KEY_DELETED)

@@ -21,7 +21,7 @@ import androidx.sqlite.execSQL
         TagEntity::class,
         AliasEntity::class,
     ],
-    version = 19,
+    version = 20,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -580,6 +580,18 @@ abstract class NotesDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * 19 -> 20: whether a note is a deprecated concept of the Open
+         * Knowledge Format. No note is until the indexer has read its front
+         * matter again, which the move of [me.parham1995.notes.data.VaultIndexer.VERSION] asks for.
+         */
+        val MIGRATION_19_20 =
+            object : Migration(19, 20) {
+                override fun migrate(connection: SQLiteConnection) {
+                    connection.execSQL("ALTER TABLE `notes` ADD COLUMN `deprecated` INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+
         /** The tables derived from a note, exactly as the entities declare them. */
         private fun createNotes(connection: SQLiteConnection) {
             connection.execSQL(
@@ -673,6 +685,7 @@ abstract class NotesDatabase : RoomDatabase() {
                 MIGRATION_16_17,
                 MIGRATION_17_18,
                 MIGRATION_18_19,
+                MIGRATION_19_20,
             )
     }
 }

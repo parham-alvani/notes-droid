@@ -28,7 +28,15 @@ package me.parham1995.notes.markdown
 class LinkResolver(
     paths: Collection<String>,
     aliases: Map<String, Collection<String>> = emptyMap(),
+    /**
+     * The folders that are the root of an Open Knowledge Format bundle:
+     * those whose `index.md` has `okf_version` in its front matter. A `/`
+     * path in a note under one is from that folder, not the vault's root.
+     */
+    bundleRoots: Collection<String> = emptyList(),
 ) {
+    private val all = HashSet<String>()
+    private val roots = bundleRoots.map { Slugs.normalize(it).trim('/') }.filter { it.isNotEmpty() }
     private val exact = HashMap<String, MutableList<String>>()
     private val folded = HashMap<String, MutableList<String>>()
     private val aliased = HashMap<String, MutableList<String>>()
@@ -47,6 +55,7 @@ class LinkResolver(
     }
 
     private fun register(path: String) {
+        all += path
         val segments = path.split('/')
         indexSuffixes(segments, path)
 
@@ -91,21 +100,76 @@ class LinkResolver(
         source: String,
     ): String? {
         if (target.isEmpty()) return source
+        // A Markdown link's `/path`, as the Open Knowledge Format reads it.
+        if (target.startsWith("/")) return fromRoot(target, source)
 
         val cleaned = Slugs.normalize(target).trim().trimEnd('/')
         if (cleaned.isEmpty()) return source
+        val folder = target.trim().endsWith("/")
 
-        // Explicit relative syntax is rare and, where it appears, usually
-        // already broken -- but honour it before falling back.
-        if (cleaned.startsWith("./") || cleaned.startsWith("../")) {
-            relative(cleaned, source)?.let { return it }
+        // A file's own path, `tables/orders.md`, or a folder's, `tables/`,
+        // is from the note's folder first, as OKF reads a Markdown link. One
+        // that is no file there, and a note's name, which is how a wikilink
+        // is written, go on to Obsidian's rule below.
+        if ((cleaned.endsWith(MD) || folder) && !cleaned.startsWith("./") && !cleaned.startsWith("../")) {
+            beside(cleaned, source)?.let { return it }
         }
+
+        // A `./` or `../` path is only what it says: the file there, or nothing.
+        if (cleaned.startsWith("./") || cleaned.startsWith("../")) return relative(cleaned, source)
 
         val candidates = exact[cleaned] ?: folded[Slugs.fold(cleaned)] ?: aliased[Slugs.fold(cleaned)] ?: return null
         return when (candidates.size) {
             1 -> candidates.first()
             else -> disambiguate(candidates, source)
         }
+    }
+
+    /**
+     * A path from the bundle's root: the nearest folder at or above the
+     * note that is one, else the vault's root (`open-knowledge-format.md` in
+     * notes-linux's `docs/specs/`, section 3). It is only what it says: a
+     * path that climbs above its root names nothing, and one that names no
+     * file there is not looked for anywhere else.
+     */
+    private fun fromRoot(
+        target: String,
+        source: String,
+    ): String? {
+        val root = roots.filter { source.startsWith("$it/") }.maxByOrNull { it.length }.orEmpty()
+        val base = root.split('/').filter { it.isNotEmpty() }.toMutableList()
+        val floor = base.size
+        for (segment in Slugs.normalize(target).trim().split('/')) {
+            when (segment) {
+                "", "." -> Unit
+                ".." -> if (base.size > floor) base.removeAt(base.lastIndex) else return null
+                else -> base += segment
+            }
+        }
+        return file(base.joinToString("/"))
+    }
+
+    /**
+     * The file a path names exactly: itself, itself with `.md`, or, for a
+     * folder, its `index.md`, as a bundle's own index links to one.
+     */
+    private fun file(path: String): String? =
+        when {
+            path.isEmpty() -> null
+            path in all -> path
+            "$path$MD" in all -> "$path$MD"
+            "$path/$INDEX" in all -> "$path/$INDEX"
+            else -> null
+        }
+
+    /** The file at [target] seen from the folder of [source], when there is one exactly there. */
+    private fun beside(
+        target: String,
+        source: String,
+    ): String? {
+        if (target.split('/').any { it == ".." || it == "." }) return null
+        val folder = source.substringBeforeLast('/', "")
+        return file(if (folder.isEmpty()) target else "$folder/$target")
     }
 
     private fun relative(
@@ -126,7 +190,7 @@ class LinkResolver(
             }
         }
         val joined = base.joinToString("/")
-        return exact[joined]?.firstOrNull() ?: exact["$joined$MD"]?.firstOrNull()
+        return file(joined)
     }
 
     /**
@@ -158,6 +222,7 @@ class LinkResolver(
     }
 
     private companion object {
+        const val INDEX = "index.md"
         const val MD = ".md"
     }
 }

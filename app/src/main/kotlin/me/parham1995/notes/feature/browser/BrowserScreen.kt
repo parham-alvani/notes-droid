@@ -60,6 +60,7 @@ import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.obsidian.Period
 import me.parham1995.notes.ui.BookmarkActions
 import me.parham1995.notes.ui.ItemRow
+import me.parham1995.notes.ui.ReadOnlyBadge
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.bookmarkItems
 import me.parham1995.notes.ui.bookmarkNodes
@@ -108,6 +109,7 @@ fun BrowserScreen(
     }
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     val templates by viewModel.templates.collectAsStateWithLifecycle()
+    val readOnly by viewModel.readOnly.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     if (creating && templates.isNotEmpty()) {
         NewNoteDialog(
@@ -213,11 +215,19 @@ fun BrowserScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = state.path.substringAfterLast('/').ifEmpty { stringResource(R.string.browse_root) },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = state.path.substringAfterLast('/').ifEmpty { stringResource(R.string.browse_root) },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        // By the vault's name: this one is pulled, never written.
+                        if (readOnly) ReadOnlyBadge()
+                    }
                 },
                 navigationIcon = {
                     if (state.path.isNotEmpty()) {
@@ -274,7 +284,11 @@ fun BrowserScreen(
                     // Pull-to-refresh alone is invisible until you already know
                     // it is there, which makes the app look like it cannot sync.
                     IconButton(onClick = { viewModel.refresh() }, enabled = !state.syncing) {
-                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.browse_sync_now))
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription =
+                                stringResource(if (readOnly) R.string.action_pull else R.string.browse_sync_now),
+                        )
                     }
                 },
             )

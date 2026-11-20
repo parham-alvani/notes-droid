@@ -24,6 +24,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.SyncTransport
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.feature.calendar.CalendarCards
 import me.parham1995.notes.feature.home.HomePictureCard
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -78,6 +79,12 @@ fun SyncScreen(
             when (section) {
                 SettingsSection.REPOSITORIES -> {
                     RepositoryCard(state, viewModel)
+                    VaultGitCards(state, viewModel)
+                    VaultSettingsCard(
+                        fromVault = state.settings.fromVault,
+                        onFollow = viewModel::setFollowVault,
+                        onDecline = viewModel::setVaultKeyDeclined,
+                    )
                     TransportCard(state, viewModel)
                     if (state.settings.transport == SyncTransport.REST) {
                         TokenCard(state, viewModel)
@@ -92,6 +99,7 @@ fun SyncScreen(
                         chosen =
                             state.settings.reading.homePicture
                                 .isNotEmpty(),
+                        fromVault = VaultOverlay.HOME_IMAGE in state.settings.fromVault,
                     )
                     TilesCard()
                 }

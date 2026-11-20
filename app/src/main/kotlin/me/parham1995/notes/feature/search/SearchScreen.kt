@@ -29,6 +29,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -97,6 +99,7 @@ fun SearchScreen(
                         icon = row.icon,
                         onClick = { onOpenNote(row.note.id) },
                         onLongClick = { onOpenNoteInNewTab(row.note.id) },
+                        dimmed = row.note.deprecated,
                     ) {
                         Text(
                             row.note.title.ifBlank { row.note.name },
@@ -124,6 +127,7 @@ fun SearchScreen(
                         onClick = { onOpenNote(row.hit.noteId) },
                         onLongClick = { onOpenNoteInNewTab(row.hit.noteId) },
                         spacing = 2.dp,
+                        dimmed = row.hit.deprecated,
                     ) {
                         Text(row.hit.title, style = MaterialTheme.typography.bodyMedium)
                         // A folder searched on its own has no excerpt, only a
@@ -223,11 +227,15 @@ private fun ResultRow(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     spacing: Dp = 0.dp,
+    /** A deprecated concept of the Open Knowledge Format: still there, and plainly not the one to read. */
+    dimmed: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Row(
         Modifier
             .fillMaxWidth()
+            .alpha(if (dimmed) DIMMED else 1f)
+            .testTag(if (dimmed) DIMMED_ROW else PLAIN_ROW)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -237,3 +245,8 @@ private fun ResultRow(
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
     }
 }
+
+/** How much of a deprecated concept's row is drawn. */
+private const val DIMMED = 0.5f
+internal const val DIMMED_ROW = "search-row-dimmed"
+internal const val PLAIN_ROW = "search-row"

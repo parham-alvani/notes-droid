@@ -448,6 +448,9 @@ fun NoteScreen(
     }
 
     val snackbar = remember { SnackbarHostState() }
+    // Whether the actions that write are offered at all: where they work, and
+    // in a read-only vault, where they are shown but off.
+    val offersWrites = state.writable || state.readOnly
     val message = state.message?.text()
     LaunchedEffect(message) {
         message?.let {
@@ -526,7 +529,7 @@ fun NoteScreen(
             }.orEmpty()
     val noteActions =
         state.note?.let { note ->
-            remember(note.id, note.vaultId, note.path, state.writable, remindedLines) {
+            remember(note.id, note.vaultId, note.path, state.writable, state.readOnly, remindedLines) {
                 RenderActions(
                     vaultId = note.vaultId,
                     remindedLines = remindedLines,
@@ -534,10 +537,12 @@ fun NoteScreen(
                     // written, rather than only
                     // from the task list.
                     onCompleteTask =
-                        if (state.writable) {
-                            { line -> viewModel.completeTask(line) }
-                        } else {
-                            null
+                        when {
+                            state.writable -> { line -> viewModel.completeTask(line) }
+                            // The box is there and does not tick: the first
+                            // tap in a note says the vault is read-only.
+                            state.readOnly -> { _ -> viewModel.tickRefused() }
+                            else -> null
                         },
                     // Always: a reminder needs no write, so the sheet opens
                     // on any vault and offers moving only where it can.
@@ -891,19 +896,22 @@ fun NoteScreen(
                                 syncing = state.syncing,
                                 onSync = viewModel::sync,
                                 onSortTasks =
-                                    if (state.writable && state.note?.isFolderNote == false) {
+                                    if (offersWrites && state.note?.isFolderNote == false) {
                                         { viewModel.sortTasks() }
                                     } else {
                                         null
                                     },
                                 onProperties =
-                                    if (state.writable && state.note?.isFolderNote == false) {
+                                    if (offersWrites && state.note?.isFolderNote == false) {
                                         { showProperties = true }
                                     } else {
                                         null
                                     },
+                                // In a read-only vault the three that write are shown, and off.
+                                writes = !state.readOnly,
+                                pullsOnly = state.readOnly,
                                 onAddTask =
-                                    if (state.writable && state.note?.isFolderNote == false) {
+                                    if (offersWrites && state.note?.isFolderNote == false) {
                                         {
                                             // The section being read when the menu was opened.
                                             val reading = currentHeading(state.note?.headings.orEmpty(), topBlock())
@@ -986,6 +994,11 @@ fun NoteScreen(
                 // back along it too.
                 state.periodic?.let { periodic ->
                     PeriodBar(periodic, onOpen = { id -> viewModel.openTab(id, inNewTab = false) })
+                    HorizontalDivider()
+                }
+                // One line above a deprecated or a stale concept, and nothing above any other note.
+                state.concept?.let { notice ->
+                    ConceptLine(notice, onOpen = { id -> viewModel.openTab(id, inNewTab = false) })
                     HorizontalDivider()
                 }
                 HorizontalPager(

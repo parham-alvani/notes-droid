@@ -21,6 +21,7 @@ import me.parham1995.notes.data.LineWidth
 import me.parham1995.notes.data.ReadingSettings
 import me.parham1995.notes.data.StartScreen
 import me.parham1995.notes.data.ThemeChoice
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.ui.inScript
 
 private const val PERCENT = 100
@@ -38,6 +39,7 @@ internal fun ReadingCard(
     viewModel: SyncViewModel,
 ) {
     val reading = state.settings.reading
+    val fromVault = state.settings.fromVault
 
     SectionCard(stringResource(R.string.card_text)) {
         Text(stringResource(R.string.settings_size), style = MaterialTheme.typography.labelMedium)
@@ -46,10 +48,13 @@ internal fun ReadingCard(
                 FilterChip(
                     selected = reading.textScale == scale,
                     onClick = { viewModel.setTextScale(scale) },
+                    enabled = VaultOverlay.TEXT_SIZE !in fromVault,
                     label = { Text(stringResource(R.string.settings_percent, (scale * PERCENT).toInt())) },
                 )
             }
         }
+
+        FromVaultNote(fromVault, VaultOverlay.TEXT_SIZE)
 
         Text(stringResource(R.string.settings_line_spacing), style = MaterialTheme.typography.labelMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -76,10 +81,12 @@ internal fun ReadingCard(
                 FilterChip(
                     selected = reading.lineWidth == width,
                     onClick = { viewModel.setLineWidth(width) },
+                    enabled = VaultOverlay.TEXT_WIDTH !in fromVault,
                     label = { Text(stringResource(width.label)) },
                 )
             }
         }
+        FromVaultNote(fromVault, VaultOverlay.TEXT_WIDTH)
         Text(
             stringResource(R.string.help_line_width),
             style = MaterialTheme.typography.bodySmall,
@@ -108,10 +115,12 @@ internal fun ReadingCard(
                 FilterChip(
                     selected = reading.theme == choice,
                     onClick = { viewModel.setTheme(choice) },
+                    enabled = VaultOverlay.THEME !in fromVault,
                     label = { Text(stringResource(choice.label)) },
                 )
             }
         }
+        FromVaultNote(fromVault, VaultOverlay.THEME)
         Text(
             stringResource(R.string.help_theme),
             style = MaterialTheme.typography.bodySmall,
@@ -175,7 +184,9 @@ internal fun ReadingCard(
             help = stringResource(R.string.help_remote_images),
             checked = reading.remoteImages,
             onCheckedChange = viewModel::setRemoteImages,
+            enabled = VaultOverlay.REMOTE_IMAGES !in fromVault,
         )
+        FromVaultNote(fromVault, VaultOverlay.REMOTE_IMAGES)
     }
 
     SectionCard(stringResource(R.string.card_behaviour)) {
@@ -208,10 +219,12 @@ internal fun ReadingCard(
                 FilterChip(
                     selected = reading.foldSections == choice,
                     onClick = { viewModel.setFoldSections(choice) },
+                    enabled = VaultOverlay.FOLD_SECTIONS !in fromVault,
                     label = { Text(stringResource(choice.label)) },
                 )
             }
         }
+        FromVaultNote(fromVault, VaultOverlay.FOLD_SECTIONS)
         Text(
             stringResource(R.string.help_fold_sections),
             style = MaterialTheme.typography.bodySmall,
@@ -225,15 +238,18 @@ internal fun ReadingCard(
             help = stringResource(R.string.help_hide_agent_files),
             checked = reading.hideAgentFiles,
             onCheckedChange = viewModel::setHideAgentFiles,
-            enabled = !reading.showHiddenFiles,
+            enabled = !reading.showHiddenFiles && VaultOverlay.HIDDEN_FILES !in fromVault,
         )
+        FromVaultNote(fromVault, VaultOverlay.HIDDEN_FILES)
 
         SwitchRow(
             title = stringResource(R.string.settings_show_hidden_files),
             help = stringResource(R.string.help_show_hidden_files),
             checked = reading.showHiddenFiles,
             onCheckedChange = viewModel::setShowHiddenFiles,
+            enabled = VaultOverlay.SHOW_HIDDEN !in fromVault,
         )
+        FromVaultNote(fromVault, VaultOverlay.SHOW_HIDDEN)
 
         SwitchRow(
             title = stringResource(R.string.settings_keep_screen_on),

@@ -225,6 +225,13 @@ data class NoteEntity(
      * a link or opens a note by id must not.
      */
     val hidden: Boolean = false,
+    /**
+     * A concept of the Open Knowledge Format whose `status` is `deprecated`
+     * (`open-knowledge-format.md` in notes-linux's `docs/specs/`): shown
+     * dimmed in quick open and search, after the others of its rank. Written
+     * by the indexer from the note's front matter, with the note.
+     */
+    val deprecated: Boolean = false,
 )
 
 /**

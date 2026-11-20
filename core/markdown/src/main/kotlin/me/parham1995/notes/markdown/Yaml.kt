@@ -225,7 +225,7 @@ object Yaml {
     }
 
     /** The items of a flow list, split at the commas outside quotes and brackets. */
-    private fun splitFlow(text: String): List<String> {
+    internal fun splitFlow(text: String): List<String> {
         val items = mutableListOf<String>()
         val current = StringBuilder()
         var depth = 0

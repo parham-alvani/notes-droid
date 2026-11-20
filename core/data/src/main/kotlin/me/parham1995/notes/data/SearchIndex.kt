@@ -16,6 +16,8 @@ data class SearchHit(
     val title: String,
     val path: String,
     val snippet: String,
+    /** A deprecated concept of the Open Knowledge Format, which a list shows dimmed. */
+    val deprecated: Boolean = false,
 )
 
 /** One note as the search index is given it, before normalizing. */
@@ -179,6 +181,7 @@ class SearchIndex
                                     path = statement.getText(1),
                                     title = statement.getText(2),
                                     aliases = aliases.split('\n').filter { it.isNotBlank() },
+                                    deprecated = statement.getLong(DEPRECATED_COLUMN) != 0L,
                                 ),
                             )
                         }
@@ -254,10 +257,12 @@ class SearchIndex
 
             val CANDIDATES_SQL =
                 """
-                SELECT notes.id, notes.path, notes.name, note_fts.aliases
+                SELECT notes.id, notes.path, notes.name, note_fts.aliases, notes.deprecated
                 FROM notes LEFT JOIN note_fts ON note_fts.rowid = notes.id
                 WHERE notes.vaultId = ?1 AND notes.hidden = 0
                 """.trimIndent()
+
+            const val DEPRECATED_COLUMN = 4
 
             val VERSION_SQL =
                 "SELECT COUNT(*), COALESCE(MAX(indexedAt), 0), TOTAL(hidden * id) FROM notes WHERE vaultId = ?1"

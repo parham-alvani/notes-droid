@@ -154,7 +154,7 @@ class NotesApplication :
             settings
                 .get()
                 .settings
-                .map { it.reading.hideAgentFiles to it.reading.showHiddenFiles }
+                .map { Triple(it.reading.hideAgentFiles, it.reading.showHiddenFiles, it.reading.hiddenNames) }
                 .distinctUntilChanged()
                 .collect {
                     if (hiddenFiles.get().applyAll() > 0) Widgets.refreshAll(this@NotesApplication)

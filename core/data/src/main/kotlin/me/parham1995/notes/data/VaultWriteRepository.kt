@@ -3,6 +3,7 @@ package me.parham1995.notes.data
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.BlobEntity
@@ -12,6 +13,8 @@ import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.NoteExists
+import me.parham1995.notes.markdown.Okf
+import me.parham1995.notes.markdown.OkfFailure
 import me.parham1995.notes.markdown.PropertyEdit
 import me.parham1995.notes.markdown.PropertyFailure
 import me.parham1995.notes.markdown.StatusType
@@ -21,11 +24,15 @@ import me.parham1995.notes.markdown.TaskNotFound
 import me.parham1995.notes.markdown.TaskReason
 import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.markdown.VaultEdits
+import me.parham1995.notes.obsidian.SettingsFromVault
+import me.parham1995.notes.sync.Author
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
+import me.parham1995.notes.sync.ReadOnlyVault
 import me.parham1995.notes.sync.TextEdit
 import me.parham1995.notes.sync.WriteOutcome
 import me.parham1995.notes.sync.gitBlobSha
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
@@ -97,6 +104,12 @@ enum class EditKind {
      * the commit, for the record, and the text the note as it was then.
      */
     RESTORE,
+
+    /**
+     * Mark a concept of the Open Knowledge Format as verified. The anchor is
+     * the actor, `human:<id>`, and the text the time, UTC to the second.
+     */
+    MARK_VERIFIED,
     ;
 
     companion object {
@@ -123,9 +136,14 @@ sealed interface WriteResult {
     /** The file already said this. Nothing was written and nothing is wrong. */
     data object Unchanged : WriteResult
 
-    /** The app will not attempt it, and why. */
+    /**
+     * The app will not attempt it, and why. [readOnly] is the vault being a
+     * read-only clone, the spec's `readOnly` failure: nothing was read and
+     * nothing written, and no key or author would change the answer.
+     */
     data class Refused(
         val why: String,
+        val readOnly: Boolean = false,
     ) : WriteResult
 }
 
@@ -183,6 +201,10 @@ class VaultWriteRepository
         private val gate: VaultGate,
         /** What each status means in a vault, so a status set is the vault's own. */
         private val statusRules: TaskStatusRules = TaskStatusRules.DEFAULT,
+        /** Which vaults are read-only clones: nothing is written to one. */
+        private val readOnly: ReadOnlyRules = ReadOnlyRules.NEVER,
+        /** Each vault's `.daftar.toml`, for the author it names when the app has none. */
+        private val vaultConfig: VaultConfigSource = VaultConfigSource.NONE,
     ) {
         /** How many edits have not reached the repository yet. */
         val queued: Flow<Int> = pending.count()
@@ -192,16 +214,37 @@ class VaultWriteRepository
          *
          * Both halves have to hold: the credential can push, and an author has
          * been named. A commit attributed to nobody in particular is worse than
-         * no commit, so the second is not a formality.
+         * no commit, so the second is not a formality. And a vault that is a
+         * read-only clone is never written, whatever its key may do.
          */
         val writable: Flow<Set<Long>> =
-            combine(vaults.observe(), settings.settings) { all, current ->
-                if (!current.write.hasAuthor) {
-                    emptySet()
-                } else {
-                    all.filter { it.canWrite }.mapTo(mutableSetOf()) { it.id }
-                }
+            combine(vaults.observe(), settings.own, readOnly.readOnly) { all, own, pullOnly ->
+                all
+                    .filter { it.canWrite && it.id !in pullOnly && authorFor(it.id, own).isUsable }
+                    .mapTo(mutableSetOf()) { it.id }
             }
+
+        /**
+         * Who a commit in [vaultId] is by: the app's own author setting
+         * first, then the `git.name` and `git.email` of that vault's
+         * `.daftar.toml`, each of the two on its own (`vault-config.md` in
+         * notes-linux's `docs/specs/`, section 3). Unusable when neither
+         * names one, and then nothing is written.
+         */
+        suspend fun authorFor(vaultId: Long): Author = authorFor(vaultId, settings.own.first())
+
+        private suspend fun authorFor(
+            vaultId: Long,
+            own: VaultSettings,
+        ): Author {
+            if (own.write.hasAuthor) return own.write.author
+            val file = vaultConfig.of(vaultId)
+            val said = SettingsFromVault.resolved(file.text, decline = own.fromVault.decline, root = file.root)
+            return own.write.authorWith(
+                said.text(VaultOverlay.AUTHOR_NAME).orEmpty(),
+                said.text(VaultOverlay.AUTHOR_EMAIL).orEmpty(),
+            )
+        }
 
         fun canWrite(vaultId: Long): Flow<Boolean> = writable.map { vaultId in it }
 
@@ -585,6 +628,51 @@ class VaultWriteRepository
         }
 
         /**
+         * Marks the concept at [path] in [vaultId] as verified, now, by this
+         * phone's actor ([verifier]): one `{ by, at }` in `verified`, in place
+         * of that actor's earlier one, and every other line as it was
+         * ([Okf.markVerified]). Refused on a note that is not a concept, with
+         * no actor to name, and in a read-only vault as every write is.
+         */
+        suspend fun markVerified(
+            vaultId: Long,
+            path: String,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            val actor =
+                verifier(vaultId)
+                    ?: return WriteResult.Refused("Set who verifies, or an author's email, in Settings > Writing.")
+            val name = path.substringAfterLast('/').removeSuffix(".md")
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.MARK_VERIFIED,
+                anchor = actor,
+                replacement = Okf.stamp(Instant.now()),
+                summary = "docs: mark ${name.take(SUBJECT)} as verified",
+            )
+        }
+
+        /**
+         * Who Mark as Verified names in [vaultId], `human:<id>`: the actor in
+         * the app's settings, else the local part of the author's email in
+         * the app's settings, else null, and then the command is off and
+         * says to set one. Nothing in the vault's `.daftar.toml` names it.
+         */
+        @Suppress("UNUSED_PARAMETER")
+        suspend fun verifier(vaultId: Long): String? {
+            val own = settings.own.first()
+            val id =
+                own.write.okfActor.trim().ifEmpty {
+                    // The app's own author, not the vault's: who verifies is this phone's to say.
+                    own.write.authorEmail
+                        .substringBefore('@', "")
+                        .trim()
+                }
+            return id.takeIf { it.isNotEmpty() }?.let { "human:$it" }
+        }
+
+        /**
          * Sends everything queued, oldest first.
          *
          * Called at the start of a sync rather than at the end: the pull that
@@ -622,6 +710,10 @@ class VaultWriteRepository
                     pending.delete(edit.id)
                     return@forEach
                 }
+                // A read-only vault sends nothing. What was queued before it
+                // was made read-only stays as it is, uncounted, for the day
+                // it is not.
+                if (readOnly.isReadOnly(vault.id)) return@forEach
                 if (automatic && edit.attempts >= MAX_ATTEMPTS) {
                     // Said once, not on every refresh: the journal is read to
                     // find out what went wrong, and a line repeated hourly
@@ -668,6 +760,9 @@ class VaultWriteRepository
             // has to wait for a refresh to finish with the files -- except it
             // does not wait. A sync of this vault is minutes; the edit goes in
             // the queue rather than freezing whoever typed it.
+            // The one place the app writes: a read-only vault is refused here,
+            // before the file is read, whatever asked.
+            if (readOnly.isReadOnly(vault.id)) return readOnlyRefusal()
             val statuses = statusRules.forVault(vault.id)
             return gate.tryWithVault {
                 val transform = transformFor(edit, statuses)
@@ -682,6 +777,8 @@ class VaultWriteRepository
                     } catch (taken: NoteExists) {
                         return@tryWithVault WriteResult.Refused(taken.message.orEmpty())
                     } catch (refused: PropertyFailure) {
+                        return@tryWithVault WriteResult.Refused(refused.message.orEmpty())
+                    } catch (refused: OkfFailure) {
                         return@tryWithVault WriteResult.Refused(refused.message.orEmpty())
                     } ?: return@tryWithVault WriteResult.Unchanged
 
@@ -720,8 +817,9 @@ class VaultWriteRepository
             edit: PendingEditEntity,
             vault: VaultEntity,
         ): Boolean {
-            val current = settings.current()
-            if (!vault.canWrite || !current.write.hasAuthor) {
+            if (readOnly.isReadOnly(vault.id)) return false
+            val author = authorFor(vault.id)
+            if (!vault.canWrite || !author.isUsable) {
                 note(edit, "waiting: ${vault.label} is read-only or no author is set")
                 return false
             }
@@ -731,7 +829,7 @@ class VaultWriteRepository
                     transports.writer(vault).write(
                         path = edit.path,
                         message = edit.summary,
-                        author = current.write.author,
+                        author = author,
                         edit = TextEdit { transform(it) },
                     )
                 when (outcome) {
@@ -805,6 +903,14 @@ class VaultWriteRepository
                 }
                 EditKind.SET_PROPERTY -> VaultEdits.setProperty(edit.anchor, edit.text)
                 EditKind.RESTORE -> VaultEdits.restore(edit.text)
+                EditKind.MARK_VERIFIED -> { current ->
+                    Okf.markVerified(
+                        current ?: throw OkfFailure("${edit.path} is gone."),
+                        edit.path,
+                        edit.anchor,
+                        edit.text,
+                    )
+                }
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
 
@@ -843,11 +949,16 @@ class VaultWriteRepository
         }
 
         private suspend fun writableVault(vaultId: Long): VaultEntity? =
-            vaults.byId(vaultId)?.takeIf { it.canWrite && settings.current().write.hasAuthor }
+            vaults.byId(vaultId)?.takeIf {
+                !readOnly.isReadOnly(it.id) && it.canWrite && authorFor(it.id).isUsable
+            }
+
+        private fun readOnlyRefusal(): WriteResult = WriteResult.Refused(ReadOnlyVault.NOTICE, readOnly = true)
 
         private suspend fun refusal(vaultId: Long): WriteResult {
             val vault = vaults.byId(vaultId) ?: return WriteResult.Refused("that vault is gone")
-            if (!settings.current().write.hasAuthor) {
+            if (readOnly.isReadOnly(vault.id)) return readOnlyRefusal()
+            if (!authorFor(vault.id).isUsable) {
                 return WriteResult.Refused("set a name and email to commit as, in Settings")
             }
             return WriteResult.Refused(

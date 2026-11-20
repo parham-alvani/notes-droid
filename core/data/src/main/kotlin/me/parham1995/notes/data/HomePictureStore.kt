@@ -43,9 +43,13 @@ class HomePictureStore
         /** The chosen picture's file, or null when none is chosen or it is gone. */
         val file: Flow<File?> =
             settings.settings
-                .map { it.reading.homePicture }
+                .map { it.reading.vaultHomePicture to it.reading.homePicture }
                 .distinctUntilChanged()
-                .map { name -> name.takeIf { it.isNotEmpty() }?.let { File(dir, it) }?.takeIf { it.isFile } }
+                .map { (vaults, name) ->
+                    // The vault's own picture first, when its `.daftar.toml` names one that is there.
+                    vaults.takeIf { it.isNotEmpty() }?.let(::File)?.takeIf { it.isFile }
+                        ?: name.takeIf { it.isNotEmpty() }?.let { File(dir, it) }?.takeIf { it.isFile }
+                }
 
         /**
          * Makes the picture at [uri] the home page's, as a small copy, and

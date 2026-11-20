@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.BaseRepository
@@ -14,6 +15,8 @@ import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.feature.tasks.describe
 import me.parham1995.notes.markdown.FrontMatterForm
+import me.parham1995.notes.markdown.Okf
+import me.parham1995.notes.markdown.OkfConcept
 import me.parham1995.notes.markdown.PropertyEdit
 import me.parham1995.notes.markdown.PropertySheet
 import me.parham1995.notes.markdown.PropertyType
@@ -43,6 +46,10 @@ data class PropertiesState(
      */
     val waiting: Boolean = false,
     val message: UiText? = null,
+    /** The note as the Open Knowledge Format reads it, when it has a `type`: the Concept row. */
+    val concept: OkfConcept? = null,
+    /** Whether Mark as Verified is offered: the vault can be written and is not read-only. */
+    val canVerify: Boolean = false,
 ) {
     /** The type [key] is shown as: the one picked for it, else Obsidian's. */
     fun typeOf(
@@ -100,7 +107,29 @@ class PropertiesViewModel
                     loading = false,
                     form = text?.let(PropertySheet::read),
                     source = text?.take(PropertySheet.length(text)).orEmpty(),
+                    concept = text?.let { note -> Okf.conceptOf(note, path) },
+                    canVerify = writes.canWrite(vaultId).first(),
                 )
+            }
+        }
+
+        /**
+         * Marks the concept as verified by this phone's actor, now, and
+         * reads the note again; says why when it could not.
+         */
+        fun markVerified(onWritten: () -> Unit = {}) {
+            if (_state.value.writing || _state.value.waiting) return
+            _state.update { it.copy(writing = true) }
+            viewModelScope.launch {
+                val result = writes.markVerified(vaultId, path)
+                read()
+                _state.update {
+                    it.copy(
+                        writing = false,
+                        message = if (result == WriteResult.Pushed) null else result.describe(),
+                    )
+                }
+                if (result == WriteResult.Pushed || result is WriteResult.Queued) onWritten()
             }
         }
 

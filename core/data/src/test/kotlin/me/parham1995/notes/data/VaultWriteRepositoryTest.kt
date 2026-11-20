@@ -7,6 +7,8 @@ import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.database.NotesDatabase
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.FrontMatterForm
+import me.parham1995.notes.markdown.Okf
+import me.parham1995.notes.markdown.OkfTier
 import me.parham1995.notes.markdown.PropertyEdit
 import me.parham1995.notes.markdown.PropertySheet
 import me.parham1995.notes.markdown.PropertyValue
@@ -176,6 +178,47 @@ class VaultWriteRepositoryTest {
             assertThat(lines.single { "second" in it }).startsWith("- [ ] second line ➕ 2026-10-28 ⏳ ")
             assertThat(lines.single { "third" in it }).doesNotContain("➕")
             assertThat(lines.single { "third" in it }).contains("⏳ ")
+        }
+
+    /**
+     * Mark as Verified through the app's one write path
+     * (`open-knowledge-format.md` in notes-linux's `docs/specs/`, section 2);
+     * what it writes, line by line, is `markAsVerifiedWritesOneEvent` in core/markdown.
+     */
+    @Test
+    fun `a concept is marked as verified by the settings' actor, else the author's own name in the email`() =
+        runTest {
+            val path = "Docs/revenue.md"
+            val note = "---\ntype: Metric\ntitle: Revenue\n---\n\nText.\n"
+            files.write(vaultId, path, note.toByteArray())
+            transport.content = note
+
+            // No actor in the settings: the local part of the author's email.
+            assertThat(writes.verifier(vaultId)).isEqualTo("human:person")
+            assertThat(writes.markVerified(vaultId, path)).isEqualTo(WriteResult.Pushed)
+            val first = Okf.conceptOf(transport.content!!, path)!!
+            assertThat(first.verified.map { it.by }).containsExactly("human:person")
+            assertThat(first.tier).isEqualTo(OkfTier.HUMAN_REVIEWED)
+            assertThat(transport.content).startsWith("---\ntype: Metric\ntitle: Revenue\nverified:\n")
+            assertThat(transport.content).endsWith("---\n\nText.\n")
+            assertThat(transport.messages.last()).isEqualTo("docs: mark revenue as verified")
+
+            // The actor from the app's settings, written with or without its scheme.
+            settings.setOkfActor("human:parham")
+            assertThat(settings.current().write.okfActor).isEqualTo("parham")
+            assertThat(writes.markVerified(vaultId, path)).isEqualTo(WriteResult.Pushed)
+            assertThat(Okf.conceptOf(transport.content!!, path)!!.verified.map { it.by })
+                .containsExactly("human:person", "human:parham")
+                .inOrder()
+
+            // A note with no type is refused, and nothing is queued for it.
+            val plain = "Notes/plain.md"
+            files.write(vaultId, plain, "---\ntitle: Plain\n---\nText.\n".toByteArray())
+            val refused = writes.markVerified(vaultId, plain)
+            assertThat(refused).isInstanceOf(WriteResult.Refused::class.java)
+            assertThat(files.readText(vaultId, plain)).isEqualTo("---\ntitle: Plain\n---\nText.\n")
+            assertThat(database.pendingEditDao().all()).isEmpty()
+            settings.setOkfActor("")
         }
 
     @Test

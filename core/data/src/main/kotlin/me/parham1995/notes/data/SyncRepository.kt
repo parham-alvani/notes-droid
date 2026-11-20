@@ -72,6 +72,8 @@ class SyncRepository
         private val calendarExport: Provider<CalendarExport>,
         private val documents: VaultDocuments,
         private val hidden: HiddenFileStore,
+        /** Which vaults are read-only clones: they are pulled, and never asked whether they may push. */
+        private val readOnly: ReadOnlyRules = ReadOnlyRules.NEVER,
     ) {
         val status: Flow<SyncStatus> =
             syncState.observe().map {
@@ -234,6 +236,7 @@ class SyncRepository
             sshKeys.delete(vault.id)
             vaults.delete(id)
             documents.changed()
+            settings.vaultConfigChanged()
             log.warn("removed ${vault.owner}/${vault.repo}")
         }
 
@@ -457,6 +460,8 @@ class SyncRepository
                 // Whatever the outcome, the files on disk may have moved; an
                 // open file picker should look again.
                 documents.changed()
+                // And a vault's `.daftar.toml` with them, which the settings follow.
+                settings.vaultConfigChanged()
 
                 failure?.let { throw it }
                 log.info("sync finished in ${(System.currentTimeMillis() - startedAt) / 1000}s")
@@ -686,6 +691,10 @@ class SyncRepository
          * typed the thing they wanted to save.
          */
         private suspend fun refreshWritability(vault: VaultEntity) {
+            // A read-only clone pulls and does nothing else: no push is
+            // opened, not even to ask. What the key could do stays as it
+            // was last told, for the day the vault is not read-only.
+            if (readOnly.isReadOnly(vault.id)) return
             val can =
                 runCatchingUnlessCancelled { transports.writer(vault).canPush() }
                     .onFailure { log.warn("could not check write access for ${vault.label}: ${it.describeChain()}") }

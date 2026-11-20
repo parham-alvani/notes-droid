@@ -26,6 +26,7 @@ import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.NoteTemplates
 import me.parham1995.notes.data.ObsidianConfigStore
+import me.parham1995.notes.data.ReadOnlyRules
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
 import me.parham1995.notes.data.SyncWorker
@@ -100,7 +101,16 @@ class BrowserViewModel
         private val noteTemplates: NoteTemplates,
         writes: VaultWriteRepository,
         private val bases: BaseRepository,
+        readOnlyRules: ReadOnlyRules,
     ) : ViewModel() {
+        /**
+         * Whether the vault being read is a read-only clone: the top bar
+         * says so by its name, and its sync is a pull.
+         */
+        val readOnly: StateFlow<Boolean> =
+            combine(repository.activeVaultId, readOnlyRules.readOnly) { id, pullOnly -> id in pullOnly }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), false)
+
         /**
          * The templates a new note can start from, in the vault being read --
          * none where it cannot be written, which is what hides the button.

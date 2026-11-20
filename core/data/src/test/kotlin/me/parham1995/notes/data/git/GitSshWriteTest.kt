@@ -41,6 +41,10 @@ class GitSshWriteTest {
     @Before
     fun setUp() {
         root = Files.createTempDirectory("git-write").toFile()
+        // Before the seed commit, not only when the transport is built: JGit
+        // otherwise reads the config of whoever runs the test, and a
+        // `commit.gpgsign` there fails the seed for want of a signer.
+        AndroidGitEnvironment.install(File(root, "config"))
         origin = File(root, "origin").apply { mkdirs() }
         workTree = File(root, "work")
 
@@ -70,7 +74,7 @@ class GitSshWriteTest {
     private fun writer(vaultId: Long = 1) =
         GitSshVaultSync(
             workTree = workTree,
-            remoteUrl = origin.toURI().toString(),
+            cloneUrl = origin.toURI().toString(),
             branch = BRANCH,
             keys = SshKeyStore(ApplicationProvider.getApplicationContext()),
             vaultId = vaultId,
