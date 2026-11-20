@@ -1,0 +1,4 @@
+A setting changed in the app is now written to the vault's .daftar.toml, so the other devices get it with their next sync. Each change is one commit, and a pinch or a run of taps is one commit for the value it stops on.
+The phone's own settings live under [android] in that file. A setting that names a token, a key or the app lock stays on the phone.
+Long press a setting for Keep on This Device, which keeps that one on the phone, and Follow the Vault, which gives it back.
+The background refresh interval is the phone's own (android.git.sync_interval) and no longer follows the desktops' timer.
