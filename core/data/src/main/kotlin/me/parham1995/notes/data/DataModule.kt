@@ -65,6 +65,14 @@ object DataModule {
     @Provides
     fun taskStatusRules(store: ObsidianConfigStore): TaskStatusRules = store
 
+    /** Where the settings read the `.daftar.toml` of the vault being read; see [VaultConfigStore]. */
+    @Provides
+    fun vaultConfigSource(store: VaultConfigStore): VaultConfigSource = store
+
+    /** Which vaults are read-only clones, which the one write path asks; see [VaultClones]. */
+    @Provides
+    fun readOnlyRules(store: VaultClones): ReadOnlyRules = store
+
     @Provides
     fun blobDao(database: NotesDatabase): BlobDao = database.blobDao()
 

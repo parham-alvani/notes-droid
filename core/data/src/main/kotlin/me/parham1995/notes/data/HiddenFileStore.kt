@@ -103,7 +103,8 @@ class HiddenFileStore
             if (reading.showHiddenFiles) return HiddenFiles.NONE
             return HiddenFiles(
                 ignoreFilters = ignoreFilters(vaultId),
-                names = if (reading.hideAgentFiles) HiddenFiles.AGENT_FILES else emptySet(),
+                // The vault's own list of names when its `.daftar.toml` has one.
+                names = if (reading.hideAgentFiles) reading.hiddenNames ?: HiddenFiles.AGENT_FILES else emptySet(),
             )
         }
 
@@ -117,7 +118,9 @@ class HiddenFileStore
         }
 
         private fun ReadingSettings.sameHiding(other: ReadingSettings) =
-            hideAgentFiles == other.hideAgentFiles && showHiddenFiles == other.showHiddenFiles
+            hideAgentFiles == other.hideAgentFiles &&
+                showHiddenFiles == other.showHiddenFiles &&
+                hiddenNames == other.hiddenNames
 
         private companion object {
             /** Well under SQLite's limit on the ids one statement may name. */

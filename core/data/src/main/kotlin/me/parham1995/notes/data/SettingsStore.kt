@@ -15,8 +15,11 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import me.parham1995.notes.obsidian.WorkingHours
 import me.parham1995.notes.sync.Author
 import java.time.LocalTime
@@ -274,6 +277,18 @@ data class ReadingSettings(
     val remoteImages: Boolean = true,
     /** Whether a note opens with its sections folded: as the vault says, always or never. */
     val foldSections: FoldSections = FoldSections.VAULT,
+    /**
+     * The names [hideAgentFiles] leaves out, when the vault says which
+     * (`files.hidden` in its `.daftar.toml`); null is the app's own list.
+     * Never stored: it is the vault's to say, read with each sync.
+     */
+    val hiddenNames: Set<String>? = null,
+    /**
+     * The home page's picture when the vault names one (`home.image` in its
+     * `.daftar.toml`): the file's path on this device, shown in place of
+     * [homePicture]. Empty when the vault names none. Never stored.
+     */
+    val vaultHomePicture: String = "",
 ) {
     companion object {
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
@@ -303,6 +318,20 @@ data class WriteSettings(
 
     /** Whether an author has been named well enough to commit as. */
     val hasAuthor: Boolean get() = author.isUsable
+
+    /**
+     * Who a commit is by, when the vault it is made in names an author too
+     * (`git.name` and `git.email` in its `.daftar.toml`): the app's own
+     * first, then the vault's, each of the two on its own.
+     */
+    fun authorWith(
+        vaultName: String,
+        vaultEmail: String,
+    ): Author =
+        Author(
+            authorName.trim().ifEmpty { vaultName.trim() },
+            authorEmail.trim().ifEmpty { vaultEmail.trim() },
+        )
 
     companion object {
         const val DEFAULT_SCRATCHPAD = "Scratchpad.md"
@@ -392,7 +421,12 @@ data class VaultSettings(
     val write: WriteSettings = WriteSettings(),
     val privacy: PrivacySettings = PrivacySettings(),
     val calendar: CalendarSettings = CalendarSettings(),
+    /** Which of these came from the vault being read, and whether this device follows it. */
+    val fromVault: FromVault = FromVault(),
 ) {
+    /** The author of a commit in the vault being read: the app's own, then the vault's. */
+    val author: Author get() = write.authorWith(fromVault.authorName, fromVault.authorEmail)
+
     val isConfigured: Boolean get() = owner.isNotBlank() && repo.isNotBlank()
 
     companion object {
@@ -409,8 +443,18 @@ class SettingsStore
     @Inject
     constructor(
         @param:ApplicationContext private val context: Context,
+        /** Where the `.daftar.toml` of the vault being read is; see [settings]. */
+        private val vaultConfig: VaultConfigSource = VaultConfigSource.NONE,
     ) {
-        val settings: Flow<VaultSettings> =
+        /** Counts the times a vault's `.daftar.toml` may have changed, so [settings] reads it again. */
+        private val vaultRevision = MutableStateFlow(0)
+
+        /**
+         * The app's own settings, as the person set them on this device and
+         * nothing else. Every setter writes these, and only these: a vault's
+         * `.daftar.toml` is changed as a note is, never by the app's settings.
+         */
+        val own: Flow<VaultSettings> =
             context.settingsDataStore.data.map { preferences ->
                 VaultSettings(
                     owner = preferences[OWNER].orEmpty(),
@@ -470,10 +514,53 @@ class SettingsStore
                             remoteImages = preferences[REMOTE_IMAGES] ?: true,
                             foldSections = FoldSections.parse(preferences[FOLD_SECTIONS]),
                         ),
+                    fromVault =
+                        FromVault(
+                            follow = preferences[FOLLOW_VAULT] ?: true,
+                            declined = preferences[VAULT_DECLINED].orEmpty(),
+                        ),
                 )
             }
 
+        /**
+         * The settings the app runs by: the vault's `.daftar.toml` over the
+         * app's own, for the keys a vault may set and this app has a setting
+         * for, unless this device declines (`vault-config.md` in notes-linux's
+         * `docs/specs/`). The vault is the one being read, and its file is
+         * read again whenever the settings change and whenever
+         * [vaultConfigChanged] says it may have: after each sync.
+         */
+        val settings: Flow<VaultSettings> =
+            combine(own, vaultRevision) { settings, _ -> settings }
+                .map { VaultOverlay.apply(it, vaultConfig.of(it.activeVaultId)) }
+
         suspend fun current(): VaultSettings = settings.first()
+
+        /** A vault's `.daftar.toml` may have changed: a sync finished, a vault was added or removed. */
+        fun vaultConfigChanged() {
+            vaultRevision.update { it + 1 }
+        }
+
+        /** Whether this device reads the app's settings from a vault at all. */
+        suspend fun setFollowVault(follow: Boolean) {
+            context.settingsDataStore.edit { it[FOLLOW_VAULT] = follow }
+        }
+
+        /** Declines one key the vault sets ([VaultOverlay.KEYS]), or follows it again. */
+        suspend fun setVaultKeyDeclined(
+            key: String,
+            declined: Boolean,
+        ) {
+            context.settingsDataStore.edit {
+                val keys = it[VAULT_DECLINED].orEmpty()
+                it[VAULT_DECLINED] = if (declined) keys + key else keys - key
+            }
+        }
+
+        /** Which vault holds the scratchpad, leaving its path as it is. */
+        suspend fun setScratchpadVault(vaultId: Long) {
+            context.settingsDataStore.edit { it[SCRATCHPAD_VAULT] = vaultId }
+        }
 
         suspend fun setRepository(
             owner: String,
@@ -745,5 +832,7 @@ class SettingsStore
             val CALENDAR_EXPORT_VAULT = longPreferencesKey("calendar_export_vault")
             val CALENDAR_WORK_START = intPreferencesKey("calendar_work_start")
             val CALENDAR_WORK_END = intPreferencesKey("calendar_work_end")
+            val FOLLOW_VAULT = booleanPreferencesKey("vault_settings")
+            val VAULT_DECLINED = stringSetPreferencesKey("vault_settings_declined")
         }
     }

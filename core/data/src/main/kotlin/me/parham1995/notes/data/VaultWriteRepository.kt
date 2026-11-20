@@ -3,6 +3,7 @@ package me.parham1995.notes.data
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.BlobEntity
@@ -21,8 +22,11 @@ import me.parham1995.notes.markdown.TaskNotFound
 import me.parham1995.notes.markdown.TaskReason
 import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.markdown.VaultEdits
+import me.parham1995.notes.obsidian.SettingsFromVault
+import me.parham1995.notes.sync.Author
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
+import me.parham1995.notes.sync.ReadOnlyVault
 import me.parham1995.notes.sync.TextEdit
 import me.parham1995.notes.sync.WriteOutcome
 import me.parham1995.notes.sync.gitBlobSha
@@ -123,9 +127,14 @@ sealed interface WriteResult {
     /** The file already said this. Nothing was written and nothing is wrong. */
     data object Unchanged : WriteResult
 
-    /** The app will not attempt it, and why. */
+    /**
+     * The app will not attempt it, and why. [readOnly] is the vault being a
+     * read-only clone, the spec's `readOnly` failure: nothing was read and
+     * nothing written, and no key or author would change the answer.
+     */
     data class Refused(
         val why: String,
+        val readOnly: Boolean = false,
     ) : WriteResult
 }
 
@@ -183,6 +192,10 @@ class VaultWriteRepository
         private val gate: VaultGate,
         /** What each status means in a vault, so a status set is the vault's own. */
         private val statusRules: TaskStatusRules = TaskStatusRules.DEFAULT,
+        /** Which vaults are read-only clones: nothing is written to one. */
+        private val readOnly: ReadOnlyRules = ReadOnlyRules.NEVER,
+        /** Each vault's `.daftar.toml`, for the author it names when the app has none. */
+        private val vaultConfig: VaultConfigSource = VaultConfigSource.NONE,
     ) {
         /** How many edits have not reached the repository yet. */
         val queued: Flow<Int> = pending.count()
@@ -192,16 +205,37 @@ class VaultWriteRepository
          *
          * Both halves have to hold: the credential can push, and an author has
          * been named. A commit attributed to nobody in particular is worse than
-         * no commit, so the second is not a formality.
+         * no commit, so the second is not a formality. And a vault that is a
+         * read-only clone is never written, whatever its key may do.
          */
         val writable: Flow<Set<Long>> =
-            combine(vaults.observe(), settings.settings) { all, current ->
-                if (!current.write.hasAuthor) {
-                    emptySet()
-                } else {
-                    all.filter { it.canWrite }.mapTo(mutableSetOf()) { it.id }
-                }
+            combine(vaults.observe(), settings.own, readOnly.readOnly) { all, own, pullOnly ->
+                all
+                    .filter { it.canWrite && it.id !in pullOnly && authorFor(it.id, own).isUsable }
+                    .mapTo(mutableSetOf()) { it.id }
             }
+
+        /**
+         * Who a commit in [vaultId] is by: the app's own author setting
+         * first, then the `git.name` and `git.email` of that vault's
+         * `.daftar.toml`, each of the two on its own (`vault-config.md` in
+         * notes-linux's `docs/specs/`, section 3). Unusable when neither
+         * names one, and then nothing is written.
+         */
+        suspend fun authorFor(vaultId: Long): Author = authorFor(vaultId, settings.own.first())
+
+        private suspend fun authorFor(
+            vaultId: Long,
+            own: VaultSettings,
+        ): Author {
+            if (own.write.hasAuthor) return own.write.author
+            val file = vaultConfig.of(vaultId)
+            val said = SettingsFromVault.resolved(file.text, decline = own.fromVault.decline, root = file.root)
+            return own.write.authorWith(
+                said.text(VaultOverlay.AUTHOR_NAME).orEmpty(),
+                said.text(VaultOverlay.AUTHOR_EMAIL).orEmpty(),
+            )
+        }
 
         fun canWrite(vaultId: Long): Flow<Boolean> = writable.map { vaultId in it }
 
@@ -622,6 +656,10 @@ class VaultWriteRepository
                     pending.delete(edit.id)
                     return@forEach
                 }
+                // A read-only vault sends nothing. What was queued before it
+                // was made read-only stays as it is, uncounted, for the day
+                // it is not.
+                if (readOnly.isReadOnly(vault.id)) return@forEach
                 if (automatic && edit.attempts >= MAX_ATTEMPTS) {
                     // Said once, not on every refresh: the journal is read to
                     // find out what went wrong, and a line repeated hourly
@@ -668,6 +706,9 @@ class VaultWriteRepository
             // has to wait for a refresh to finish with the files -- except it
             // does not wait. A sync of this vault is minutes; the edit goes in
             // the queue rather than freezing whoever typed it.
+            // The one place the app writes: a read-only vault is refused here,
+            // before the file is read, whatever asked.
+            if (readOnly.isReadOnly(vault.id)) return readOnlyRefusal()
             val statuses = statusRules.forVault(vault.id)
             return gate.tryWithVault {
                 val transform = transformFor(edit, statuses)
@@ -720,8 +761,9 @@ class VaultWriteRepository
             edit: PendingEditEntity,
             vault: VaultEntity,
         ): Boolean {
-            val current = settings.current()
-            if (!vault.canWrite || !current.write.hasAuthor) {
+            if (readOnly.isReadOnly(vault.id)) return false
+            val author = authorFor(vault.id)
+            if (!vault.canWrite || !author.isUsable) {
                 note(edit, "waiting: ${vault.label} is read-only or no author is set")
                 return false
             }
@@ -731,7 +773,7 @@ class VaultWriteRepository
                     transports.writer(vault).write(
                         path = edit.path,
                         message = edit.summary,
-                        author = current.write.author,
+                        author = author,
                         edit = TextEdit { transform(it) },
                     )
                 when (outcome) {
@@ -843,11 +885,16 @@ class VaultWriteRepository
         }
 
         private suspend fun writableVault(vaultId: Long): VaultEntity? =
-            vaults.byId(vaultId)?.takeIf { it.canWrite && settings.current().write.hasAuthor }
+            vaults.byId(vaultId)?.takeIf {
+                !readOnly.isReadOnly(it.id) && it.canWrite && authorFor(it.id).isUsable
+            }
+
+        private fun readOnlyRefusal(): WriteResult = WriteResult.Refused(ReadOnlyVault.NOTICE, readOnly = true)
 
         private suspend fun refusal(vaultId: Long): WriteResult {
             val vault = vaults.byId(vaultId) ?: return WriteResult.Refused("that vault is gone")
-            if (!settings.current().write.hasAuthor) {
+            if (readOnly.isReadOnly(vault.id)) return readOnlyRefusal()
+            if (!authorFor(vault.id).isUsable) {
                 return WriteResult.Refused("set a name and email to commit as, in Settings")
             }
             return WriteResult.Refused(

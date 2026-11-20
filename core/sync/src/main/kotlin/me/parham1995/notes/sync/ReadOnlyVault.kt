@@ -42,6 +42,9 @@ sealed class ReadOnlyFailure(
 }
 
 object ReadOnlyVault {
+    /** What a write asked of a read-only vault is answered with. */
+    const val NOTICE = "This vault is read-only."
+
     private val FALSE = setOf("false", "no", "off", "0", "")
 
     /**
