@@ -645,7 +645,6 @@
     <string name="help_follow_vault">دفتر می‌تواند بخشی از تنظیمات برنامه را در ‎.daftar.toml‏ ریشهٔ خود داشته باشد. مقدار آن به جای مقدار شما به کار می‌رود و تنظیمی که این‌جا تغییر کند هرگز در دفتر نوشته نمی‌شود.</string>
     <string name="vault_settings_none">دفتری که خوانده می‌شود هیچ‌کدام را تعیین نمی‌کند.</string>
     <string name="vault_settings_sets">دفتری که خوانده می‌شود این‌ها را تعیین می‌کند. برای استفاده از مقدار خودتان، هر کدام را خاموش کنید.</string>
-    <string name="from_vault">از دفتر</string>
     <string name="help_from_vault">از دفتر: ‎.daftar.toml‏ آن این را تعیین می‌کند. برای استفاده از مقدار خودتان، آن را در «تنظیمات از دفتر» خاموش کنید.</string>
     <string name="from_vault_author">از دفتر، جایی که مقدار شما خالی است: %1$s</string>
     <string name="settings_home_picture">تصویر صفحهٔ خانه</string>

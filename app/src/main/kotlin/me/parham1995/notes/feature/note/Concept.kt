@@ -34,7 +34,6 @@ import me.parham1995.notes.markdown.OkfStatus
 import me.parham1995.notes.markdown.OkfTier
 import me.parham1995.notes.markdown.OkfTime
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -205,7 +204,7 @@ internal fun ConceptLine(
 }
 
 /** A day as the phone writes one. */
-private fun Instant?.day(): String = this?.let { DAY.format(LocalDate.ofInstant(it, ZoneId.systemDefault())) }.orEmpty()
+private fun Instant?.day(): String = this?.let { DAY.format(it.atZone(ZoneId.systemDefault()).toLocalDate()) }.orEmpty()
 
 private val DAY: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
 

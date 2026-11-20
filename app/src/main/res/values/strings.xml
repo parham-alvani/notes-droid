@@ -647,7 +647,6 @@
     <string name="help_follow_vault">A vault can carry some of the app\'s settings in the .daftar.toml at its root. Its value is used in place of yours, and a setting changed here is never written to the vault.</string>
     <string name="vault_settings_none">The vault being read sets none of them.</string>
     <string name="vault_settings_sets">The vault being read sets these. Turn one off to use your own.</string>
-    <string name="from_vault">From the vault</string>
     <string name="help_from_vault">From the vault: its .daftar.toml sets this. To use your own, decline it under Settings from the vault.</string>
     <string name="from_vault_author">From the vault where yours is empty: %1$s</string>
     <string name="settings_home_picture">Home page picture</string>
