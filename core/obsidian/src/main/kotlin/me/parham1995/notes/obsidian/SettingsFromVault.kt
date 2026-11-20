@@ -244,32 +244,17 @@ object SettingsFromVault {
     private fun platformOf(key: String): String? = key.substringBefore('.', "").takeIf { it in PLATFORMS }
 
     /**
-     * The rule of a key in a platform's table: the shared one, which holds
-     * there as in a shared section, or the one of a setting only that
-     * platform has. Another platform's own settings are not known here, and
-     * are left alone.
+     * The rule of a key in this platform's own table: the one of a setting
+     * only this platform has, else the shared one, which holds there as in
+     * a shared section.
      */
     private fun platformRule(
         platform: String,
         inner: String,
     ): Rule? {
         if (platform == ANDROID) ANDROID_RULES[inner]?.let { return it }
-        RULES[inner]?.let { return it }
-        // What a shared section refuses by name is refused in a platform's table too.
-        return rule(inner)?.takeIf { platform == ANDROID || inner in NAMED_NEVER }
+        return rule(inner)
     }
-
-    /** The never rows of the list: they name or start a program, or send the notes' paths to a service. */
-    private val NAMED_NEVER =
-        setOf(
-            "editor.vim_mode",
-            "editor.neovide",
-            "editor.nvim",
-            "editor.nvim_config",
-            "terminal.shell",
-            "wakatime.enabled",
-            "wakatime.cli",
-        )
 
     /** Where a change of a setting is written. */
     sealed interface Home {
@@ -376,13 +361,14 @@ object SettingsFromVault {
         ordered.forEach { (key, value) ->
             val table = platformOf(key)
             val inner = if (table == null) key else key.substringAfter('.')
+            // Another platform's table is never read: its keys are not used, and not named as refused either.
+            if (table != null && table != platform) return@forEach
             val rule = (if (table == null) rule(key) else platformRule(table, inner)) ?: return@forEach
+            // A refused key of the platform's own table is named with its table.
             if (rule !is Rule.Allowed) {
                 refused += key
                 return@forEach
             }
-            // Another platform's table is never read.
-            if (table != null && table != platform) return@forEach
             // A value of the wrong type, or out of the key's range, is as not there.
             if (!rule.valid(value, root)) return@forEach
             // A shared key keeps its name whichever table said it; a setting only this platform has keeps the table's.

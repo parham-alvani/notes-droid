@@ -667,4 +667,8 @@
     <string name="okf_mark_verified">Mark as Verified</string>
     <string name="settings_okf_actor">Verifier</string>
     <string name="help_okf_actor">Who Mark as Verified says a concept was verified by, as human:name. Empty uses the part of the author\'s email before the @.</string>
+    <string name="keep_on_this_device">Keep on This Device</string>
+    <string name="follow_the_vault">Follow the Vault</string>
+    <string name="help_from_vault_shared">From the vault: a change here is written to its .daftar.toml and reaches your other devices. Hold the setting to keep it on this phone.</string>
+    <string name="kept_on_this_device">Kept on this device. Hold the setting to follow the vault again.</string>
 </resources>

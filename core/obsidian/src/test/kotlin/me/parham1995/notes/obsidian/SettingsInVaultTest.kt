@@ -83,6 +83,17 @@ class SettingsInVaultTest {
         val shell = SettingsFromVault.resolved("[macos.terminal]\nshell = \"/tmp/x\"\n", "", platform = "macos")
         assertThat(shell.refused).containsExactly("macos.terminal.shell")
         assertThat(shell.values).isEmpty()
+        // Another platform's table is not used, and not named as refused either.
+        val other =
+            SettingsFromVault.resolved(
+                "[macos.terminal]\nshell = \"/tmp/x\"\n[linux.appearance]\ntext_size = 20\n",
+                "",
+            )
+        assertThat(other.refused).isEmpty()
+        assertThat(other.values).isEmpty()
+        // A refused key of the platform's own table is named with its table.
+        assertThat(SettingsFromVault.resolved("[android.terminal]\nshell = \"/tmp/x\"\n", "").refused)
+            .containsExactly("android.terminal.shell")
         assertThat(SettingsFromVault.resolved("[android.appearance]\ntext_size = 99\n", "").values).isEmpty()
 
         // A setting only this platform has is read from its table, and from nowhere else.

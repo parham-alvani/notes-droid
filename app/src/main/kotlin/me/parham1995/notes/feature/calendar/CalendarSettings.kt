@@ -41,6 +41,8 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.CalendarSettings
 import me.parham1995.notes.data.SettingsStore
+import me.parham1995.notes.data.SettingsWriter
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.data.VaultRepository
 import me.parham1995.notes.data.VaultWriteRepository
 import me.parham1995.notes.data.calendar.PhoneCalendar
@@ -63,6 +65,7 @@ class CalendarSettingsViewModel
     constructor(
         private val calendars: PhoneCalendars,
         private val store: SettingsStore,
+        private val writer: SettingsWriter,
         repository: VaultRepository,
         writes: VaultWriteRepository,
     ) : ViewModel() {
@@ -104,7 +107,14 @@ class CalendarSettingsViewModel
         fun setWorkingHours(
             start: Int,
             end: Int,
-        ) = viewModelScope.launch { store.setCalendarWorkingHours(start, end) }
+        ) = viewModelScope.launch {
+            if (start >= end) return@launch
+            val now = store.current().calendar
+            // The end first when the day moves later, so neither change is refused for crossing the other.
+            if (end != now.workEnd && end > now.workStart) writer.set(VaultOverlay.workEnd, end)
+            if (start != now.workStart) writer.set(VaultOverlay.workStart, start)
+            if (end != now.workEnd && end <= now.workStart) writer.set(VaultOverlay.workEnd, end)
+        }
 
         private companion object {
             const val STOP_MS = 5_000L

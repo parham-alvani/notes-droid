@@ -104,6 +104,12 @@ data class FromVault(
     val authorEmail: String = "",
     /** Whether a change of a setting can go to the vault being read; see [locks]. */
     val writable: Boolean = false,
+    /**
+     * Keys the vault sets whose last change here went to the device, a
+     * value a vault may not hold: the device's value holds until the
+     * settings are read again, and then the vault's returns. Never stored.
+     */
+    val held: Set<String> = emptySet(),
 ) {
     val decline: VaultSettingsDecline
         get() =
@@ -114,6 +120,9 @@ data class FromVault(
             }
 
     operator fun contains(key: String): Boolean = key in applied
+
+    /** This phone keeps [key] though the vault sets it: its row says "Kept on this device". */
+    fun keeps(key: String): Boolean = follow && key in declined && key in offered
 
     /**
      * Whether the vault's file can be written from here. With it, a setting
@@ -621,7 +630,7 @@ object VaultOverlay {
         var out = own
         if (asked.follow) {
             BINDINGS.forEach { binding ->
-                if (binding.id in asked.declined) return@forEach
+                if (binding.id in asked.declined || binding.id in asked.held) return@forEach
                 out = take(binding, out, said, root) ?: return@forEach
                 applied += binding.id
             }

@@ -173,25 +173,52 @@ A vault synced over REST has no repository under it, so it has none of these set
 
 ### Settings from the vault
 
-The `.daftar.toml` at the vault's root may hold some of the app's settings, beside what the vault says of itself (`[reader]`, `[agents]`). The vault's value is used in place of the phone's own, and a setting changed in the app is written to the phone, never to the vault. [The spec](https://github.com/parham-alvani/notes-linux/blob/main/docs/specs/vault-config.md) has the list of keys a vault may set; a repository never chooses a program to run, a file outside the vault or what leaves the phone.
+The settings are kept in the repository. The `.daftar.toml` at the vault's root holds the app's settings beside what the vault says of itself (`[reader]`, `[agents]`), and **a setting changed in the app is written to that file**, through the app's ordinary vault write: one key's line changes, the comments and every other byte stay, and the change is committed, pushed and read by the other devices. [The spec](https://github.com/parham-alvani/notes-linux/blob/main/docs/specs/vault-config.md) is shared with Daftar for Linux and the Mac.
 
-The keys this app has a setting for, with the desktop's units turned into its own:
+- **The vault's value is used in place of the phone's own**, and the `[android]` table of the file over its shared sections. `[linux]` and `[macos]` are never read here.
+- **A change goes to the vault being read**: the one the browser, search and the tasks show, and the first vault when none was chosen. With no vault, it goes to the phone.
+- **The phone keeps a change** when the vault is read-only or cannot be written, when the key is declined, and when the value is one a vault may not hold (pictures from the web turned on). Such a change of a key the vault sets holds until the next sync reads the settings again.
+- **Hold a setting** for **Keep on This Device**, which declines its key and keeps the value in use on the phone, and for **Follow the Vault**, which follows it again. **Settings › Vaults › Settings from the vault** has the same choices in one list, and one switch that declines all of them.
+- A repository never chooses a program to run, a file outside the vault or what leaves the phone: the keys are a list, and a key not on it is ignored.
+
+The shared keys this app has a setting for, written in the spec's unit when the value can be said in it exactly:
 
 | Key | Here |
 | --- | --- |
 | `appearance.theme` | the theme |
-| `appearance.text_size` | the text size, as a scale of the desktop's 14 |
-| `appearance.text_width` | the line width: 0 is the whole window, up to 38 em the narrow one, more the comfortable one |
+| `appearance.text_size` | the text size, as a scale of the desktop's 14; a scale that is no whole size is `android.appearance.text_scale` |
+| `appearance.text_width` | the line width: 0 is the whole window; the narrow and the comfortable one are `android.appearance.line_width` |
 | `appearance.remote_images` | pictures from the web; a vault can only turn them off |
 | `appearance.fold_sections` | whether notes open folded |
-| `git.sync_interval` | the background refresh: 0 is off, minutes are rounded up to hours |
-| `git.name`, `git.email` | the author of a commit, where the app's own is empty |
+| `git.sync_interval` | the background refresh, in minutes: 0 is off, and the app's hours are written times 60 |
+| `git.name`, `git.email` | the author of a commit, where the app's own is empty; read, never written |
 | `notifications.digest`, `notifications.digest_time` | the daily digest and its hour |
 | `capture.target` | the scratchpad's path, when it is a note's path |
 | `files.hidden`, `files.show_hidden` | the files left out of the lists |
-| `home.image` | the home page's picture, a file in the vault |
+| `home.image` | the home page's picture, a file in the vault; read, never written, since the app's own picker takes a photo from outside the vault |
 
-A setting the vault sets says "From the vault" and its control is off. **Settings › Vaults › Settings from the vault** declines all of them, or one key at a time. The settings follow the vault being read.
+The settings only this app has live in `[android]`:
+
+| Key | Value | Setting |
+| --- | --- | --- |
+| `android.appearance.text_scale` | 85 to 150 | the text size, in percent |
+| `android.appearance.line_width` | `narrow`, `comfortable`, `full` | the line width |
+| `android.appearance.line_spacing` | 100 to 160 | the line spacing, in percent |
+| `android.appearance.persian_font` | a boolean | Persian set in Vazirmatn |
+| `android.appearance.start_screen` | `home`, `browse`, `tasks`, `search` | where the app opens |
+| `android.appearance.stylus_spotlight` | a boolean | the mark under a hovering pen |
+| `android.appearance.hide_completed_tasks` | a boolean | finished tasks left out of a note |
+| `android.appearance.hold_to_define` | a boolean | a hold on a word opens the dictionary |
+| `android.appearance.keep_screen_on` | a boolean | the screen held awake in a note |
+| `android.appearance.tap_full_screen` | a boolean | a tap hides the bars on a wide window |
+| `android.appearance.widget_opacity` | 0 to 100 | the widgets' background |
+| `android.files.sort` | `name`, `recently_opened`, `recently_changed` | the browser's order |
+| `android.git.wifi_only` | a boolean | background sync on Wi-Fi only |
+| `android.git.ssh_port_443` | a boolean | SSH over port 443 |
+| `android.git.image_policy` | `on_demand`, `prefetch_on_wifi`, `never` | when pictures are fetched |
+| `android.calendar.work_start`, `android.calendar.work_end` | an hour | the working day of the week notes |
+
+Kept on the phone and never written to a vault: the access token and the SSH keys, the app lock, the repositories and how each is fetched, which vault is being read, the scratchpad's and the week notes' vault, the phone's calendars, the author and the verifier, a home picture chosen from the gallery, the folded rail, and whether the vault's settings are followed.
 
 `[agents] read_only_clones = false` is read too. Nothing in this app sends a note to a model; a feature that would has to ask it first.
 

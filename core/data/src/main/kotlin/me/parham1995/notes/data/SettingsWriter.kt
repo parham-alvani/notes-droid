@@ -85,11 +85,11 @@ class SettingsWriter
                     }
                 }
                 // A value a vault may not hold (pictures from the web turned
-                // on) is the device's. Where the vault says otherwise the
-                // person's choice would change nothing, so the key is kept on
-                // this device from here on, as Keep on This Device does.
+                // on) is the device's. Where the vault sets the key, the
+                // device's value holds until the settings are read again;
+                // then the vault's returns.
                 val vaultSays = binding.read(SettingsFromVault.resolved(file.text, root = file.root), file.root) != null
-                if (writable && vaultSays) settings.setVaultKeyDeclined(binding.id, declined = true)
+                if (vaultSays) settings.hold(binding.id)
             }
             binding.keep(settings, value)
             return SettingHome.DEVICE
@@ -101,6 +101,13 @@ class SettingsWriter
          * screen. The vault's line stays, for the other devices.
          */
         suspend fun <T : Any> keepOnDevice(binding: SettingBinding<T>) {
+            // With every setting of the vault declined already, there is nothing to keep.
+            if (!settings.own
+                    .first()
+                    .fromVault.follow
+            ) {
+                return
+            }
             val value = binding.get(settings.current())
             binding.keep(settings, value)
             settings.setVaultKeyDeclined(binding.id, declined = true)

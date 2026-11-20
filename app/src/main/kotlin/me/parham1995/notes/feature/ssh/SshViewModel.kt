@@ -11,8 +11,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.SettingsStore
+import me.parham1995.notes.data.SettingsWriter
 import me.parham1995.notes.data.SyncRepository
 import me.parham1995.notes.data.SyncTransport
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.data.git.StoredKey
@@ -62,6 +64,7 @@ class SshViewModel
         private val keys: SshKeyStore,
         private val repository: SyncRepository,
         private val settings: SettingsStore,
+        private val writer: SettingsWriter,
     ) : ViewModel() {
         private val _state = MutableStateFlow(SshUiState())
         val state: StateFlow<SshUiState> = _state.asStateFlow()
@@ -139,7 +142,7 @@ class SshViewModel
 
         fun setOverPort443(enabled: Boolean) =
             viewModelScope.launch {
-                settings.setSshOverPort443(enabled)
+                writer.set(VaultOverlay.sshPort443, enabled)
                 refresh()
             }
 

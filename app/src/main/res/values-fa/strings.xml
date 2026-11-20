@@ -665,4 +665,8 @@
     <string name="okf_mark_verified">علامت‌گذاری به‌عنوان تأییدشده</string>
     <string name="settings_okf_actor">تأییدکننده</string>
     <string name="help_okf_actor">کسی که «علامت‌گذاری به‌عنوان تأییدشده» می‌گوید مفهوم را تأیید کرده است، به شکل human:name. اگر خالی باشد، بخش پیش از @ در ایمیل نویسنده به کار می‌رود.</string>
+    <string name="keep_on_this_device">نگه‌داشتن روی این دستگاه</string>
+    <string name="follow_the_vault">پیروی از دفتر</string>
+    <string name="help_from_vault_shared">از دفتر: تغییر این‌جا در ‎.daftar.toml‏ آن نوشته می‌شود و به دستگاه‌های دیگر شما می‌رسد. برای نگه‌داشتن آن روی این گوشی، تنظیم را نگه دارید.</string>
+    <string name="kept_on_this_device">روی این دستگاه نگه داشته شده است. برای پیروی دوباره از دفتر، تنظیم را نگه دارید.</string>
 </resources>

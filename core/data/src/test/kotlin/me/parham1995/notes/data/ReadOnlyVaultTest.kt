@@ -392,8 +392,7 @@ class ReadOnlyVaultTest {
             val before = File(tree, DAFTAR).readBytes().toList()
             val head = tip(remote)
 
-            // Pictures from the web turned on: a vault may only turn them off. The
-            // vault says off, so the key is kept on this device and the choice holds.
+            // Pictures from the web turned on: a vault may only turn them off, so the change is the device's.
             assertThat(settings.current().reading.remoteImages).isFalse()
             assertThat(writer.set(VaultOverlay.remoteImages, true)).isEqualTo(SettingHome.DEVICE)
             assertThat(
@@ -402,11 +401,19 @@ class ReadOnlyVaultTest {
                     .reading.remoteImages,
             ).isTrue()
             assertThat(settings.current().reading.remoteImages).isTrue()
+            // It holds until the settings are read again; then the vault's value returns. Nothing is declined.
             assertThat(
                 settings.own
                     .first()
                     .fromVault.declined,
-            ).containsExactly(VaultOverlay.REMOTE_IMAGES)
+            ).isEmpty()
+            settings.vaultConfigChanged()
+            assertThat(settings.current().reading.remoteImages).isFalse()
+            assertThat(
+                settings.own
+                    .first()
+                    .reading.remoteImages,
+            ).isTrue()
 
             // With the vault's settings declined, every change is the device's.
             settings.setFollowVault(false)
@@ -466,6 +473,17 @@ class ReadOnlyVaultTest {
             assertThat(settings.current().reading.theme).isEqualTo(ThemeChoice.DARK)
             assertThat(File(tree, DAFTAR).readBytes().toList()).isEqualTo(before)
 
+            // With every setting of the vault declined, Keep on This Device changes nothing.
+            settings.setFollowVault(false)
+            writer.keepOnDevice(VaultOverlay.digest)
+            assertThat(
+                settings.own
+                    .first()
+                    .fromVault.declined,
+            ).containsExactly(VaultOverlay.THEME)
+            settings.setFollowVault(true)
+            assertThat(settings.current().fromVault.keeps(VaultOverlay.THEME)).isTrue()
+
             // Follow the Vault takes the key off the list, and the vault's value is used again.
             writer.followVault(VaultOverlay.theme)
             assertThat(
@@ -505,7 +523,10 @@ class ReadOnlyVaultTest {
             ).isEqualTo(ThemeChoice.LIGHT)
             assertThat(daftar.readBytes().toList()).isEqualTo(before)
             assertThat(changed()).isEmpty()
-            // The vault still wins, until this device declines the key.
+            // The change holds until the settings are read again; then the vault's value
+            // returns, until this device declines the key.
+            assertThat(settings.current().reading.textScale).isEqualTo(1.3f)
+            settings.vaultConfigChanged()
             assertThat(settings.current().reading.textScale).isEqualTo(16 / 14f)
             settings.setVaultKeyDeclined(VaultOverlay.TEXT_SIZE, declined = true)
             assertThat(settings.current().reading.textScale).isEqualTo(1.3f)
