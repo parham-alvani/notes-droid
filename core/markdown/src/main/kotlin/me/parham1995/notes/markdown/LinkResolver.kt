@@ -28,7 +28,15 @@ package me.parham1995.notes.markdown
 class LinkResolver(
     paths: Collection<String>,
     aliases: Map<String, Collection<String>> = emptyMap(),
+    /**
+     * The folders that are the root of an Open Knowledge Format bundle:
+     * those whose `index.md` has `okf_version` in its front matter. A `/`
+     * path in a note under one is from that folder, not the vault's root.
+     */
+    bundleRoots: Collection<String> = emptyList(),
 ) {
+    private val all = HashSet<String>()
+    private val roots = bundleRoots.map { Slugs.normalize(it).trim('/') }.filter { it.isNotEmpty() }
     private val exact = HashMap<String, MutableList<String>>()
     private val folded = HashMap<String, MutableList<String>>()
     private val aliased = HashMap<String, MutableList<String>>()
@@ -47,6 +55,7 @@ class LinkResolver(
     }
 
     private fun register(path: String) {
+        all += path
         val segments = path.split('/')
         indexSuffixes(segments, path)
 
@@ -91,9 +100,18 @@ class LinkResolver(
         source: String,
     ): String? {
         if (target.isEmpty()) return source
+        // A Markdown link's `/path`, as the Open Knowledge Format reads it.
+        if (target.startsWith("/")) return fromRoot(target, source)
 
         val cleaned = Slugs.normalize(target).trim().trimEnd('/')
         if (cleaned.isEmpty()) return source
+
+        // A file's own path, `tables/orders.md`, is from the note's folder
+        // first, as OKF reads a Markdown link; a note's name, which is how a
+        // wikilink is written, goes on to Obsidian's rule below.
+        if (cleaned.endsWith(MD) && !cleaned.startsWith("./") && !cleaned.startsWith("../")) {
+            beside(cleaned, source)?.let { return it }
+        }
 
         // Explicit relative syntax is rare and, where it appears, usually
         // already broken -- but honour it before falling back.
@@ -106,6 +124,48 @@ class LinkResolver(
             1 -> candidates.first()
             else -> disambiguate(candidates, source)
         }
+    }
+
+    /**
+     * A path from the bundle's root: the nearest folder at or above the
+     * note that is one, else the vault's root (`open-knowledge-format.md` in
+     * notes-linux's `docs/specs/`, section 3). A path that climbs out of
+     * that root names nothing, and is never looked for anywhere else. One
+     * that stays in it and names no file there falls back to Obsidian's
+     * rule, which is how `[t](/Folder/Note.md)` was read before and how a
+     * vault that is no bundle still writes it.
+     */
+    private fun fromRoot(
+        target: String,
+        source: String,
+    ): String? {
+        val root = roots.filter { source.startsWith("$it/") }.maxByOrNull { it.length }.orEmpty()
+        val base = root.split('/').filter { it.isNotEmpty() }.toMutableList()
+        val floor = base.size
+        for (segment in Slugs.normalize(target).trim().split('/')) {
+            when (segment) {
+                "", "." -> Unit
+                ".." -> if (base.size > floor) base.removeAt(base.lastIndex) else return null
+                else -> base += segment
+            }
+        }
+        val joined = base.joinToString("/")
+        if (joined in all) return joined
+        if ("$joined$MD" in all) return "$joined$MD"
+        val rest = target.trim().trim('/')
+        if (rest.isEmpty() || rest.split('/').any { it == ".." }) return null
+        return resolve(rest, source)
+    }
+
+    /** The file at [target] seen from the folder of [source], when there is one exactly there. */
+    private fun beside(
+        target: String,
+        source: String,
+    ): String? {
+        if (target.split('/').any { it == ".." }) return null
+        val folder = source.substringBeforeLast('/', "")
+        val joined = if (folder.isEmpty()) target else "$folder/$target"
+        return joined.takeIf { it in all }
     }
 
     private fun relative(

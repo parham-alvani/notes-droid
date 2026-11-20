@@ -25,13 +25,19 @@ object MarkdownLinks {
      * the percent-encoding Obsidian writes for spaces and non-Latin names.
      *
      * An empty target is this note -- `[see below](#Details)`.
+     *
+     * A target that starts with `/` is a path from the root, as the Open
+     * Knowledge Format writes one (`open-knowledge-format.md` in notes-linux's
+     * `docs/specs/`, section 3), and keeps its `/` to say so.
      */
     fun internal(destination: String): Internal {
         val hash = destination.indexOf('#')
         val rawTarget = if (hash >= 0) destination.substring(0, hash) else destination
         val rawHeading = if (hash >= 0) destination.substring(hash + 1) else null
         return Internal(
-            target = decode(rawTarget).trim().removePrefix("/"),
+            // A leading `/` stays: it is what says the path is from the bundle's
+            // root and not from the note's folder ([LinkResolver.resolve]).
+            target = decode(rawTarget).trim(),
             heading = rawHeading?.let { decode(it).trim() }?.takeIf { it.isNotEmpty() },
         )
     }
@@ -54,6 +60,9 @@ object MarkdownLinks {
         target: String,
         source: String,
     ): String {
+        // From the vault's root, as it was before a `/` path meant a bundle's:
+        // a file is looked for by its vault path.
+        if (target.startsWith("/")) return target.trimStart('/')
         if (!target.startsWith("./") && !target.startsWith("../")) return target
         val base =
             source
