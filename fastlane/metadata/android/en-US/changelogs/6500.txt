@@ -1,0 +1,4 @@
+A vault can be read-only on this phone: Settings, Vaults has a Read-only switch. Daftar then only pulls, never commits or pushes, and refuses every change with a notice. The same card shows the address the vault pulls from and lets you change it.
+A vault can carry the app's settings in its .daftar.toml (theme, text size, sync, the home picture and more). A setting from the vault says so, and Settings can decline all of them or one.
+A note with a type in its front matter is a concept of the Open Knowledge Format: its properties show how far it is verified, a deprecated or stale concept says so above its text, and Mark as Verified records your review.
+Markdown links to notes now count as links, in backlinks and the graph. Each vault is indexed again once after this update.
