@@ -996,6 +996,11 @@ fun NoteScreen(
                     PeriodBar(periodic, onOpen = { id -> viewModel.openTab(id, inNewTab = false) })
                     HorizontalDivider()
                 }
+                // One line above a deprecated or a stale concept, and nothing above any other note.
+                state.concept?.let { notice ->
+                    ConceptLine(notice, onOpen = { id -> viewModel.openTab(id, inNewTab = false) })
+                    HorizontalDivider()
+                }
                 HorizontalPager(
                     state = pager,
                     modifier = Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()),

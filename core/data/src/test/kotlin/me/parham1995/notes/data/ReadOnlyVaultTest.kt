@@ -243,6 +243,7 @@ class ReadOnlyVaultTest {
                             PropertyEdit.Set("title", PropertyValue.Text("New")),
                         ),
                     "a restore" to writes.restore(vaultId, NOTE, head, "restored\n"),
+                    "a verification" to writes.markVerified(vaultId, NOTE),
                 )
 
             refusals.forEach { (what, result) ->

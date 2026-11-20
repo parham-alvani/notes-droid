@@ -97,6 +97,35 @@ internal fun WritingCard(
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+        // Who Mark as Verified names on a concept of the Open Knowledge Format.
+        var actor by remember(stored.okfActor) { mutableStateOf(stored.okfActor) }
+        OutlinedTextField(
+            value = actor,
+            onValueChange = { actor = it },
+            label = { Text(stringResource(R.string.settings_okf_actor)) },
+            placeholder = {
+                Text(
+                    state.settings.author.email
+                        .substringBefore('@', ""),
+                )
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            stringResource(R.string.help_okf_actor),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(
+            onClick = { viewModel.setOkfActor(actor) },
+            enabled = actor.trim().removePrefix("human:").trim() != stored.okfActor,
+        ) {
+            Text(stringResource(R.string.settings_okf_actor) + ": " + stringResource(R.string.action_save))
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
         state.vaults.forEach { vault ->
             LabelledValue(
                 label = vault.label,

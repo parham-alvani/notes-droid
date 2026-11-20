@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.BaseAnswer
 import me.parham1995.notes.data.BaseRepository
+import me.parham1995.notes.data.ConceptNotice
 import me.parham1995.notes.data.Destinations
 import me.parham1995.notes.data.IconStore
 import me.parham1995.notes.data.ObsidianConfigStore
@@ -92,6 +93,8 @@ data class NoteUiState(
      * shown, off, a task's box says so instead of ticking, and sync is a pull.
      */
     val readOnly: Boolean = false,
+    /** What is said above the text of a deprecated or stale concept; null for any other note. */
+    val concept: ConceptNotice? = null,
     /** The last thing a write had to say, shown once and dismissed. */
     val message: UiText? = null,
     /** The journal either side, when this note is one of its vault's daily notes. */
@@ -585,6 +588,7 @@ class NoteViewModel
                 val backlinks = repository.backlinks(id)
                 val writable = writes.canWrite(note.vaultId).first()
                 val pullsOnly = readOnly.isReadOnly(note.vaultId)
+                val notice = repository.conceptNotice(note.vaultId, note.path)
                 // The sync may have brought another `.daftar.toml`.
                 val opensFolded = opensFolded(note.vaultId)
                 _state.update {
@@ -596,6 +600,7 @@ class NoteViewModel
                             backlinks = backlinks,
                             writable = writable,
                             readOnly = pullsOnly,
+                            concept = notice,
                             // The person's own folds, less what moved; a note
                             // they never folded is drawn as the settings say.
                             folded =
@@ -658,6 +663,7 @@ class NoteViewModel
                     val assignments = icons.config.first()
                     val writable = writes.canWrite(note.vaultId).first()
                     val pullsOnly = readOnly.isReadOnly(note.vaultId)
+                    val notice = repository.conceptNotice(note.vaultId, note.path)
                     val opensFolded = opensFolded(note.vaultId)
                     _state.value =
                         NoteUiState(
@@ -667,6 +673,7 @@ class NoteViewModel
                             icon = assignments.forFile(note.vaultId, note.path),
                             writable = writable,
                             readOnly = pullsOnly,
+                            concept = notice,
                             // As it was left, less any fold the file has since
                             // moved out from under; a note never folded or
                             // opened by hand opens as the settings say.

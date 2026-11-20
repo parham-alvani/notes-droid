@@ -177,7 +177,9 @@ class VaultGitSectionTest {
 
         compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Sync now").assertDoesNotExist()
-        listOf("Add a task", "Sort tasks", "Properties").forEach { compose.onNodeWithText(it).assertIsNotEnabled() }
+        listOf("Add a task", "Sort tasks").forEach { compose.onNodeWithText(it).assertIsNotEnabled() }
+        // Where a note's properties are read; what it writes is refused like any other write.
+        compose.onNodeWithText("Properties").assertIsEnabled()
         compose.onNodeWithText("Pull").performClick()
 
         assertThat(syncs).isEqualTo(1)

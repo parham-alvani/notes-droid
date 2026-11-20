@@ -313,6 +313,13 @@ data class WriteSettings(
     val scratchpadPath: String = DEFAULT_SCRATCHPAD,
     /** Which vault holds it. Zero means the one being read. */
     val scratchpadVaultId: Long = 0,
+    /**
+     * Who Mark as Verified says a concept was verified by, `human:<this>`
+     * (`okf.actor` in the other apps' config; `open-knowledge-format.md` in
+     * notes-linux's `docs/specs/`). Empty is the part of the author's email
+     * before the `@`.
+     */
+    val okfActor: String = "",
 ) {
     val author: Author get() = Author(authorName.trim(), authorEmail.trim())
 
@@ -478,6 +485,7 @@ class SettingsStore
                                 preferences[SCRATCHPAD_PATH]?.takeIf { it.isNotBlank() }
                                     ?: WriteSettings.DEFAULT_SCRATCHPAD,
                             scratchpadVaultId = preferences[SCRATCHPAD_VAULT] ?: 0L,
+                            okfActor = preferences[OKF_ACTOR].orEmpty(),
                         ),
                     calendar =
                         CalendarSettings(
@@ -555,6 +563,11 @@ class SettingsStore
                 val keys = it[VAULT_DECLINED].orEmpty()
                 it[VAULT_DECLINED] = if (declined) keys + key else keys - key
             }
+        }
+
+        /** Who Mark as Verified names; empty for the author's own. A `human:` typed with it is not kept twice. */
+        suspend fun setOkfActor(actor: String) {
+            context.settingsDataStore.edit { it[OKF_ACTOR] = actor.trim().removePrefix("human:").trim() }
         }
 
         /** Which vault holds the scratchpad, leaving its path as it is. */
@@ -832,6 +845,7 @@ class SettingsStore
             val CALENDAR_EXPORT_VAULT = longPreferencesKey("calendar_export_vault")
             val CALENDAR_WORK_START = intPreferencesKey("calendar_work_start")
             val CALENDAR_WORK_END = intPreferencesKey("calendar_work_end")
+            val OKF_ACTOR = stringPreferencesKey("okf_actor")
             val FOLLOW_VAULT = booleanPreferencesKey("vault_settings")
             val VAULT_DECLINED = stringSetPreferencesKey("vault_settings_declined")
         }

@@ -652,4 +652,20 @@
     <string name="from_vault_author">From the vault where yours is empty: %1$s</string>
     <string name="settings_home_picture">Home page picture</string>
     <string name="settings_hidden_names">Files left out of the lists</string>
+    <string name="okf_concept">Concept</string>
+    <string name="okf_unverified">Unverified</string>
+    <string name="okf_machine_confirmed">Machine-confirmed</string>
+    <string name="okf_human_reviewed">Human-reviewed</string>
+    <string name="okf_verified_by">%1$s, %2$s</string>
+    <string name="okf_draft">Draft</string>
+    <string name="okf_deprecated">Deprecated</string>
+    <string name="okf_stale_since">Stale since %1$s</string>
+    <string name="okf_stale_bad_date">Stale: bad date</string>
+    <string name="okf_line_deprecated">Deprecated.</string>
+    <string name="okf_line_replaced">Deprecated. Replaced by %1$s.</string>
+    <string name="okf_line_stale">Stale since %1$s: check it again.</string>
+    <string name="okf_line_stale_bad_date">Stale, with a date that cannot be read: check it again.</string>
+    <string name="okf_mark_verified">Mark as Verified</string>
+    <string name="settings_okf_actor">Verifier</string>
+    <string name="help_okf_actor">Who Mark as Verified says a concept was verified by, as human:name. Empty uses the part of the author\'s email before the @.</string>
 </resources>

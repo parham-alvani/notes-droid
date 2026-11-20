@@ -13,6 +13,8 @@ import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
 import me.parham1995.notes.markdown.NoteExists
+import me.parham1995.notes.markdown.Okf
+import me.parham1995.notes.markdown.OkfFailure
 import me.parham1995.notes.markdown.PropertyEdit
 import me.parham1995.notes.markdown.PropertyFailure
 import me.parham1995.notes.markdown.StatusType
@@ -30,6 +32,7 @@ import me.parham1995.notes.sync.ReadOnlyVault
 import me.parham1995.notes.sync.TextEdit
 import me.parham1995.notes.sync.WriteOutcome
 import me.parham1995.notes.sync.gitBlobSha
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
@@ -101,6 +104,12 @@ enum class EditKind {
      * the commit, for the record, and the text the note as it was then.
      */
     RESTORE,
+
+    /**
+     * Mark a concept of the Open Knowledge Format as verified. The anchor is
+     * the actor, `human:<id>`, and the text the time, UTC to the second.
+     */
+    MARK_VERIFIED,
     ;
 
     companion object {
@@ -619,6 +628,49 @@ class VaultWriteRepository
         }
 
         /**
+         * Marks the concept at [path] in [vaultId] as verified, now, by this
+         * phone's actor ([verifier]): one `{ by, at }` in `verified`, in place
+         * of that actor's earlier one, and every other line as it was
+         * ([Okf.markVerified]). Refused on a note that is not a concept, with
+         * no actor to name, and in a read-only vault as every write is.
+         */
+        suspend fun markVerified(
+            vaultId: Long,
+            path: String,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            val actor =
+                verifier(vaultId)
+                    ?: return WriteResult.Refused("Set who verifies, or an author's email, in Settings > Writing.")
+            val name = path.substringAfterLast('/').removeSuffix(".md")
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.MARK_VERIFIED,
+                anchor = actor,
+                replacement = Okf.stamp(Instant.now()),
+                summary = "docs: mark ${name.take(SUBJECT)} as verified",
+            )
+        }
+
+        /**
+         * Who Mark as Verified names in [vaultId], `human:<id>`: the actor in
+         * the app's settings, else the local part of the author's email, else
+         * null, and then the command is off and says to set one.
+         */
+        suspend fun verifier(vaultId: Long): String? {
+            val own = settings.own.first()
+            val id =
+                own.write.okfActor.trim().ifEmpty {
+                    authorFor(vaultId, own)
+                        .email
+                        .substringBefore('@', "")
+                        .trim()
+                }
+            return id.takeIf { it.isNotEmpty() }?.let { "human:$it" }
+        }
+
+        /**
          * Sends everything queued, oldest first.
          *
          * Called at the start of a sync rather than at the end: the pull that
@@ -723,6 +775,8 @@ class VaultWriteRepository
                     } catch (taken: NoteExists) {
                         return@tryWithVault WriteResult.Refused(taken.message.orEmpty())
                     } catch (refused: PropertyFailure) {
+                        return@tryWithVault WriteResult.Refused(refused.message.orEmpty())
+                    } catch (refused: OkfFailure) {
                         return@tryWithVault WriteResult.Refused(refused.message.orEmpty())
                     } ?: return@tryWithVault WriteResult.Unchanged
 
@@ -847,6 +901,14 @@ class VaultWriteRepository
                 }
                 EditKind.SET_PROPERTY -> VaultEdits.setProperty(edit.anchor, edit.text)
                 EditKind.RESTORE -> VaultEdits.restore(edit.text)
+                EditKind.MARK_VERIFIED -> { current ->
+                    Okf.markVerified(
+                        current ?: throw OkfFailure("${edit.path} is gone."),
+                        edit.path,
+                        edit.anchor,
+                        edit.text,
+                    )
+                }
                 EditKind.APPEND, null -> VaultEdits.append(edit.text)
             }
 

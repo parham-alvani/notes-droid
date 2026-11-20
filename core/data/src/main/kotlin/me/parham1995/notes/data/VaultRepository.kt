@@ -30,9 +30,11 @@ import me.parham1995.notes.data.database.isUpdatedSinceRead
 import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
+import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MarkdownParser
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.NoteGraph
+import me.parham1995.notes.markdown.Okf
 import me.parham1995.notes.markdown.QuickSwitcher
 import me.parham1995.notes.markdown.Slugs
 import me.parham1995.notes.markdown.TagTree
@@ -40,6 +42,7 @@ import me.parham1995.notes.markdown.TagTreeNode
 import me.parham1995.notes.obsidian.FolderLogos
 import me.parham1995.notes.obsidian.HiddenFiles
 import me.parham1995.notes.sync.BlobKind
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -68,6 +71,19 @@ data class VaultItem(
     /** For a folder, its `logo.svg` or picture, drawn as its icon. */
     val logo: String? = null,
 )
+
+/** The one line above a deprecated or stale concept's text. */
+sealed interface ConceptNotice {
+    /** Deprecated, and what replaced it when `superseded_by` names a note that is there: its id and name. */
+    data class Deprecated(
+        val replacedBy: Pair<Long, String>?,
+    ) : ConceptNotice
+
+    /** Stale since [since], or with a `stale_after` that is no time when that is null. */
+    data class Stale(
+        val since: Instant?,
+    ) : ConceptNotice
+}
 
 /** A note prepared for display. */
 data class RenderedNote(
@@ -560,6 +576,40 @@ class VaultRepository
             val wanted = name.trim()
             return all.firstOrNull { it.name.isNotBlank() && it.name.trim().equals(wanted, ignoreCase = true) }
                 ?: all.firstOrNull { it.repo.equals(wanted, ignoreCase = true) }
+        }
+
+        /**
+         * What the reader says above the note at [path] in [vaultId] when it
+         * is a deprecated or a stale concept of the Open Knowledge Format,
+         * and null for any other note (`open-knowledge-format.md` in
+         * notes-linux's `docs/specs/`, section 2). `superseded_by` is read as
+         * a Markdown link's target is.
+         */
+        suspend fun conceptNotice(
+            vaultId: Long,
+            path: String,
+            now: Instant = Instant.now(),
+        ): ConceptNotice? {
+            val text = files.readText(vaultId, path) ?: return null
+            val concept = Okf.conceptOf(text, path) ?: return null
+            if (concept.deprecated) {
+                val replacement =
+                    concept.supersededBy
+                        ?.takeIf { !MarkdownLinks.isExternal(it) }
+                        ?.let { target ->
+                            val refs = notes.allIds(vaultId)
+                            val paths = refs.map { it.path }
+                            val roots = OkfBundles.roots(paths) { files.readText(vaultId, it) }
+                            LinkResolver(paths, bundleRoots = roots)
+                                .resolve(MarkdownLinks.internal(target).target, path)
+                                ?.let { found -> refs.firstOrNull { it.path == found } }
+                        }
+                return ConceptNotice.Deprecated(
+                    replacement?.let { it.id to it.path.substringAfterLast('/').removeSuffix(".md") },
+                )
+            }
+            if (!concept.isStale(now)) return null
+            return ConceptNotice.Stale(concept.staleAfter?.instantOrNull)
         }
 
         /** Full-text results, ranked with the title weighted above the body. */

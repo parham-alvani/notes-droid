@@ -56,7 +56,11 @@ fun NoteMenu(
     onSync: () -> Unit = {},
     onSortTasks: (() -> Unit)? = null,
     onAddTask: (() -> Unit)? = null,
-    /** False in a read-only vault: the items that write are shown, and off. */
+    /**
+     * False in a read-only vault: the items that write are shown, and off.
+     * Properties stays on: it is where a note's properties and its Concept
+     * row are read, and what it writes is refused like any other write.
+     */
     writes: Boolean = true,
     /** The vault is a read-only clone, so its sync is a pull and is called one. */
     pullsOnly: Boolean = false,
@@ -129,7 +133,6 @@ fun NoteMenu(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.note_properties)) },
                     leadingIcon = { LucideGlyph("sliders-horizontal", size = 18.dp) },
-                    enabled = writes,
                     onClick = {
                         open = false
                         edit()

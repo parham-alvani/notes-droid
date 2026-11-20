@@ -104,6 +104,19 @@ fun PropertiesSheet(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+            // Above the properties of a concept, and of no other note.
+            state.concept?.let { concept ->
+                ConceptRow(
+                    concept = concept,
+                    onVerify =
+                        if (state.canVerify) {
+                            { viewModel.markVerified(onWritten) }
+                        } else {
+                            null
+                        },
+                    enabled = !state.writing && !state.waiting,
+                )
+            }
             when (val form = state.form) {
                 null -> Unit
                 is FrontMatterForm.Source -> {

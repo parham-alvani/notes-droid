@@ -278,6 +278,9 @@ class SyncViewModel
             vaultId: Long,
         ) = viewModelScope.launch { settingsStore.setScratchpad(path, vaultId) }
 
+        /** Who Mark as Verified names; empty for the author's own name in the email. */
+        fun setOkfActor(actor: String) = viewModelScope.launch { settingsStore.setOkfActor(actor) }
+
         /** Which vault holds the scratchpad, when its path is the vault's to say and not this phone's. */
         fun setScratchpadVault(vaultId: Long) = viewModelScope.launch { settingsStore.setScratchpadVault(vaultId) }
 
