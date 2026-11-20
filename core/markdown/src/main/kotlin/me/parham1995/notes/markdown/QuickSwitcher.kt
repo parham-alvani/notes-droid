@@ -20,6 +20,8 @@ object QuickSwitcher {
         val path: String,
         title: String,
         aliases: List<String> = emptyList(),
+        /** A deprecated concept of the Open Knowledge Format: listed after the others of its rank. */
+        val deprecated: Boolean = false,
     ) {
         internal val title = SearchText.foldName(title)
         internal val aliases = aliases.map(SearchText::foldName)
@@ -64,6 +66,7 @@ object QuickSwitcher {
             .filter { it.match == best || it.match * 2 >= best }
             .sortedWith(
                 compareByDescending<Scored> { it.score }
+                    .thenBy { it.candidate.deprecated }
                     .thenBy { it.candidate.path.length }
                     .thenBy { it.candidate.path },
             ).take(limit)

@@ -478,6 +478,35 @@ class MigrationTest {
         )
 
     @Test
+    fun `no note starts out a deprecated concept, in either vault, and keeps everything it had`() =
+        withData(
+            version = 19,
+            migration = NotesDatabase.MIGRATION_19_20,
+            seed = { connection ->
+                // Two vaults each holding a note of one name: the column is
+                // the indexer's to fill, and until it has, no note is dimmed.
+                connection.execSQL(
+                    "INSERT INTO notes (id, vaultId, path, parent, name, slug, title, blobSha, size, " +
+                        "isFolderNote, isRtl, hasMermaid, hasMath, indexedAt, openedAt, scrollIndex, " +
+                        "readSha, changedAt, folds, hidden, outlineClosed) VALUES " +
+                        "(1, 1, 'Plan.md', '', 'Plan', 'plan', 'Plan', 'a', 1, 0, 0, 0, 0, 100, 7, 4, " +
+                        "'a', 100, '3', 0, '2'), " +
+                        "(2, 2, 'Plan.md', '', 'Plan', 'plan', 'Plan', 'b', 1, 0, 0, 0, 0, 200, NULL, 0, " +
+                        "NULL, 200, '', 1, '')",
+                )
+            },
+            check = { connection ->
+                assertThat(
+                    texts(
+                        connection,
+                        "SELECT id || ':' || vaultId || ':' || scrollIndex || ':' || folds || ':' || hidden || " +
+                            "':[' || outlineClosed || ']:' || deprecated FROM notes ORDER BY id",
+                    ),
+                ).containsExactly("1:1:4:3:0:[2]:0", "2:2:0::1:[]:0").inOrder()
+            },
+        )
+
+    @Test
     fun `every note starts out shown, and keeps everything it had`() =
         withData(
             version = 16,

@@ -361,7 +361,12 @@ class VaultRepository
                     }
 
                 val refs = notes.allIds(entity.vaultId)
-                val resolver = LinkResolver(refs.map { it.path }, aliases.inVault(entity.vaultId).byPath())
+                val resolver =
+                    LinkResolver(
+                        refs.map { it.path },
+                        aliases.inVault(entity.vaultId).byPath(),
+                        OkfBundles.roots(refs.map { it.path }) { files.readText(entity.vaultId, it) },
+                    )
                 val byPath = refs.associate { it.path to it.id }
                 val targets =
                     parsed.links
@@ -558,7 +563,15 @@ class VaultRepository
         }
 
         /** Full-text results, ranked with the title weighted above the body. */
-        suspend fun search(query: String): List<SearchHit> = search.search(active(), query)
+        suspend fun search(query: String): List<SearchHit> {
+            val vaultId = active()
+            val hits = search.search(vaultId, query)
+            if (hits.isEmpty()) return hits
+            // A deprecated concept is shown dimmed. Full-text ranks are not
+            // ones two notes share, so the order is the search's own.
+            val deprecated = notes.deprecatedIds(vaultId).toHashSet()
+            return if (deprecated.isEmpty()) hits else hits.map { it.copy(deprecated = it.noteId in deprecated) }
+        }
 
         /**
          * Name matches, for jumping straight to a note while typing: every

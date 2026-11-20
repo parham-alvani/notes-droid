@@ -67,6 +67,46 @@ class VaultIndexerTest {
             }
         }
 
+    /**
+     * `open-knowledge-format.md` in notes-linux's `docs/specs/`, section 3:
+     * a resolved Markdown link is a link like a wikilink.
+     */
+    @Test
+    fun `a Markdown link is a link, resolved from the bundle's root, and counts as a backlink`() =
+        runTest {
+            val entries =
+                listOf(
+                    write("Docs/index.md", "---\nokf_version: \"0.3\"\n---\n# Docs\n"),
+                    write("Docs/tables/orders.md", "---\ntype: Table\nstatus: deprecated\n---\nOrders.\n"),
+                    write(
+                        "Docs/metrics/revenue.md",
+                        "---\ntype: Metric\n---\nFrom [orders](/tables/orders.md), [a scan](../scan.pdf), " +
+                            "[the web](https://example.com) and [below](#Definition).\n",
+                    ),
+                    // The same path from the vault's root names another file: outside a bundle, `/` is the vault's.
+                    write("tables/orders.md", "Not the bundle's.\n"),
+                    write("Other/x.md", "See [orders](/tables/orders.md).\n"),
+                )
+
+            indexer.indexAll(1L, entries)
+
+            val notes = database.noteDao()
+            val inBundle = notes.byPath(1L, "Docs/tables/orders.md")!!
+            val atRoot = notes.byPath(1L, "tables/orders.md")!!
+            assertThat(
+                database.linkDao().backlinks(inBundle.id).map { it.path },
+            ).containsExactly("Docs/metrics/revenue.md")
+            assertThat(database.linkDao().backlinks(atRoot.id).map { it.path }).containsExactly("Other/x.md")
+            // The file, the web address and the heading of the note itself are no links to a note.
+            val revenue = notes.byPath(1L, "Docs/metrics/revenue.md")!!
+            assertThat(database.linkDao().outgoing(revenue.id).map { it.path }).containsExactly("Docs/tables/orders.md")
+
+            // And the index knows which note is a deprecated concept.
+            assertThat(notes.deprecatedIds(1L)).containsExactly(inBundle.id)
+            assertThat(inBundle.deprecated).isTrue()
+            assertThat(revenue.deprecated).isFalse()
+        }
+
     @Test
     fun `a note is titled by its file name, not its first heading`() =
         runTest {

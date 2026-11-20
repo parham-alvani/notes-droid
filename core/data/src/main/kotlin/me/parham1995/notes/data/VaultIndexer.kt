@@ -21,7 +21,10 @@ import me.parham1995.notes.data.database.TaskEntity
 import me.parham1995.notes.data.database.byPath
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
+import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MarkdownParser
+import me.parham1995.notes.markdown.Okf
+import me.parham1995.notes.markdown.ParsedLink
 import me.parham1995.notes.markdown.ParsedNote
 import me.parham1995.notes.markdown.Slugs
 import me.parham1995.notes.markdown.TaskExtractor
@@ -169,6 +172,8 @@ class VaultIndexer
             val sha: String,
             val size: Long,
             val note: ParsedNote,
+            /** Whether the note is a deprecated concept of the Open Knowledge Format. */
+            val deprecated: Boolean,
         )
 
         private suspend fun parseBatch(
@@ -181,7 +186,8 @@ class VaultIndexer
                         async(Dispatchers.Default) {
                             val text = files.readText(vaultId, entry.path) ?: return@async null
                             val parsed = MarkdownParser.parseNote(text)
-                            Indexed(entry.path, entry.sha, text.length.toLong(), parsed)
+                            val deprecated = Okf.conceptOf(text, entry.path)?.deprecated == true
+                            Indexed(entry.path, entry.sha, text.length.toLong(), parsed, deprecated)
                         }
                     }.awaitAll()
                     .filterNotNull()
@@ -225,6 +231,7 @@ class VaultIndexer
                                 // moved; see IndexDao.writeBatch.
                                 changedAt = now,
                                 hidden = rules.hides(indexed.path),
+                                deprecated = indexed.deprecated,
                             ),
                         headings =
                             indexed.note.headings.mapIndexed { ordinal, heading ->
@@ -239,8 +246,14 @@ class VaultIndexer
                             },
                         links =
                             indexed.note.links
-                                .filter { it.kind == LinkKind.WIKILINK || it.kind == LinkKind.WIKI_EMBED }
-                                .mapIndexed { ordinal, link ->
+                                // A Markdown link to a note is a link like a wikilink:
+                                // it counts in backlinks and the graph. One to a
+                                // file, or to a heading of this note, names no note.
+                                .filter {
+                                    it.kind == LinkKind.WIKILINK ||
+                                        it.kind == LinkKind.WIKI_EMBED ||
+                                        it.namesNote()
+                                }.mapIndexed { ordinal, link ->
                                     LinkEntity(
                                         srcId = 0,
                                         kind = link.kind.name,
@@ -314,7 +327,12 @@ class VaultIndexer
                 val byPath = refs.associate { it.path to it.id }
                 // Aliases from the same vault, and consulted only after every
                 // real name has missed -- the resolver's order, not this one's.
-                val resolver = LinkResolver(byPath.keys, aliases.inVault(vaultId).byPath())
+                val resolver =
+                    LinkResolver(
+                        byPath.keys,
+                        aliases.inVault(vaultId).byPath(),
+                        OkfBundles.roots(byPath.keys) { files.readText(vaultId, it) },
+                    )
                 val sources = refs.associate { it.id to it.path }
 
                 // Only what found a target is written. Every candidate here is
@@ -372,8 +390,11 @@ class VaultIndexer
              * 15: a block of HTML that is only pictures (`<img src=…>`) is
              *    those pictures, where it was no block at all, so every
              *    block after one moves along.
+             * 16: a Markdown link to a note is a link, resolved as the Open
+             *    Knowledge Format says, and a note knows whether it is a
+             *    deprecated concept.
              */
-            const val VERSION = 15
+            const val VERSION = 16
 
             /**
              * Large enough that commits are rare, small enough that a failure
@@ -388,3 +409,27 @@ data class PathAndSha(
     val path: String,
     val sha: String,
 )
+
+/** Whether a Markdown link names a note: it has a target, and that is not a file of another kind. */
+private fun ParsedLink.namesNote(): Boolean =
+    kind == LinkKind.MARKDOWN && rawTarget.isNotEmpty() && !MarkdownLinks.isFile(rawTarget)
+
+/**
+ * The folders of a vault that are the root of an Open Knowledge Format
+ * bundle: those whose `index.md` has `okf_version` in its front matter
+ * (`open-knowledge-format.md` in notes-linux's `docs/specs/`, section 3). A
+ * `/` path in a Markdown link is from the nearest one above the note.
+ */
+object OkfBundles {
+    private const val INDEX = "index.md"
+
+    suspend fun roots(
+        paths: Collection<String>,
+        read: suspend (String) -> String?,
+    ): List<String> =
+        paths
+            .filter { it == INDEX || it.endsWith("/$INDEX") }
+            .filter { path -> read(path)?.let(Okf::isBundleRoot) == true }
+            .map { it.substringBeforeLast('/', "") }
+            .filter { it.isNotEmpty() }
+}

@@ -39,6 +39,10 @@ interface NoteDao {
     @Query("SELECT id, path FROM notes WHERE vaultId = :vaultId")
     suspend fun allIds(vaultId: Long): List<NoteRef>
 
+    /** The deprecated concepts of one vault, for whatever dims them in a list. */
+    @Query("SELECT id FROM notes WHERE vaultId = :vaultId AND deprecated = 1")
+    suspend fun deprecatedIds(vaultId: Long): List<Long>
+
     /**
      * Notes directly inside [parent], folders excluded -- those are derived.
      * Hidden notes are not listed (see [NoteEntity.hidden]), nor are they in
