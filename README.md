@@ -65,6 +65,9 @@ All seven milestones are implemented, and the app has been running against a rea
 - **Tablets and landscape** — the note beside the list it was picked from on an expanded window, held to a comfortable reading width (narrow, comfortable or full), and a navigation rail in place of the bottom bar; a tap on the page — not on a link, a box or a picture — hides the bars, the rail and the system bars for full-screen reading, and the next tap brings them back (a setting turns it off)
 - **Right-to-left support**, detected per block rather than declared — in the note, and in every list that shows a line taken out of one
 - **A little writing** — tick a task off, add one, move one to another day, capture a thought, start a note from one of the vault's templates, sort a note's tasks — each a commit, and offered only where the credential can actually push
+- **A read-only vault** — a clone can be made read-only in Settings: it is pulled by fast-forward and never written, and says so by its name. See [A read-only vault](#a-read-only-vault)
+- **Settings from the vault** — the vault's `.daftar.toml` can carry some of the app's settings, so a new phone is set up by its first sync. See [Settings from the vault](#settings-from-the-vault)
+- **Open Knowledge Format** — a note whose front matter has a `type` is a concept: its trust tier, status and staleness are shown with its properties, a deprecated or stale one says so above its text, and Markdown links resolve as OKF says. See [Open Knowledge Format](#open-knowledge-format)
 - **Sort tasks** — from a note's menu, the done and cancelled tasks of each section move above the open ones, sub-items with their parent, as the vault's `task-sorter` plugin does on the desk
 - **New note from a template** — in the browser, a button makes a note in the folder being looked at from a template in the folder the core Templates plugin names in `.obsidian/templates.json`, filling `{{title}}`, `{{date}}`, `{{time}}` and `{{date:FORMAT}}` with the plugin's own formats, and opens it; a note already there is never written over
 
@@ -155,6 +158,54 @@ A repository that fails to sync does not stop the others, and its error is shown
 The alternative transport, chosen in Settings. The key is generated on the device and its private half never leaves; the public line is added to the repository as a deploy key — **read-only unless you want the writing above**, in which case tick write access when you register it — so nothing expires and nothing secret is ever copied between machines.
 
 The trade is size. Git cannot fetch a subset of paths — there is no sparse-checkout or partial clone in JGit — so this is the full history and every attachment, where the REST transport takes the markdown alone. The clone is shallow, which helps but does not close the gap. REST remains the default.
+
+### A read-only vault
+
+Not every phone that reads a vault should change it. A vault synced over SSH is a clone, and **Settings › Vaults** has a Git card for each: a **Read-only** switch and the clone's **Address**. Both are in the clone's own git config (`daftar.readonly`, `remote.<name>.url`), never committed, as [the spec](https://github.com/parham-alvani/notes-linux/blob/main/docs/specs/read-only-vault.md) that Daftar for Linux and the Mac share says.
+
+- **Sync is a pull.** A read-only clone is fetched and fast-forwarded. Nothing is committed, pushed, stashed or reset, and the key is not even asked whether it may push. A clone that has commits or changes of its own fails with the files named and is left exactly as it was. The clone here is one commit deep, so "fast-forward" means it still stands on the commit it last pulled.
+- **Every write is refused**, at the one place the app writes and before the file is read: a tick, a new task, a capture, a new note, a property, a restore, and the week notes of the phone's calendar.
+- **It says so.** A "Read-only" badge sits by the vault's name in the browser, Sync is called Pull and answers "Pulled" or "Up to date", the note's writing actions are shown but off, and a task's box says "This vault is read-only." the first time it is tapped in a note.
+- **A key that cannot write** is named on the same card, with a button that makes the vault read-only.
+- **The address** is how a clone moves to another remote. It is trimmed, an empty one is refused, and nothing is fetched until the next sync. Host keys are pinned to GitHub's, so the new address has to be on GitHub.
+
+A vault synced over REST has no repository under it, so it has none of these settings. The clone's key and author stay where they were, under **SSH keys** and **Writing**; `core.sshCommand` is for a `git` that runs the system's `ssh`, which this app does not.
+
+### Settings from the vault
+
+The `.daftar.toml` at the vault's root may hold some of the app's settings, beside what the vault says of itself (`[reader]`, `[agents]`). The vault's value is used in place of the phone's own, and a setting changed in the app is written to the phone, never to the vault. [The spec](https://github.com/parham-alvani/notes-linux/blob/main/docs/specs/vault-config.md) has the list of keys a vault may set; a repository never chooses a program to run, a file outside the vault or what leaves the phone.
+
+The keys this app has a setting for, with the desktop's units turned into its own:
+
+| Key | Here |
+| --- | --- |
+| `appearance.theme` | the theme |
+| `appearance.text_size` | the text size, as a scale of the desktop's 14 |
+| `appearance.text_width` | the line width: 0 is the whole window, up to 38 em the narrow one, more the comfortable one |
+| `appearance.remote_images` | pictures from the web; a vault can only turn them off |
+| `appearance.fold_sections` | whether notes open folded |
+| `git.sync_interval` | the background refresh: 0 is off, minutes are rounded up to hours |
+| `git.name`, `git.email` | the author of a commit, where the app's own is empty |
+| `notifications.digest`, `notifications.digest_time` | the daily digest and its hour |
+| `capture.target` | the scratchpad's path, when it is a note's path |
+| `files.hidden`, `files.show_hidden` | the files left out of the lists |
+| `home.image` | the home page's picture, a file in the vault |
+
+A setting the vault sets says "From the vault" and its control is off. **Settings › Vaults › Settings from the vault** declines all of them, or one key at a time. The settings follow the vault being read.
+
+`[agents] read_only_clones = false` is read too. Nothing in this app sends a note to a model; a feature that would has to ask it first.
+
+### Open Knowledge Format
+
+The [Open Knowledge Format](https://github.com/open-knowledge-format/open-knowledge-format) is knowledge as Markdown files with front matter that says where a text came from, who confirmed it and when it goes stale. The app reads it in any note, as [the spec](https://github.com/parham-alvani/notes-linux/blob/main/docs/specs/open-knowledge-format.md) shared with Daftar for Linux and the Mac says; a note with no `type` is read as before.
+
+- **A concept** is a note whose front matter has a `type`. Its Properties sheet opens with a Concept row: the type, the trust tier (Unverified, Machine-confirmed, Human-reviewed), the status when it is not stable, and "Stale since" when `stale_after` has passed.
+- **The reader** says one line above a deprecated or stale concept, with a link to what replaced it when `superseded_by` names a note.
+- **Quick open and search** show a deprecated concept dimmed, and quick open lists it after the others of its rank.
+- **Mark as Verified**, in the Concept row, adds one `{ by, at }` to `verified` and leaves every other line as it was. The actor is the Verifier under **Settings › Writing**, else the part of the author's email before the `@`.
+- **Markdown links** resolve as OKF says: `/path` from the bundle's root (the nearest folder whose `index.md` has `okf_version`, else the vault's root), any other path from the note's folder. A resolved one is a link like a wikilink, in backlinks and the graph.
+
+The audit, the MCP server and the bundle export are `daftar-cli`'s, which does not run on Android.
 
 ## Writing
 
