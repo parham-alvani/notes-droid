@@ -41,6 +41,8 @@ import me.parham1995.notes.feature.sync.SectionCard
 internal fun HomePictureCard(
     /** Whether a picture of the app's own is set, as opposed to the vault's or none. */
     chosen: Boolean,
+    /** Whether the vault's `.daftar.toml` names the picture (`home.image`): it is shown, and not changed here. */
+    fromVault: Boolean = false,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -62,6 +64,7 @@ internal fun HomePictureCard(
         }
     HomePictureSettings(
         chosen = chosen,
+        fromVault = fromVault,
         picture = picture,
         onChoose = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         onClear = viewModel::clearPicture,
@@ -74,6 +77,7 @@ internal fun HomePictureSettings(
     picture: ImageBitmap?,
     onChoose: () -> Unit,
     onClear: () -> Unit,
+    fromVault: Boolean = false,
 ) {
     SectionCard(stringResource(R.string.card_home)) {
         // The picture as the page crops it, at a phone's shape.
@@ -94,8 +98,17 @@ internal fun HomePictureSettings(
             }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onChoose) { Text(stringResource(R.string.home_picture_choose)) }
-            OutlinedButton(onClick = onClear, enabled = chosen) { Text(stringResource(R.string.action_clear)) }
+            Button(onClick = onChoose, enabled = !fromVault) { Text(stringResource(R.string.home_picture_choose)) }
+            OutlinedButton(onClick = onClear, enabled = chosen && !fromVault) {
+                Text(stringResource(R.string.action_clear))
+            }
+        }
+        if (fromVault) {
+            Text(
+                stringResource(R.string.help_from_vault),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
         }
         Text(
             stringResource(R.string.help_home_picture),

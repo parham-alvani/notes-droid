@@ -56,6 +56,10 @@ fun NoteMenu(
     onSync: () -> Unit = {},
     onSortTasks: (() -> Unit)? = null,
     onAddTask: (() -> Unit)? = null,
+    /** False in a read-only vault: the items that write are shown, and off. */
+    writes: Boolean = true,
+    /** The vault is a read-only clone, so its sync is a pull and is called one. */
+    pullsOnly: Boolean = false,
     onProperties: (() -> Unit)? = null,
     onHistory: () -> Unit = {},
 ) {
@@ -73,7 +77,7 @@ fun NoteMenu(
             // that was just changed elsewhere. Pull-to-refresh does the same,
             // and is invisible until you already know it is there.
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.browse_sync_now)) },
+                text = { Text(stringResource(if (pullsOnly) R.string.action_pull else R.string.browse_sync_now)) },
                 leadingIcon = { LucideGlyph("refresh-cw", size = 18.dp) },
                 enabled = !syncing,
                 onClick = {
@@ -103,6 +107,7 @@ fun NoteMenu(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.tasks_add)) },
                     leadingIcon = { LucideGlyph("list-plus", size = 18.dp) },
+                    enabled = writes,
                     onClick = {
                         open = false
                         add()
@@ -113,6 +118,7 @@ fun NoteMenu(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.note_sort_tasks)) },
                     leadingIcon = { LucideGlyph("list-checks", size = 18.dp) },
+                    enabled = writes,
                     onClick = {
                         open = false
                         sort()
@@ -123,6 +129,7 @@ fun NoteMenu(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.note_properties)) },
                     leadingIcon = { LucideGlyph("sliders-horizontal", size = 18.dp) },
+                    enabled = writes,
                     onClick = {
                         open = false
                         edit()

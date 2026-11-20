@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
@@ -38,12 +39,15 @@ internal fun TaskDigestCard(
     state: SyncUiState,
     viewModel: SyncViewModel,
 ) {
+    val fromVault = state.settings.fromVault
     SectionCard(stringResource(R.string.card_digest)) {
         SwitchRow(
             title = stringResource(R.string.settings_digest),
             checked = state.settings.taskDigest,
             onCheckedChange = viewModel::setTaskDigest,
+            enabled = VaultOverlay.DIGEST !in fromVault,
         )
+        FromVaultNote(fromVault, VaultOverlay.DIGEST, VaultOverlay.DIGEST_TIME)
 
         if (state.settings.taskDigest) {
             Text(stringResource(R.string.digest_at), style = MaterialTheme.typography.labelMedium)
@@ -52,6 +56,7 @@ internal fun TaskDigestCard(
                     FilterChip(
                         selected = state.settings.taskDigestHour == hour,
                         onClick = { viewModel.setTaskDigestHour(hour) },
+                        enabled = VaultOverlay.DIGEST_TIME !in fromVault,
                         label = { Text(stringResource(R.string.settings_hour, hour)) },
                     )
                 }

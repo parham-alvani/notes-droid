@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
 import me.parham1995.notes.data.ImagePolicy
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.data.database.VaultEntity
 import java.text.DateFormat
@@ -120,7 +121,8 @@ internal fun StatusCard(
                 onClick = viewModel::syncNow,
                 enabled = state.blocker() == null && !state.running,
             ) {
-                Text(stringResource(R.string.browse_sync_now))
+                // A read-only vault is pulled and nothing else.
+                Text(stringResource(if (state.pullsOnly) R.string.action_pull else R.string.browse_sync_now))
             }
             if (state.running || state.queued) {
                 OutlinedButton(onClick = viewModel::cancelSync) { Text(stringResource(R.string.action_cancel)) }
@@ -159,12 +161,15 @@ internal fun BackgroundSyncCard(
     viewModel: SyncViewModel,
 ) {
     val context = LocalContext.current
+    val scheduleFromVault = VaultOverlay.SYNC_INTERVAL in state.settings.fromVault
     SectionCard(stringResource(R.string.card_background_sync)) {
         SwitchRow(
             title = stringResource(R.string.settings_schedule),
             checked = state.settings.backgroundSync,
             onCheckedChange = viewModel::setBackgroundSync,
+            enabled = !scheduleFromVault,
         )
+        FromVaultNote(state.settings.fromVault, VaultOverlay.SYNC_INTERVAL)
 
         if (state.settings.backgroundSync) {
             Text(stringResource(R.string.settings_how_often), style = MaterialTheme.typography.labelMedium)
@@ -173,6 +178,7 @@ internal fun BackgroundSyncCard(
                     FilterChip(
                         selected = state.settings.syncIntervalHours == hours,
                         onClick = { viewModel.setSyncIntervalHours(hours) },
+                        enabled = !scheduleFromVault,
                         label = {
                             Text(
                                 if (hours == HOURS_IN_DAY) {

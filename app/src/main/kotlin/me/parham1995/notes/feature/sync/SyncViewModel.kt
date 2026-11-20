@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.BrowserSort
+import me.parham1995.notes.data.CloneSettings
 import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.FoldSections
 import me.parham1995.notes.data.ImagePolicy
@@ -30,6 +31,7 @@ import me.parham1995.notes.data.SyncTransport
 import me.parham1995.notes.data.SyncWorker
 import me.parham1995.notes.data.ThemeChoice
 import me.parham1995.notes.data.TokenStore
+import me.parham1995.notes.data.VaultClones
 import me.parham1995.notes.data.VaultFileStore
 import me.parham1995.notes.data.VaultSettings
 import me.parham1995.notes.data.VaultWriteRepository
@@ -76,7 +78,18 @@ data class SyncUiState(
     val queuedEdits: List<PendingEditEntity> = emptyList(),
     /** Result of the last write-access check, for immediate feedback. */
     val writeMessage: UiText? = null,
-)
+    /** The vaults that are clones, and what each clone's own git config says. */
+    val clones: Map<Long, CloneSettings> = emptyMap(),
+    /** What came of the last change of a vault's address, by the vault it was for. */
+    val addressMessage: Pair<Long, UiText>? = null,
+) {
+    /** Whether the vault being read is a read-only clone: its sync is a pull. */
+    val pullsOnly: Boolean
+        get() {
+            val active = vaults.firstOrNull { it.id == settings.activeVaultId } ?: vaults.firstOrNull()
+            return active != null && clones[active.id]?.readOnly == true
+        }
+}
 
 @HiltViewModel
 class SyncViewModel
@@ -91,6 +104,7 @@ class SyncViewModel
         private val syncLog: SyncLog,
         private val crashLog: CrashLog,
         private val writes: VaultWriteRepository,
+        private val vaultClones: VaultClones,
     ) : ViewModel() {
         private val local = MutableStateFlow(LocalState())
 
@@ -102,6 +116,7 @@ class SyncViewModel
             val reindexing: Boolean = false,
             val lastCrash: String? = null,
             val writeMessage: UiText? = null,
+            val addressMessage: Pair<Long, UiText>? = null,
         )
 
         /**
@@ -161,6 +176,7 @@ class SyncViewModel
                         reindexing = extra.reindexing,
                         lastCrash = extra.lastCrash,
                         writeMessage = extra.writeMessage,
+                        addressMessage = extra.addressMessage,
                         tokenRejected =
                             failed?.outputData?.getString(SyncWorker.KEY_ERROR) == SyncWorker.TOKEN_REJECTED,
                     )
@@ -170,8 +186,9 @@ class SyncViewModel
                 repository.vaults(),
                 sshKeyRows,
                 writes.queue(),
-            ) { base, vaults, keys, queued ->
-                base.copy(vaults = vaults, sshKeys = keys, queuedEdits = queued)
+                vaultClones.clones,
+            ) { base, vaults, keys, queued, clones ->
+                base.copy(vaults = vaults, sshKeys = keys, queuedEdits = queued, clones = clones)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SyncUiState())
 
         init {
@@ -260,6 +277,37 @@ class SyncViewModel
             path: String,
             vaultId: Long,
         ) = viewModelScope.launch { settingsStore.setScratchpad(path, vaultId) }
+
+        /** Which vault holds the scratchpad, when its path is the vault's to say and not this phone's. */
+        fun setScratchpadVault(vaultId: Long) = viewModelScope.launch { settingsStore.setScratchpadVault(vaultId) }
+
+        /**
+         * Makes a vault's clone read-only, or not. It waits for a sync that
+         * is running, which asks the clone which it is more than once.
+         */
+        fun setReadOnly(
+            vaultId: Long,
+            readOnly: Boolean,
+        ) = viewModelScope.launch { vaultClones.setReadOnly(vaultId, readOnly) }
+
+        /** Sets where a vault's clone pulls from; an empty address is refused and the old one stays. */
+        fun setAddress(
+            vaultId: Long,
+            address: String,
+        ) = viewModelScope.launch {
+            val saved = runCatching { vaultClones.setAddress(vaultId, address) }.getOrDefault(false)
+            val said = if (saved) R.string.vault_address_saved else R.string.vault_address_refused
+            local.update { it.copy(addressMessage = vaultId to UiText.Resource(said)) }
+        }
+
+        /** Whether this phone reads the app's settings from a vault at all. */
+        fun setFollowVault(follow: Boolean) = viewModelScope.launch { settingsStore.setFollowVault(follow) }
+
+        /** Declines one key the vault sets, or follows it again. */
+        fun setVaultKeyDeclined(
+            key: String,
+            declined: Boolean,
+        ) = viewModelScope.launch { settingsStore.setVaultKeyDeclined(key, declined) }
 
         /**
          * Asks each repository again whether this device may push to it.

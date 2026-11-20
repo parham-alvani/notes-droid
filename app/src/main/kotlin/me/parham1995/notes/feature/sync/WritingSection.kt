@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
+import me.parham1995.notes.data.VaultOverlay
 import me.parham1995.notes.ui.text
 
 /**
@@ -75,7 +76,19 @@ internal fun WritingCard(
                 Text(stringResource(R.string.settings_check_write))
             }
         }
-        if (!stored.hasAuthor) {
+        // The vault's author, which a commit takes where the app's own is empty.
+        val vaults = state.settings.fromVault
+        if (VaultOverlay.AUTHOR_NAME in vaults || VaultOverlay.AUTHOR_EMAIL in vaults) {
+            Text(
+                stringResource(
+                    R.string.from_vault_author,
+                    listOf(vaults.authorName, vaults.authorEmail).filter { it.isNotEmpty() }.joinToString(" · "),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+        if (!state.settings.author.isUsable) {
             Text(
                 stringResource(R.string.help_author_missing),
                 style = MaterialTheme.typography.bodySmall,
@@ -88,10 +101,11 @@ internal fun WritingCard(
             LabelledValue(
                 label = vault.label,
                 value =
-                    if (vault.canWrite) {
-                        stringResource(R.string.settings_can_write)
-                    } else {
-                        stringResource(R.string.settings_read_only)
+                    when {
+                        // A read-only clone, whatever its key may do.
+                        state.clones[vault.id]?.readOnly == true -> stringResource(R.string.read_only_badge)
+                        vault.canWrite -> stringResource(R.string.settings_can_write)
+                        else -> stringResource(R.string.settings_read_only)
                     },
             )
         }
@@ -109,6 +123,7 @@ internal fun ScratchpadCard(
 ) {
     val stored = state.settings.write
     var path by remember(stored.scratchpadPath) { mutableStateOf(stored.scratchpadPath) }
+    val pathFromVault = VaultOverlay.CAPTURE_TARGET in state.settings.fromVault
     val chosen =
         stored.scratchpadVaultId.takeIf { id -> state.vaults.any { it.id == id } }
             ?: state.vaults.firstOrNull()?.id
@@ -125,15 +140,24 @@ internal fun ScratchpadCard(
             onValueChange = { path = it },
             label = { Text(stringResource(R.string.settings_scratchpad_path)) },
             singleLine = true,
+            enabled = !pathFromVault,
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),
         )
+        FromVaultNote(state.settings.fromVault, VaultOverlay.CAPTURE_TARGET)
         if (state.vaults.size > 1) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.vaults.forEach { vault ->
                     FilterChip(
                         selected = vault.id == chosen,
-                        onClick = { viewModel.setScratchpad(path, vault.id) },
+                        // The vault's path is not written down as this phone's own.
+                        onClick = {
+                            if (pathFromVault) {
+                                viewModel.setScratchpadVault(vault.id)
+                            } else {
+                                viewModel.setScratchpad(path, vault.id)
+                            }
+                        },
                         label = { Text(vault.label) },
                     )
                 }
@@ -141,7 +165,7 @@ internal fun ScratchpadCard(
         }
         Button(
             onClick = { viewModel.setScratchpad(path, chosen) },
-            enabled = path.trim() != stored.scratchpadPath && path.isNotBlank(),
+            enabled = !pathFromVault && path.trim() != stored.scratchpadPath && path.isNotBlank(),
         ) {
             Text(stringResource(R.string.action_save))
         }
