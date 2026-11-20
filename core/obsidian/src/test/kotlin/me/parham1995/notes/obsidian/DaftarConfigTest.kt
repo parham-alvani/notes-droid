@@ -61,6 +61,29 @@ class DaftarConfigTest {
         assertThat(DaftarConfig.parse("[\"reader\"]\n\"folded\" = true\n").folded).isTrue()
     }
 
+    /**
+     * The settings half of `aReadOnlyCloneCanRefuseAgents` in `read-only-vault.md`;
+     * `daftar-cli mcp`, the other half, does not run on Android.
+     */
+    @Test
+    fun aReadOnlyCloneCanRefuseAgents() {
+        val refusing = DaftarConfig.parse("[agents]\nread_only_clones = false\n")
+        assertThat(refusing.agentsInReadOnlyClones).isFalse()
+        assertThat(refusing.agentsRefused(readOnly = true)).isTrue()
+        // A clone that is not read-only is never touched by the key.
+        assertThat(refusing.agentsRefused(readOnly = false)).isFalse()
+
+        listOf(
+            "",
+            "[agents]\nread_only_clones = true\n",
+            "[reader]\nread_only_clones = false\n",
+            "read_only_clones = false\n",
+        ).forEach { text ->
+            assertThat(DaftarConfig.parse(text).agentsInReadOnlyClones).isTrue()
+            assertThat(DaftarConfig.parse(text).agentsRefused(readOnly = true)).isFalse()
+        }
+    }
+
     @Test
     fun `a file that is not TOML at all is the default and does not throw`() {
         assertThat(DaftarConfig.parse("[[[\n===\n]\n\u0000 = = =\n[reader\nfolded true").folded).isFalse()
