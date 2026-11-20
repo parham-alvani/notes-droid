@@ -402,15 +402,18 @@ class SyncViewModel
 
         fun setTaskDigestHour(hour: Int) = viewModelScope.launch { writer.set(VaultOverlay.digestHour, hour) }
 
-        fun setTextScale(scale: Float) = viewModelScope.launch { writer.set(VaultOverlay.textSize, scale) }
+        fun setTextScale(scale: Float) = viewModelScope.launch { writer.setWhenStill(VaultOverlay.textSize, scale) }
 
-        fun setLineSpacing(spacing: Float) = viewModelScope.launch { writer.set(VaultOverlay.lineSpacing, spacing) }
+        fun setLineSpacing(spacing: Float) =
+            viewModelScope.launch { writer.setWhenStill(VaultOverlay.lineSpacing, spacing) }
 
-        fun setLineWidth(width: LineWidth) = viewModelScope.launch { writer.set(VaultOverlay.lineWidth, width) }
+        fun setLineWidth(width: LineWidth) =
+            viewModelScope.launch { writer.setWhenStill(VaultOverlay.lineWidth, width) }
 
         fun setTheme(theme: ThemeChoice) = viewModelScope.launch { writer.set(VaultOverlay.theme, theme) }
 
-        fun setWidgetOpacity(percent: Int) = viewModelScope.launch { writer.set(VaultOverlay.widgetOpacity, percent) }
+        fun setWidgetOpacity(percent: Int) =
+            viewModelScope.launch { writer.setWhenStill(VaultOverlay.widgetOpacity, percent) }
 
         fun setPersianFont(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.persianFont, enabled) }
 

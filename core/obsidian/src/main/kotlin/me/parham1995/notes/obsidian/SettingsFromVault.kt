@@ -233,6 +233,9 @@ object SettingsFromVault {
             "appearance.tap_full_screen" to flag,
             "appearance.widget_opacity" to whole(0..PERCENT),
             "files.sort" to oneOf(setOf("name", "recently_opened", "recently_changed")),
+            // The phone's background refresh, in hours; 0 is off. Its own key: the shared
+            // `git.sync_interval` is the desktops' timer, which the phone neither reads nor writes.
+            "git.sync_interval" to whole(0..HOURS),
             "git.wifi_only" to flag,
             "git.ssh_port_443" to flag,
             "git.image_policy" to oneOf(setOf("on_demand", "prefetch_on_wifi", "never")),
@@ -372,7 +375,8 @@ object SettingsFromVault {
             // A value of the wrong type, or out of the key's range, is as not there.
             if (!rule.valid(value, root)) return@forEach
             // A shared key keeps its name whichever table said it; a setting only this platform has keeps the table's.
-            val name = if (table != null && inner in RULES) inner else key
+            val own = table == ANDROID && inner in ANDROID_RULES
+            val name = if (table != null && !own && inner in RULES) inner else key
             vaultSets += name
             if (decline.declines(name)) return@forEach
             values[name] = value

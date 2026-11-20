@@ -13,6 +13,8 @@ import me.parham1995.notes.data.git.GitSshVaultSync
 import me.parham1995.notes.data.git.SshKeyStore
 import me.parham1995.notes.markdown.PropertyEdit
 import me.parham1995.notes.markdown.PropertyValue
+import me.parham1995.notes.obsidian.DaftarToml
+import me.parham1995.notes.obsidian.HiddenFiles
 import me.parham1995.notes.sync.ReadOnlyVault
 import me.parham1995.notes.sync.VaultWriter
 import okhttp3.OkHttpClient
@@ -370,11 +372,13 @@ class ReadOnlyVaultTest {
             assertThat(remoteSettings()).contains("\ntext_size = 16\n")
             assertThat(settings.current().reading.textScale).isEqualTo(1f)
 
-            // A setting only this app has, and one in hours said in the spec's minutes.
+            // A setting only this app has. The background refresh is the phone's own too: the shared
+            // `git.sync_interval` is the desktops' timer, and its line stays as the vault has it.
             assertThat(writer.set(VaultOverlay.persianFont, false)).isEqualTo(SettingHome.VAULT)
             assertThat(writer.set(VaultOverlay.syncInterval, 12)).isEqualTo(SettingHome.VAULT)
             assertThat(remoteSettings()).contains("text_scale = 100\npersian_font = false\n")
-            assertThat(remoteSettings()).contains("sync_interval = 720\n")
+            assertThat(remoteSettings()).contains("\n[android.git]\nsync_interval = 12\n")
+            assertThat(remoteSettings()).contains("\n[git]\nsync_interval = 90\n")
             assertThat(settings.current().reading.persianFont).isFalse()
             assertThat(settings.current().syncIntervalHours).isEqualTo(12)
 
@@ -383,6 +387,94 @@ class ReadOnlyVaultTest {
             assertThat(database.noteDao().byPath(vaultId, DAFTAR)).isNull()
             assertThat(changed()).isEmpty()
             assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    /** How many commits the remote's branch has. */
+    private fun commits(): Int =
+        Git.open(remote).use { git ->
+            git
+                .log()
+                .add(git.repository.resolve("refs/heads/$BRANCH"))
+                .call()
+                .count()
+        }
+
+    /**
+     * A pinch goes through every size on its way, and a run of taps through
+     * every choice: the screen follows each at once, and the vault gets one
+     * commit, for the value the hand stopped on.
+     */
+    @Test
+    fun `a pinch and a run of taps are one commit each, for the value they stopped on`() =
+        runTest {
+            settings.setAuthor("A Person", "person@example.com")
+            writer.settleMillis = 300
+            val before = commits()
+
+            // One pinch, through four sizes.
+            listOf(1.15f, 1.3f, 1.5f, 1.3f).forEach { scale ->
+                writer.setWhenStill(VaultOverlay.textSize, scale)
+                // The screen follows the fingers at once, from memory.
+                assertThat(settings.current().reading.textScale).isEqualTo(scale)
+            }
+            // Nothing is written while the value is still moving.
+            assertThat(commits()).isEqualTo(before)
+            assertThat(database.pendingEditDao().all()).isEmpty()
+
+            writer.settle()
+
+            assertThat(commits()).isEqualTo(before + 1)
+            assertThat(remoteSettings()).endsWith("\n[android.appearance]\ntext_scale = 130\n")
+            assertThat(lastMessage()).isEqualTo("chore(settings): set android.appearance.text_scale")
+            assertThat(settings.current().reading.textScale).isEqualTo(1.3f)
+            assertThat(settings.current().fromVault.shown).isEmpty()
+
+            // One drag of a slider, or as many taps along a row of choices.
+            listOf(75, 50, 25, 0, 25).forEach { writer.setWhenStill(VaultOverlay.widgetOpacity, it) }
+            assertThat(settings.current().reading.widgetOpacity).isEqualTo(25)
+            writer.settle()
+
+            assertThat(commits()).isEqualTo(before + 2)
+            assertThat(remoteSettings()).contains("widget_opacity = 25\n")
+            assertThat(settings.current().reading.widgetOpacity).isEqualTo(25)
+
+            // A second gesture after the first has settled is a commit of its own.
+            writer.setWhenStill(VaultOverlay.textSize, 1f)
+            writer.settle()
+            assertThat(commits()).isEqualTo(before + 3)
+        }
+
+    @Test
+    fun `the switch of hidden files leaves a list the person wrote as it is`() =
+        runTest {
+            settings.setAuthor("A Person", "person@example.com")
+            // The vault's list is neither the app's four names nor empty: someone wrote it.
+            assertThat(settings.current().reading.hiddenNames).containsExactly("CLAUDE.md", "NOTES.md")
+
+            assertThat(writer.set(VaultOverlay.hiddenFiles, emptySet())).isEqualTo(SettingHome.VAULT)
+
+            // The shared line stays byte for byte, and the phone's choice is in its own table.
+            assertThat(
+                remoteSettings(),
+            ).contains("\n[files]\nhidden = [\"CLAUDE.md\", \"NOTES.md\"]\nshow_hidden = false\n")
+            assertThat(remoteSettings()).endsWith("\n[android.files]\nhidden = []\n")
+            assertThat(settings.current().reading.hideAgentFiles).isFalse()
+
+            // Where the shared list is the app's own names, or empty, the switch writes the shared line.
+            val own =
+                DaftarToml.parse(
+                    "[files]\nhidden = [\"CLAUDE.md\", \"AGENTS.md\", \"GEMINI.md\", \"CLAUDE.local.md\"]\n",
+                )
+            assertThat(VaultOverlay.hiddenFiles.said(emptySet(), own)?.first).isEqualTo(VaultOverlay.HIDDEN_FILES)
+            assertThat(
+                VaultOverlay.hiddenFiles
+                    .said(
+                        HiddenFiles.AGENT_FILES,
+                        DaftarToml.parse("[files]\nhidden = []\n"),
+                    )?.first,
+            ).isEqualTo(VaultOverlay.HIDDEN_FILES)
+            assertThat(VaultOverlay.hiddenFiles.said(HiddenFiles.AGENT_FILES, emptyMap())?.first)
+                .isEqualTo(VaultOverlay.HIDDEN_FILES)
         }
 
     @Test
@@ -547,9 +639,10 @@ class ReadOnlyVaultTest {
             assertThat(followed.reading.lineWidth).isEqualTo(LineWidth.FULL)
             assertThat(followed.reading.remoteImages).isFalse()
             assertThat(followed.reading.foldSections).isEqualTo(FoldSections.ALWAYS)
-            // Ninety minutes is rounded up to whole hours.
+            // The shared `git.sync_interval` is the desktops' timer: the phone's refresh does not read it.
             assertThat(followed.backgroundSync).isTrue()
-            assertThat(followed.syncIntervalHours).isEqualTo(2)
+            assertThat(followed.syncIntervalHours).isEqualTo(6)
+            assertThat(VaultOverlay.SYNC_INTERVAL in followed.fromVault).isFalse()
             assertThat(followed.taskDigest).isTrue()
             assertThat(followed.taskDigestHour).isEqualTo(7)
             assertThat(followed.write.scratchpadPath).isEqualTo("Inbox.md")
@@ -559,7 +652,7 @@ class ReadOnlyVaultTest {
             assertThat(followed.reading.vaultHomePicture).isEqualTo(File(tree, NOTE).path)
             // A key this app has no setting for, and one a vault may not set, change nothing.
             assertThat(followed.fromVault.applied).containsNoneOf("appearance.font", "terminal.shell")
-            assertThat(followed.fromVault.applied).containsAtLeast(VaultOverlay.THEME, VaultOverlay.SYNC_INTERVAL)
+            assertThat(followed.fromVault.applied).containsAtLeast(VaultOverlay.THEME, VaultOverlay.DIGEST)
 
             // The switch: no app setting is read from any vault.
             settings.setFollowVault(false)

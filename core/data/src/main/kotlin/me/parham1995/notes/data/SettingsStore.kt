@@ -465,6 +465,26 @@ class SettingsStore
             held.update { it + key }
         }
 
+        /** The values a gesture has not settled on yet, by key; see [show]. */
+        private val shown = MutableStateFlow<Map<String, Any>>(emptyMap())
+
+        /**
+         * Shows [value] for the setting of [key] at once, from memory, before
+         * it is written anywhere: how the screen follows a pinch whose
+         * value is written only once, when the hand has been still.
+         */
+        fun show(
+            key: String,
+            value: Any,
+        ) {
+            shown.update { it + (key to value) }
+        }
+
+        /** The value shown for [key] has been written, or dropped: what is stored is shown again. */
+        fun settled(key: String) {
+            shown.update { it - key }
+        }
+
         /** Counts the times a vault's `.daftar.toml` may have changed, so [settings] reads it again. */
         private val vaultRevision = MutableStateFlow(0)
 
@@ -551,12 +571,9 @@ class SettingsStore
          * [vaultConfigChanged] says it may have: after each sync.
          */
         val settings: Flow<VaultSettings> =
-            combine(
-                own,
-                vaultRevision,
-                held,
-            ) { settings, _, kept -> settings.copy(fromVault = settings.fromVault.copy(held = kept)) }
-                .map { VaultOverlay.apply(it, vaultConfig.of(it.activeVaultId)) }
+            combine(own, vaultRevision, held, shown) { settings, _, kept, unsettled ->
+                settings.copy(fromVault = settings.fromVault.copy(held = kept, shown = unsettled))
+            }.map { VaultOverlay.apply(it, vaultConfig.of(it.activeVaultId)) }
 
         suspend fun current(): VaultSettings = settings.first()
 

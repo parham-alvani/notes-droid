@@ -218,8 +218,9 @@ class NoteViewModel
                 val current = settings.current().reading.textScale
                 val wanted = current * factor
                 val nearest = ReadingSettings.TEXT_SCALES.minBy { kotlin.math.abs(it - wanted) }
-                // A change like any made in Settings: to the vault where it holds the size.
-                if (nearest != current) settingsWriter.set(VaultOverlay.textSize, nearest)
+                // A change like any made in Settings, to the vault where it holds the
+                // size: shown at once, and written once, when the pinch is over.
+                if (nearest != current) settingsWriter.setWhenStill(VaultOverlay.textSize, nearest)
             }
         }
 

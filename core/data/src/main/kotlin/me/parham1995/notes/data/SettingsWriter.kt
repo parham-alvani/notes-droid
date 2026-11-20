@@ -1,6 +1,15 @@
 package me.parham1995.notes.data
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.obsidian.DaftarToml
 import me.parham1995.notes.obsidian.SettingsFromVault
@@ -50,6 +59,56 @@ class SettingsWriter
         private val vaultConfig: VaultConfigSource,
         private val vaults: VaultDao,
     ) {
+        /** Where a change waits for the hand to be still; one per key. */
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        private val settling = HashMap<String, Pair<Any, Job>>()
+
+        /** How long a value has to stay as it is before it is written. */
+        var settleMillis: Long = SETTLE_MILLIS
+
+        /**
+         * Changes [binding] to [value] as a pinch or a run of taps does: the
+         * screen follows at once, from memory, and the value is written once,
+         * when it has been still for [settleMillis]. A step after another
+         * takes its place, so a whole gesture is one write, and in a vault
+         * one commit, however many values it went through.
+         */
+        fun <T : Any> setWhenStill(
+            binding: SettingBinding<T>,
+            value: T,
+        ) {
+            settings.show(binding.id, value)
+            val mine = Any()
+            synchronized(settling) {
+                settling[binding.id]?.second?.cancel()
+                settling[binding.id] =
+                    mine to
+                    scope.launch {
+                        delay(settleMillis)
+                        // Past the wait, the write is not given up for a later step: that one follows it.
+                        withContext(NonCancellable) {
+                            set(binding, value)
+                            synchronized(settling) {
+                                if (settling[binding.id]?.first === mine) {
+                                    settling.remove(binding.id)
+                                    settings.settled(binding.id)
+                                }
+                            }
+                        }
+                    }
+            }
+        }
+
+        /** Waits for every change that is still settling to be written. For a test, and for leaving a screen. */
+        suspend fun settle() {
+            while (true) {
+                val waiting = synchronized(settling) { settling.values.map { it.second } }
+                if (waiting.isEmpty()) return
+                waiting.joinAll()
+                synchronized(settling) { settling.values.removeAll { it.second.isCompleted } }
+            }
+        }
+
         /** The vault a change is written to: the one being read, else the first, else none. */
         suspend fun vaultId(): Long? {
             val active = settings.own.first().activeVaultId
@@ -116,3 +175,6 @@ class SettingsWriter
         /** Follow the Vault: the key leaves the declined list, and the vault's value is used again. */
         suspend fun followVault(binding: SettingBinding<*>) = settings.setVaultKeyDeclined(binding.id, declined = false)
     }
+
+/** About two seconds: long enough that a pinch, or a few taps looking for a size, is one change. */
+private const val SETTLE_MILLIS = 2_000L

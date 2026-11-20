@@ -102,6 +102,13 @@ class SettingsInVaultTest {
         assertThat(read.whole("android.appearance.text_scale")).isEqualTo(115)
         assertThat(read.refused).containsExactly("appearance.text_scale")
         assertThat(SettingsFromVault.resolved(own, "", platform = "macos").values).isEmpty()
+
+        // The phone's background refresh is its own key: the shared one is the desktops' timer,
+        // and neither is read as the other.
+        val both = SettingsFromVault.resolved("[git]\nsync_interval = 0\n[android.git]\nsync_interval = 12\n", "")
+        assertThat(both.whole("git.sync_interval")).isEqualTo(0)
+        assertThat(both.whole("android.git.sync_interval")).isEqualTo(12)
+        assertThat(SettingsFromVault.resolved("[android.git]\nsync_interval = 720\n", "").values).isEmpty()
     }
 
     @Test

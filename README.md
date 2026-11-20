@@ -179,6 +179,8 @@ The settings are kept in the repository. The `.daftar.toml` at the vault's root 
 - **A change goes to the vault being read**: the one the browser, search and the tasks show, and the first vault when none was chosen. With no vault, it goes to the phone.
 - **The phone keeps a change** when the vault is read-only or cannot be written, when the key is declined, and when the value is one a vault may not hold (pictures from the web turned on). Such a change of a key the vault sets holds until the next sync reads the settings again.
 - **Hold a setting** for **Keep on This Device**, which declines its key and keeps the value in use on the phone, and for **Follow the Vault**, which follows it again. **Settings › Vaults › Settings from the vault** has the same choices in one list, and one switch that declines all of them.
+- **A pinch is one commit.** A pinch in a note, and the choices of text size, line spacing, line width and widget background, are shown at once and written once, when the value has been still for two seconds.
+- **The desktops' sync timer is not the phone's.** The shared `git.sync_interval` is the computers' timer of commit, pull and push; the phone neither reads nor writes it, and keeps its background refresh in `android.git.sync_interval`.
 - A repository never chooses a program to run, a file outside the vault or what leaves the phone: the keys are a list, and a key not on it is ignored.
 
 The shared keys this app has a setting for, written in the spec's unit when the value can be said in it exactly:
@@ -190,11 +192,10 @@ The shared keys this app has a setting for, written in the spec's unit when the 
 | `appearance.text_width` | the line width: 0 is the whole window; the narrow and the comfortable one are `android.appearance.line_width` |
 | `appearance.remote_images` | pictures from the web; a vault can only turn them off |
 | `appearance.fold_sections` | whether notes open folded |
-| `git.sync_interval` | the background refresh, in minutes: 0 is off, and the app's hours are written times 60 |
 | `git.name`, `git.email` | the author of a commit, where the app's own is empty; read, never written |
 | `notifications.digest`, `notifications.digest_time` | the daily digest and its hour |
 | `capture.target` | the scratchpad's path, when it is a note's path |
-| `files.hidden`, `files.show_hidden` | the files left out of the lists |
+| `files.hidden`, `files.show_hidden` | the files left out of the lists; the switch writes the app's four names or none, and where the vault's list is one a person wrote, it writes `android.files.hidden` and leaves that list as it is |
 | `home.image` | the home page's picture, a file in the vault; read, never written, since the app's own picker takes a photo from outside the vault |
 
 The settings only this app has live in `[android]`:
@@ -213,6 +214,7 @@ The settings only this app has live in `[android]`:
 | `android.appearance.tap_full_screen` | a boolean | a tap hides the bars on a wide window |
 | `android.appearance.widget_opacity` | 0 to 100 | the widgets' background |
 | `android.files.sort` | `name`, `recently_opened`, `recently_changed` | the browser's order |
+| `android.git.sync_interval` | 0 to 24 | the background refresh, in hours; 0 is off |
 | `android.git.wifi_only` | a boolean | background sync on Wi-Fi only |
 | `android.git.ssh_port_443` | a boolean | SSH over port 443 |
 | `android.git.image_policy` | `on_demand`, `prefetch_on_wifi`, `never` | when pictures are fetched |

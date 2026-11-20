@@ -14,7 +14,6 @@ import me.parham1995.notes.sync.VaultFilter
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.ceil
 
 /** A vault's `.daftar.toml` as it is on the device: its text, and the folder it is the root of. */
 data class VaultConfigFile(
@@ -110,6 +109,11 @@ data class FromVault(
      * settings are read again, and then the vault's returns. Never stored.
      */
     val held: Set<String> = emptySet(),
+    /**
+     * Values a pinch or a run of taps has not settled on yet, by their key:
+     * shown at once, and written once the hand has been still. Never stored.
+     */
+    val shown: Map<String, Any> = emptyMap(),
 ) {
     val decline: VaultSettingsDecline
         get() =
@@ -172,9 +176,10 @@ class SettingBinding<T : Any>(
  *   is the whole window, up to [NARROW_EM] the narrow one, more the
  *   comfortable one. The two that are no exact em are
  *   `android.appearance.line_width`.
- * - `git.sync_interval` is minutes between syncs there and a background
- *   refresh in hours here: 0 turns it off, anything else is rounded up to
- *   whole hours, a day at most.
+ * - `git.sync_interval` is the desktops' timer of commit, pull and push,
+ *   and is neither read nor written here: a phone that wrote its hours
+ *   there would turn automatic sync on for every computer. The phone's
+ *   background refresh is `android.git.sync_interval`, in hours; 0 is off.
  * - `notifications.digest_time` is `HH:MM` there and an hour here.
  * - `capture.target` is where quick capture goes: a note's path is the
  *   scratchpad's path here; `"daily"` has no like and is as not there.
@@ -189,13 +194,16 @@ object VaultOverlay {
     const val TEXT_WIDTH = "appearance.text_width"
     const val REMOTE_IMAGES = SettingsFromVault.REMOTE_IMAGES
     const val FOLD_SECTIONS = "appearance.fold_sections"
-    const val SYNC_INTERVAL = "git.sync_interval"
+
+    /** The phone's own: the shared `git.sync_interval` is the desktops' timer and is never read or written here. */
+    const val SYNC_INTERVAL = "android.git.sync_interval"
     const val AUTHOR_NAME = "git.name"
     const val AUTHOR_EMAIL = "git.email"
     const val DIGEST = "notifications.digest"
     const val DIGEST_TIME = "notifications.digest_time"
     const val CAPTURE_TARGET = "capture.target"
     const val HIDDEN_FILES = "files.hidden"
+    const val ANDROID_HIDDEN_FILES = "android.files.hidden"
     const val SHOW_HIDDEN = "files.show_hidden"
     const val HOME_IMAGE = "home.image"
 
@@ -224,8 +232,6 @@ object VaultOverlay {
     /** The widest `text_width`, in em, that is this app's narrow column. */
     const val NARROW_EM = 38L
 
-    private const val MINUTES_PER_HOUR = 60.0
-    private const val HOURS_PER_DAY = 24
     private const val DAILY = "daily"
     private const val PERCENT = 100f
     private const val EXACT = 0.001f
@@ -320,9 +326,7 @@ object VaultOverlay {
         SettingBinding(
             SYNC_INTERVAL,
             { it, _ ->
-                it.whole(SYNC_INTERVAL)?.let { minutes ->
-                    if (minutes == 0L) 0 else ceil(minutes / MINUTES_PER_HOUR).toInt().coerceIn(1, HOURS_PER_DAY)
-                }
+                it.whole(SYNC_INTERVAL)?.toInt()
             },
             { if (it.backgroundSync) it.syncIntervalHours else 0 },
             { s, hours ->
@@ -334,7 +338,7 @@ object VaultOverlay {
                     s.copy(backgroundSync = true, syncIntervalHours = hours)
                 }
             },
-            { hours, _ -> SYNC_INTERVAL to TomlValue.Whole(hours * MINUTES_PER_HOUR.toLong()) },
+            { hours, _ -> SYNC_INTERVAL to TomlValue.Whole(hours.toLong()) },
         ) { store, hours ->
             store.setBackgroundSync(hours > 0)
             if (hours > 0) store.setSyncIntervalHours(hours)
@@ -381,7 +385,13 @@ object VaultOverlay {
             { it, _ -> it.texts(HIDDEN_FILES)?.toSet() },
             { if (it.reading.hideAgentFiles) it.reading.hiddenNames ?: HiddenFiles.AGENT_FILES else emptySet() },
             { s, names -> s.reading { copy(hideAgentFiles = names.isNotEmpty(), hiddenNames = names) } },
-            { names, _ -> HIDDEN_FILES to TomlValue.Texts(names.toList()) },
+            { names, file ->
+                // A list the person wrote, neither the app's own names nor empty, is not
+                // replaced by a switch: the phone's choice goes to its own table.
+                val shared = (file[HIDDEN_FILES] as? TomlValue.Texts)?.value?.toSet()
+                val written = shared != null && shared.isNotEmpty() && shared != HiddenFiles.AGENT_FILES
+                (if (written) ANDROID_HIDDEN_FILES else HIDDEN_FILES) to TomlValue.Texts(names.toList())
+            },
         ) { store, names -> store.setHideAgentFiles(names.isNotEmpty()) }
 
     val showHidden =
@@ -593,7 +603,7 @@ object VaultOverlay {
         // What the vault would set with nothing declined: what Settings can offer to follow again.
         val offered = overlay(VaultSettings(), said, file.root, FromVault()).second
         val follows = asked.follow
-        return settings.copy(
+        return shown(settings, own.fromVault.shown).copy(
             fromVault =
                 asked.copy(
                     applied = applied,
@@ -643,6 +653,23 @@ object VaultOverlay {
         }
         return out to applied
     }
+
+    /** [settings] with the values a gesture has not settled yet, which the screen follows at once. */
+    private fun shown(
+        settings: VaultSettings,
+        values: Map<String, Any>,
+    ): VaultSettings =
+        BINDINGS.fold(settings) { out, binding ->
+            values[binding.id]?.let { show(binding, out, it) }
+                ?: out
+        }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T : Any> show(
+        binding: SettingBinding<T>,
+        settings: VaultSettings,
+        value: Any,
+    ): VaultSettings = binding.put(settings, value as T)
 
     private fun <T : Any> take(
         binding: SettingBinding<T>,
