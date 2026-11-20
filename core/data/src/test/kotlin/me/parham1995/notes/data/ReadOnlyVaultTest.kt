@@ -44,6 +44,7 @@ class ReadOnlyVaultTest {
     private lateinit var settings: SettingsStore
     private lateinit var clones: VaultClones
     private lateinit var writes: VaultWriteRepository
+    private lateinit var writer: SettingsWriter
     private lateinit var root: File
     private lateinit var remote: File
     private lateinit var tree: File
@@ -169,6 +170,7 @@ class ReadOnlyVaultTest {
                     readOnly = clones,
                     vaultConfig = vaultConfig,
                 )
+            writer = SettingsWriter(settings, writes, vaultConfig, database.vaultDao())
         }
 
     @After
@@ -314,6 +316,168 @@ class ReadOnlyVaultTest {
             }
         }
 
+    /** The vault's `.daftar.toml` as the remote holds it at its tip. */
+    private fun remoteSettings(): String =
+        Git.open(remote).use { git ->
+            val tip = git.repository.resolve("refs/heads/$BRANCH")
+            org.eclipse.jgit.revwalk.RevWalk(git.repository).use { walk ->
+                val tree = walk.parseCommit(tip).tree
+                org.eclipse.jgit.treewalk.TreeWalk.forPath(git.repository, DAFTAR, tree).use { found ->
+                    String(git.repository.open(found.getObjectId(0)).bytes)
+                }
+            }
+        }
+
+    private fun lastMessage(): String =
+        Git.open(remote).use { git ->
+            git
+                .log()
+                .add(git.repository.resolve("refs/heads/$BRANCH"))
+                .setMaxCount(1)
+                .call()
+                .first()
+                .fullMessage
+        }
+
+    /**
+     * `vault-config.md` section 5, through the app's settings and its one
+     * write path, on the phone's own clone; the pure rule and the file's
+     * bytes are `SettingsInVaultTest` in core/obsidian.
+     */
+    @Test
+    fun aSettingChangedInTheAppGoesToTheVault() =
+        runTest {
+            settings.setAuthor("A Person", "person@example.com")
+            val before = File(tree, DAFTAR).readText()
+            val device = settings.own.first()
+
+            // A shared key the vault has: only its line changes, and the change is committed and pushed.
+            assertThat(writer.set(VaultOverlay.theme, ThemeChoice.SYSTEM)).isEqualTo(SettingHome.VAULT)
+            assertThat(
+                File(tree, DAFTAR).readText(),
+            ).isEqualTo(before.replace("theme = \"light\"", "theme = \"system\""))
+            assertThat(remoteSettings()).isEqualTo(File(tree, DAFTAR).readText())
+            assertThat(lastMessage()).isEqualTo("chore(settings): set appearance.theme")
+            assertThat(settings.current().reading.theme).isEqualTo(ThemeChoice.SYSTEM)
+
+            // A scale that is no whole size is said in `[android]`, at the end of the file.
+            assertThat(writer.set(VaultOverlay.textSize, 1.15f)).isEqualTo(SettingHome.VAULT)
+            assertThat(remoteSettings()).endsWith("\n[android.appearance]\ntext_scale = 115\n")
+            assertThat(settings.current().reading.textScale).isEqualTo(1.15f)
+            // And once it is there, that is the line a later change goes to, the shared size left as it was.
+            assertThat(writer.set(VaultOverlay.textSize, 1f)).isEqualTo(SettingHome.VAULT)
+            assertThat(remoteSettings()).contains("text_scale = 100\n")
+            assertThat(remoteSettings()).contains("\ntext_size = 16\n")
+            assertThat(settings.current().reading.textScale).isEqualTo(1f)
+
+            // A setting only this app has, and one in hours said in the spec's minutes.
+            assertThat(writer.set(VaultOverlay.persianFont, false)).isEqualTo(SettingHome.VAULT)
+            assertThat(writer.set(VaultOverlay.syncInterval, 12)).isEqualTo(SettingHome.VAULT)
+            assertThat(remoteSettings()).contains("text_scale = 100\npersian_font = false\n")
+            assertThat(remoteSettings()).contains("sync_interval = 720\n")
+            assertThat(settings.current().reading.persianFont).isFalse()
+            assertThat(settings.current().syncIntervalHours).isEqualTo(12)
+
+            // The phone's own settings are as they were, and the file is no note.
+            assertThat(settings.own.first()).isEqualTo(device)
+            assertThat(database.noteDao().byPath(vaultId, DAFTAR)).isNull()
+            assertThat(changed()).isEmpty()
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun whatAVaultMayNotHoldGoesToTheDevice() =
+        runTest {
+            settings.setAuthor("A Person", "person@example.com")
+            val before = File(tree, DAFTAR).readBytes().toList()
+            val head = tip(remote)
+
+            // Pictures from the web turned on: a vault may only turn them off. The
+            // vault says off, so the key is kept on this device and the choice holds.
+            assertThat(settings.current().reading.remoteImages).isFalse()
+            assertThat(writer.set(VaultOverlay.remoteImages, true)).isEqualTo(SettingHome.DEVICE)
+            assertThat(
+                settings.own
+                    .first()
+                    .reading.remoteImages,
+            ).isTrue()
+            assertThat(settings.current().reading.remoteImages).isTrue()
+            assertThat(
+                settings.own
+                    .first()
+                    .fromVault.declined,
+            ).containsExactly(VaultOverlay.REMOTE_IMAGES)
+
+            // With the vault's settings declined, every change is the device's.
+            settings.setFollowVault(false)
+            assertThat(writer.set(VaultOverlay.theme, ThemeChoice.SYSTEM)).isEqualTo(SettingHome.DEVICE)
+            assertThat(
+                settings.own
+                    .first()
+                    .reading.theme,
+            ).isEqualTo(ThemeChoice.SYSTEM)
+            settings.setFollowVault(true)
+
+            // So is every change in a read-only clone.
+            clones.setReadOnly(vaultId, true)
+            assertThat(writer.writable()).isFalse()
+            assertThat(writer.set(VaultOverlay.digest, false)).isEqualTo(SettingHome.DEVICE)
+            assertThat(writer.set(VaultOverlay.keepScreenOn, true)).isEqualTo(SettingHome.DEVICE)
+            assertThat(settings.own.first().taskDigest).isFalse()
+            assertThat(
+                settings.own
+                    .first()
+                    .reading.keepScreenOn,
+            ).isTrue()
+
+            // `.daftar.toml` is byte for byte as it was, here and on the remote.
+            assertThat(File(tree, DAFTAR).readBytes().toList()).isEqualTo(before)
+            assertThat(tip(remote)).isEqualTo(head)
+            assertThat(changed()).isEmpty()
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun keepOnThisDeviceDeclinesTheKey() =
+        runTest {
+            settings.setAuthor("A Person", "person@example.com")
+            val before = File(tree, DAFTAR).readBytes().toList()
+            assertThat(settings.current().reading.theme).isEqualTo(ThemeChoice.LIGHT)
+
+            writer.keepOnDevice(VaultOverlay.theme)
+
+            // The key is declined, the value in use is the device's now, and the vault's line stays.
+            assertThat(
+                settings.own
+                    .first()
+                    .fromVault.declined,
+            ).containsExactly(VaultOverlay.THEME)
+            assertThat(
+                settings.own
+                    .first()
+                    .reading.theme,
+            ).isEqualTo(ThemeChoice.LIGHT)
+            assertThat(settings.current().reading.theme).isEqualTo(ThemeChoice.LIGHT)
+            assertThat(VaultOverlay.THEME in settings.current().fromVault).isFalse()
+            assertThat(File(tree, DAFTAR).readBytes().toList()).isEqualTo(before)
+
+            // A later change of it writes the device.
+            assertThat(writer.set(VaultOverlay.theme, ThemeChoice.DARK)).isEqualTo(SettingHome.DEVICE)
+            assertThat(settings.current().reading.theme).isEqualTo(ThemeChoice.DARK)
+            assertThat(File(tree, DAFTAR).readBytes().toList()).isEqualTo(before)
+
+            // Follow the Vault takes the key off the list, and the vault's value is used again.
+            writer.followVault(VaultOverlay.theme)
+            assertThat(
+                settings.own
+                    .first()
+                    .fromVault.declined,
+            ).isEmpty()
+            assertThat(settings.current().reading.theme).isEqualTo(ThemeChoice.LIGHT)
+            assertThat(VaultOverlay.THEME in settings.current().fromVault).isTrue()
+        }
+
+    /** Holds now only for a key the device keeps: here, every key of a read-only clone. */
     @Test
     fun aSettingChangedInTheAppGoesToTheComputer() =
         runTest {
@@ -323,8 +487,10 @@ class ReadOnlyVaultTest {
             assertThat(settings.current().reading.textScale).isEqualTo(16 / 14f)
             assertThat(VaultOverlay.TEXT_SIZE in settings.current().fromVault).isTrue()
 
-            settings.setTextScale(1.3f)
-            settings.setTheme(ThemeChoice.LIGHT)
+            // A read-only clone is never written: the changes are the device's.
+            clones.setReadOnly(vaultId, true)
+            assertThat(writer.set(VaultOverlay.textSize, 1.3f)).isEqualTo(SettingHome.DEVICE)
+            assertThat(writer.set(VaultOverlay.theme, ThemeChoice.LIGHT)).isEqualTo(SettingHome.DEVICE)
 
             // The app's own store has the change, and the vault's file is as it was, byte for byte.
             assertThat(

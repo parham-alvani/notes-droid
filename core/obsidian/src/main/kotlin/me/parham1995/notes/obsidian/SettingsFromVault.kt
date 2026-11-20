@@ -231,7 +231,6 @@ object SettingsFromVault {
             "appearance.hold_to_define" to flag,
             "appearance.keep_screen_on" to flag,
             "appearance.tap_full_screen" to flag,
-            "appearance.hide_rail" to flag,
             "appearance.widget_opacity" to whole(0..PERCENT),
             "files.sort" to oneOf(setOf("name", "recently_opened", "recently_changed")),
             "git.wifi_only" to flag,

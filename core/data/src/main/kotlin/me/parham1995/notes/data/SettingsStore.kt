@@ -546,6 +546,7 @@ class SettingsStore
 
         /** A vault's `.daftar.toml` may have changed: a sync finished, a vault was added or removed. */
         fun vaultConfigChanged() {
+            vaultConfig.changed()
             vaultRevision.update { it + 1 }
         }
 

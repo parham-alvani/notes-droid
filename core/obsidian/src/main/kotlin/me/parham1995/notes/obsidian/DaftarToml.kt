@@ -79,11 +79,17 @@ object DaftarToml {
         text: String?,
         key: String,
         value: TomlValue,
+    ): String = setWritten(text, key, written(value))
+
+    /** [set] with the value as the file writes it already ([written]): how a change waits in a queue. */
+    fun setWritten(
+        text: String?,
+        key: String,
+        written: String,
     ): String {
         val source = text.orEmpty()
         val eol = if (source.contains("\r\n")) "\r\n" else "\n"
         val lines = if (source.isEmpty()) mutableListOf() else source.removeSuffix(eol).split(eol).toMutableList()
-        val written = written(value)
         val section = key.substringBeforeLast('.', "")
         val name = key.substringAfterLast('.')
 

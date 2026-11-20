@@ -24,12 +24,15 @@ import me.parham1995.notes.markdown.TaskNotFound
 import me.parham1995.notes.markdown.TaskReason
 import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.markdown.VaultEdits
+import me.parham1995.notes.obsidian.DaftarToml
 import me.parham1995.notes.obsidian.SettingsFromVault
+import me.parham1995.notes.obsidian.TomlValue
 import me.parham1995.notes.sync.Author
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
 import me.parham1995.notes.sync.ReadOnlyVault
 import me.parham1995.notes.sync.TextEdit
+import me.parham1995.notes.sync.VaultFilter
 import me.parham1995.notes.sync.WriteOutcome
 import me.parham1995.notes.sync.gitBlobSha
 import java.time.Instant
@@ -110,6 +113,12 @@ enum class EditKind {
      * the actor, `human:<id>`, and the text the time, UTC to the second.
      */
     MARK_VERIFIED,
+
+    /**
+     * Set one of the app's settings in the vault's `.daftar.toml`. The anchor
+     * is the key, and the text the value as the file writes it.
+     */
+    SET_SETTING,
     ;
 
     companion object {
@@ -654,6 +663,31 @@ class VaultWriteRepository
         }
 
         /**
+         * Writes one of the app's settings to the `.daftar.toml` of [vaultId]:
+         * [key]'s line and no other ([DaftarToml.set]), through the same
+         * queue and the same re-reading as every edit, so a change made with
+         * no signal is kept and lands on the file as it is then
+         * (`vault-config.md` in notes-linux's `docs/specs/`, section 5).
+         */
+        suspend fun setSetting(
+            vaultId: Long,
+            key: String,
+            value: TomlValue,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            // A newer value of the same key makes one still in the queue pointless.
+            pending.deleteForAnchor(vault.id, VaultFilter.DAFTAR, EditKind.SET_SETTING.name, key)
+            return apply(
+                vault = vault,
+                path = VaultFilter.DAFTAR,
+                kind = EditKind.SET_SETTING,
+                anchor = key,
+                replacement = DaftarToml.written(value),
+                summary = "chore(settings): set $key",
+            )
+        }
+
+        /**
          * Who Mark as Verified names in [vaultId], `human:<id>`: the actor in
          * the app's settings, else the local part of the author's email in
          * the app's settings, else null, and then the command is off and
@@ -903,6 +937,10 @@ class VaultWriteRepository
                 }
                 EditKind.SET_PROPERTY -> VaultEdits.setProperty(edit.anchor, edit.text)
                 EditKind.RESTORE -> VaultEdits.restore(edit.text)
+                // Only that key's line; nothing when the file says it already.
+                EditKind.SET_SETTING -> { current ->
+                    DaftarToml.setWritten(current, edit.anchor, edit.text).takeIf { it != current }
+                }
                 EditKind.MARK_VERIFIED -> { current ->
                     Okf.markVerified(
                         current ?: throw OkfFailure("${edit.path} is gone."),
@@ -929,16 +967,20 @@ class VaultWriteRepository
             val bytes = text.toByteArray()
             val sha = gitBlobSha(bytes)
             files.write(vaultId, path, bytes)
+            // A file that is not a note, the vault's `.daftar.toml`, is kept as
+            // what it is and is not put through the indexer.
+            val note = path.endsWith(".md")
             blobs.upsert(
                 BlobEntity(
                     path = path,
                     vaultId = vaultId,
                     sha = sha,
                     size = bytes.size.toLong(),
-                    kind = BlobKind.MARKDOWN,
+                    kind = if (note) BlobKind.MARKDOWN else BlobKind.CONFIG,
                     localState = LocalState.DOWNLOADED,
                 ),
             )
+            if (!note) return
             indexer.indexChanged(
                 vaultId = vaultId,
                 changed = listOf(PathAndSha(path, sha)),
