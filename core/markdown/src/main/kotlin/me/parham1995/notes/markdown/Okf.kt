@@ -82,7 +82,13 @@ data class OkfConcept(
      */
     val currentEvents: List<OkfEvent>
         get() {
-            val written = generated?.at?.instantOrNull ?: return verified
+            val written =
+                when (val at = generated?.at) {
+                    null -> return verified
+                    // Nothing can be shown to come after a time that cannot be read.
+                    is OkfTime.Malformed -> return emptyList()
+                    is OkfTime.At -> at.instant
+                }
             return verified.filter { event -> event.at.instantOrNull?.let { !it.isBefore(written) } == true }
         }
 
@@ -217,7 +223,13 @@ object Okf {
         val close = (1 until lines.size).first { lines[it].bare() == "---" || lines[it].bare() == "..." }
         val eol = if (lines[0].endsWith("\r")) "\r" else ""
         val start = (1 until close).firstOrNull { isKey(lines[it], "verified") }
-        val end = start?.let { from -> (from + 1 until close).firstOrNull { isTopLevel(lines[it]) } ?: close }
+        val end =
+            start?.let { from ->
+                var to = (from + 1 until close).firstOrNull { isTopLevel(lines[it]) } ?: close
+                // The blank lines after the key stay where they are.
+                while (to > from + 1 && lines[to - 1].bare().isEmpty()) to--
+                to
+            }
 
         val kept =
             if (start == null || end == null) {
@@ -228,13 +240,16 @@ object Okf {
                     .filter { text(it["by"]) != actor }
             }
         val written = mutableListOf("verified:")
+        // A block list, one event a line, those already there in their order.
         kept.forEach { event ->
-            event.entries.forEachIndexed { index, (key, value) ->
-                written += (if (index == 0) "  - " else "    ") + "$key: " + quoted(text(value).orEmpty())
-            }
+            written +=
+                "  - { " +
+                event.entries.joinToString(
+                    ", ",
+                ) { (key, value) -> "$key: " + quoted(text(value).orEmpty()) } +
+                " }"
         }
-        written += "  - by: " + quoted(actor)
-        written += "    at: " + quoted(at)
+        written += "  - { by: " + quoted(actor) + ", at: " + quoted(at) + " }"
 
         val out = lines.subList(0, start ?: close) + written.map { it + eol } + lines.subList(end ?: close, lines.size)
         return out.joinToString("\n")

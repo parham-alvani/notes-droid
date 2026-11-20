@@ -105,19 +105,18 @@ class LinkResolver(
 
         val cleaned = Slugs.normalize(target).trim().trimEnd('/')
         if (cleaned.isEmpty()) return source
+        val folder = target.trim().endsWith("/")
 
-        // A file's own path, `tables/orders.md`, is from the note's folder
-        // first, as OKF reads a Markdown link; a note's name, which is how a
-        // wikilink is written, goes on to Obsidian's rule below.
-        if (cleaned.endsWith(MD) && !cleaned.startsWith("./") && !cleaned.startsWith("../")) {
+        // A file's own path, `tables/orders.md`, or a folder's, `tables/`,
+        // is from the note's folder first, as OKF reads a Markdown link. One
+        // that is no file there, and a note's name, which is how a wikilink
+        // is written, go on to Obsidian's rule below.
+        if ((cleaned.endsWith(MD) || folder) && !cleaned.startsWith("./") && !cleaned.startsWith("../")) {
             beside(cleaned, source)?.let { return it }
         }
 
-        // Explicit relative syntax is rare and, where it appears, usually
-        // already broken -- but honour it before falling back.
-        if (cleaned.startsWith("./") || cleaned.startsWith("../")) {
-            relative(cleaned, source)?.let { return it }
-        }
+        // A `./` or `../` path is only what it says: the file there, or nothing.
+        if (cleaned.startsWith("./") || cleaned.startsWith("../")) return relative(cleaned, source)
 
         val candidates = exact[cleaned] ?: folded[Slugs.fold(cleaned)] ?: aliased[Slugs.fold(cleaned)] ?: return null
         return when (candidates.size) {
@@ -129,11 +128,9 @@ class LinkResolver(
     /**
      * A path from the bundle's root: the nearest folder at or above the
      * note that is one, else the vault's root (`open-knowledge-format.md` in
-     * notes-linux's `docs/specs/`, section 3). A path that climbs out of
-     * that root names nothing, and is never looked for anywhere else. One
-     * that stays in it and names no file there falls back to Obsidian's
-     * rule, which is how `[t](/Folder/Note.md)` was read before and how a
-     * vault that is no bundle still writes it.
+     * notes-linux's `docs/specs/`, section 3). It is only what it says: a
+     * path that climbs above its root names nothing, and one that names no
+     * file there is not looked for anywhere else.
      */
     private fun fromRoot(
         target: String,
@@ -149,23 +146,30 @@ class LinkResolver(
                 else -> base += segment
             }
         }
-        val joined = base.joinToString("/")
-        if (joined in all) return joined
-        if ("$joined$MD" in all) return "$joined$MD"
-        val rest = target.trim().trim('/')
-        if (rest.isEmpty() || rest.split('/').any { it == ".." }) return null
-        return resolve(rest, source)
+        return file(base.joinToString("/"))
     }
+
+    /**
+     * The file a path names exactly: itself, itself with `.md`, or, for a
+     * folder, its `index.md`, as a bundle's own index links to one.
+     */
+    private fun file(path: String): String? =
+        when {
+            path.isEmpty() -> null
+            path in all -> path
+            "$path$MD" in all -> "$path$MD"
+            "$path/$INDEX" in all -> "$path/$INDEX"
+            else -> null
+        }
 
     /** The file at [target] seen from the folder of [source], when there is one exactly there. */
     private fun beside(
         target: String,
         source: String,
     ): String? {
-        if (target.split('/').any { it == ".." }) return null
+        if (target.split('/').any { it == ".." || it == "." }) return null
         val folder = source.substringBeforeLast('/', "")
-        val joined = if (folder.isEmpty()) target else "$folder/$target"
-        return joined.takeIf { it in all }
+        return file(if (folder.isEmpty()) target else "$folder/$target")
     }
 
     private fun relative(
@@ -186,7 +190,7 @@ class LinkResolver(
             }
         }
         val joined = base.joinToString("/")
-        return exact[joined]?.firstOrNull() ?: exact["$joined$MD"]?.firstOrNull()
+        return file(joined)
     }
 
     /**
@@ -218,6 +222,7 @@ class LinkResolver(
     }
 
     private companion object {
+        const val INDEX = "index.md"
         const val MD = ".md"
     }
 }

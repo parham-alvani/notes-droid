@@ -655,15 +655,17 @@ class VaultWriteRepository
 
         /**
          * Who Mark as Verified names in [vaultId], `human:<id>`: the actor in
-         * the app's settings, else the local part of the author's email, else
-         * null, and then the command is off and says to set one.
+         * the app's settings, else the local part of the author's email in
+         * the app's settings, else null, and then the command is off and
+         * says to set one. Nothing in the vault's `.daftar.toml` names it.
          */
+        @Suppress("UNUSED_PARAMETER")
         suspend fun verifier(vaultId: Long): String? {
             val own = settings.own.first()
             val id =
                 own.write.okfActor.trim().ifEmpty {
-                    authorFor(vaultId, own)
-                        .email
+                    // The app's own author, not the vault's: who verifies is this phone's to say.
+                    own.write.authorEmail
                         .substringBefore('@', "")
                         .trim()
                 }

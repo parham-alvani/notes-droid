@@ -97,9 +97,18 @@ class SettingsFromVaultTest {
             assertThat(resolved.from(key)).isNotEqualTo(SettingSource.VAULT)
             assertThat(SettingsFromVault.mayBeSet(key)).isFalse()
         }
-        // A key the table does not have is refused too.
+        // A key of one of the app's own sections that the list does not have is refused too.
         assertThat(SettingsFromVault.resolved("[appearance]\nplugin = \"x\"\n", "").refused)
             .containsExactly("appearance.plugin")
+        // Left alone, neither used nor refused: a key the app does not know under an open
+        // section, a key of a section that is not the app's, and an unknown top-level key.
+        val alone =
+            SettingsFromVault.resolved(
+                "memory = true\n\n[notifications]\nsound = \"x\"\n\n[capture]\nnew = 1\n\n[okf]\nactor = \"x\"\n\n[check]\nokf = true\n",
+                "",
+            )
+        assertThat(alone.refused).isEmpty()
+        assertThat(alone.values).isEmpty()
     }
 
     @Test
@@ -129,6 +138,10 @@ class SettingsFromVaultTest {
             val inside = SettingsFromVault.resolved("[home]\nimage = \"uploads/home.webp\"\n", computer, root)
             assertThat(inside.text(key)).isEqualTo("uploads/home.webp")
             assertThat(inside.from(key)).isEqualTo(SettingSource.VAULT)
+            // An empty path is accepted, and means none.
+            val none = SettingsFromVault.resolved("[home]\nimage = \"\"\n", computer, root)
+            assertThat(none.text(key)).isEmpty()
+            assertThat(none.from(key)).isEqualTo(SettingSource.VAULT)
 
             listOf("/etc/passwd", "~/x.png", "../x.png", "uploads/../../x.png", "uploads/out.png").forEach { path ->
                 val resolved = SettingsFromVault.resolved("[home]\nimage = \"$path\"\n", computer, root)
@@ -145,7 +158,8 @@ class SettingsFromVaultTest {
     fun aWrongValueIsAsNotThere() {
         val computer = "[appearance]\ntext_size = 14\n"
 
-        listOf("\"big\"", "-3", "14.5", "true", "[14]").forEach { wrong ->
+        // 10 to 28 is the range of the apps' own control.
+        listOf("\"big\"", "-3", "9", "29", "14.5", "true", "[14]").forEach { wrong ->
             val resolved = SettingsFromVault.resolved("[appearance]\ntext_size = $wrong\n", computer)
             assertThat(resolved.whole(size)).isEqualTo(14)
             assertThat(resolved.from(size)).isEqualTo(SettingSource.COMPUTER)

@@ -126,7 +126,8 @@ data class FromVault(
  *   scratchpad's path here; `"daily"` has no like and is as not there.
  * - `files.hidden` is the names left out of the lists, in place of the
  *   app's own list of agents' files; an empty list hides none.
- * - `home.image` is a picture in the vault, shown in place of the app's own.
+ * - `home.image` is a picture in the vault, shown in place of the app's own;
+ *   empty is none.
  */
 object VaultOverlay {
     const val THEME = "appearance.theme"
@@ -245,8 +246,15 @@ object VaultOverlay {
             s.copy(reading = s.reading.copy(hideAgentFiles = names.isNotEmpty(), hiddenNames = names.toSet()))
         }
         take(SHOW_HIDDEN, resolved.flag(SHOW_HIDDEN)) { s, v -> s.copy(reading = s.reading.copy(showHiddenFiles = v)) }
+        // An empty path is the vault saying none: no picture of the app's own either.
         take(HOME_IMAGE, picture(resolved.text(HOME_IMAGE), file.root)) { s, v ->
-            s.copy(reading = s.reading.copy(vaultHomePicture = v))
+            s.copy(
+                reading =
+                    s.reading.copy(
+                        vaultHomePicture = v,
+                        homePicture = if (v.isEmpty()) "" else s.reading.homePicture,
+                    ),
+            )
         }
         // The author is not put over the app's own: the app's is first, each
         // of the two on its own, and a commit takes the vault's only when
@@ -297,7 +305,8 @@ object VaultOverlay {
         path: String?,
         root: File?,
     ): String? {
-        if (path.isNullOrBlank() || root == null) return null
+        if (path == null || root == null) return null
+        if (path.isBlank()) return ""
         return File(root, path).takeIf { it.isFile }?.path
     }
 }

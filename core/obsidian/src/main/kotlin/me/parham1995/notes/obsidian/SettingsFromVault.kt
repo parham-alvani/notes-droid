@@ -74,7 +74,10 @@ data class ResolvedSettings(
  * a vault may set and the device follows the vault; the device's own value;
  * the default. A repository is text other people can change, so it never
  * chooses a program to run, a file outside the vault or what leaves the
- * device: the keys are a list ([rule]), and a key not on it is refused.
+ * device: the keys are a list ([rule]), and a key of the app's own sections
+ * that is not on it is refused and listed. A key the app does not know under
+ * `notifications`, `scratchpad` or `capture`, a key of any other section and
+ * an unknown top-level key are left alone.
  *
  * `[check]`, `[audit]`, `[reader]` and `[agents]` are what the vault says of
  * itself, not app settings: they are always read ([DaftarConfig]) and never
@@ -84,21 +87,47 @@ object SettingsFromVault {
     const val VAULT_SETTINGS = "vault_settings"
     const val REMOTE_IMAGES = "appearance.remote_images"
 
-    /** The sections of `.daftar.toml` that are the vault's own and `daftar-cli`'s. */
-    private val VAULT_OWN = setOf("check", "audit", "reader", "agents")
+    /**
+     * The sections of the app's own settings. A key in one of them that is
+     * not on the list is refused; every other section (`[check]`, `[audit]`,
+     * `[reader]`, `[agents]`, `[okf]`) is not an app setting and is left alone.
+     */
+    private val APP_SECTIONS =
+        setOf(
+            "appearance",
+            "calendar",
+            "editor",
+            "git",
+            "notifications",
+            "terminal",
+            "scratchpad",
+            "capture",
+            "meaning",
+            "home",
+            "files",
+            "wakatime",
+            "export",
+        )
 
-    /** Top-level keys of `.daftar.toml` that are `daftar-cli`'s, not settings of the app. */
-    private val VAULT_OWN_KEYS = setOf("memory")
+    /** Sections a vault may set whole: a key there the app does not know is left alone, not refused. */
+    private val OPEN_SECTIONS = setOf("notifications", "scratchpad", "capture")
+
+    /** The keys at the top of the desktop's `config.toml`: never the vault's to say. Any other top-level key is left alone. */
+    private val TOP = setOf("vault", VAULT_SETTINGS)
 
     private val THEMES = setOf("system", "light", "dark")
     private val FOLDS = setOf("vault", "always", "never")
     private val TIME = Regex("""([01]\d|2[0-3]):[0-5]\d""")
 
-    private const val MAX_TEXT_SIZE = 72L
-    private const val MIN_TEXT_SIZE = 6L
+    // The ranges are those of the apps' own controls, the same in the three apps.
+    private const val MAX_TEXT_SIZE = 28L
+    private const val MIN_TEXT_SIZE = 10L
     private const val MAX_TEXT_WIDTH = 400L
     private const val PERCENT = 100L
-    private const val MAX_FONT_SIZE = 100L
+    private const val MAX_FONT_SIZE = 24L
+    private const val MIN_FONT_SIZE = 9L
+    private const val MINUTES_IN_WEEK = 10_080L
+    private const val MINUTES_IN_DAY = 1_440L
 
     /** What a vault may say for one key. */
     private sealed interface Rule {
@@ -114,9 +143,15 @@ object SettingsFromVault {
     private fun allowed(valid: (TomlValue) -> Boolean) = Rule.Allowed { value, _ -> valid(value) }
 
     private val flag = allowed { it is TomlValue.Flag }
-    private val text = allowed { it is TomlValue.Text }
-    private val named = allowed { it is TomlValue.Text && it.value.isNotBlank() }
-    private val anything = allowed { it !is TomlValue.Other }
+
+    /** Any text of one line. */
+    private val text = allowed { it is TomlValue.Text && oneLine(it.value) }
+
+    /** Text of one line that says something: a font, a name. */
+    private val named = allowed { it is TomlValue.Text && oneLine(it.value) && it.value.isNotBlank() }
+
+    private fun oneLine(text: String): Boolean = text.none { it.isISOControl() }
+
     private val path = Rule.Allowed { value, root -> value is TomlValue.Text && inVault(value.value, root) }
 
     private fun whole(range: LongRange) = allowed { it is TomlValue.Whole && it.value in range }
@@ -138,21 +173,21 @@ object SettingsFromVault {
             "calendar.place" to text,
             "editor.live_preview" to flag,
             "editor.format_on_save" to flag,
-            "git.sync_interval" to whole(0..Int.MAX_VALUE.toLong()),
+            "git.sync_interval" to whole(0..MINUTES_IN_WEEK),
             "git.pull_on_launch" to flag,
             "git.name" to named,
             "git.email" to named,
             "notifications.meetings" to flag,
-            "notifications.meeting_lead" to whole(0..Int.MAX_VALUE.toLong()),
+            "notifications.meeting_lead" to whole(0..MINUTES_IN_DAY),
             "notifications.digest" to flag,
             "notifications.digest_time" to allowed { it is TomlValue.Text && TIME.matches(it.value) },
-            "terminal.font_size" to whole(1..MAX_FONT_SIZE),
+            "terminal.font_size" to whole(MIN_FONT_SIZE..MAX_FONT_SIZE),
             "home.image" to path,
             "export.logo" to path,
             "export.footer" to text,
             "export.contents" to flag,
             "export.landscape" to flag,
-            "scratchpad.folder" to path,
+            "scratchpad.note" to path,
             // "daily" is today's daily note; anything else is a note's path.
             "capture.target" to
                 Rule.Allowed { value, root ->
@@ -161,28 +196,21 @@ object SettingsFromVault {
             "capture.heading" to text,
             "files.hidden" to allowed { it is TomlValue.Texts },
             "files.show_hidden" to flag,
-            // They name or start a program.
-            "editor.vim_mode" to Rule.Never,
-            "editor.neovide" to Rule.Never,
-            "editor.nvim" to Rule.Never,
-            "editor.nvim_config" to Rule.Never,
-            "terminal.shell" to Rule.Never,
-            // One device's own.
-            "vault" to Rule.Never,
-            VAULT_SETTINGS to Rule.Never,
+            "capture.hotkey" to text,
         )
 
-    /** Sections any key of which is allowed (`notifications.*`) or refused (`wakatime.*`). */
-    private val SECTIONS: Map<String, Rule> =
-        mapOf(
-            "notifications" to anything,
-            "scratchpad" to anything,
-            "capture" to anything,
-            // It sends the notes' paths to a service.
-            "wakatime" to Rule.Never,
-        )
-
-    private fun rule(key: String): Rule = RULES[key] ?: SECTIONS[key.substringBefore('.', "")] ?: Rule.Never
+    /**
+     * The rule of [key], or null for a key that is neither on the list nor
+     * refused: one the app does not know under an open section, one of a
+     * section that is not the app's, or an unknown top-level key. Such a key
+     * is left alone.
+     */
+    private fun rule(key: String): Rule? {
+        RULES[key]?.let { return it }
+        val section = key.substringBeforeLast('.', "")
+        val refused = if (section.isEmpty()) key in TOP else section in APP_SECTIONS && section !in OPEN_SECTIONS
+        return if (refused) Rule.Never else null
+    }
 
     /** Whether [key] is one a vault may set at all. */
     fun mayBeSet(key: String): Boolean = rule(key) is Rule.Allowed
@@ -228,8 +256,7 @@ object SettingsFromVault {
         val refused = mutableListOf<String>()
         val vaultSets = LinkedHashSet<String>()
         DaftarToml.parse(vault.orEmpty()).forEach { (key, value) ->
-            if (key.substringBefore('.', "") in VAULT_OWN || key in VAULT_OWN_KEYS) return@forEach
-            val rule = rule(key)
+            val rule = rule(key) ?: return@forEach
             if (rule !is Rule.Allowed) {
                 refused += key
                 return@forEach

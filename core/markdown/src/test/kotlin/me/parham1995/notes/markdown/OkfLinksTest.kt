@@ -17,6 +17,7 @@ class OkfLinksTest {
             "Docs/metrics/my note.md",
             "Other/x.md",
             "Other/orders.md",
+            "Docs/tables/index.md",
         )
 
     /** `Docs` is a bundle: its `index.md` has `okf_version`. */
@@ -47,6 +48,14 @@ class OkfLinksTest {
         // The file beside the note, not the one of the same name elsewhere.
         assertThat(resolve("orders.md", "Other/x.md").first).isEqualTo("Other/orders.md")
 
+        // A folder is its `index.md`, and a path without `.md` is tried with it.
+        assertThat(resolve("/tables/", revenue).first).isEqualTo("Docs/tables/index.md")
+        assertThat(resolve("../tables/", revenue).first).isEqualTo("Docs/tables/index.md")
+        assertThat(resolve("/tables/orders", revenue).first).isEqualTo("Docs/tables/orders.md")
+        assertThat(resolve("../tables/orders", revenue).first).isEqualTo("Docs/tables/orders.md")
+        // A relative path may leave the bundle, never the vault.
+        assertThat(resolve("../../Other/x.md", revenue).first).isEqualTo("Other/x.md")
+
         // Under no bundle, a `/` path is from the vault's root.
         assertThat(resolve("/Docs/tables/orders.md", "Other/x.md").first).isEqualTo("Docs/tables/orders.md")
 
@@ -58,14 +67,18 @@ class OkfLinksTest {
     }
 
     @Test
-    fun `a slash path that names no file at the root is still found as it was before`() {
-        // How Obsidian's own Markdown links are written in a vault that is no bundle.
+    fun `a plain name that is no file beside the note is found as a wikilink is, and a path is only what it says`() {
         val plain = LinkResolver(paths)
 
-        assertThat(plain.resolve(MarkdownLinks.internal("/tables/orders.md").target, "Other/x.md"))
-            .isEqualTo("Docs/tables/orders.md")
-        assertThat(plain.resolve(MarkdownLinks.internal("/Docs/metrics/revenue").target, "Other/x.md"))
+        // `[x](revenue.md)` and `[x](metrics/revenue)` for a note elsewhere, as before OKF's rules.
+        assertThat(plain.resolve(MarkdownLinks.internal("revenue.md").target, "Other/x.md"))
             .isEqualTo("Docs/metrics/revenue.md")
+        assertThat(plain.resolve(MarkdownLinks.internal("metrics/revenue").target, "Other/x.md"))
+            .isEqualTo("Docs/metrics/revenue.md")
+        // A `/`, `./` or `../` path does not fall back.
+        assertThat(plain.resolve(MarkdownLinks.internal("/tables/orders.md").target, "Other/x.md")).isNull()
+        assertThat(plain.resolve(MarkdownLinks.internal("./revenue.md").target, "Other/x.md")).isNull()
+        assertThat(plain.resolve(MarkdownLinks.internal("../revenue.md").target, "Other/x.md")).isNull()
         // And a wikilink is read as it always was.
         assertThat(plain.resolve("revenue", "Other/x.md")).isEqualTo("Docs/metrics/revenue.md")
     }

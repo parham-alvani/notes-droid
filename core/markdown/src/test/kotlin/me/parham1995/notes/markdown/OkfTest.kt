@@ -65,6 +65,11 @@ class OkfTest {
         val noTime = concept("type: Metric\nverified:\n  - by: \"human:parham\"\n")!!
         assertThat(noTime.verified).isEmpty()
         assertThat(noTime.tier).isEqualTo(OkfTier.UNVERIFIED)
+        // With a `generated.at` that cannot be read no event is current; with none at all, every one is.
+        assertThat(concept("type: Metric\n$human\ngenerated: { by: claude-code/2.1, at: \"soon\" }")!!.tier)
+            .isEqualTo(OkfTier.UNVERIFIED)
+        assertThat(concept("type: Metric\n$human\ngenerated: { by: claude-code/2.1 }")!!.tier)
+            .isEqualTo(OkfTier.HUMAN_REVIEWED)
         // An event at the very second of `generated.at` is current.
         val same = "verified: { by: \"human:parham\", at: \"2026-06-26T00:00:00Z\" }"
         assertThat(concept("type: Metric\n$generated\n$same")!!.tier).isEqualTo(OkfTier.HUMAN_REVIEWED)
@@ -84,7 +89,15 @@ class OkfTest {
         assertThat(concept("type: T\nstale_after: 2026-06-30")!!.staleAfter).isEqualTo(day)
         assertThat(concept("type: T\nstale_after: \"2026-06-30\"")!!.staleAfter).isEqualTo(day)
 
-        listOf("2026-06-30T14:00:00", "30/06/2026", "soon", "2026-13-45").forEach {
+        // A day that does not exist is malformed too.
+        listOf(
+            "2026-06-30T14:00:00",
+            "30/06/2026",
+            "soon",
+            "2026-13-45",
+            "2026-02-30",
+            "2026-02-30T10:00:00Z",
+        ).forEach {
             assertThat(Okf.time(it)).isEqualTo(OkfTime.Malformed(it))
         }
     }
@@ -131,6 +144,7 @@ class OkfTest {
                 "type: Metric",
                 "title: \"Revenue\"   # kept as written",
                 "verified: { by: \"process:nightly\", at: \"2026-06-25T03:00:00Z\" }",
+                "",
                 "tags:",
                 "  - money",
                 "",
@@ -151,10 +165,9 @@ class OkfTest {
                 "type: Metric",
                 "title: \"Revenue\"   # kept as written",
                 "verified:",
-                "  - by: \"process:nightly\"",
-                "    at: \"2026-06-25T03:00:00Z\"",
-                "  - by: \"human:parham\"",
-                "    at: \"2026-07-01T10:00:00Z\"",
+                "  - { by: \"process:nightly\", at: \"2026-06-25T03:00:00Z\" }",
+                "  - { by: \"human:parham\", at: \"2026-07-01T10:00:00Z\" }",
+                "",
                 "tags:",
                 "  - money",
                 "",
@@ -186,7 +199,7 @@ class OkfTest {
                 "2026-07-01T10:00:00Z",
             )
         assertThat(fresh).isEqualTo(
-            "---\r\ntype: Metric\r\nverified:\r\n  - by: \"human:parham\"\r\n    at: \"2026-07-01T10:00:00Z\"\r\n---\r\nText.\r\n",
+            "---\r\ntype: Metric\r\nverified:\r\n  - { by: \"human:parham\", at: \"2026-07-01T10:00:00Z\" }\r\n---\r\nText.\r\n",
         )
 
         // On a note with no `type` it is refused.
