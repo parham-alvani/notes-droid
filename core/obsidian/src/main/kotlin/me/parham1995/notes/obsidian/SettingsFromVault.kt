@@ -199,6 +199,119 @@ object SettingsFromVault {
             "capture.hotkey" to text,
         )
 
+    const val ANDROID = "android"
+
+    /** The platform tables a `.daftar.toml` may hold, each with the app's sections under it. */
+    val PLATFORMS = setOf("linux", "macos", ANDROID)
+
+    /** The keys that differ by platform by nature: a change is written to the platform's table. */
+    private val BY_PLATFORM = setOf("appearance.font", "appearance.code_font", "terminal.font_size")
+
+    private const val MIN_SCALE = 85L
+    private const val MAX_SCALE = 150L
+    private const val MIN_SPACING = 100L
+    private const val MAX_SPACING = 160L
+    private const val LAST_HOUR = 23L
+    private const val HOURS = 24L
+
+    /**
+     * The settings only Daftar for Android has, which live in `[android]`
+     * under these names (the README lists them). None names a program, a
+     * token, a key or a path outside the vault.
+     */
+    private val ANDROID_RULES: Map<String, Rule> =
+        mapOf(
+            "appearance.text_scale" to whole(MIN_SCALE..MAX_SCALE),
+            "appearance.line_width" to oneOf(setOf("narrow", "comfortable", "full")),
+            "appearance.line_spacing" to whole(MIN_SPACING..MAX_SPACING),
+            "appearance.persian_font" to flag,
+            "appearance.start_screen" to oneOf(setOf("home", "browse", "tasks", "search")),
+            "appearance.stylus_spotlight" to flag,
+            "appearance.hide_completed_tasks" to flag,
+            "appearance.hold_to_define" to flag,
+            "appearance.keep_screen_on" to flag,
+            "appearance.tap_full_screen" to flag,
+            "appearance.hide_rail" to flag,
+            "appearance.widget_opacity" to whole(0..PERCENT),
+            "files.sort" to oneOf(setOf("name", "recently_opened", "recently_changed")),
+            "git.wifi_only" to flag,
+            "git.ssh_port_443" to flag,
+            "git.image_policy" to oneOf(setOf("on_demand", "prefetch_on_wifi", "never")),
+            "calendar.work_start" to whole(0..LAST_HOUR),
+            "calendar.work_end" to whole(1..HOURS),
+        )
+
+    /** The platform whose table [key] is in, or null for a key of a shared section. */
+    private fun platformOf(key: String): String? = key.substringBefore('.', "").takeIf { it in PLATFORMS }
+
+    /**
+     * The rule of a key in a platform's table: the shared one, which holds
+     * there as in a shared section, or the one of a setting only that
+     * platform has. Another platform's own settings are not known here, and
+     * are left alone.
+     */
+    private fun platformRule(
+        platform: String,
+        inner: String,
+    ): Rule? {
+        if (platform == ANDROID) ANDROID_RULES[inner]?.let { return it }
+        RULES[inner]?.let { return it }
+        // What a shared section refuses by name is refused in a platform's table too.
+        return rule(inner)?.takeIf { platform == ANDROID || inner in NAMED_NEVER }
+    }
+
+    /** The never rows of the list: they name or start a program, or send the notes' paths to a service. */
+    private val NAMED_NEVER =
+        setOf(
+            "editor.vim_mode",
+            "editor.neovide",
+            "editor.nvim",
+            "editor.nvim_config",
+            "terminal.shell",
+            "wakatime.enabled",
+            "wakatime.cli",
+        )
+
+    /** Where a change of a setting is written. */
+    sealed interface Home {
+        /** The device's own settings. */
+        data object Device : Home
+
+        /** The vault's `.daftar.toml`, under [key]: a shared section's, or the platform table's. */
+        data class Vault(
+            val key: String,
+        ) : Home
+    }
+
+    /**
+     * Where a change of [key] to [value] is written (section 5), the first
+     * that applies: the device, when the key is one a vault may not hold,
+     * when the device declines it ([declined]), when the vault cannot be
+     * written ([writable] false) or when the value is not one a vault may
+     * hold; the platform's table, when the key is there already or differs
+     * by platform by nature; else the vault's shared section. [key] is a
+     * shared key (`appearance.theme`) or one of the platform's own
+     * (`android.appearance.text_scale`).
+     */
+    fun home(
+        vault: String?,
+        key: String,
+        value: TomlValue,
+        writable: Boolean,
+        declined: Boolean = false,
+        root: File? = null,
+        platform: String = ANDROID,
+    ): Home {
+        if (!writable || declined) return Home.Device
+        val own = platformOf(key)
+        val rule = if (own != null) platformRule(own, key.substringAfter('.')) else rule(key)
+        if (rule !is Rule.Allowed || !rule.valid(value, root)) return Home.Device
+        if (own != null) return if (own == platform) Home.Vault(key) else Home.Device
+        val inTable = "$platform.$key"
+        if (key in BY_PLATFORM || inTable in DaftarToml.parse(vault.orEmpty())) return Home.Vault(inTable)
+        return Home.Vault(key)
+    }
+
     /**
      * The rule of [key], or null for a key that is neither on the list nor
      * refused: one the app does not know under an open section, one of a
@@ -245,6 +358,8 @@ object SettingsFromVault {
         computer: Map<String, TomlValue> = emptyMap(),
         decline: VaultSettingsDecline = VaultSettingsDecline.None,
         root: File? = null,
+        /** The platform whose table is read over the shared sections; another platform's never is. */
+        platform: String = ANDROID,
     ): ResolvedSettings {
         val values = LinkedHashMap<String, TomlValue>()
         val sources = LinkedHashMap<String, SettingSource>()
@@ -255,18 +370,28 @@ object SettingsFromVault {
         }
         val refused = mutableListOf<String>()
         val vaultSets = LinkedHashSet<String>()
-        DaftarToml.parse(vault.orEmpty()).forEach { (key, value) ->
-            val rule = rule(key) ?: return@forEach
+        val file = DaftarToml.parse(vault.orEmpty())
+        // The shared sections first, then the platform's table over them, whatever the file's order.
+        val ordered =
+            file.entries.filter { platformOf(it.key) == null } + file.entries.filter { platformOf(it.key) != null }
+        ordered.forEach { (key, value) ->
+            val table = platformOf(key)
+            val inner = if (table == null) key else key.substringAfter('.')
+            val rule = (if (table == null) rule(key) else platformRule(table, inner)) ?: return@forEach
             if (rule !is Rule.Allowed) {
                 refused += key
                 return@forEach
             }
+            // Another platform's table is never read.
+            if (table != null && table != platform) return@forEach
             // A value of the wrong type, or out of the key's range, is as not there.
             if (!rule.valid(value, root)) return@forEach
-            vaultSets += key
-            if (decline.declines(key)) return@forEach
-            values[key] = value
-            sources[key] = SettingSource.VAULT
+            // A shared key keeps its name whichever table said it; a setting only this platform has keeps the table's.
+            val name = if (table != null && inner in RULES) inner else key
+            vaultSets += name
+            if (decline.declines(name)) return@forEach
+            values[name] = value
+            sources[name] = SettingSource.VAULT
         }
         return ResolvedSettings(values, sources, refused, vaultSets)
     }
@@ -280,6 +405,7 @@ object SettingsFromVault {
         vault: String?,
         computer: String,
         root: File? = null,
+        platform: String = ANDROID,
     ): ResolvedSettings {
         val own = DaftarToml.parse(computer)
         val decline =
@@ -288,6 +414,6 @@ object SettingsFromVault {
                 is TomlValue.Texts -> VaultSettingsDecline.Keys(said.value.toSet())
                 else -> VaultSettingsDecline.None
             }
-        return resolved(vault, own, decline, root)
+        return resolved(vault, own, decline, root, platform)
     }
 }
