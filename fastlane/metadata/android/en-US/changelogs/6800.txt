@@ -1,0 +1,3 @@
+A note can now be edited on the phone: Edit in the note's menu opens its text. The editor has the reader's look, shows the marks of one element only while the cursor is in it, and keeps what you typed if the app is closed. A save is refused when the file changed underneath.
+A bar over the keyboard formats a selection: bold, italic, highlight, code, strike and a link to a note.
+A task's box is drawn in the editor and a tap changes its status. The dates of a task are small chips, and a late due date is red.
