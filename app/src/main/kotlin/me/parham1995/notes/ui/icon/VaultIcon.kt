@@ -17,9 +17,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -126,9 +128,22 @@ private fun LucideIcon(
         Box(modifier)
         return
     }
-    Canvas(modifier) {
-        val factor = size.minDimension / VIEWPORT
-        scale(factor, pivot = Offset.Zero) {
+    Canvas(modifier) { drawLucide(glyph, tint, Offset.Zero, size.minDimension) }
+}
+
+/**
+ * Draws [glyph] [side] pixels square with its corner at [topLeft], for a
+ * canvas that places an icon itself: the editor draws a callout's behind its
+ * text.
+ */
+internal fun DrawScope.drawLucide(
+    glyph: LucideSet.Glyph,
+    tint: Color,
+    topLeft: Offset,
+    side: Float,
+) {
+    translate(topLeft.x, topLeft.y) {
+        scale(side / VIEWPORT, pivot = Offset.Zero) {
             // Scaling the canvas scales the stroke with it, which is what keeps
             // the weight right: Lucide's 2px stroke is 2px *of its own 24px
             // canvas*, not of the size it happens to be drawn at.

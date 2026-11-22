@@ -95,6 +95,7 @@ import me.parham1995.notes.ui.theme.NazScheme
 import me.parham1995.notes.ui.theme.NazSoftScheme
 import me.parham1995.notes.ui.theme.SoftBlack
 import me.parham1995.notes.ui.theme.Vazirmatn
+import me.parham1995.notes.ui.theme.accent
 
 /** Everything a rendered block might need to hand back to the screen. */
 data class RenderActions(
@@ -1062,31 +1063,7 @@ private fun markerColor(type: StatusType): Color =
         StatusType.TODO -> Markup.ListMarker
     }
 
-/**
- * A colour per kind, from naz rather than from the Material roles.
- *
- * The Material scheme only carries three accents, so a warning and a tip came
- * out the same colour and everything else fell back to primary. The top five
- * kinds are 93% of the 1,302 callouts in this vault, so telling those apart at
- * a glance is most of what a callout is for.
- */
-private fun CalloutKind.accent(accents: AccentColors): Color =
-    when (this) {
-        CalloutKind.WARNING -> accents.orange
-        CalloutKind.DANGER, CalloutKind.BUG, CalloutKind.FAILURE -> accents.red
-        CalloutKind.SUCCESS -> accents.springGreen
-        CalloutKind.TIP -> accents.chartreuse
-        CalloutKind.TODO -> accents.vividYellow
-        CalloutKind.QUESTION -> accents.yellow
-        CalloutKind.ABSTRACT -> accents.limeGreen
-        CalloutKind.EXAMPLE -> accents.purple
-        CalloutKind.QUOTE -> accents.warmGrey
-        CalloutKind.FIGURE -> accents.pink
-        CalloutKind.READ -> accents.aqua
-        CalloutKind.INFO, CalloutKind.NOTE -> accents.blue
-    }
-
-private fun CalloutKind.icon(): String =
+internal fun CalloutKind.icon(): String =
     when (this) {
         CalloutKind.WARNING -> "triangle-alert"
         CalloutKind.DANGER -> "octagon-alert"
