@@ -456,6 +456,21 @@ class EditorStylerTest {
     }
 
     @Test
+    fun `a callout's title line reads as its title does, not as the kind in its marks`() {
+        fun direction(text: String) =
+            draw(text)
+                .text.paragraphStyles
+                .first()
+                .item.textDirection
+        // `note` is the first letter of the drawn text, and it is not seen.
+        assertThat(direction("> [!note] یادداشت")).isEqualTo(TextDirection.Rtl)
+        assertThat(direction("> [!note] Plan")).isEqualTo(TextDirection.Ltr)
+        assertThat(direction("> [!note]")).isEqualTo(TextDirection.Ltr)
+        assertThat(direction("## یادداشت")).isEqualTo(TextDirection.Rtl)
+        assertThat(direction("Plan")).isEqualTo(TextDirection.Content)
+    }
+
+    @Test
     fun `the day changing styles the tasks again, and a key in a note of tasks makes one line`() {
         val note = (1..300).joinToString("\n") { "- [ ] task $it 📅 2026-11-22 ➕ 2026-11-01" }
         val styler = EditorStyler()

@@ -295,15 +295,17 @@ object EditorMarkup {
             callout: EditorCallout? = null,
             next: EditorState = after,
             task: EditorTask? = null,
+            words: Int = task?.box?.end ?: 0,
         ) = EditorRead(
-            // A task reads as its words do: the `x` in a done box is no word.
+            // A task reads as its words do, and a callout as its title does:
+            // the `x` in a done box and the kind in `[!note]` are no words.
             EditorLine(
                 text.length,
                 kind,
                 level,
                 quote,
                 callout,
-                if (task == null) rtl else TextDirection.of(text.substring(task.box.end)) == MdDirection.RTL,
+                if (words == 0) rtl else TextDirection.of(text.substring(words)) == MdDirection.RTL,
                 spans,
                 elements,
                 lineMarks,
@@ -322,6 +324,7 @@ object EditorMarkup {
             }
             val type = header.groupValues[1]
             return read(
+                words = titleStart,
                 callout =
                     EditorCallout(
                         kind = CalloutKind.parse(type),

@@ -156,6 +156,11 @@ class EditorMarkupTest {
         assertThat(read("## یادداشت").rtl).isTrue()
         assertThat(read("- [ ] خرید").rtl).isTrue()
         assertThat(read("Plan یادداشت").rtl).isFalse()
+        // A callout reads as its title does: the kind in its marks is no word.
+        assertThat(read("> [!note] یادداشت").rtl).isTrue()
+        assertThat(read("> [!note] Plan").rtl).isFalse()
+        assertThat(read("> [!note]").rtl).isFalse()
+        assertThat(read("> یادداشت").rtl).isTrue()
     }
 
     /** `aCalloutHasItsKindsLook` of the spec. */

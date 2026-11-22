@@ -455,12 +455,14 @@ internal class EditorStyler {
         return ParagraphStyle(
             lineHeight = (look.size * scale * height).sp,
             lineHeightStyle = FULL_LINE,
-            // A task's line reads as its words do: the `x` of a done box is no word.
+            // A task's line reads as its words do, and a callout's as its title:
+            // the `x` of a done box and the kind in `[!note]` are no words,
+            // though they are the first letters of the drawn text.
             textDirection =
                 when {
-                    line.task == null -> TextDirection.Content
                     line.rtl -> TextDirection.Rtl
-                    else -> TextDirection.Ltr
+                    line.task != null || line.callout != null -> TextDirection.Ltr
+                    else -> TextDirection.Content
                 },
             textIndent = indent,
         )
