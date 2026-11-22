@@ -57,6 +57,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -96,12 +97,14 @@ import me.parham1995.notes.data.runCatchingUnlessCancelled
 import me.parham1995.notes.feature.define.DefineActivity
 import me.parham1995.notes.feature.drawer.FileDrawerSheet
 import me.parham1995.notes.feature.drawer.FileDrawerViewModel
+import me.parham1995.notes.feature.editor.EditorScreen
 import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.ReadingTime
 import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.markdown.footnotes
+import me.parham1995.notes.obsidian.CalendarWeeks
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
 import me.parham1995.notes.ui.AddTaskDialog
@@ -483,6 +486,25 @@ fun NoteScreen(
                 }
             },
         )
+    }
+
+    // The note's text in the editor, in place of the page. It is opened at
+    // the heading being read under, and what it saves is read again here.
+    var editing by rememberSaveable(noteId) { mutableStateOf(false) }
+    var editAt by rememberSaveable(noteId) { mutableStateOf<Int?>(null) }
+    val editable = state.note?.takeIf { editing && state.writable }
+    if (editable != null) {
+        EditorScreen(
+            vaultId = editable.vaultId,
+            path = editable.path,
+            title = editable.title,
+            heading = editAt,
+            onClose = { saved ->
+                editing = false
+                if (saved) viewModel.refresh()
+            },
+        )
+        return
     }
 
     var showPlaces by remember(noteId) { mutableStateOf(false) }
@@ -921,6 +943,18 @@ fun NoteScreen(
                                         null
                                     },
                                 onHistory = { showHistory = true },
+                                // Not a week note: the app writes those whole.
+                                onEdit =
+                                    if (offersWrites &&
+                                        state.note?.let { CalendarWeeks.isWeekNote(it.path) } == false
+                                    ) {
+                                        {
+                                            editAt = headingNumber(state.note?.headings.orEmpty(), topBlock())
+                                            editing = true
+                                        }
+                                    } else {
+                                        null
+                                    },
                                 onSharePdf = {
                                     state.note?.let { note ->
                                         scope.launch {

@@ -290,3 +290,16 @@ internal fun currentHeading(
         .sortedBy { it.ordinal }
         .lastOrNull { it.blockIndex <= block }
         ?.id
+
+/**
+ * Which heading of the note, from 0, the block at [block] is under: the
+ * editor opens there. Null above the first heading.
+ */
+internal fun headingNumber(
+    headings: List<HeadingEntity>,
+    block: Int,
+): Int? =
+    headings
+        .sortedBy { it.ordinal }
+        .indexOfLast { it.blockIndex <= block }
+        .takeIf { it >= 0 }

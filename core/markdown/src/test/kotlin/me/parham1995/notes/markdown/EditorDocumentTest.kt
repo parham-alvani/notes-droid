@@ -46,6 +46,14 @@ class EditorDocumentTest {
     }
 
     @Test
+    fun `a heading is found by its number, and one in a code block is not counted`() {
+        val document = fresh("# A\n\n```\n# not one\n```\n\n## B\ntext")
+        assertThat(document.headingEnd(0)).isEqualTo(3)
+        assertThat(document.headingEnd(1)).isEqualTo(document.text.indexOf("## B") + 4)
+        assertThat(document.headingEnd(2)).isNull()
+    }
+
+    @Test
     fun `the same text reads nothing`() {
         val document = fresh("a\nb")
         document.update("a\nb")

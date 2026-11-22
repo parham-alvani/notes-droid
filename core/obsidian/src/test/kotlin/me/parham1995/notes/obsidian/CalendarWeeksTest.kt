@@ -66,6 +66,16 @@ class CalendarWeeksTest {
     }
 
     @Test
+    fun `a week note is known by its folder and its name`() {
+        assertThat(CalendarWeeks.isWeekNote("Calendar/2026-W43.md")).isTrue()
+        assertThat(CalendarWeeks.isWeekNote("Calendar/CLAUDE.md")).isFalse()
+        assertThat(CalendarWeeks.isWeekNote("Calendar/Plans/2026-W43.md")).isFalse()
+        assertThat(CalendarWeeks.isWeekNote("Notes/2026-W43.md")).isFalse()
+        assertThat(CalendarWeeks.isWeekNote("2026-W43.md")).isFalse()
+        assertThat(CalendarWeeks.isWeekNote("2026-W43.md", folder = "")).isTrue()
+    }
+
+    @Test
     fun `the weeks run from last week to eight weeks out`() {
         val weeks = CalendarWeeks.weeks(LocalDate.of(2026, 10, 24))
         assertThat(weeks.first()).isEqualTo(LocalDate.of(2026, 10, 12))

@@ -43,6 +43,14 @@ class OutlineTest {
     }
 
     @Test
+    fun `the editor opens at the number of the heading being read under`() {
+        assertThat(headingNumber(headings, 0)).isEqualTo(0)
+        assertThat(headingNumber(headings, 7)).isEqualTo(1)
+        assertThat(headingNumber(headings, 400)).isEqualTo(2)
+        assertThat(headingNumber(headings.drop(1), 2)).isNull()
+    }
+
+    @Test
     fun `the current section is marked and the others are not`() {
         compose.setContent { OutlineList(headings, current = 2, onJump = {}) }
 

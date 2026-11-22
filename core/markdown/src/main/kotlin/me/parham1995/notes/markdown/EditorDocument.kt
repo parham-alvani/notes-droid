@@ -45,6 +45,22 @@ class EditorDocument {
         return low
     }
 
+    /**
+     * Where the heading that is number [ordinal] of the note, from 0, ends:
+     * the place the editor opens at for a note being read under it. Null when
+     * the note has no such heading.
+     */
+    fun headingEnd(ordinal: Int): Int? {
+        var seen = 0
+        for (index in rows.indices) {
+            val line = rows[index].read.line
+            if (line.kind != EditorLineKind.HEADING) continue
+            if (seen == ordinal) return starts[index] + line.length
+            seen++
+        }
+        return null
+    }
+
     /** Reads [next], which becomes [text]. */
     fun update(next: String) {
         if (rows.isNotEmpty() && next == text) {
