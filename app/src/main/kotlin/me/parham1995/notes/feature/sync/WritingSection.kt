@@ -1,5 +1,6 @@
 package me.parham1995.notes.feature.sync
 
+import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -18,15 +19,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import me.parham1995.notes.R
+import me.parham1995.notes.data.EditKind
 import me.parham1995.notes.data.VaultOverlay
+import me.parham1995.notes.data.database.PendingEditEntity
 import me.parham1995.notes.ui.text
 
 /**
@@ -243,26 +250,45 @@ internal fun QueuedEditsCard(
     viewModel: SyncViewModel,
 ) {
     SectionCard(stringResource(R.string.card_queued)) {
-        state.queuedEdits.forEach { edit ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(edit.summary, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-                    Text(
-                        text = edit.lastError ?: edit.path,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                    )
-                }
-                TextButton(onClick = { viewModel.discardEdit(edit.id) }) {
-                    Text(stringResource(R.string.action_discard))
-                }
-            }
-        }
+        state.queuedEdits.forEach { edit -> QueuedEditRow(edit, onDiscard = { viewModel.discardEdit(edit.id) }) }
         Button(onClick = viewModel::sendQueuedEdits) { Text(stringResource(R.string.settings_send_queued)) }
+    }
+}
+
+/**
+ * One edit that waits: what it is, why it waits, and Discard. A save from the
+ * editor holds a note's whole text, and one that can never land -- the file
+ * changed at the desk meanwhile -- is the only copy of what was typed once a
+ * sync has read the file again. So it has Copy My Text, to take the text out
+ * before it is discarded.
+ */
+@Composable
+internal fun QueuedEditRow(
+    edit: PendingEditEntity,
+    onDiscard: () -> Unit,
+) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val label = stringResource(R.string.editor_copy_label)
+    Column(Modifier.fillMaxWidth()) {
+        Text(edit.summary, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+        Text(
+            text = edit.lastError ?: edit.path,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (edit.kind == EditKind.EDIT.name) {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            clipboard.setClipEntry(ClipData.newPlainText(label, edit.text).toClipEntry())
+                        }
+                    },
+                ) { Text(stringResource(R.string.editor_copy_text)) }
+            }
+            TextButton(onClick = onDiscard) { Text(stringResource(R.string.action_discard)) }
+        }
     }
 }
