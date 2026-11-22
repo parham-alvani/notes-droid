@@ -89,9 +89,31 @@ internal object DaylightMarkup : MarkupColors(
     ListMarker = Daylight.Orange,
 )
 
+/** naz's markdown roles with their strength capped, for naz, soft. */
+internal object NazSoftMarkup : MarkupColors(
+    Heading1 = NazMarkup.Heading1.soft(),
+    Heading2 = NazMarkup.Heading2.soft(),
+    Heading3 = NazMarkup.Heading3.soft(),
+    Heading4 = NazMarkup.Heading4.soft(),
+    Heading = NazMarkup.Heading.soft(),
+    Strong = NazMarkup.Strong.soft(),
+    Italic = NazMarkup.Italic.soft(),
+    Strike = NazMarkup.Strike.soft(),
+    Raw = NazMarkup.Raw.soft(),
+    Link = NazMarkup.Link.soft(),
+    Math = NazMarkup.Math.soft(),
+    Quote = NazMarkup.Quote.soft(),
+    ListMarker = NazMarkup.ListMarker.soft(),
+)
+
 /** The markup colours that belong on this scheme's background. */
 internal val ColorScheme.markup: MarkupColors
-    get() = if (background.luminance() > HALF) DaylightMarkup else NazMarkup
+    get() =
+        when {
+            background.luminance() > HALF -> DaylightMarkup
+            background == SoftBlack -> NazSoftMarkup
+            else -> NazMarkup
+        }
 
 private const val HALF = 0.5f
 

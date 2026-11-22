@@ -175,7 +175,7 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
             val statuses by taskStatuses.collectAsStateWithLifecycle()
-            NotesTheme(theme = current.reading.theme) {
+            NotesTheme(theme = current.reading.theme, softDark = current.reading.softDark) {
                 CompositionLocalProvider(
                     LocalReading provides current.reading,
                     LocalTaskStatuses provides statuses,

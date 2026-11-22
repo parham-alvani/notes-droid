@@ -190,6 +190,7 @@ class SettingBinding<T : Any>(
  */
 object VaultOverlay {
     const val THEME = "appearance.theme"
+    const val DARK_PALETTE = "appearance.dark_palette"
     const val TEXT_SIZE = "appearance.text_size"
     const val TEXT_WIDTH = "appearance.text_width"
     const val REMOTE_IMAGES = SettingsFromVault.REMOTE_IMAGES
@@ -312,6 +313,18 @@ object VaultOverlay {
         flag(REMOTE_IMAGES, { it.reading.remoteImages }, { s, v -> s.reading { copy(remoteImages = v) } }) { store, v ->
             store.setRemoteImages(v)
         }
+
+    /** `"naz-soft"` is naz with its colour strength capped; `"naz"`, or nothing, is naz. */
+    val softDark =
+        SettingBinding(
+            DARK_PALETTE,
+            { it, _ -> it.text(DARK_PALETTE)?.let { said -> said == SOFT } },
+            { it.reading.softDark },
+            { s, v -> s.reading { copy(softDark = v) } },
+            { soft, _ -> DARK_PALETTE to TomlValue.Text(if (soft) SOFT else "naz") },
+        ) { store, v -> store.setSoftDark(v) }
+
+    private const val SOFT = "naz-soft"
 
     val foldSections =
         choice(
@@ -564,6 +577,7 @@ object VaultOverlay {
             textSize,
             lineWidth,
             remoteImages,
+            softDark,
             foldSections,
             syncInterval,
             digest,

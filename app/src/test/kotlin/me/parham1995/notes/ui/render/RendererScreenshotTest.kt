@@ -147,6 +147,13 @@ class RendererScreenshotTest {
         capture("note_dark")
     }
 
+    /** naz, soft: the same hues with less colour strength (`appearance.dark_palette`). */
+    @Test
+    fun `a note, soft dark`() {
+        page(reading = ReadingSettings(softDark = true)) { Note(note) }
+        capture("note_soft")
+    }
+
     @Test
     fun `a note, light`() {
         page(theme = ThemeChoice.LIGHT) { Note(note) }
@@ -343,7 +350,7 @@ class RendererScreenshotTest {
         content: @Composable () -> Unit,
     ) {
         compose.setContent {
-            NotesTheme(theme) {
+            NotesTheme(theme, softDark = reading.softDark) {
                 CompositionLocalProvider(LocalReading provides reading, LocalLucide provides lucide) {
                     Surface(
                         Modifier
