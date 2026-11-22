@@ -67,6 +67,58 @@ class EditorHistoryTest {
         assertThat(now.text).isEqualTo("abd")
     }
 
+    /** The keyboard writes [text] at the caret in one change: a swiped word, a paste. */
+    private fun insert(text: String) {
+        val next =
+            EditorEdit(
+                now.text.substring(0, now.start) + text + now.text.substring(now.end),
+                now.start + text.length,
+                now.start + text.length,
+            )
+        history.typed(now, next)
+        now = next
+    }
+
+    private fun backspace(times: Int = 1) {
+        repeat(times) {
+            val next = EditorEdit(now.text.removeRange(now.start - 1, now.start), now.start - 1, now.start - 1)
+            history.typed(now, next)
+            now = next
+        }
+    }
+
+    @Test
+    fun `a word the keyboard writes whole is a step of its own`() {
+        // Swiped words come with their space in front, so no key ends in a space.
+        insert("one")
+        insert(" two")
+        insert(" three")
+        assertThat(undo()).isTrue()
+        assertThat(now.text).isEqualTo("one two")
+        assertThat(undo()).isTrue()
+        assertThat(now.text).isEqualTo("one")
+        assertThat(undo()).isTrue()
+        assertThat(now.text).isEmpty()
+    }
+
+    @Test
+    fun `deleting after writing is another step, and undo gives the deleted text back`() {
+        type("one two")
+        backspace(3)
+        assertThat(now.text).isEqualTo("one ")
+        assertThat(undo()).isTrue()
+        assertThat(now.text).isEqualTo("one two")
+        assertThat(undo()).isTrue()
+        assertThat(now.text).isEqualTo("one ")
+        // Writing after deleting is another step too.
+        backspace(2)
+        type("x")
+        assertThat(undo()).isTrue()
+        assertThat(now.text).isEqualTo("on")
+        assertThat(undo()).isTrue()
+        assertThat(now.text).isEqualTo("one ")
+    }
+
     @Test
     fun `only the last steps are kept`() {
         val short = EditorHistory(limit = 2)
