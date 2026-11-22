@@ -1,5 +1,7 @@
 package me.parham1995.notes.markdown
 
+import java.time.LocalDate
+
 /** What a range of a line is, for the editor to colour. */
 enum class EditorStyle {
     HEADING,
@@ -42,6 +44,34 @@ data class EditorElement(
     val marks: List<EditorRange>,
 )
 
+/** Which of a task's dates a chip is. */
+enum class EditorChipKind { CREATED, SCHEDULED, START, DUE, DONE, CANCELLED, REPEAT }
+
+/**
+ * A date of a task, drawn as a chip: the emoji and the day as written, from
+ * [start] until [end] of the line. [day] is null for a repeat, which has a
+ * rule and no day.
+ */
+data class EditorChip(
+    val start: Int,
+    val end: Int,
+    val kind: EditorChipKind,
+    val day: LocalDate? = null,
+)
+
+/**
+ * A task's line. [box] is what the drawn box takes the place of: the marker,
+ * its space and the brackets (`- [ ]`), or the brackets alone after a number.
+ * [text] is what a closed task strikes: the line's words, with the chips and
+ * the reason left out.
+ */
+class EditorTask(
+    val box: EditorRange,
+    val status: Char,
+    val chips: List<EditorChip> = emptyList(),
+    val text: List<EditorRange> = emptyList(),
+)
+
 /** What kind of line it is. [PLAIN] holds no Markdown: front matter, `$$` math, a `%%` comment. */
 enum class EditorLineKind { TEXT, HEADING, FENCE, CODE, PLAIN }
 
@@ -76,6 +106,8 @@ class EditorLine(
     val spans: List<EditorSpan> = emptyList(),
     val elements: List<EditorElement> = emptyList(),
     val lineMarks: List<EditorRange> = emptyList(),
+    /** The line is a task: its box and its date chips. */
+    val task: EditorTask? = null,
 ) {
     /** Whatever drew this line keeps what it made here, so a line that did not change is not made again. */
     var drawn: Any? = null
@@ -140,6 +172,27 @@ object EditorMarkup {
     private val RULE = Regex("""^ {0,3}([-*_])(?: *\1){2,} *$""")
     private val LIST = Regex("""^([ \t]*)([-*+]|\d{1,9}[.)])(?: +|$)""")
     private val CALLOUT = Regex("""^\[!([A-Za-z_-]+)\]([+-]?)[ \t]*(.*)$""")
+
+    /** A task: an indent, a marker, one space, one character in brackets, one space. */
+    private val TASK = Regex("""^[ \t]*(?:([-*+])|\d{1,9}[.)]) (\[([^\]])\]) """)
+    private val REASON = Regex("""\[\s*reason\s*::[^\]]*\]""", RegexOption.IGNORE_CASE)
+    private val BLOCK_ID = Regex("""\s\^[A-Za-z0-9-]+\s*$""")
+    private val DAY = Regex("""\d{4}-\d{2}-\d{2}""")
+    private const val DAY_LENGTH = 10
+    private const val REPEAT = "\uD83D\uDD01"
+    private val DATES =
+        listOf(
+            "\u2795" to EditorChipKind.CREATED,
+            "\u23F3" to EditorChipKind.SCHEDULED,
+            "\uD83D\uDEEB" to EditorChipKind.START,
+            "\uD83D\uDCC5" to EditorChipKind.DUE,
+            "\u2705" to EditorChipKind.DONE,
+            "\u274C" to EditorChipKind.CANCELLED,
+        )
+    private val PRIORITIES = listOf("\uD83D\uDD3A", "\u23EB", "\uD83D\uDD3C", "\uD83D\uDD3D", "\u23EC")
+
+    /** No emoji of a task is below this, so most of a line is passed over at a glance. */
+    private const val FIRST_SYMBOL = '\u2000'
     private val TAG = Regex("""#[\p{L}\p{N}_/-]+""")
     private val URL = Regex("""https?://[^\s<>)\]]+""")
     private const val VARIATION_SELECTOR = '\uFE0F'
@@ -241,8 +294,9 @@ object EditorMarkup {
             level: Int = 0,
             callout: EditorCallout? = null,
             next: EditorState = after,
+            task: EditorTask? = null,
         ) = EditorRead(
-            EditorLine(text.length, kind, level, quote, callout, rtl, spans, elements, lineMarks),
+            EditorLine(text.length, kind, level, quote, callout, rtl, spans, elements, lineMarks, task),
             next,
         )
 
@@ -301,8 +355,119 @@ object EditorMarkup {
             spans += EditorSpan(prefix + marker.first, prefix + marker.last + 1, EditorStyle.LIST_MARKER)
             start = prefix + item.value.length
         }
+        // The box is no text: `[*]` opens no italic.
+        val box = TASK.find(body)
+        if (box != null) start = prefix + box.value.length
         inline(text, start, text.length, spans, elements)
-        return read()
+        return read(task = box?.let { task(text, prefix, it, spans) })
+    }
+
+    /** The task whose box [box] found in the line's text after its [prefix] of quote marks. */
+    private fun task(
+        text: String,
+        prefix: Int,
+        box: MatchResult,
+        spans: List<EditorSpan>,
+    ): EditorTask {
+        val brackets = box.groups[2]!!.range
+        val marker = box.groups[1]?.range
+        val from = prefix + box.value.length
+        // Inline code, math and a comment hold no chip.
+        val plain =
+            spans.filter {
+                it.style == EditorStyle.CODE ||
+                    it.style == EditorStyle.MATH ||
+                    it.style == EditorStyle.COMMENT
+            }
+        val chips = chips(text, from).filter { chip -> plain.none { chip.start < it.end && chip.end > it.start } }
+        val left =
+            chips.map { EditorRange(it.start, it.end) } +
+                REASON.findAll(text, from).map { EditorRange(it.range.first, it.range.last + 1) }
+        return EditorTask(
+            box = EditorRange(prefix + (marker ?: brackets).first, prefix + brackets.last + 1),
+            status = box.groupValues[3].single(),
+            chips = chips,
+            text = between(text, from, left.sortedBy { it.start }),
+        )
+    }
+
+    /** The ranges of [text] from [from] on that are in none of [left], each with the spaces at its ends taken off. */
+    private fun between(
+        text: String,
+        from: Int,
+        left: List<EditorRange>,
+    ): List<EditorRange> {
+        val out = ArrayList<EditorRange>()
+        var at = from
+        for (range in left + EditorRange(text.length, text.length)) {
+            var start = at
+            var end = minOf(range.start, text.length)
+            while (start < end && text[start] == ' ') start++
+            while (end > start && text[end - 1] == ' ') end--
+            if (start < end) out += EditorRange(start, end)
+            at = maxOf(at, range.end)
+        }
+        return out
+    }
+
+    /**
+     * The date chips of a task's text from [from] on: an emoji, one space and
+     * a real day, and a repeat's emoji with its rule.
+     */
+    private fun chips(
+        text: String,
+        from: Int,
+    ): List<EditorChip> {
+        var out: ArrayList<EditorChip>? = null
+        var i = from
+        while (i < text.length) {
+            if (text[i] < FIRST_SYMBOL) {
+                i++
+                continue
+            }
+            val chip = dateChip(text, i) ?: repeatChip(text, i)
+            if (chip == null) {
+                i++
+            } else {
+                out = (out ?: ArrayList()).also { it += chip }
+                i = chip.end
+            }
+        }
+        return out ?: emptyList()
+    }
+
+    private fun dateChip(
+        text: String,
+        at: Int,
+    ): EditorChip? {
+        val (emoji, kind) = DATES.firstOrNull { text.startsWith(it.first, at) } ?: return null
+        var day = at + emoji.length
+        if (day < text.length && text[day] == VARIATION_SELECTOR) day++
+        if (day >= text.length || text[day] != ' ') return null
+        day++
+        val end = day + DAY_LENGTH
+        if (end > text.length || (end < text.length && text[end].isDigit())) return null
+        if (!DAY.matches(text.subSequence(day, end))) return null
+        // A day that is not real is no chip: the audit names it.
+        val date = runCatching { LocalDate.parse(text.subSequence(day, end)) }.getOrNull() ?: return null
+        return EditorChip(at, end, kind, date)
+    }
+
+    /** A repeat's rule ends before the next emoji of a task, before a block id, or at the line's end. */
+    private fun repeatChip(
+        text: String,
+        at: Int,
+    ): EditorChip? {
+        if (!text.startsWith(REPEAT, at)) return null
+        var end = BLOCK_ID.find(text, at)?.range?.first ?: text.length
+        for (symbol in DATES.map { it.first } + PRIORITIES + REPEAT) {
+            val next = text.indexOf(symbol, at + REPEAT.length)
+            if (next in 0 until end) end = next
+        }
+        while (end > at && text[end - 1] == ' ') end--
+        // The emoji alone has no rule.
+        if (end <= at + REPEAT.length) return null
+        return EditorChip(at, end, EditorChipKind.REPEAT)
     }
 
     /** Reads the inline marks of [text] from [from] until [to]. A parent's span is added before its children's. */

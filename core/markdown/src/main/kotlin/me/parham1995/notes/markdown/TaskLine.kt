@@ -134,6 +134,26 @@ object TaskLine {
     }
 
     /**
+     * The line after a tap on its box: an open task is done and dated
+     * [today], with its next occurrence on the line above when it repeats; a
+     * closed one is open again and loses its done or cancelled date. The
+     * reason goes with the status it was given with. Null when [raw] is not
+     * a task.
+     *
+     * It is [withStatus] to `x` or to a space, so a tap adds no rule of its
+     * own (`task-reasons-and-statuses.md` in notes-linux's `docs/specs/`,
+     * section 3).
+     */
+    fun toggled(
+        raw: String,
+        today: String,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
+    ): List<String>? {
+        val status = statusOf(raw) ?: return null
+        return withStatus(raw, if (statuses.isOpen(status)) 'x' else ' ', today, statuses)
+    }
+
+    /**
      * The line with its status set to [status], as the board writes a task
      * dropped on another column or a picker sets it; null when nothing would
      * change or it is not a task.
