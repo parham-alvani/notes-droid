@@ -28,11 +28,13 @@ class NoteMenuTest {
     private var pins = 0
     private var shares = 0
     private var sorts = 0
+    private var edits = 0
 
     private fun menu(
         pinned: Boolean = false,
         enabled: Boolean = true,
         writable: Boolean = false,
+        writes: Boolean = true,
     ) {
         compose.setContent {
             NoteMenu(
@@ -41,6 +43,8 @@ class NoteMenuTest {
                 onShare = { shares++ },
                 onTogglePin = { pins++ },
                 onSortTasks = if (writable) ({ sorts++ }) else null,
+                onEdit = if (writable) ({ edits++ }) else null,
+                writes = writes,
             )
         }
     }
@@ -101,5 +105,34 @@ class NoteMenuTest {
 
         compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Sort tasks").assertDoesNotExist()
+    }
+
+    @Test
+    fun `edit reaches its handler where the note can be written, and is not there where it cannot`() {
+        menu(writable = true)
+
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Edit").performClick()
+
+        assertThat(edits).isEqualTo(1)
+    }
+
+    @Test
+    fun `a note that cannot be written has no edit`() {
+        menu(writable = false)
+
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Edit").assertDoesNotExist()
+    }
+
+    @Test
+    fun `in a read-only vault edit is shown, and off`() {
+        menu(writable = true, writes = false)
+
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Edit").assertIsNotEnabled()
+        compose.onNodeWithText("Edit").performClick()
+
+        assertThat(edits).isEqualTo(0)
     }
 }

@@ -139,6 +139,21 @@ object CalendarWeeks {
         return from until to
     }
 
+    /**
+     * Whether [path] is a week note in [folder]: a note the app writes whole,
+     * so one a person does not edit.
+     */
+    fun isWeekNote(
+        path: String,
+        folder: String = DEFAULT_FOLDER,
+    ): Boolean {
+        val dir = folder.trim().trim('/')
+        val name = if (dir.isEmpty()) path else path.removePrefix("$dir/").takeIf { it != path } ?: return false
+        return WEEK_NOTE.matches(name)
+    }
+
+    private val WEEK_NOTE = Regex("""\d{4}-W\d{2}\.md""")
+
     /** `Calendar/2026-W43.md`: the ISO week, in the year that week belongs to. */
     fun pathFor(
         folder: String,

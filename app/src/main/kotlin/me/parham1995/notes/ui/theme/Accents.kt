@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import me.parham1995.notes.markdown.CalloutKind
+import me.parham1995.notes.markdown.TaskTint
 
 /**
  * naz's accents by name, in the shade that belongs on the background being
@@ -103,3 +105,40 @@ internal val Accents: AccentColors
     @Composable
     @ReadOnlyComposable
     get() = MaterialTheme.colorScheme.accents
+
+/**
+ * A colour per kind, from naz rather than from the Material roles.
+ *
+ * The Material scheme only carries three accents, so a warning and a tip came
+ * out the same colour and everything else fell back to primary. The top five
+ * kinds are 93% of the 1,302 callouts in this vault, so telling those apart at
+ * a glance is most of what a callout is for.
+ */
+internal fun CalloutKind.accent(accents: AccentColors): Color =
+    when (this) {
+        CalloutKind.WARNING -> accents.orange
+        CalloutKind.DANGER, CalloutKind.BUG, CalloutKind.FAILURE -> accents.red
+        CalloutKind.SUCCESS -> accents.springGreen
+        CalloutKind.TIP -> accents.chartreuse
+        CalloutKind.TODO -> accents.vividYellow
+        CalloutKind.QUESTION -> accents.yellow
+        CalloutKind.ABSTRACT -> accents.limeGreen
+        CalloutKind.EXAMPLE -> accents.purple
+        CalloutKind.QUOTE -> accents.warmGrey
+        CalloutKind.FIGURE -> accents.pink
+        CalloutKind.READ -> accents.aqua
+        CalloutKind.INFO, CalloutKind.NOTE -> accents.blue
+    }
+
+/** The accent a status's icon is drawn in, or null when it is a colour of the scheme: the list marker's, the done one, the accent. */
+internal fun TaskTint.accent(accents: AccentColors): Color? =
+    when (this) {
+        TaskTint.BLUE -> accents.blue
+        TaskTint.RED -> accents.red
+        TaskTint.YELLOW -> accents.yellow
+        TaskTint.VIVID_YELLOW -> accents.vividYellow
+        TaskTint.WARM_GREY -> accents.warmGrey
+        TaskTint.ORANGE -> accents.orange
+        TaskTint.SPRING_GREEN -> accents.springGreen
+        TaskTint.LIST_MARKER, TaskTint.DONE, TaskTint.ACCENT -> null
+    }

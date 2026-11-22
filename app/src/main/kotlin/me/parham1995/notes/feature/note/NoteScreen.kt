@@ -57,6 +57,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -92,16 +93,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
+import me.parham1995.notes.data.RenderedNote
 import me.parham1995.notes.data.runCatchingUnlessCancelled
 import me.parham1995.notes.feature.define.DefineActivity
 import me.parham1995.notes.feature.drawer.FileDrawerSheet
 import me.parham1995.notes.feature.drawer.FileDrawerViewModel
+import me.parham1995.notes.feature.editor.EditorScreen
 import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MdBlock
 import me.parham1995.notes.markdown.ReadingTime
 import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.markdown.footnotes
+import me.parham1995.notes.obsidian.CalendarWeeks
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
 import me.parham1995.notes.ui.AddTaskDialog
@@ -483,6 +487,40 @@ fun NoteScreen(
                 }
             },
         )
+    }
+
+    // The note's text in the editor, in place of the page. It is opened at
+    // the heading being read under, and what it saves is read again here.
+    var editing by rememberSaveable(noteId) { mutableStateOf(false) }
+    var editAt by rememberSaveable(noteId) { mutableStateOf<Int?>(null) }
+    // Where to read on when the editor closes under another heading than it opened at.
+    var readAt by remember(noteId) { mutableStateOf<ReadAt?>(null) }
+    val editable = state.note?.takeIf { editing && state.writable }
+    if (editable != null) {
+        EditorScreen(
+            vaultId = editable.vaultId,
+            path = editable.path,
+            title = editable.title,
+            heading = editAt,
+            onClose = { saved, heading ->
+                editing = false
+                // Under the heading it opened at, the reader is where it was left.
+                if (heading != null && heading != editAt) readAt = ReadAt(heading, editable.takeIf { saved })
+                if (saved) viewModel.refresh()
+            },
+        )
+        return
+    }
+    // Back to reading at the editor's heading, once the note that was saved is read again.
+    LaunchedEffect(readAt, state.note) {
+        val to = readAt ?: return@LaunchedEffect
+        val note = state.note ?: return@LaunchedEffect
+        if (note === to.before) return@LaunchedEffect
+        note.headings.sortedBy { it.ordinal }.getOrNull(to.heading)?.let {
+            listState.scrollToItem(viewModel.reveal(it.blockIndex))
+        }
+        // After the scroll: clearing the effect's own key first would cancel it.
+        readAt = null
     }
 
     var showPlaces by remember(noteId) { mutableStateOf(false) }
@@ -921,6 +959,18 @@ fun NoteScreen(
                                         null
                                     },
                                 onHistory = { showHistory = true },
+                                // Not a week note: the app writes those whole.
+                                onEdit =
+                                    if (offersWrites &&
+                                        state.note?.let { CalendarWeeks.isWeekNote(it.path) } == false
+                                    ) {
+                                        {
+                                            editAt = headingNumber(state.note?.headings.orEmpty(), topBlock())
+                                            editing = true
+                                        }
+                                    } else {
+                                        null
+                                    },
                                 onSharePdf = {
                                     state.note?.let { note ->
                                         scope.launch {
@@ -1441,4 +1491,14 @@ private data class ZoomedImage(
     val vaultId: Long,
     val path: String,
     val alt: String?,
+)
+
+/**
+ * Where the reader goes when the editor closes: the heading of that number,
+ * from 0. [before] is the note as it was read before a save, which is not the
+ * one to look the heading up in; null when nothing was written.
+ */
+private class ReadAt(
+    val heading: Int,
+    val before: RenderedNote?,
 )

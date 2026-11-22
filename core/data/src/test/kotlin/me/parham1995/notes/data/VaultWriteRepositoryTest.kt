@@ -755,4 +755,38 @@ class VaultWriteRepositoryTest {
             assertThat(transport.messages.single()).isEqualTo("docs: restore Plan as of 0123456")
             assertThat(writes.restore(vaultId, path, "0123456789abcdef", "then\n")).isEqualTo(WriteResult.Unchanged)
         }
+
+    /** `aSaveOnThePhoneRefusesAChangedFile` of `look.md` in notes-linux's `docs/specs/`. */
+    @Test
+    fun aSaveOnThePhoneRefusesAChangedFile() =
+        runTest {
+            val path = "Work/Plan.md"
+            // The editor opened `a`, and the file is now `b`.
+            files.write(vaultId, path, "b".toByteArray())
+            transport.content = "b"
+
+            val refused = writes.edit(vaultId, path, opened = "a", text = "c")
+
+            assertThat(refused).isInstanceOf(WriteResult.Refused::class.java)
+            assertThat((refused as WriteResult.Refused).changed).isTrue()
+            assertThat(files.readText(vaultId, path)).isEqualTo("b")
+            assertThat(transport.content).isEqualTo("b")
+            assertThat(transport.messages).isEmpty()
+            assertThat(database.pendingEditDao().all()).isEmpty()
+        }
+
+    @Test
+    fun `a save from the editor is one commit, and the same text again is none`() =
+        runTest {
+            val path = "Work/Plan.md"
+            files.write(vaultId, path, "a".toByteArray())
+            transport.content = "a"
+
+            assertThat(writes.edit(vaultId, path, opened = "a", text = "c")).isEqualTo(WriteResult.Pushed)
+
+            assertThat(transport.content).isEqualTo("c")
+            assertThat(files.readText(vaultId, path)).isEqualTo("c")
+            assertThat(transport.messages.single()).isEqualTo("docs: edit Plan")
+            assertThat(writes.edit(vaultId, path, opened = "a", text = "c")).isEqualTo(WriteResult.Unchanged)
+        }
 }

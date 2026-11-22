@@ -12,6 +12,7 @@ import me.parham1995.notes.data.database.PendingEditEntity
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.data.database.VaultDao
 import me.parham1995.notes.data.database.VaultEntity
+import me.parham1995.notes.markdown.NoteChanged
 import me.parham1995.notes.markdown.NoteExists
 import me.parham1995.notes.markdown.Okf
 import me.parham1995.notes.markdown.OkfFailure
@@ -109,6 +110,13 @@ enum class EditKind {
     RESTORE,
 
     /**
+     * Save a note from the editor. The anchor is the text the editor opened,
+     * and the text the note as it was edited: written only while the file is
+     * still the anchor.
+     */
+    EDIT,
+
+    /**
      * Mark a concept of the Open Knowledge Format as verified. The anchor is
      * the actor, `human:<id>`, and the text the time, UTC to the second.
      */
@@ -149,10 +157,14 @@ sealed interface WriteResult {
      * The app will not attempt it, and why. [readOnly] is the vault being a
      * read-only clone, the spec's `readOnly` failure: nothing was read and
      * nothing written, and no key or author would change the answer.
+     * [changed] is the editor's save refused because the file is no longer
+     * the text it opened.
      */
     data class Refused(
         val why: String,
         val readOnly: Boolean = false,
+        /** The editor's save found the file changed since it was opened: its text is still in the editor. */
+        val changed: Boolean = false,
     ) : WriteResult
 }
 
@@ -637,6 +649,31 @@ class VaultWriteRepository
         }
 
         /**
+         * Saves [path] in [vaultId] from the editor: it reads [text], when
+         * the file is still [opened], the text the editor opened
+         * ([VaultEdits.edit]). One edit, so one commit, as a tick is. When
+         * the file is something else by now, nothing is written and the
+         * refusal says [WriteResult.Refused.changed].
+         */
+        suspend fun edit(
+            vaultId: Long,
+            path: String,
+            opened: String,
+            text: String,
+        ): WriteResult {
+            val vault = writableVault(vaultId) ?: return refusal(vaultId)
+            val name = path.substringAfterLast('/').removeSuffix(".md")
+            return apply(
+                vault = vault,
+                path = path,
+                kind = EditKind.EDIT,
+                anchor = opened,
+                replacement = text,
+                summary = "docs: edit ${name.take(SUBJECT)}",
+            )
+        }
+
+        /**
          * Marks the concept at [path] in [vaultId] as verified, now, by this
          * phone's actor ([verifier]): one `{ by, at }` in `verified`, in place
          * of that actor's earlier one, and every other line as it was
@@ -810,6 +847,8 @@ class VaultWriteRepository
                         return@tryWithVault WriteResult.Refused(gone.message.orEmpty())
                     } catch (taken: NoteExists) {
                         return@tryWithVault WriteResult.Refused(taken.message.orEmpty())
+                    } catch (changed: NoteChanged) {
+                        return@tryWithVault WriteResult.Refused(changed.message.orEmpty(), changed = true)
                     } catch (refused: PropertyFailure) {
                         return@tryWithVault WriteResult.Refused(refused.message.orEmpty())
                     } catch (refused: OkfFailure) {
@@ -937,6 +976,7 @@ class VaultWriteRepository
                 }
                 EditKind.SET_PROPERTY -> VaultEdits.setProperty(edit.anchor, edit.text)
                 EditKind.RESTORE -> VaultEdits.restore(edit.text)
+                EditKind.EDIT -> VaultEdits.edit(edit.anchor, edit.text)
                 // Only that key's line; nothing when the file says it already.
                 EditKind.SET_SETTING -> { current ->
                     DaftarToml.setWritten(current, edit.anchor, edit.text).takeIf { it != current }

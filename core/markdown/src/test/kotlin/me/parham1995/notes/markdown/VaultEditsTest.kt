@@ -198,6 +198,20 @@ class VaultEditsTest {
         org.junit.Assert.assertThrows(NoteExists::class.java) { create("written at the desk\n") }
     }
 
+    /** `aSaveOnThePhoneRefusesAChangedFile` of `look.md` in notes-linux's `docs/specs/`. */
+    @Test
+    fun aSaveOnThePhoneRefusesAChangedFile() {
+        // The editor opened `a` and saves `c`.
+        val save = VaultEdits.edit(opened = "a", text = "c")
+        // The file is now `b`: nothing is written.
+        assertThrows(NoteChanged::class.java) { save("b") }
+        assertThrows(NoteChanged::class.java) { save(null) }
+        // The file is still `a`: it becomes `c`.
+        assertThat(save("a")).isEqualTo("c")
+        // The save already landed: there is nothing to write.
+        assertThat(save("c")).isNull()
+    }
+
     @Test
     fun `the sections offered are the ones addUnder finds`() {
         val note = "# Week\n## **Work**\n- [ ] A\n\n### Later\n```sh\n# not a heading\n```\n"

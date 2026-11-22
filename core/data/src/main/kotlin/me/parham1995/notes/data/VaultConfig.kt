@@ -191,6 +191,8 @@ class SettingBinding<T : Any>(
 object VaultOverlay {
     const val THEME = "appearance.theme"
     const val DARK_PALETTE = "appearance.dark_palette"
+    const val LIVE_PREVIEW = "editor.live_preview"
+    const val FORMAT_BAR = "editor.format_bar"
     const val TEXT_SIZE = "appearance.text_size"
     const val TEXT_WIDTH = "appearance.text_width"
     const val REMOTE_IMAGES = SettingsFromVault.REMOTE_IMAGES
@@ -325,6 +327,18 @@ object VaultOverlay {
         ) { store, v -> store.setSoftDark(v) }
 
     private const val SOFT = "naz-soft"
+
+    /** The editor's drawn parts, the hidden marks first among them; `false` shows every mark. */
+    val livePreview =
+        flag(LIVE_PREVIEW, { it.reading.livePreview }, { s, v -> s.reading { copy(livePreview = v) } }) { store, v ->
+            store.setLivePreview(v)
+        }
+
+    /** The editor's format bar, over the keyboard for a selection in one line. */
+    val formatBar =
+        flag(FORMAT_BAR, { it.reading.formatBar }, { s, v -> s.reading { copy(formatBar = v) } }) { store, v ->
+            store.setFormatBar(v)
+        }
 
     val foldSections =
         choice(
@@ -578,6 +592,8 @@ object VaultOverlay {
             lineWidth,
             remoteImages,
             softDark,
+            livePreview,
+            formatBar,
             foldSections,
             syncInterval,
             digest,

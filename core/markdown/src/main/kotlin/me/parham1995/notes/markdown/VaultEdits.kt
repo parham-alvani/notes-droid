@@ -173,6 +173,26 @@ object VaultEdits {
     fun restore(text: String): (String?) -> String? = replaceFile(text)
 
     /**
+     * The editor's save: the note reads [text], when the file is still
+     * [opened], the text the editor opened. A file that is something else by
+     * now -- written at the desk while the note was open here -- throws
+     * [NoteChanged] and nothing is written (`look.md` in notes-linux's
+     * `docs/specs/`, "Android: the editor"). Null when the note already reads
+     * [text], which is this same save having landed once.
+     */
+    fun edit(
+        opened: String,
+        text: String,
+    ): (String?) -> String? =
+        { current ->
+            when (current) {
+                text -> null
+                opened -> text
+                else -> throw NoteChanged()
+            }
+        }
+
+    /**
      * Makes one change of the Properties form ([PropertyEdit.encode]d as
      * [edit]) to a note's front matter, read again from the note as it is
      * now -- and only while that front matter is still [frontMatter], the one
@@ -450,6 +470,9 @@ object VaultEdits {
 class TaskNotFound(
     val task: String,
 ) : IllegalStateException("\"${task.take(TASK_IN_MESSAGE)}\" is not in that note any more - refresh and try again")
+
+/** The editor's save found another text in the file than the one it opened. */
+class NoteChanged : IllegalStateException("the note changed while it was open here - nothing was written")
 
 /** A new note asked for where a note already is. */
 class NoteExists : IllegalStateException("a note of that name is already there - pick another title")
