@@ -1,0 +1,2 @@
+The reader has a quieter look. Headings have one weight and no line under them, a callout is a soft tint with a thin edge and no bar, italic text keeps the text's colour, and text in a highlight keeps its own colours.
+A second dark palette, naz soft, has the same colours at a lower strength for long reading. Turn it on in Settings, Reading, Soft dark colours. The setting goes to the vault (appearance.dark_palette), so the desktops follow it.
