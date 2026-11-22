@@ -45,6 +45,10 @@
     <string name="editor_copy_label">Note text</string>
     <string name="editor_reload_title">Reload the note?</string>
     <string name="editor_reload_body">The note is read again as it is now. What you typed here is dropped.</string>
+    <string name="editor_not_saved">Not saved: %1$s</string>
+    <string name="editor_discard">Close Without Saving</string>
+    <string name="editor_discard_title">Close without saving?</string>
+    <string name="editor_discard_body">What you typed here is dropped. Copy your text first to keep it.</string>
     <string name="card_editor">Editor</string>
     <string name="settings_live_preview">Hide marks until the caret is in them</string>
     <string name="help_live_preview">On, the editor draws a note as it reads: the marks of bold text, a highlight or a link show only while the caret is in them. Off, every mark shows.</string>

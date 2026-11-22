@@ -46,6 +46,10 @@
     <string name="editor_copy_label">متن یادداشت</string>
     <string name="editor_reload_title">یادداشت دوباره خوانده شود؟</string>
     <string name="editor_reload_body">یادداشت همان‌طور که اکنون هست دوباره خوانده می‌شود. آنچه اینجا نوشتید کنار گذاشته می‌شود.</string>
+    <string name="editor_not_saved">ذخیره نشد: %1$s</string>
+    <string name="editor_discard">بستن بدون ذخیره</string>
+    <string name="editor_discard_title">بدون ذخیره بسته شود؟</string>
+    <string name="editor_discard_body">آنچه اینجا نوشتید از بین می‌رود. برای نگه داشتن، اول متن را کپی کنید.</string>
     <string name="card_editor">ویرایشگر</string>
     <string name="settings_live_preview">پنهان کردن نشانه‌ها تا وقتی مکان‌نما درونشان نیست</string>
     <string name="help_live_preview">اگر روشن باشد، ویرایشگر یادداشت را همان‌طور که خوانده می‌شود نشان می‌دهد: نشانه‌های متن پررنگ، برجسته یا پیوند فقط وقتی دیده می‌شوند که مکان‌نما درونشان باشد. اگر خاموش باشد، همهٔ نشانه‌ها دیده می‌شوند.</string>

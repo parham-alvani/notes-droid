@@ -13,6 +13,18 @@ import me.parham1995.notes.markdown.EditorHistory
 import me.parham1995.notes.ui.UiText
 
 /**
+ * A note being edited, as it is kept while the app is out of sight: the text
+ * that was opened, what it reads now, and the selection. The system may end
+ * the app there, and what was typed must not go with it.
+ */
+internal data class EditorDraft(
+    val opened: String,
+    val text: String,
+    val start: Int,
+    val end: Int,
+)
+
+/**
  * One note open in the editor, from the text it opened to its save
  * (`look.md` in notes-linux's `docs/specs/`, "Android: the editor").
  *
@@ -46,8 +58,13 @@ internal class EditorSession(
 
     private val TextFieldValue.step get() = EditorEdit(text, selection.start, selection.end)
 
-    /** The text field's change: keys, or a move of the caret. Keys are an undo step a word. */
+    /**
+     * The text field's change: keys, or a move of the caret. Keys are an undo
+     * step a word. Nothing changes while a save is on its way: the text that
+     * is being written is the text the editor closes with.
+     */
     fun change(next: TextFieldValue) {
+        if (saving) return
         val before = value
         if (next.text != before.text) {
             history.typed(before.step, next.step)
@@ -64,18 +81,20 @@ internal class EditorSession(
      * a button that had nothing to do.
      */
     fun run(edit: EditorEdit?) {
-        if (edit == null || opened == null) return
+        if (edit == null || opened == null || saving) return
         history.command(value.step)
         value = TextFieldValue(edit.text, TextRange(edit.start, edit.end))
         steps()
     }
 
     fun undo() {
+        if (saving) return
         history.undo(value.step)?.let { value = TextFieldValue(it.text, TextRange(it.start, it.end)) }
         steps()
     }
 
     fun redo() {
+        if (saving) return
         history.redo(value.step)?.let { value = TextFieldValue(it.text, TextRange(it.start, it.end)) }
         steps()
     }
@@ -101,6 +120,14 @@ internal class EditorSession(
 
     /** The file is no longer the text that was opened: the save wrote nothing. */
     var changed by mutableStateOf(false)
+        private set
+
+    /**
+     * The save was refused for another reason than the file's change: the
+     * vault cannot be written now. What it said, and the editor offers Copy
+     * My Text and a way out that drops the text after a confirm.
+     */
+    var refused: UiText? by mutableStateOf(null)
         private set
 
     /** The file is not there to edit. */
@@ -133,8 +160,13 @@ internal class EditorSession(
         if (text == from) return true
         if (saving) return false
         saving = true
-        val result = write(from, text)
-        saving = false
+        refused = null
+        val result =
+            try {
+                write(from, text)
+            } finally {
+                saving = false
+            }
         return when (result) {
             WriteResult.Pushed, WriteResult.Unchanged -> true
             is WriteResult.Queued -> {
@@ -143,7 +175,7 @@ internal class EditorSession(
             }
             is WriteResult.Refused -> {
                 changed = result.changed
-                if (!result.changed) message = result.describe()
+                if (!result.changed) refused = result.describe()
                 false
             }
         }
@@ -162,5 +194,38 @@ internal class EditorSession(
         history = EditorHistory()
         steps()
         changed = false
+        refused = null
+    }
+
+    /**
+     * What to keep while the app is out of sight, or null when there is
+     * nothing typed to lose or the note is too long to keep there
+     * ([DRAFT_LIMIT]).
+     */
+    fun draft(): EditorDraft? {
+        val from = opened ?: return null
+        val text = value.text
+        if (text == from || from.length + text.length > DRAFT_LIMIT) return null
+        return EditorDraft(from, text, value.selection.start, value.selection.end)
+    }
+
+    /**
+     * Opens with what was kept, in place of [open]. The text that was opened
+     * then is still what a save is checked against, so a file that changed
+     * since is refused as ever.
+     */
+    fun restore(draft: EditorDraft) {
+        opened = draft.opened
+        val length = draft.text.length
+        value = TextFieldValue(draft.text, TextRange(draft.start.coerceIn(0, length), draft.end.coerceIn(0, length)))
+    }
+
+    companion object {
+        /**
+         * The most characters, of the opened text and the edited one
+         * together, that are kept in the saved state: the system gives every
+         * app well under a megabyte there.
+         */
+        const val DRAFT_LIMIT = 120_000
     }
 }

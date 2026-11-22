@@ -64,6 +64,9 @@ import java.time.LocalDate
 /** The banner that says the file changed, for a test to find. */
 internal const val EDITOR_CHANGED_TAG = "editor-changed"
 
+/** The banner that says the save was refused, for a test to find. */
+internal const val EDITOR_REFUSED_TAG = "editor-refused"
+
 /** The format bar, for a test to find. */
 internal const val FORMAT_BAR_TAG = "format-bar"
 
@@ -90,6 +93,7 @@ fun EditorScreen(
         title = title,
         onDone = { viewModel.close(onClose) },
         onReload = viewModel::reload,
+        onDiscard = { viewModel.discard(onClose) },
     )
 }
 
@@ -105,6 +109,7 @@ internal fun EditorPage(
     title: String,
     onDone: () -> Unit,
     onReload: () -> Unit,
+    onDiscard: () -> Unit = {},
     today: LocalDate = rememberToday(),
 ) {
     val reading = LocalReading.current
@@ -158,7 +163,11 @@ internal fun EditorPage(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
         Column(Modifier.padding(inner).fillMaxSize().imePadding()) {
-            if (session.changed) FileChanged(session, onReload)
+            if (session.changed) {
+                FileChanged(session, onReload)
+            } else {
+                session.refused?.let { SaveRefused(session, it, onDiscard) }
+            }
             if (session.missing) {
                 Text(missing, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -175,11 +184,14 @@ internal fun EditorPage(
                             value = session.value,
                             onValueChange = session::change,
                             modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                            // The text being written is the text the editor closes with.
+                            readOnly = session.saving,
                             livePreview = reading.livePreview,
                             today = today,
                             statuses = statuses,
                             // A tap on a box is the task toggle: the text changes, and the save is the editor's.
                             onTask = { at ->
+                                if (session.saving) return@NoteEditor
                                 val value = session.value
                                 val selection = value.selection
                                 val edit =
@@ -348,10 +360,6 @@ private fun FileChanged(
     onReload: () -> Unit,
 ) {
     var confirm by remember { mutableStateOf(false) }
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
-    val copied = stringResource(R.string.editor_copied)
-    val label = stringResource(R.string.editor_copy_label)
 
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
@@ -362,14 +370,7 @@ private fun FileChanged(
             Text(stringResource(R.string.editor_file_changed), style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { confirm = true }) { Text(stringResource(R.string.editor_reload)) }
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            clipboard.setClipEntry(ClipData.newPlainText(label, session.value.text).toClipEntry())
-                            session.message = UiText.Raw(copied)
-                        }
-                    },
-                ) { Text(stringResource(R.string.editor_copy_text)) }
+                CopyMyText(session)
             }
         }
     }
@@ -385,6 +386,70 @@ private fun FileChanged(
                         onReload()
                     },
                 ) { Text(stringResource(R.string.editor_reload)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+}
+
+/** Copy My Text: the editor's whole text goes to the clipboard, so a save that cannot land loses nothing. */
+@Composable
+private fun CopyMyText(session: EditorSession) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val copied = stringResource(R.string.editor_copied)
+    val label = stringResource(R.string.editor_copy_label)
+    TextButton(
+        onClick = {
+            scope.launch {
+                clipboard.setClipEntry(ClipData.newPlainText(label, session.value.text).toClipEntry())
+                session.message = UiText.Raw(copied)
+            }
+        },
+    ) { Text(stringResource(R.string.editor_copy_text)) }
+}
+
+/**
+ * The save was refused and the file did not change: the vault cannot be
+ * written now ([why]). Done and Back would refuse for ever, so there are two
+ * ways on: Copy My Text, and Close Without Saving, which drops what was typed
+ * after a confirm.
+ */
+@Composable
+private fun SaveRefused(
+    session: EditorSession,
+    why: UiText,
+    onDiscard: () -> Unit,
+) {
+    var confirm by remember { mutableStateOf(false) }
+
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier.fillMaxWidth().testTag(EDITOR_REFUSED_TAG),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(stringResource(R.string.editor_not_saved, why.text()), style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CopyMyText(session)
+                TextButton(onClick = { confirm = true }) { Text(stringResource(R.string.editor_discard)) }
+            }
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text(stringResource(R.string.editor_discard_title)) },
+            text = { Text(stringResource(R.string.editor_discard_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirm = false
+                        onDiscard()
+                    },
+                ) { Text(stringResource(R.string.editor_discard)) }
             },
             dismissButton = {
                 TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.action_cancel)) }

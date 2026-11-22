@@ -112,7 +112,7 @@ internal fun rememberToday(): LocalDate {
  * A tap on a task's box is [onTask] with a place in the task's line, and a
  * long press is [onTaskMenu]. Neither reaches the text field, so the caret
  * stays where it was and the keyboard is not opened. With no [onTask] a tap
- * on a box is a tap in the text.
+ * on a box is a tap in the text. With [readOnly] no key changes the text.
  */
 @Suppress("LongParameterList")
 @Composable
@@ -120,6 +120,7 @@ internal fun NoteEditor(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
     livePreview: Boolean = true,
     look: EditorLook = rememberEditorLook(),
     today: LocalDate = rememberToday(),
@@ -154,6 +155,7 @@ internal fun NoteEditor(
                 // Before the text field's own taps, so a tap on a box is not one in the text.
                 .pointerInput(Unit) { taskTaps { taps.value } }
                 .drawBehind { layout?.let { drawDecor(it, drawn, look, lucide, measurer, seen) } },
+        readOnly = readOnly,
         textStyle = TextStyle(color = look.text, fontSize = look.size.sp),
         // The caret is the accent.
         cursorBrush = SolidColor(look.accent),

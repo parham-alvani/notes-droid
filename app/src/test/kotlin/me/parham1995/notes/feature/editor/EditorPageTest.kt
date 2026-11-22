@@ -8,6 +8,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -46,6 +47,7 @@ class EditorPageTest {
     private var answer: WriteResult = WriteResult.Pushed
     private var done = 0
     private var reloads = 0
+    private var discards = 0
 
     private val session =
         EditorSession(
@@ -66,6 +68,7 @@ class EditorPageTest {
                         title = "Plan",
                         onDone = { done++ },
                         onReload = { reloads++ },
+                        onDiscard = { discards++ },
                         today = LocalDate.of(2026, 11, 22),
                     )
                 }
@@ -201,5 +204,40 @@ class EditorPageTest {
         compose.onNodeWithText("Cancel").performClick()
         assertThat(reloads).isEqualTo(0)
         assertThat(session.value.text).contains("typed")
+    }
+
+    @Test
+    fun `a save the vault refuses is said, with copy my text and a way out behind a confirm`() {
+        page()
+        answer = WriteResult.Refused("the vault is read-only")
+        compose.onNodeWithTag(EDITOR_TAG).performTextInput("typed ")
+        runBlocking { session.save() }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(EDITOR_REFUSED_TAG).assertIsDisplayed()
+        compose.onNodeWithText("Not saved: the vault is read-only").assertIsDisplayed()
+        compose.onNodeWithText("Copy My Text").assertIsDisplayed()
+        // Closing asks first: what was typed would be dropped.
+        compose.onNodeWithText("Close Without Saving").performClick()
+        assertThat(discards).isEqualTo(0)
+        compose.onNodeWithText("Close without saving?").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        assertThat(discards).isEqualTo(0)
+        assertThat(session.value.text).contains("typed")
+
+        compose.onNodeWithText("Close Without Saving").performClick()
+        compose.onAllNodesWithText("Close Without Saving")[1].performClick()
+        assertThat(discards).isEqualTo(1)
+        assertThat(file).isEqualTo("# Plan\n")
+    }
+
+    @Test
+    fun `what is kept for the system ending the app comes back as it went`() {
+        val draft = EditorDraft("# Plan\n", "# Plan\nمتن 📅", 3, 9)
+        assertThat(draft.toBundle().toDraft()).isEqualTo(draft)
+        assertThat(
+            android.os.Bundle.EMPTY
+                .toDraft(),
+        ).isNull()
     }
 }

@@ -3,6 +3,10 @@ package me.parham1995.notes.feature.editor
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.markdown.EditorCommands
@@ -15,6 +19,7 @@ import org.junit.Test
  * "Android: the editor"): one write when the text changed, and nothing
  * written when the file is no longer the text that was opened.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class EditorSessionTest {
     /** The file, written the way the vault writes: by the edit's own rule. */
     private var file: String? = "a"
@@ -172,7 +177,100 @@ class EditorSessionTest {
             answer = WriteResult.Refused("set a name and email to commit as, in Settings")
             assertThat(editor.save()).isFalse()
             assertThat(editor.changed).isFalse()
-            assertThat(editor.message).isNotNull()
+            // It says why, and stays open with the text: the page offers Copy My Text and a way out.
+            assertThat(editor.refused).isNotNull()
+            assertThat(editor.value.text).isEqualTo("c")
+            // The next save that lands takes the word away.
+            answer = null
+            assertThat(editor.save()).isTrue()
+            assertThat(editor.refused).isNull()
+        }
+
+    @Test
+    fun `no key changes the text while a save is on its way`() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val editor =
+                EditorSession(
+                    read = { file },
+                    write = { _, text ->
+                        gate.await()
+                        file = text
+                        WriteResult.Pushed
+                    },
+                )
+            editor.open()
+            editor.type("ab")
+            val save = async { editor.save() }
+            runCurrent()
+            assertThat(editor.saving).isTrue()
+
+            // A key, a button and an undo that come now would be lost when the editor closes.
+            editor.type("abc")
+            editor.run(EditorCommands.wrap(editor.value.text, 0, 2, EditorCommands.BOLD))
+            editor.undo()
+            assertThat(editor.value.text).isEqualTo("ab")
+
+            gate.complete(Unit)
+            assertThat(save.await()).isTrue()
+            assertThat(file).isEqualTo("ab")
+            assertThat(editor.saving).isFalse()
+        }
+
+    @Test
+    fun `a write that fails leaves the editor open and not saving`() =
+        runTest {
+            val editor = EditorSession(read = { file }, write = { _, _ -> error("no disk") })
+            editor.open()
+            editor.type("ab")
+            assertThat(runCatching { editor.save() }.isFailure).isTrue()
+            assertThat(editor.saving).isFalse()
+            editor.type("abc")
+            assertThat(editor.value.text).isEqualTo("abc")
+        }
+
+    @Test
+    fun `what was typed is kept for when the system ends the app, with the text it was opened from`() =
+        runTest {
+            file = "# Plan\n"
+            val editor = session().apply { open() }
+            // Nothing typed: nothing to keep.
+            assertThat(editor.draft()).isNull()
+            editor.change(TextFieldValue("# Plan\nmore", TextRange(9, 11)))
+            val draft = editor.draft()!!
+            assertThat(draft).isEqualTo(EditorDraft("# Plan\n", "# Plan\nmore", 9, 11))
+
+            // The app comes back: the editor opens with the text and the selection, and it is still to save.
+            val back = session().apply { restore(draft) }
+            assertThat(back.value.text).isEqualTo("# Plan\nmore")
+            assertThat(back.value.selection).isEqualTo(TextRange(9, 11))
+            assertThat(back.dirty).isTrue()
+            assertThat(back.save()).isTrue()
+            assertThat(file).isEqualTo("# Plan\nmore")
+        }
+
+    @Test
+    fun `a kept text is still refused when the file changed while the app was away`() =
+        runTest {
+            val editor = session().apply { open() }
+            editor.type("c")
+            val draft = editor.draft()!!
+            file = "b"
+
+            val back = session().apply { restore(draft) }
+            assertThat(back.save()).isFalse()
+            assertThat(back.changed).isTrue()
+            assertThat(file).isEqualTo("b")
+            assertThat(back.value.text).isEqualTo("c")
+        }
+
+    @Test
+    fun `a note too long for the saved state is not kept there`() =
+        runTest {
+            file = "a".repeat(EditorSession.DRAFT_LIMIT / 2)
+            val editor = session().apply { open() }
+            editor.type(file + "b")
+            assertThat(editor.draft()).isNull()
         }
 
     @Test
