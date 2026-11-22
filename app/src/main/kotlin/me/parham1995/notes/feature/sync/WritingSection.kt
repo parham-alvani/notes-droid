@@ -144,6 +144,26 @@ internal fun WritingCard(
     }
 }
 
+/** How the editor of a note's text draws it. */
+@Composable
+internal fun EditorCard(
+    state: SyncUiState,
+    viewModel: SyncViewModel,
+) {
+    val fromVault = state.settings.fromVault
+    SectionCard(stringResource(R.string.card_editor)) {
+        SwitchRow(
+            title = stringResource(R.string.settings_live_preview),
+            vault = state.vaultKey(VaultOverlay.LIVE_PREVIEW, viewModel),
+            help = stringResource(R.string.help_live_preview),
+            checked = state.settings.reading.livePreview,
+            onCheckedChange = viewModel::setLivePreview,
+            enabled = !fromVault.locks(VaultOverlay.LIVE_PREVIEW),
+        )
+        FromVaultNote(fromVault, VaultOverlay.LIVE_PREVIEW)
+    }
+}
+
 /** Where a captured thought lands, and in which vault. */
 @Composable
 internal fun ScratchpadCard(

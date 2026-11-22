@@ -108,6 +108,18 @@ class SettingsStoreTest {
             assertThat(store.current().reading.remoteImages).isTrue()
         }
 
+    /** `look.md` in notes-linux's `docs/specs/`: `editor.live_preview` is on with no setting. */
+    @Test
+    fun `the editor hides marks by default, and the switch survives a round trip`() =
+        runTest {
+            assertThat(store.current().reading.livePreview).isTrue()
+
+            store.setLivePreview(false)
+            assertThat(store.current().reading.livePreview).isFalse()
+            store.setLivePreview(true)
+            assertThat(store.current().reading.livePreview).isTrue()
+        }
+
     /** `folded-sections.md` in notes-linux's `docs/specs/`: as the vault says until chosen otherwise. */
     @Test
     fun `notes open folded as the vault says by default, and the choice survives a round trip`() =

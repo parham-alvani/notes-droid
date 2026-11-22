@@ -107,6 +107,7 @@ fun SyncScreen(
                 SettingsSection.WRITING -> {
                     WritingCard(state, viewModel)
                     ScratchpadCard(state, viewModel)
+                    EditorCard(state, viewModel)
                     if (state.queuedEdits.isNotEmpty()) QueuedEditsCard(state, viewModel)
                 }
 

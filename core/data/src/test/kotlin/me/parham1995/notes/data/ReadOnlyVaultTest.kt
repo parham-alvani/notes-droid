@@ -640,6 +640,8 @@ class ReadOnlyVaultTest {
             assertThat(followed.reading.lineWidth).isEqualTo(LineWidth.FULL)
             assertThat(followed.reading.remoteImages).isFalse()
             assertThat(followed.reading.foldSections).isEqualTo(FoldSections.ALWAYS)
+            // `editor.live_preview`, which the phone's editor reads: on with no setting.
+            assertThat(followed.reading.livePreview).isFalse()
             // The shared `git.sync_interval` is the desktops' timer: the phone's refresh does not read it.
             assertThat(followed.backgroundSync).isTrue()
             assertThat(followed.syncIntervalHours).isEqualTo(6)
@@ -661,6 +663,7 @@ class ReadOnlyVaultTest {
             assertThat(own.reading.theme).isEqualTo(ThemeChoice.DARK)
             assertThat(own.syncIntervalHours).isEqualTo(6)
             assertThat(own.reading.remoteImages).isTrue()
+            assertThat(own.reading.livePreview).isTrue()
             assertThat(own.reading.hiddenNames).isNull()
             assertThat(own.fromVault.applied).isEmpty()
             assertThat(own.fromVault.offered).contains(VaultOverlay.THEME)
@@ -691,6 +694,9 @@ class ReadOnlyVaultTest {
             remote_images = false
             fold_sections = "always"
             font = "Inter"
+
+            [editor]
+            live_preview = false
 
             [git]
             sync_interval = 90

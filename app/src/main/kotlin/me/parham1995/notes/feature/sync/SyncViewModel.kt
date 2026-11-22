@@ -429,6 +429,8 @@ class SyncViewModel
 
         fun setSoftDark(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.softDark, enabled) }
 
+        fun setLivePreview(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.livePreview, enabled) }
+
         fun setFoldSections(choice: FoldSections) =
             viewModelScope.launch { writer.set(VaultOverlay.foldSections, choice) }
 

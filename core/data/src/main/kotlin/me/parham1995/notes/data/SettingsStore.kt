@@ -277,6 +277,11 @@ data class ReadingSettings(
     val remoteImages: Boolean = true,
     /** The dark theme is naz, soft: naz with its colour strength capped (`appearance.dark_palette`). */
     val softDark: Boolean = false,
+    /**
+     * The editor draws a note as it reads: the marks of an element show only
+     * while the caret is in it (`editor.live_preview`). Off, every mark shows.
+     */
+    val livePreview: Boolean = true,
     /** Whether a note opens with its sections folded: as the vault says, always or never. */
     val foldSections: FoldSections = FoldSections.VAULT,
     /**
@@ -555,6 +560,7 @@ class SettingsStore
                             widgetOpacity = (preferences[WIDGET_OPACITY] ?: 100).coerceIn(0, 100),
                             remoteImages = preferences[REMOTE_IMAGES] ?: true,
                             softDark = preferences[SOFT_DARK] ?: false,
+                            livePreview = preferences[LIVE_PREVIEW] ?: true,
                             foldSections = FoldSections.parse(preferences[FOLD_SECTIONS]),
                         ),
                     fromVault =
@@ -791,6 +797,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[SOFT_DARK] = enabled }
         }
 
+        suspend fun setLivePreview(enabled: Boolean) {
+            context.settingsDataStore.edit { it[LIVE_PREVIEW] = enabled }
+        }
+
         suspend fun setFoldSections(choice: FoldSections) {
             context.settingsDataStore.edit { it[FOLD_SECTIONS] = choice.name }
         }
@@ -880,6 +890,7 @@ class SettingsStore
             val WIDGET_OPACITY = intPreferencesKey("widget_opacity")
             val REMOTE_IMAGES = booleanPreferencesKey("reading_remote_images")
             val SOFT_DARK = booleanPreferencesKey("reading_soft_dark")
+            val LIVE_PREVIEW = booleanPreferencesKey("editor_live_preview")
             val FOLD_SECTIONS = stringPreferencesKey("reading_fold_sections")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")
