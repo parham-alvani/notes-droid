@@ -193,7 +193,8 @@ The shared keys this app has a setting for, written in the spec's unit when the 
 | `appearance.remote_images` | pictures from the web; a vault can only turn them off |
 | `appearance.fold_sections` | whether notes open folded |
 | `appearance.dark_palette` | the dark theme's colours: naz, or naz with its colour strength capped |
-| `editor.live_preview` | whether the editor hides the marks of an element until the caret is in it |
+| `editor.live_preview` | whether the editor draws a note as it reads: marks hidden until the caret is in them, a task's box, the date chips |
+| `editor.format_bar` | whether the editor shows its format bar over the keyboard for a selection |
 | `git.name`, `git.email` | the author of a commit, where the app's own is empty; read, never written |
 | `notifications.digest`, `notifications.digest_time` | the daily digest and its hour |
 | `capture.target` | the scratchpad's path, when it is a note's path |

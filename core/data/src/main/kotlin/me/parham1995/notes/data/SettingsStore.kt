@@ -282,6 +282,8 @@ data class ReadingSettings(
      * while the caret is in it (`editor.live_preview`). Off, every mark shows.
      */
     val livePreview: Boolean = true,
+    /** The editor shows its format bar over the keyboard for a selection in one line (`editor.format_bar`). */
+    val formatBar: Boolean = true,
     /** Whether a note opens with its sections folded: as the vault says, always or never. */
     val foldSections: FoldSections = FoldSections.VAULT,
     /**
@@ -561,6 +563,7 @@ class SettingsStore
                             remoteImages = preferences[REMOTE_IMAGES] ?: true,
                             softDark = preferences[SOFT_DARK] ?: false,
                             livePreview = preferences[LIVE_PREVIEW] ?: true,
+                            formatBar = preferences[FORMAT_BAR] ?: true,
                             foldSections = FoldSections.parse(preferences[FOLD_SECTIONS]),
                         ),
                     fromVault =
@@ -801,6 +804,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[LIVE_PREVIEW] = enabled }
         }
 
+        suspend fun setFormatBar(enabled: Boolean) {
+            context.settingsDataStore.edit { it[FORMAT_BAR] = enabled }
+        }
+
         suspend fun setFoldSections(choice: FoldSections) {
             context.settingsDataStore.edit { it[FOLD_SECTIONS] = choice.name }
         }
@@ -891,6 +898,7 @@ class SettingsStore
             val REMOTE_IMAGES = booleanPreferencesKey("reading_remote_images")
             val SOFT_DARK = booleanPreferencesKey("reading_soft_dark")
             val LIVE_PREVIEW = booleanPreferencesKey("editor_live_preview")
+            val FORMAT_BAR = booleanPreferencesKey("editor_format_bar")
             val FOLD_SECTIONS = stringPreferencesKey("reading_fold_sections")
             val APP_LOCK = booleanPreferencesKey("app_lock")
             val SEEN_VERSION = intPreferencesKey("seen_version")

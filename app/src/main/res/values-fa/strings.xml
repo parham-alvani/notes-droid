@@ -49,6 +49,8 @@
     <string name="card_editor">ویرایشگر</string>
     <string name="settings_live_preview">پنهان کردن نشانه‌ها تا وقتی مکان‌نما درونشان نیست</string>
     <string name="help_live_preview">اگر روشن باشد، ویرایشگر یادداشت را همان‌طور که خوانده می‌شود نشان می‌دهد: نشانه‌های متن پررنگ، برجسته یا پیوند فقط وقتی دیده می‌شوند که مکان‌نما درونشان باشد. اگر خاموش باشد، همهٔ نشانه‌ها دیده می‌شوند.</string>
+    <string name="settings_format_bar">نوار قالب‌بندی برای متن گزیده</string>
+    <string name="help_format_bar">وقتی متنی در یک خط گزیده شده باشد، نواری بالای صفحه‌کلید دکمه‌های پررنگ، کج، برجسته، کد، خط‌خورده و پیوند به یادداشت را نشان می‌دهد.</string>
     <string name="history_none">هیچ کامیتی این یادداشت را تغییر نداده است.</string>
     <string name="history_failed">تاریخچه خوانده نشد: %1$s</string>
     <string name="history_not_there">این یادداشت در آن کامیت نیست.</string>

@@ -161,6 +161,15 @@ internal fun EditorCard(
             enabled = !fromVault.locks(VaultOverlay.LIVE_PREVIEW),
         )
         FromVaultNote(fromVault, VaultOverlay.LIVE_PREVIEW)
+        SwitchRow(
+            title = stringResource(R.string.settings_format_bar),
+            vault = state.vaultKey(VaultOverlay.FORMAT_BAR, viewModel),
+            help = stringResource(R.string.help_format_bar),
+            checked = state.settings.reading.formatBar,
+            onCheckedChange = viewModel::setFormatBar,
+            enabled = !fromVault.locks(VaultOverlay.FORMAT_BAR),
+        )
+        FromVaultNote(fromVault, VaultOverlay.FORMAT_BAR)
     }
 }
 

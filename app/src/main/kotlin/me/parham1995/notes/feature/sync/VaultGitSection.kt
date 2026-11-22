@@ -167,6 +167,7 @@ internal fun vaultKeyLabel(key: String): Int =
         VaultOverlay.THEME -> R.string.settings_theme
         VaultOverlay.DARK_PALETTE -> R.string.settings_soft_dark
         VaultOverlay.LIVE_PREVIEW -> R.string.settings_live_preview
+        VaultOverlay.FORMAT_BAR -> R.string.settings_format_bar
         VaultOverlay.TEXT_SIZE -> R.string.settings_size
         VaultOverlay.TEXT_WIDTH -> R.string.settings_line_width
         VaultOverlay.REMOTE_IMAGES -> R.string.settings_remote_images

@@ -431,6 +431,8 @@ class SyncViewModel
 
         fun setLivePreview(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.livePreview, enabled) }
 
+        fun setFormatBar(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.formatBar, enabled) }
+
         fun setFoldSections(choice: FoldSections) =
             viewModelScope.launch { writer.set(VaultOverlay.foldSections, choice) }
 

@@ -173,6 +173,7 @@ object SettingsFromVault {
             REMOTE_IMAGES to allowed { it == TomlValue.Flag(false) },
             "calendar.place" to text,
             "editor.live_preview" to flag,
+            "editor.format_bar" to flag,
             "editor.format_on_save" to flag,
             "git.sync_interval" to whole(0..MINUTES_IN_WEEK),
             "git.pull_on_launch" to flag,
