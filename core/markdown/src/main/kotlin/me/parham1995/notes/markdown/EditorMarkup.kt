@@ -296,7 +296,19 @@ object EditorMarkup {
             next: EditorState = after,
             task: EditorTask? = null,
         ) = EditorRead(
-            EditorLine(text.length, kind, level, quote, callout, rtl, spans, elements, lineMarks, task),
+            // A task reads as its words do: the `x` in a done box is no word.
+            EditorLine(
+                text.length,
+                kind,
+                level,
+                quote,
+                callout,
+                if (task == null) rtl else TextDirection.of(text.substring(task.box.end)) == MdDirection.RTL,
+                spans,
+                elements,
+                lineMarks,
+                task,
+            ),
             next,
         )
 

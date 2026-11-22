@@ -5,12 +5,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -24,6 +28,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.LocalDate
 
 /**
  * The editor in a real text field: what is typed is the note's text and
@@ -38,6 +43,10 @@ class NoteEditorTest {
 
     private var value by mutableStateOf(TextFieldValue(""))
 
+    /** The places a tap and a long press on a task's box named. */
+    private val tapped = ArrayList<Int>()
+    private val held = ArrayList<Int>()
+
     private fun edit(
         text: String,
         caret: Int = text.length,
@@ -45,7 +54,14 @@ class NoteEditorTest {
         value = TextFieldValue(text, TextRange(caret))
         compose.setContent {
             NotesTheme(ThemeChoice.DARK) {
-                NoteEditor(value, { value = it }, Modifier.width(400.dp))
+                NoteEditor(
+                    value,
+                    { value = it },
+                    Modifier.width(400.dp),
+                    today = LocalDate.of(2026, 11, 22),
+                    onTask = { tapped += it },
+                    onTaskMenu = { held += it },
+                )
             }
         }
         compose.waitForIdle()
@@ -104,6 +120,91 @@ class NoteEditorTest {
         assertThat(height(2) / plain).isWithin(0.05f).of(2f / 1.65f)
         // The last line is a whole line too: nothing is trimmed off it.
         assertThat(height(3)).isEqualTo(plain)
+    }
+
+    @Test
+    fun `a task's marks are as wide as its box, and its line is as high as any other`() {
+        edit("plain\n- [ ] Buy\n1. [x] done\n\nlast")
+        val layout = layout()
+        val em = 15f
+        val start = layout.getLineStart(1)
+        // `- [ ]` is five characters and takes 1.1 em: the space after it starts there.
+        val room = layout.getHorizontalPosition(start + 5, true) - layout.getHorizontalPosition(start, true)
+        assertThat(room).isWithin(1f).of(1.1f * em)
+        // After a number the brackets alone are the box.
+        val numbered = layout.getLineStart(2)
+        val brackets =
+            layout.getHorizontalPosition(numbered + 6, true) - layout.getHorizontalPosition(numbered + 3, true)
+        assertThat(brackets).isWithin(1f).of(1.1f * em)
+
+        fun height(line: Int) = layout.getLineBottom(line) - layout.getLineTop(line)
+        assertThat(height(1)).isEqualTo(height(0))
+        // The letters that keep the room do not move the words off the line's baseline.
+        assertThat(layout.getLineBaseline(1) - layout.getLineTop(1)).isWithin(0.5f).of(layout.getLineBaseline(0))
+        assertThat(value.text).isEqualTo("plain\n- [ ] Buy\n1. [x] done\n\nlast")
+    }
+
+    @Test
+    fun `a tap on a task's box names its line and does not move the caret`() {
+        val text = "plain\n- [ ] Buy\n- [ ] Sell\n\nlast"
+        edit(text)
+        val layout = layout()
+
+        fun middle(line: Int) = (layout.getLineTop(line) + layout.getLineBottom(line)) / 2
+        compose.onNodeWithTag(EDITOR_TAG).performTouchInput { click(Offset(8f, middle(1))) }
+        compose.waitForIdle()
+        assertThat(tapped).containsExactly(text.indexOf("- [ ] Buy"))
+        assertThat(value.selection).isEqualTo(TextRange(text.length))
+
+        compose.onNodeWithTag(EDITOR_TAG).performTouchInput { click(Offset(8f, middle(2))) }
+        compose.waitForIdle()
+        assertThat(tapped).containsExactly(text.indexOf("- [ ] Buy"), text.indexOf("- [ ] Sell")).inOrder()
+        assertThat(held).isEmpty()
+
+        // In the words, well past the box's target, a tap is the text field's.
+        compose.onNodeWithTag(EDITOR_TAG).performTouchInput { click(Offset(120f, middle(1))) }
+        compose.waitForIdle()
+        assertThat(tapped).hasSize(2)
+        // A line with no box has nothing to tap.
+        compose.onNodeWithTag(EDITOR_TAG).performTouchInput { click(Offset(8f, middle(0))) }
+        compose.waitForIdle()
+        assertThat(tapped).hasSize(2)
+        assertThat(value.text).isEqualTo(text)
+    }
+
+    @Test
+    fun `the box's target is 40 dp, and a long press on it opens the status sheet`() {
+        val text = "- [ ] Buy\n\nlast"
+        edit(text)
+        val layout = layout()
+        val middle = (layout.getLineTop(0) + layout.getLineBottom(0)) / 2
+        // The box is 16 dp wide from the line's start: 26 dp is past it and inside its target.
+        compose.onNodeWithTag(EDITOR_TAG).performTouchInput { click(Offset(26f, middle)) }
+        compose.waitForIdle()
+        assertThat(tapped).containsExactly(0)
+        compose.onNodeWithTag(EDITOR_TAG).performTouchInput { click(Offset(40f, middle)) }
+        compose.waitForIdle()
+        assertThat(tapped).hasSize(1)
+
+        // That tap was the text's: the caret went there. A long press on the box leaves it.
+        val caret = value.selection
+        assertThat(caret).isNotEqualTo(TextRange(text.length))
+        compose.onNodeWithTag(EDITOR_TAG).performTouchInput { longClick(Offset(8f, middle)) }
+        compose.waitForIdle()
+        assertThat(held).containsExactly(0)
+        assertThat(tapped).hasSize(1)
+        assertThat(value.selection).isEqualTo(caret)
+    }
+
+    @Test
+    fun `with the caret in a task's marks there is no box to tap`() {
+        edit("- [ ] Buy\n\nlast", caret = 2)
+        val layout = layout()
+        compose.onNodeWithTag(EDITOR_TAG).performTouchInput {
+            click(Offset(8f, (layout.getLineTop(0) + layout.getLineBottom(0)) / 2))
+        }
+        compose.waitForIdle()
+        assertThat(tapped).isEmpty()
     }
 
     @Test

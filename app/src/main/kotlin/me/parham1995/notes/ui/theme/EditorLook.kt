@@ -9,9 +9,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.sp
 import me.parham1995.notes.markdown.CalloutKind
+import me.parham1995.notes.markdown.EditorChipKind
 import me.parham1995.notes.markdown.EditorSpan
 import me.parham1995.notes.markdown.EditorStyle
 import me.parham1995.notes.markdown.HighlightColor
+import me.parham1995.notes.markdown.TaskTint
 
 /**
  * The editor's look, "naz, refined" (`look.md` in notes-linux's
@@ -63,6 +65,32 @@ internal object EditorMetrics {
 
     /** A tag's colour behind it. */
     const val TAG_ALPHA = 0.14f
+
+    /** A task's box: its side in em, how far its bottom is under the baseline, and the least side of what a tap hits. */
+    const val BOX_EM = 1.1f
+    const val BOX_DROP_EM = 0.18f
+    const val BOX_TARGET_DP = 40
+
+    /** What a monospace letter's width is of its size, on every font Android has shipped. Measured where there is a screen. */
+    const val MONOSPACE_ADVANCE = 0.6f
+
+    /** A date chip: its text's size, the pill's colour, the room at each side of the text and between two pills, in em. */
+    const val CHIP_SCALE = 0.92f
+    const val CHIP_ALPHA = 0.14f
+    const val CHIP_ROOM_EM = 0.5f
+    const val CHIP_GAP_EM = 0.3f
+
+    /** The pill is as high as its text's line, not the row's: this, times the chip's text size. */
+    const val CHIP_HEIGHT = 1.35f
+
+    /** A space's width in em, near enough for the room between two pills. */
+    const val SPACE_EM = 0.25f
+
+    /** The chips of a closed task. */
+    const val CHIP_CLOSED_ALPHA = 0.75f
+
+    /** A due date that is late. */
+    val Late = FontWeight(600)
 }
 
 /**
@@ -85,10 +113,41 @@ internal data class EditorLook(
     val size: Float,
     /** Right-to-left lines are set in Vazirmatn. */
     val persianFont: Boolean = true,
+    /** A done or cancelled task's box and text. */
+    val done: Color = faint,
+    /**
+     * How many monospace letters wide a task's box is: the letters that keep
+     * its room are sized by it, so together they are [EditorMetrics.BOX_EM]
+     * wide.
+     */
+    val boxScale: Float = EditorMetrics.BOX_EM / EditorMetrics.MONOSPACE_ADVANCE,
 ) {
     val currentLine: Color get() = text.copy(alpha = EditorMetrics.CURRENT_LINE_ALPHA)
 
     fun calloutColor(kind: CalloutKind): Color = kind.accent(accents)
+
+    /** The colour of a task's box. */
+    fun taskColor(tint: TaskTint): Color =
+        tint.accent(accents) ?: when (tint) {
+            TaskTint.DONE -> done
+            TaskTint.ACCENT -> accent
+            else -> markup.ListMarker
+        }
+
+    /** A date chip's colour: a late due date is the red. */
+    fun chipColor(
+        kind: EditorChipKind,
+        late: Boolean = false,
+    ): Color =
+        when (kind) {
+            EditorChipKind.DUE -> if (late) accents.red else accents.orange
+            EditorChipKind.SCHEDULED -> accents.blue
+            EditorChipKind.START -> accents.purple
+            EditorChipKind.CREATED -> faint
+            EditorChipKind.DONE -> accents.springGreen
+            EditorChipKind.CANCELLED -> accents.red
+            EditorChipKind.REPEAT -> accents.pink
+        }
 
     /** The colour under a highlight: the plain one is the vivid yellow, as the reader has it. */
     fun highlight(color: HighlightColor?): Color =
@@ -144,10 +203,11 @@ internal data class EditorLook(
         }
 }
 
-/** The editor's look on this scheme, at [size] sp. */
+/** The editor's look on this scheme, at [size] sp. [boxScale] is [EditorLook.boxScale], when it was measured. */
 internal fun ColorScheme.editorLook(
     size: Float,
     persianFont: Boolean = true,
+    boxScale: Float = EditorMetrics.BOX_EM / EditorMetrics.MONOSPACE_ADVANCE,
 ): EditorLook =
     EditorLook(
         text = onBackground,
@@ -160,4 +220,6 @@ internal fun ColorScheme.editorLook(
         accents = accents,
         size = size,
         persianFont = persianFont,
+        done = outline,
+        boxScale = boxScale,
     )

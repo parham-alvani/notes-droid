@@ -34,6 +34,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.time.LocalDate
 
 /**
  * The editor as it is drawn, in each palette, compared with what it drew last
@@ -81,6 +82,40 @@ class EditorScreenshotTest {
         این یک خط فارسی با **تاکید** است.
         """.trimIndent()
 
+    /** Tasks in every status with their boxes, and their dates as chips: one late, one on a closed task, one raw. */
+    private val tasks =
+        """
+        ## Tasks
+
+        - [ ] Pay the rent 📅 2026-11-20 ⏳ 2026-11-18 🔁 every month ➕ 2026-11-01
+        - [/] Write the review ⏳ 2026-11-22
+        - [x] Call the bank ➕ 2026-11-10 ✅ 2026-11-21
+        - [-] Sell the bike [reason:: no buyer] ❌ 2026-11-19
+        - [>] Forwarded to next week 🛫 2026-11-24
+        - [?] A question
+            1. [ ] A numbered task 📅 2026-12-01
+        - [ ] The caret is in this date 📅 2026-11-30
+
+        > [!todo] In a callout
+        > - [ ] A task here 📅 2026-11-25
+
+        - [x] کار انجام شده ✅ 2026-11-21
+        - [ ] کار فارسی 📅 2026-11-23
+        """.trimIndent()
+
+    @Test
+    fun `tasks in the editor, dark`() =
+        editor(
+            "editor_tasks_dark",
+            text = tasks,
+            caret =
+                tasks.indexOf("2026-11-30") + 4,
+        )
+
+    @Test
+    fun `tasks in the editor, light`() =
+        editor("editor_tasks_light", text = tasks, caret = tasks.indexOf("2026-11-30") + 4, theme = ThemeChoice.LIGHT)
+
     /** The caret in "bold": its two marks show, every other mark is hidden, and its line is tinted. */
     @Test
     fun `the editor, dark, with the caret in a bold word`() = editor("editor_dark", caret = note.indexOf("bold") + 2)
@@ -102,6 +137,7 @@ class EditorScreenshotTest {
         // On the heading's line by default, so one line shows its marks.
         caret: Int = 0,
         livePreview: Boolean = true,
+        text: String = note,
     ) {
         compose.setContent {
             NotesTheme(theme, softDark = reading.softDark) {
@@ -111,10 +147,12 @@ class EditorScreenshotTest {
                         color = MaterialTheme.colorScheme.background,
                     ) {
                         NoteEditor(
-                            value = TextFieldValue(note, TextRange(caret)),
+                            value = TextFieldValue(text, TextRange(caret)),
                             onValueChange = {},
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             livePreview = livePreview,
+                            // A day of its own, so a late date is late on any day the test runs.
+                            today = LocalDate.of(2026, 11, 22),
                         )
                     }
                 }

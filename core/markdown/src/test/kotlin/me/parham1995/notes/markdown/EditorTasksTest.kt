@@ -231,6 +231,13 @@ class EditorTasksTest {
     }
 
     @Test
+    fun `a task reads the way its words do, not the way its box's letter does`() {
+        assertThat(read("- [x] کار انجام شده ✅ 2026-11-21").rtl).isTrue()
+        assertThat(read("- [ ] کار").rtl).isTrue()
+        assertThat(read("- [x] Call علی").rtl).isFalse()
+    }
+
+    @Test
     fun `the box's marks open no italic, and the text after it is read as ever`() {
         val text = "- [*] a *b* and **c**"
         val line = read(text)

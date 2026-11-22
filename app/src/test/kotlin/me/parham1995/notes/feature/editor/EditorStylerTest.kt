@@ -6,9 +6,17 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import com.google.common.truth.Truth.assertThat
 import me.parham1995.notes.markdown.CalloutKind
+import me.parham1995.notes.markdown.EditorTasks
+import me.parham1995.notes.markdown.StatusType
+import me.parham1995.notes.markdown.TaskStatus
+import me.parham1995.notes.markdown.TaskStatuses
+import me.parham1995.notes.markdown.TaskTint
 import me.parham1995.notes.ui.theme.DaylightAccents
 import me.parham1995.notes.ui.theme.DaylightMarkup
 import me.parham1995.notes.ui.theme.DaylightScheme
@@ -21,6 +29,7 @@ import me.parham1995.notes.ui.theme.NazSoftMarkup
 import me.parham1995.notes.ui.theme.NazSoftScheme
 import me.parham1995.notes.ui.theme.editorLook
 import org.junit.Test
+import java.time.LocalDate
 
 /**
  * The editor's look as `look.md` (notes-linux's `docs/specs/`, "Android: the
@@ -276,7 +285,201 @@ class EditorStylerTest {
         assertThat(again).isEqualTo(EditorStyler().draw(typed, TextRange(3), naz).text)
     }
 
+    /** The style of the character at [at], every span over it merged in order. */
+    private fun EditorDrawn.styleAt(at: Int): SpanStyle =
+        text.spanStyles.filter { at >= it.start && at < it.end }.fold(SpanStyle()) { all, next -> all.merge(next.item) }
+
+    private fun tasks(
+        text: String,
+        caret: Int? = null,
+        livePreview: Boolean = true,
+        statuses: TaskStatuses = TaskStatuses.DEFAULT,
+    ): EditorDrawn {
+        val note = if (caret == null) "$text\n" else text
+        return EditorStyler().draw(note, TextRange(caret ?: note.length), naz, livePreview, TODAY, statuses)
+    }
+
+    @Test
+    fun `a task's marks take the room of its box and no more, and show with the caret in them`() {
+        val drawn = tasks("- [ ] Buy")
+        // Two letters keep the box's room: not seen, and 1.1 em wide together.
+        for (at in 0..1) {
+            assertThat(drawn.styleAt(at).color).isEqualTo(Color.Transparent)
+            assertThat(drawn.styleAt(at).fontSize.value).isWithin(TOLERANCE).of(SIZE * naz.boxScale / 2)
+        }
+        for (at in 2..4) assertThat(drawn.styleAt(at).fontSize).isEqualTo(0.sp)
+        // The space after the box is a space, and the text is as written.
+        assertThat(drawn.styleAt(5).fontSize.isSpecified).isFalse()
+        assertThat(drawn.boxes.single()).isEqualTo(EditorDecor.TaskBox(0, 1, EditorTasks.drawing(' ')))
+        assertThat(drawn.text.text).startsWith("- [ ] Buy")
+
+        // With the caret in the marks they are raw: nothing hidden, no box.
+        val raw = tasks("- [ ] Buy", caret = 3)
+        assertThat(raw.boxes).isEmpty()
+        for (at in 0..4) assertThat(raw.styleAt(at).fontSize.isSpecified).isFalse()
+        // At the start of the text the box is drawn.
+        assertThat(tasks("- [ ] Buy", caret = 6).boxes).hasSize(1)
+    }
+
+    @Test
+    fun `after a number the box stands for the brackets alone, and each status has its drawing`() {
+        val numbered = tasks("1. [x] a")
+        assertThat(numbered.boxes.single().start).isEqualTo(3)
+        assertThat(numbered.styleAt(0).color).isEqualTo(naz.markup.ListMarker)
+        assertThat(
+            numbered.boxes
+                .single()
+                .symbol.icon,
+        ).isEqualTo("square-check-big")
+        assertThat(
+            naz.taskColor(
+                numbered.boxes
+                    .single()
+                    .symbol.tint,
+            ),
+        ).isEqualTo(naz.done)
+
+        val review = TaskStatuses.of(emptyList(), listOf(TaskStatus('r', "In Review", 'x', StatusType.IN_PROGRESS)))
+        val under = tasks("- [r] a", statuses = review).boxes.single().symbol
+        assertThat(under.icon).isEqualTo("square-dot")
+        assertThat(naz.taskColor(under.tint)).isEqualTo(naz.accent)
+        assertThat(naz.taskColor(TaskTint.BLUE)).isEqualTo(NazAccents.blue)
+        assertThat(naz.taskColor(TaskTint.LIST_MARKER)).isEqualTo(naz.markup.ListMarker)
+    }
+
+    @Test
+    fun `a closed task's text is struck in the done colour, and its chips and reason are not`() {
+        val text = "- [x] Call the bank [reason:: late] ➕ 2026-11-10 ✅ 2026-11-21"
+        val drawn = tasks(text)
+        val word = drawn.styleAt(text.indexOf("Call"))
+        assertThat(word.color).isEqualTo(naz.done)
+        assertThat(word.textDecoration).isEqualTo(TextDecoration.LineThrough)
+        assertThat(drawn.styleAt(text.indexOf("reason")).textDecoration).isNotEqualTo(TextDecoration.LineThrough)
+        // The chips of a closed task are drawn at 75 percent and are not struck.
+        val chip = drawn.styleAt(text.indexOf("2026-11-21"))
+        assertThat(chip.textDecoration).isEqualTo(TextDecoration.None)
+        assertThat(chip.color).isEqualTo(NazAccents.springGreen.copy(alpha = 0.75f))
+        // An open task's text is as written.
+        assertThat(tasks("- [ ] Call").styleAt(6).textDecoration).isNull()
+        assertThat(tasks("- [/] Call").styleAt(6).textDecoration).isNull()
+    }
+
+    @Test
+    fun `a chip is smaller and in its kind's colour, and a late due date is the red at 600`() {
+        val text = "- [ ] Pay 📅 2026-11-20 ⏳ 2026-11-18 🛫 2026-11-17 🔁 every week ➕ 2026-11-01"
+        val drawn = tasks(text)
+
+        fun chip(of: String) = drawn.styleAt(text.indexOf(of))
+        assertThat(chip("2026-11-20").fontSize.value).isWithin(TOLERANCE).of(SIZE * 0.92f)
+        // Due on the 20th and today is the 22nd: late.
+        assertThat(chip("2026-11-20").color).isEqualTo(NazAccents.red)
+        assertThat(chip("2026-11-20").fontWeight).isEqualTo(FontWeight(600))
+        assertThat(chip("2026-11-18").color).isEqualTo(NazAccents.blue)
+        assertThat(chip("2026-11-18").fontWeight).isNull()
+        assertThat(chip("2026-11-17").color).isEqualTo(NazAccents.purple)
+        assertThat(chip("every week").color).isEqualTo(NazAccents.pink)
+        assertThat(chip("2026-11-01").color).isEqualTo(naz.faint)
+        // A pill for each, from the emoji to the last character.
+        val pills = drawn.decor.filterIsInstance<EditorDecor.Chip>()
+        assertThat(pills.map { text.substring(it.start, it.end) })
+            .containsExactly("📅 2026-11-20", "⏳ 2026-11-18", "🛫 2026-11-17", "🔁 every week", "➕ 2026-11-01")
+            .inOrder()
+
+        // Due today is not late: the orange, at the ordinary weight.
+        val today = tasks("- [ ] Pay 📅 2026-11-22")
+        assertThat(today.styleAt(12).color).isEqualTo(NazAccents.orange)
+        assertThat(today.styleAt(12).fontWeight).isNull()
+        // A cancelled date is the red, and never bold.
+        val cancelled = tasks("- [-] a ❌ 2026-11-01")
+        assertThat(cancelled.styleAt(12).fontWeight).isNull()
+    }
+
+    @Test
+    fun `the room between two pills is the space before the second`() {
+        val text = "- [ ] Pay 📅 2026-11-20 ⏳ 2026-11-18"
+        val drawn = tasks(text)
+        // Before the first chip: the pill's room. Between two: both rooms and the gap, less the space itself.
+        assertThat(drawn.styleAt(text.indexOf(" 📅")).letterSpacing.value).isWithin(TOLERANCE).of(0.5f)
+        assertThat(drawn.styleAt(text.indexOf(" ⏳")).letterSpacing.value).isWithin(TOLERANCE).of(1.05f)
+    }
+
+    @Test
+    fun `a chip is raw with the caret in it, and the others stay drawn`() {
+        val text = "- [ ] Pay 📅 2026-11-20 ⏳ 2026-11-18"
+        val drawn = tasks(text, caret = text.indexOf("2026-11-20") + 3)
+        assertThat(drawn.styleAt(text.indexOf("2026-11-20")).fontSize.isSpecified).isFalse()
+        assertThat(drawn.styleAt(text.indexOf("2026-11-20")).color).isEqualTo(Color.Unspecified)
+        assertThat(drawn.decor.filterIsInstance<EditorDecor.Chip>().map { text.substring(it.start, it.end) })
+            .containsExactly("⏳ 2026-11-18")
+        // The caret just after the last digit is in the chip too.
+        assertThat(tasks(text, caret = text.length).decor.filterIsInstance<EditorDecor.Chip>()).hasSize(1)
+    }
+
+    @Test
+    fun `with live preview off a task is its marks and its dates are text`() {
+        val text = "- [x] Pay 📅 2026-11-20"
+        val drawn = tasks(text, livePreview = false)
+        assertThat(drawn.boxes).isEmpty()
+        assertThat(drawn.decor.filterIsInstance<EditorDecor.Chip>()).isEmpty()
+        assertThat(drawn.styleAt(2).fontSize.isSpecified).isFalse()
+        assertThat(drawn.styleAt(text.indexOf("Pay")).textDecoration).isNull()
+        assertThat(drawn.styleAt(text.indexOf("2026")).fontSize.isSpecified).isFalse()
+        // The colours of the look stay.
+        assertThat(drawn.styleAt(0).color).isEqualTo(naz.markup.ListMarker)
+    }
+
+    @Test
+    fun `a day after right-to-left text is drawn after a Latin letter, and the note's text is not changed`() {
+        val text = "- [ ] کار 📅 2026-11-23"
+        val drawn = tasks(text)
+        val space = text.indexOf(" 2026")
+        // The space in the chip is drawn as a letter that is not seen: the day reads 2026-11-23.
+        assertThat(drawn.text.text[space]).isEqualTo('l')
+        assertThat(drawn.styleAt(space).color).isEqualTo(Color.Transparent)
+        // Every other place is the note's own character, and there are as many.
+        assertThat(drawn.text.text.length).isEqualTo(text.length + 2)
+        assertThat(drawn.text.text.replaceRange(space, space + 1, " ")).startsWith(text)
+        // With no right-to-left letter the line is drawn from its own characters.
+        val latin = tasks("- [ ] Pay 📅 2026-11-23")
+        assertThat(latin.text.text).startsWith("- [ ] Pay 📅 2026-11-23")
+        // The task's line reads as its words do.
+        assertThat(
+            drawn.text.paragraphStyles
+                .first()
+                .item.textDirection,
+        ).isEqualTo(TextDirection.Rtl)
+        assertThat(
+            latin.text.paragraphStyles
+                .first()
+                .item.textDirection,
+        ).isEqualTo(TextDirection.Ltr)
+    }
+
+    @Test
+    fun `the day changing styles the tasks again, and a key in a note of tasks makes one line`() {
+        val note = (1..300).joinToString("\n") { "- [ ] task $it 📅 2026-11-22 ➕ 2026-11-01" }
+        val styler = EditorStyler()
+        val at = note.indexOf("task 150") + 4
+        styler.draw(note, TextRange(at), naz, today = TODAY)
+        assertThat(styler.lastMade).isEqualTo(300)
+        val typed = note.substring(0, at) + "x" + note.substring(at)
+        val drawn = styler.draw(typed, TextRange(at + 1), naz, today = TODAY)
+        assertThat(styler.lastMade).isEqualTo(1)
+        assertThat(drawn.boxes).hasSize(300)
+        // The boxes are in the order of the text, for a tap to find one.
+        assertThat(drawn.boxes.map { it.start }).isInOrder()
+
+        // The next day every due date is late: the lines are made again.
+        val tomorrow = styler.draw(typed, TextRange(at + 1), naz, today = TODAY.plusDays(1))
+        assertThat(styler.lastMade).isEqualTo(300)
+        assertThat(tomorrow.styleAt(typed.indexOf("2026-11-22")).color).isEqualTo(NazAccents.red)
+        assertThat(
+            tomorrow.text,
+        ).isEqualTo(EditorStyler().draw(typed, TextRange(at + 1), naz, today = TODAY.plusDays(1)).text)
+    }
+
     private companion object {
+        val TODAY: LocalDate = LocalDate.of(2026, 11, 22)
         const val SIZE = 15f
         const val TOLERANCE = 0.001f
         const val BREAK = "​"

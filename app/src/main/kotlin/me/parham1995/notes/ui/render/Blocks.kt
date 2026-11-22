@@ -80,6 +80,7 @@ import me.parham1995.notes.markdown.RemoteImages
 import me.parham1995.notes.markdown.StatusType
 import me.parham1995.notes.markdown.TaskMeta
 import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.markdown.TaskSymbols
 import me.parham1995.notes.markdown.UnsupportedKind
 import me.parham1995.notes.markdown.isFinishedAndEmpty
 import me.parham1995.notes.ui.LocalReading
@@ -1036,23 +1037,11 @@ private fun MdListItem.customStatus(
 ): CustomStatus? =
     when (status) {
         ' ', 'x', 'X', '-', '/' -> null
-        '>' -> CustomStatus("square-arrow-right", accents.blue, "forwarded")
-        '<' -> CustomStatus("calendar-clock", accents.blue, "scheduled")
-        '!' -> CustomStatus("circle-alert", accents.red, "important")
-        '?' -> CustomStatus("circle-help", accents.yellow, "question")
-        '*' -> CustomStatus("star", accents.vividYellow, "star")
-        '"' -> CustomStatus("quote", accents.warmGrey, "quote")
-        'i' -> CustomStatus("info", accents.blue, "information")
-        'b' -> CustomStatus("bookmark", accents.orange, "bookmark")
-        'l' -> CustomStatus("map-pin", accents.red, "location")
-        'I' -> CustomStatus("lightbulb", accents.vividYellow, "idea")
-        'S' -> CustomStatus("piggy-bank", accents.springGreen, "savings")
-        'f' -> CustomStatus("flame", accents.red, "fire")
-        'k' -> CustomStatus("key", accents.vividYellow, "key")
-        'w' -> CustomStatus("trophy", accents.vividYellow, "win")
-        'u', 'p' -> CustomStatus("thumbs-up", accents.springGreen, if (status == 'p') "pro" else "up")
-        'd', 'c' -> CustomStatus("thumbs-down", accents.red, if (status == 'c') "con" else "down")
-        else -> CustomStatus("square-dashed", unknown, "status $status")
+        // The table the editor's box is drawn from too, so the two agree.
+        else ->
+            (TaskSymbols.of(status) ?: TaskSymbols.unknown(status)).let {
+                CustomStatus(it.icon, it.tint.accent(accents) ?: unknown, it.description)
+            }
     }
 
 @Composable
