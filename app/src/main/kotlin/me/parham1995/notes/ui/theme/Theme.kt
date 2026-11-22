@@ -32,52 +32,60 @@ import me.parham1995.notes.data.ThemeChoice
  * are the accent they belong to washed into the background, not a grey. A
  * plain `DarkGrey` behind everything made the chrome around a note read as
  * one flat panel; a container the colour of its role says which role it is.
+ *
+ * Each colour goes through [c]: itself for naz, its soft one for naz, soft.
  */
-internal val NazScheme =
+private fun nazScheme(c: (Color) -> Color) =
     darkColorScheme(
         // Normal
-        background = Naz.Black,
-        onBackground = Naz.White,
-        surface = Naz.Black,
-        onSurface = Naz.White,
+        background = c(Naz.Black),
+        onBackground = c(Naz.White),
+        surface = c(Naz.Black),
+        onSurface = c(Naz.White),
         // Pmenu and code: the editor's darker panel
-        surfaceVariant = Naz.DarkBlack,
-        onSurfaceVariant = Naz.Grey,
+        surfaceVariant = c(Naz.DarkBlack),
+        onSurfaceVariant = c(Naz.Grey),
         // Stepped, so a sheet over a menu over the page each sit visibly apart.
-        surfaceContainer = Naz.LightBlack,
-        surfaceContainerHigh = lerp(Naz.LightBlack, Naz.White, 0.04f),
-        surfaceContainerHighest = lerp(Naz.LightBlack, Naz.White, 0.08f),
-        surfaceContainerLow = Naz.DarkBlack,
-        surfaceContainerLowest = Naz.DarkBlack,
+        surfaceContainer = c(Naz.LightBlack),
+        surfaceContainerHigh = lerp(c(Naz.LightBlack), c(Naz.White), 0.04f),
+        surfaceContainerHighest = lerp(c(Naz.LightBlack), c(Naz.White), 0.08f),
+        surfaceContainerLow = c(Naz.DarkBlack),
+        surfaceContainerLowest = c(Naz.DarkBlack),
         // Directory / Identifier: folders, links, anything to act on
-        primary = Naz.Orange,
-        onPrimary = Naz.Black,
-        primaryContainer = Naz.Orange.wash(Naz.Black),
-        onPrimaryContainer = Naz.Orange,
+        primary = c(Naz.Orange),
+        onPrimary = c(Naz.Black),
+        primaryContainer = c(Naz.Orange).wash(c(Naz.Black)),
+        onPrimaryContainer = c(Naz.Orange),
         // Function
-        secondary = Naz.Blue,
-        onSecondary = Naz.Black,
-        secondaryContainer = Naz.Blue.wash(Naz.Black),
-        onSecondaryContainer = Naz.Aqua,
+        secondary = c(Naz.Blue),
+        onSecondary = c(Naz.Black),
+        secondaryContainer = c(Naz.Blue).wash(c(Naz.Black)),
+        onSecondaryContainer = c(Naz.Aqua),
         // Title / Search: headings, and the background behind ==highlight==
-        tertiary = Naz.Yellow,
-        onTertiary = Naz.Black,
-        tertiaryContainer = Naz.Yellow,
-        onTertiaryContainer = Naz.Black,
+        tertiary = c(Naz.Yellow),
+        onTertiary = c(Naz.Black),
+        tertiaryContainer = c(Naz.Yellow),
+        onTertiaryContainer = c(Naz.Black),
         // WarningMsg, a shade lighter: naz's red is 4.0:1 on Black, and a
         // sync failure is a sentence at body size, not a highlight.
-        error = Naz.ErrorText,
-        onError = Naz.Black,
-        errorContainer = Naz.Red.wash(Naz.Black),
-        onErrorContainer = Naz.ErrorText,
+        error = c(Naz.ErrorText),
+        onError = c(Naz.Black),
+        errorContainer = c(Naz.Red).wash(c(Naz.Black)),
+        onErrorContainer = c(Naz.ErrorText),
         // Visual
-        outline = Naz.LightGrey,
-        outlineVariant = Naz.DarkGrey,
-        inverseSurface = Naz.White,
-        inverseOnSurface = Naz.Black,
-        inversePrimary = Naz.WarmGrey,
-        scrim = Naz.DarkBlack,
+        outline = c(Naz.LightGrey),
+        outlineVariant = c(Naz.DarkGrey),
+        inverseSurface = c(Naz.White),
+        inverseOnSurface = c(Naz.Black),
+        inversePrimary = c(Naz.WarmGrey),
+        scrim = c(Naz.DarkBlack),
     )
+
+/** naz, each colour as it is. */
+internal val NazScheme = nazScheme { it }
+
+/** naz, soft: naz with its colour strength capped ([SoftPalette]). */
+internal val NazSoftScheme = nazScheme { it.soft() }
 
 /**
  * naz's accents against paper.
@@ -171,10 +179,16 @@ fun ThemeChoice.isDark(): Boolean =
 @Composable
 fun NotesTheme(
     theme: ThemeChoice = ThemeChoice.DARK,
+    softDark: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     MaterialExpressiveTheme(
-        colorScheme = if (theme.isDark()) NazScheme else DaylightScheme,
+        colorScheme =
+            when {
+                !theme.isDark() -> DaylightScheme
+                softDark -> NazSoftScheme
+                else -> NazScheme
+            },
         motionScheme = MotionScheme.expressive(),
         typography = NazTypography,
         shapes = NazShapes,

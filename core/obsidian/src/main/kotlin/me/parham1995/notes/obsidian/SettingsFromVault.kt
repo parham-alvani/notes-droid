@@ -161,6 +161,7 @@ object SettingsFromVault {
     private val RULES: Map<String, Rule> =
         mapOf(
             "appearance.theme" to oneOf(THEMES),
+            "appearance.dark_palette" to oneOf(setOf("naz", "naz-soft")),
             "appearance.text_size" to whole(MIN_TEXT_SIZE..MAX_TEXT_SIZE),
             "appearance.font" to named,
             "appearance.code_font" to named,

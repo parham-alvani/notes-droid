@@ -194,6 +194,16 @@ internal fun ReadingCard(
         FromVaultNote(fromVault, VaultOverlay.HOLD_TO_DEFINE)
 
         SwitchRow(
+            title = stringResource(R.string.settings_soft_dark),
+            vault = state.vaultKey(VaultOverlay.DARK_PALETTE, viewModel),
+            help = stringResource(R.string.help_soft_dark),
+            checked = reading.softDark,
+            onCheckedChange = viewModel::setSoftDark,
+            enabled = !fromVault.locks(VaultOverlay.DARK_PALETTE),
+        )
+        FromVaultNote(fromVault, VaultOverlay.DARK_PALETTE)
+
+        SwitchRow(
             title = stringResource(R.string.settings_remote_images),
             vault = state.vaultKey(VaultOverlay.REMOTE_IMAGES, viewModel),
             help = stringResource(R.string.help_remote_images),

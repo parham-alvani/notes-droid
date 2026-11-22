@@ -427,6 +427,8 @@ class SyncViewModel
 
         fun setRemoteImages(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.remoteImages, enabled) }
 
+        fun setSoftDark(enabled: Boolean) = viewModelScope.launch { writer.set(VaultOverlay.softDark, enabled) }
+
         fun setFoldSections(choice: FoldSections) =
             viewModelScope.launch { writer.set(VaultOverlay.foldSections, choice) }
 

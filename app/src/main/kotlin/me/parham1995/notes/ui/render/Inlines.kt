@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.em
 import me.parham1995.notes.markdown.HighlightColor
 import me.parham1995.notes.markdown.MarkdownLinks
 import me.parham1995.notes.markdown.MdInline
-import me.parham1995.notes.ui.theme.Naz
+import me.parham1995.notes.ui.theme.accents
 import me.parham1995.notes.ui.theme.markup
 
 /** How a tapped link should be handled, decided by the screen rather than here. */
@@ -135,13 +135,14 @@ private fun appendInlines(
 
             // @markup.italic
             is MdInline.Emphasis ->
-                builder.withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = own(colors.markup.Italic))) {
+                // Slanted, in the text's own colour (look.md in notes-linux's docs/specs).
+                builder.withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
                     appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked)
                 }
 
             // @markup.strong
             is MdInline.Strong ->
-                builder.withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = own(colors.markup.Strong))) {
+                builder.withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = own(colors.markup.Strong))) {
                     appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked)
                 }
 
@@ -155,7 +156,8 @@ private fun appendInlines(
 
             is MdInline.Highlight ->
                 builder.withStyle(highlightStyle(node.color, colors)) {
-                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked = true)
+                    // A highlight is a tint: what is inside keeps its own colours (look.md in notes-linux's docs/specs).
+                    appendInlines(builder, node.children, colors, actions, brokenLinks, formulas, marked)
                 }
 
             is MdInline.Link -> {
@@ -283,15 +285,18 @@ private fun highlightStyle(
     color: HighlightColor?,
     colors: ColorScheme,
 ): SpanStyle {
+    // The scheme's own accents, so paper and naz, soft get theirs; a plain
+    // highlight is a tint too, and its text keeps its colours.
+    val accents = colors.accents
     val fill =
         when (color) {
-            null -> return SpanStyle(background = colors.tertiaryContainer, color = colors.onTertiaryContainer)
-            HighlightColor.RED -> Naz.Red
-            HighlightColor.ORANGE -> Naz.Orange
-            HighlightColor.YELLOW -> Naz.VividYellow
-            HighlightColor.GREEN -> Naz.SpringGreen
-            HighlightColor.BLUE -> Naz.Blue
-            HighlightColor.PURPLE -> Naz.Purple
+            null -> accents.vividYellow
+            HighlightColor.RED -> accents.red
+            HighlightColor.ORANGE -> accents.orange
+            HighlightColor.YELLOW -> accents.vividYellow
+            HighlightColor.GREEN -> accents.springGreen
+            HighlightColor.BLUE -> accents.blue
+            HighlightColor.PURPLE -> accents.purple
         }
     return SpanStyle(background = fill.copy(alpha = HIGHLIGHT_WASH))
 }

@@ -69,9 +69,32 @@ internal val DaylightAccents =
         warmGrey = Daylight.Umber,
     )
 
+/** naz's accents with their strength capped, for naz, soft. */
+internal val NazSoftAccents =
+    AccentColors(
+        red = Naz.Red.soft(),
+        orange = Naz.Orange.soft(),
+        yellow = Naz.Yellow.soft(),
+        vividYellow = Naz.VividYellow.soft(),
+        springGreen = Naz.SpringGreen.soft(),
+        chartreuse = Naz.Chartreuse.soft(),
+        limeGreen = Naz.LimeGreen.soft(),
+        blue = Naz.Blue.soft(),
+        aqua = Naz.Aqua.soft(),
+        purple = Naz.Purple.soft(),
+        pink = Naz.Pink.soft(),
+        grey = Naz.Grey.soft(),
+        warmGrey = Naz.WarmGrey.soft(),
+    )
+
 /** The accents that belong on this scheme's background. */
 internal val ColorScheme.accents: AccentColors
-    get() = if (background.luminance() > HALF) DaylightAccents else NazAccents
+    get() =
+        when {
+            background.luminance() > HALF -> DaylightAccents
+            background == SoftBlack -> NazSoftAccents
+            else -> NazAccents
+        }
 
 private const val HALF = 0.5f
 

@@ -92,6 +92,8 @@ import me.parham1995.notes.ui.theme.AccentColors
 import me.parham1995.notes.ui.theme.Accents
 import me.parham1995.notes.ui.theme.Markup
 import me.parham1995.notes.ui.theme.NazScheme
+import me.parham1995.notes.ui.theme.NazSoftScheme
+import me.parham1995.notes.ui.theme.SoftBlack
 import me.parham1995.notes.ui.theme.Vazirmatn
 
 /** Everything a rendered block might need to hand back to the screen. */
@@ -268,12 +270,6 @@ private fun HeadingView(
             // the heading keeps its left edge with the text under it.
             if (fold != null) FoldChevron(fold)
         }
-        if (block.level <= 2) {
-            HorizontalDivider(
-                Modifier.padding(top = 6.dp),
-                color = Markup.heading(block.level).copy(alpha = RULE_ALPHA),
-            )
-        }
     }
 }
 
@@ -398,7 +394,8 @@ private fun CodeBlockView(
     // Always naz's dark panel, in either theme: the highlighter's colours
     // are the editor's, chosen for a dark background, and on the light
     // scheme's paper the plain code came out white on off-white.
-    MaterialTheme(colorScheme = NazScheme) {
+    // A code block is dark on paper too: naz, or naz, soft when the page is.
+    MaterialTheme(colorScheme = if (MaterialTheme.colorScheme.background == SoftBlack) NazSoftScheme else NazScheme) {
         Surface(
             modifier = modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -503,9 +500,9 @@ private fun CalloutView(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(accent.copy(alpha = CONTAINER_ALPHA))
+            .border(1.dp, accent.copy(alpha = HAIRLINE_ALPHA), RoundedCornerShape(12.dp))
             .height(IntrinsicSize.Min),
     ) {
-        Box(Modifier.width(ACCENT_BAR).fillMaxHeight().background(accent))
         Column(
             Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1119,9 +1116,11 @@ private fun MdBlock.Callout.label(): String = type.replaceFirstChar { it.upperca
 internal const val QUOTE_BAR_TAG = "quote-bar"
 
 private const val CONTAINER_ALPHA = 0.10f
+
+/** The hairline round a callout, in its kind's colour. */
+private const val HAIRLINE_ALPHA = 0.26f
 private const val CHIP_ALPHA = 0.16f
 private const val STRIPE_ALPHA = 0.35f
-private val ACCENT_BAR = 3.dp
 private val CALLOUT_ICON = 16.dp
 private val CHIP_ICON = 11.dp
 private val REASON_ICON = 13.dp
@@ -1129,7 +1128,6 @@ private val ATTACHMENT_ICON = 22.dp
 private val MARKER_ICON = 16.dp
 private val COPY_ICON = 16.dp
 private val MARKER_NUDGE = 3.dp
-private const val RULE_ALPHA = 0.35f
 private val CODE_LINE_HEIGHT = 18.sp
 private const val APPROX_CHAR_WIDTH = 8
 private val MIN_CELL_WIDTH = 72.dp
