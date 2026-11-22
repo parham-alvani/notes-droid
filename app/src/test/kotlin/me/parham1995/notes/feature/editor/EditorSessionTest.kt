@@ -288,6 +288,21 @@ class EditorSessionTest {
         }
 
     @Test
+    fun `the caret's heading is said by its number, for the reader to go back to`() =
+        runTest {
+            file = "intro\n# A\n\ntext\n\n## B\n\nmore"
+            val editor = session()
+            assertThat(editor.heading()).isNull()
+            editor.open()
+            assertThat(editor.heading()).isNull()
+            editor.change(TextFieldValue(file!!, TextRange(file!!.indexOf("text"))))
+            assertThat(editor.heading()).isEqualTo(0)
+            // The same number the editor opens at.
+            val under = session().apply { open(heading = 1) }
+            assertThat(under.heading()).isEqualTo(1)
+        }
+
+    @Test
     fun `a note that is not on the device says so`() =
         runTest {
             file = null

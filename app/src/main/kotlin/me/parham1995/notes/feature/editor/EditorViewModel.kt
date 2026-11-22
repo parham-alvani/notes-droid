@@ -49,22 +49,26 @@ class EditorViewModel
                 if (draft != null) it.restore(draft) else viewModelScope.launch { it.open(heading) }
             }
 
-        /** Saves, then [onDone] with whether anything was written, when the editor can close. */
-        fun close(onDone: (saved: Boolean) -> Unit) {
-            val open = session ?: return onDone(false)
+        /**
+         * Saves, then [onDone] when the editor can close: whether anything
+         * was written, and the number of the heading the caret was under.
+         */
+        fun close(onDone: (saved: Boolean, heading: Int?) -> Unit) {
+            val open = session ?: return onDone(false, null)
             val dirty = open.dirty
             viewModelScope.launch {
                 if (open.save()) {
+                    val heading = open.heading()
                     leave()
-                    onDone(dirty)
+                    onDone(dirty, heading)
                 }
             }
         }
 
         /** Closes with nothing written: what was typed is dropped. Ask first. */
-        fun discard(onDone: (saved: Boolean) -> Unit) {
+        fun discard(onDone: (saved: Boolean, heading: Int?) -> Unit) {
             leave()
-            onDone(false)
+            onDone(false, null)
         }
 
         private fun leave() {

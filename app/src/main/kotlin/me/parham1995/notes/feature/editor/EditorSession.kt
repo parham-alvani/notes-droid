@@ -151,6 +151,15 @@ internal class EditorSession(
     }
 
     /**
+     * Which heading of the note, from 0, the caret is under, for the reader
+     * to go back to. Null above the first heading and before the text is read.
+     */
+    fun heading(): Int? {
+        if (opened == null) return null
+        return EditorDocument().apply { update(value.text) }.headingAt(value.selection.start)
+    }
+
+    /**
      * Saves when the text changed. True when the editor can close: the text
      * is written or waits in the queue, or there was nothing to write.
      */

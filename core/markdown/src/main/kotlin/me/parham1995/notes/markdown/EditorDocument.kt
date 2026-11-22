@@ -61,6 +61,21 @@ class EditorDocument {
         return null
     }
 
+    /**
+     * Which heading of the note, from 0, the place [offset] is under: the
+     * one the reader goes back to when the editor closes. Null above the
+     * first heading. It walks the lines, so it is for a close, not for a key.
+     */
+    fun headingAt(offset: Int): Int? {
+        if (rows.isEmpty()) return null
+        val last = lineAt(offset)
+        var seen = -1
+        for (index in 0..last) {
+            if (rows[index].read.line.kind == EditorLineKind.HEADING) seen++
+        }
+        return seen.takeIf { it >= 0 }
+    }
+
     /** Reads [next], which becomes [text]. */
     fun update(next: String) {
         if (rows.isNotEmpty() && next == text) {

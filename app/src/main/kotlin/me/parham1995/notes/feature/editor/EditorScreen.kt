@@ -73,7 +73,8 @@ internal const val FORMAT_BAR_TAG = "format-bar"
 /**
  * A note's text, edited (`look.md` in notes-linux's `docs/specs/`, "Android:
  * the editor"). Done and Back save when the text changed, as one commit, and
- * then [onClose] says whether anything was written.
+ * then [onClose] says whether anything was written and the number of the
+ * heading the caret was under, for the reader to go back to.
  *
  * [heading] is the number of the heading the note was being read under, so
  * the editor opens there.
@@ -84,7 +85,7 @@ fun EditorScreen(
     path: String,
     title: String,
     heading: Int?,
-    onClose: (saved: Boolean) -> Unit,
+    onClose: (saved: Boolean, heading: Int?) -> Unit,
     viewModel: EditorViewModel = hiltViewModel(key = "editor:$vaultId:$path"),
 ) {
     val session = remember(viewModel, vaultId, path) { viewModel.open(vaultId, path, heading) }

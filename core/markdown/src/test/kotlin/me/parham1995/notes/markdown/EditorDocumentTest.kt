@@ -54,6 +54,18 @@ class EditorDocumentTest {
     }
 
     @Test
+    fun `a place is under the heading before it, by the same number`() {
+        val document = fresh("intro\n# A\n\n```\n# not one\n```\n\n## B\ntext")
+        assertThat(document.headingAt(0)).isNull()
+        assertThat(document.headingAt(document.text.indexOf("# A"))).isEqualTo(0)
+        assertThat(document.headingAt(document.text.indexOf("# not one") + 2)).isEqualTo(0)
+        assertThat(document.headingAt(document.text.length)).isEqualTo(1)
+        // The number is the one `headingEnd` opens at.
+        assertThat(document.headingAt(document.headingEnd(1)!!)).isEqualTo(1)
+        assertThat(EditorDocument().headingAt(0)).isNull()
+    }
+
+    @Test
     fun `the same text reads nothing`() {
         val document = fresh("a\nb")
         document.update("a\nb")
