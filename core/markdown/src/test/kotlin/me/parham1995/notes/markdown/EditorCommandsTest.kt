@@ -2,6 +2,7 @@ package me.parham1995.notes.markdown
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
+import kotlin.random.Random
 
 /** The format bar's buttons: `look.md` in notes-linux's `docs/specs/`, "The format bar". */
 class EditorCommandsTest {
@@ -55,6 +56,45 @@ class EditorCommandsTest {
         assertThat(wrap("***|word|***", EditorCommands.BOLD)).isEqualTo("*|word|*")
         assertThat(wrap("*|word|*", EditorCommands.BOLD)).isEqualTo("***|word|***")
         assertThat(wrap("|**word**|", EditorCommands.ITALIC)).isEqualTo("*|**word**|*")
+    }
+
+    @Test
+    fun `a selection that starts in the middle of bold's stars does not make bold italic`() {
+        // Half of `**` is not italic's star: the run is counted whole, inside the selection and outside it.
+        val once = wrap("*|*word*|*", EditorCommands.ITALIC)
+        assertThat(once).isEqualTo("**|*word*|**")
+        assertThat(wrap(once, EditorCommands.ITALIC)).isEqualTo("*|*word*|*")
+        // Bold is there, so bold comes off: the two stars next to each end of the selection.
+        assertThat(wrap("*|*word*|*", EditorCommands.BOLD)).isEqualTo("|word|")
+        assertThat(wrap("=|=word=|=", EditorCommands.HIGHLIGHT)).isEqualTo("|word|")
+    }
+
+    @Test
+    fun `a button takes out nothing but its own marks, and a second press gives the text back`() {
+        val parts = listOf("a", "b", " ", "*", "**", "=", "==", "`", "~~", "~", "[[", "]]", "س", "\uD83D\uDE00", "_")
+        val marks =
+            listOf(
+                EditorCommands.BOLD,
+                EditorCommands.ITALIC,
+                EditorCommands.HIGHLIGHT,
+                EditorCommands.CODE,
+                EditorCommands.STRIKE,
+            )
+        val random = Random(7)
+        repeat(20_000) {
+            val text = (0 until random.nextInt(1, 10)).joinToString("") { parts.random(random) }
+            val start = random.nextInt(0, text.length)
+            val end = random.nextInt(start + 1, text.length + 1)
+            for (mark in marks) {
+                val once = EditorCommands.wrap(text, start, end, mark)
+                val words = { of: String -> of.filter { it != mark[0] } }
+                assertThat(words(once.text)).isEqualTo(words(text))
+                // Where the first press put marks on, the second takes them off.
+                if (once.text.length > text.length && text.substring(start, end).any { it != mark[0] }) {
+                    assertThat(EditorCommands.wrap(once.text, once.start, once.end, mark).text).isEqualTo(text)
+                }
+            }
+        }
     }
 
     @Test

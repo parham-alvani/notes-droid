@@ -26,8 +26,15 @@ object EditorCommands {
 
     /**
      * Wraps the selection in [mark], or takes the marks off when they are
-     * there: at the ends of the selection, or just outside it. The selection
-     * stays on the same words, so a second press undoes the first.
+     * there: at the ends of the selection, just outside it, or partly both
+     * (a selection that starts in the middle of `**`). The selection stays on
+     * the same words, so a second press undoes the first. Only the mark's own
+     * characters are ever taken out.
+     *
+     * Stars are counted as one run on each side, inside and outside the
+     * selection together: an odd run holds italic's star, a run of two or
+     * more holds bold's, so `**a**` is bold and not italic however much of
+     * its stars the selection holds.
      */
     fun wrap(
         text: String,
@@ -36,53 +43,41 @@ object EditorCommands {
         mark: String,
     ): EditorEdit {
         val width = mark.length
-        val selected = text.substring(start, end)
-        // The marks are in the selection.
-        if (selected.length >= 2 * width &&
-            selected.startsWith(mark) &&
-            selected.endsWith(mark) &&
-            wraps(selected, mark)
-        ) {
-            val inner = selected.substring(width, selected.length - width)
-            return EditorEdit(text.replaceRange(start, end, inner), start, start + inner.length)
-        }
-        // The marks are around the selection.
-        if (around(text, start, end, mark)) {
-            val without = text.removeRange(end, end + width).removeRange(start - width, start)
-            return EditorEdit(without, start - width, end - width)
-        }
-        return EditorEdit(text.replaceRange(start, end, mark + selected + mark), start + width, end + width)
-    }
-
-    /** `**a**` selected whole is bold, and not italic: one star is italic's only when the run is odd. */
-    private fun wraps(
-        selected: String,
-        mark: String,
-    ): Boolean {
-        if (mark != ITALIC) return true
-        val before = selected.takeWhile { it == '*' }.length
-        val after = selected.takeLastWhile { it == '*' }.length
-        return minOf(before, after) % 2 == 1
-    }
-
-    /** Whether [mark] sits on both sides of the selection. Stars are counted: `**a**` is bold and not italic. */
-    private fun around(
-        text: String,
-        start: Int,
-        end: Int,
-        mark: String,
-    ): Boolean {
         val c = mark[0]
-        var before = 0
-        while (start - before > 0 && text[start - before - 1] == c) before++
-        var after = 0
-        while (end + after < text.length && text[end + after] == c) after++
-        val run = minOf(before, after)
-        return when {
-            c != '*' -> run >= mark.length
-            mark == BOLD -> run >= 2
-            else -> run % 2 == 1
+        // The run of the mark's character on each side: outside the selection, and inside it.
+        var outsideBefore = 0
+        while (start - outsideBefore > 0 && text[start - outsideBefore - 1] == c) outsideBefore++
+        var insideBefore = 0
+        while (start + insideBefore < end && text[start + insideBefore] == c) insideBefore++
+        var outsideAfter = 0
+        while (end + outsideAfter < text.length && text[end + outsideAfter] == c) outsideAfter++
+        var insideAfter = 0
+        while (end - insideAfter > start && text[end - insideAfter - 1] == c) insideAfter++
+
+        val run = minOf(outsideBefore + insideBefore, outsideAfter + insideAfter)
+        val marked =
+            when {
+                // Nothing but marks is selected: there are no words to take them off.
+                insideBefore == end - start -> false
+                c != '*' -> run >= width
+                mark == BOLD -> run >= 2
+                else -> run % 2 == 1
+            }
+        if (!marked) {
+            return EditorEdit(
+                text.replaceRange(start, end, mark + text.substring(start, end) + mark),
+                start + width,
+                end + width,
+            )
         }
+        // The marks next to the selection's ends go: outside it first, then inside.
+        val before = minOf(outsideBefore, width)
+        val after = minOf(outsideAfter, width)
+        val without =
+            text
+                .removeRange(end - (width - after), end + after)
+                .removeRange(start - before, start - before + width)
+        return EditorEdit(without, start - before, end - width - (width - after))
     }
 
     /** A link to a note: `[[selection]]`, with the selection on the name. Around a link already, the brackets come off. */
