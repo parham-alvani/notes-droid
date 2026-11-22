@@ -48,6 +48,15 @@
     <string name="card_editor">Editor</string>
     <string name="settings_live_preview">Hide marks until the caret is in them</string>
     <string name="help_live_preview">On, the editor draws a note as it reads: the marks of bold text, a highlight or a link show only while the caret is in them. Off, every mark shows.</string>
+    <string name="editor_undo">Undo</string>
+    <string name="editor_redo">Redo</string>
+    <string name="editor_status">Status</string>
+    <string name="format_bold">Bold</string>
+    <string name="format_italic">Italic</string>
+    <string name="format_highlight">Highlight</string>
+    <string name="format_code">Code</string>
+    <string name="format_strike">Strikethrough</string>
+    <string name="format_link">Link to a note</string>
     <string name="settings_format_bar">Format bar over a selection</string>
     <string name="help_format_bar">With text selected in one line, a bar over the keyboard has bold, italic, highlight, code, strikethrough and a link to a note.</string>
     <string name="history_none">No commit has changed this note.</string>

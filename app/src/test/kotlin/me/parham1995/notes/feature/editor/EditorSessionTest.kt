@@ -5,6 +5,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.parham1995.notes.data.WriteResult
+import me.parham1995.notes.markdown.EditorCommands
 import me.parham1995.notes.markdown.NoteChanged
 import me.parham1995.notes.markdown.VaultEdits
 import org.junit.Test
@@ -35,7 +36,7 @@ class EditorSessionTest {
         )
 
     private fun EditorSession.type(text: String) {
-        value = TextFieldValue(text, TextRange(text.length))
+        change(TextFieldValue(text, TextRange(text.length)))
     }
 
     /** `aSaveOnThePhoneRefusesAChangedFile` of the spec. */
@@ -60,6 +61,63 @@ class EditorSessionTest {
             assertThat(other.save()).isTrue()
             assertThat(file).isEqualTo("c")
             assertThat(other.changed).isFalse()
+        }
+
+    @Test
+    fun `a button is one undo step and keeps the selection, and undo puts the text back`() =
+        runTest {
+            file = "a word here"
+            val editor = session().apply { open() }
+            assertThat(editor.canUndo).isFalse()
+            editor.change(TextFieldValue(file!!, TextRange(2, 6)))
+            assertThat(editor.selectionInLine).isTrue()
+
+            editor.run(EditorCommands.wrap(editor.value.text, 2, 6, EditorCommands.BOLD))
+            assertThat(editor.value.text).isEqualTo("a **word** here")
+            assertThat(editor.value.selection).isEqualTo(TextRange(4, 8))
+            assertThat(editor.dirty).isTrue()
+            assertThat(editor.canUndo).isTrue()
+
+            editor.undo()
+            assertThat(editor.value.text).isEqualTo("a word here")
+            assertThat(editor.value.selection).isEqualTo(TextRange(2, 6))
+            assertThat(editor.canUndo).isFalse()
+            assertThat(editor.dirty).isFalse()
+            editor.redo()
+            assertThat(editor.value.text).isEqualTo("a **word** here")
+            assertThat(editor.canRedo).isFalse()
+            // A button with nothing to do is no step.
+            editor.undo()
+            editor.run(null)
+            assertThat(editor.canUndo).isFalse()
+        }
+
+    @Test
+    fun `the format bar is for a selection inside one line`() =
+        runTest {
+            file = "one\ntwo"
+            val editor = session().apply { open() }
+            assertThat(editor.selectionInLine).isFalse()
+            editor.change(TextFieldValue(file!!, TextRange(0, 3)))
+            assertThat(editor.selectionInLine).isTrue()
+            editor.change(TextFieldValue(file!!, TextRange(4, 7)))
+            assertThat(editor.selectionInLine).isTrue()
+            // Over the line break it is two paragraphs.
+            editor.change(TextFieldValue(file!!, TextRange(2, 5)))
+            assertThat(editor.selectionInLine).isFalse()
+            editor.change(TextFieldValue(file!!, TextRange(5, 2)))
+            assertThat(editor.selectionInLine).isFalse()
+        }
+
+    @Test
+    fun `typing is undone a word at a time`() =
+        runTest {
+            val editor = session().apply { open() }
+            for (text in listOf("ab", "ab ", "ab c")) editor.type(text)
+            editor.undo()
+            assertThat(editor.value.text).isEqualTo("ab ")
+            editor.undo()
+            assertThat(editor.value.text).isEqualTo("a")
         }
 
     @Test

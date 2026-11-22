@@ -8,6 +8,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.feature.tasks.describe
 import me.parham1995.notes.markdown.EditorDocument
+import me.parham1995.notes.markdown.EditorEdit
+import me.parham1995.notes.markdown.EditorHistory
 import me.parham1995.notes.ui.UiText
 
 /**
@@ -32,6 +34,67 @@ internal class EditorSession(
 
     /** The text being edited, and the caret. It is the file's Markdown and nothing else. */
     var value by mutableStateOf(TextFieldValue(""))
+        private set
+
+    private var history = EditorHistory()
+
+    /** Whether there is a step to undo, and one to do again. */
+    var canUndo by mutableStateOf(false)
+        private set
+    var canRedo by mutableStateOf(false)
+        private set
+
+    private val TextFieldValue.step get() = EditorEdit(text, selection.start, selection.end)
+
+    /** The text field's change: keys, or a move of the caret. Keys are an undo step a word. */
+    fun change(next: TextFieldValue) {
+        val before = value
+        if (next.text != before.text) {
+            history.typed(before.step, next.step)
+            steps()
+        } else if (next.selection != before.selection) {
+            history.moved()
+        }
+        value = next
+    }
+
+    /**
+     * A button's change of the text: one undo step. The selection is the
+     * edit's, so a format button keeps the words it was on. A null [edit] is
+     * a button that had nothing to do.
+     */
+    fun run(edit: EditorEdit?) {
+        if (edit == null || opened == null) return
+        history.command(value.step)
+        value = TextFieldValue(edit.text, TextRange(edit.start, edit.end))
+        steps()
+    }
+
+    fun undo() {
+        history.undo(value.step)?.let { value = TextFieldValue(it.text, TextRange(it.start, it.end)) }
+        steps()
+    }
+
+    fun redo() {
+        history.redo(value.step)?.let { value = TextFieldValue(it.text, TextRange(it.start, it.end)) }
+        steps()
+    }
+
+    private fun steps() {
+        canUndo = history.canUndo
+        canRedo = history.canRedo
+    }
+
+    /** The selection is in one line and is not empty: what the format bar is shown for. */
+    val selectionInLine: Boolean
+        get() {
+            val selection = value.selection
+            if (selection.collapsed) return false
+            val text = value.text
+            // To the first line break from the selection's start: a line's length, not the note's.
+            val line = text.indexOf('\n', selection.min)
+            return line < 0 || line >= selection.max
+        }
 
     var saving by mutableStateOf(false)
         private set
@@ -95,6 +158,9 @@ internal class EditorSession(
         }
         opened = text
         value = TextFieldValue(text, TextRange(minOf(value.selection.start, text.length)))
+        // What was typed is dropped, and its steps with it.
+        history = EditorHistory()
+        steps()
         changed = false
     }
 }

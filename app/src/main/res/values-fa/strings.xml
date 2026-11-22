@@ -49,6 +49,15 @@
     <string name="card_editor">ویرایشگر</string>
     <string name="settings_live_preview">پنهان کردن نشانه‌ها تا وقتی مکان‌نما درونشان نیست</string>
     <string name="help_live_preview">اگر روشن باشد، ویرایشگر یادداشت را همان‌طور که خوانده می‌شود نشان می‌دهد: نشانه‌های متن پررنگ، برجسته یا پیوند فقط وقتی دیده می‌شوند که مکان‌نما درونشان باشد. اگر خاموش باشد، همهٔ نشانه‌ها دیده می‌شوند.</string>
+    <string name="editor_undo">واگرد</string>
+    <string name="editor_redo">ازنو</string>
+    <string name="editor_status">وضعیت</string>
+    <string name="format_bold">پررنگ</string>
+    <string name="format_italic">کج</string>
+    <string name="format_highlight">برجسته</string>
+    <string name="format_code">کد</string>
+    <string name="format_strike">خط‌خورده</string>
+    <string name="format_link">پیوند به یادداشت</string>
     <string name="settings_format_bar">نوار قالب‌بندی برای متن گزیده</string>
     <string name="help_format_bar">وقتی متنی در یک خط گزیده شده باشد، نواری بالای صفحه‌کلید دکمه‌های پررنگ، کج، برجسته، کد، خط‌خورده و پیوند به یادداشت را نشان می‌دهد.</string>
     <string name="history_none">هیچ کامیتی این یادداشت را تغییر نداده است.</string>
