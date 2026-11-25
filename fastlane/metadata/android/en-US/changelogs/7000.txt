@@ -1,0 +1,4 @@
+Wide blocks: on a wide screen, a table, a code block, a diagram or a picture wider than the text grows up to appearance.block_width (60 em), centred.
+Settings move out of .obsidian: the task statuses, daily notes, templates, property types, icons, the home page and bookmarks are read from .daftar.toml and the .daftar folder first.
+New vault settings: the working day, a default scheduled date for a new task, a filter for the daily digest, and rules per folder (direction, folded, template).
+Notification rules can ring on chosen days only, when a task query has results, or when a note has not changed for some days.
