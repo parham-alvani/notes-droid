@@ -8,7 +8,7 @@ Guidance for Claude Code working in this repository.
 
 The repository is **public**; the vault it reads is private. See [Public-repo hygiene](#public-repo-hygiene) before committing anything derived from real content.
 
-`README.md` is the outward-facing document and explains how sync, transports and signing work. It is not duplicated here. This file is what a person working on the code needs and the README would not say.
+`README.md` is the outward-facing document and explains how sync, transports and signing work. It is not duplicated here. This file is what a person working on the code needs and the README would not say. A lesson that holds for any desktop app (a data-safety rule, a testing or release lesson, a way to measure) also goes into the `taller` plugin for Claude Code, which gathers the three apps' lessons, with its reason and commit; this file keeps what is about this app.
 
 ## Commands — always `just`
 
