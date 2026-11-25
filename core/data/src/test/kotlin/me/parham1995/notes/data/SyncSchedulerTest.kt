@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.ListenableWorker
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerFactory
@@ -11,11 +12,14 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.runBlocking
+import me.parham1995.notes.obsidian.NotificationRule
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.Instant
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
@@ -108,6 +112,52 @@ class SyncSchedulerTest {
         scheduler.scheduleDigest(18)
 
         assertOnTheHour(nextRun(), 18)
+    }
+
+    private val diary =
+        VaultRule(1, NotificationRule("diary", "Diet/Diary.md", "D MMM YYYY · dddd", LocalTime.of(21, 30)))
+
+    private fun rule(name: String) =
+        WorkManager
+            .getInstance(context)
+            .getWorkInfosForUniqueWork(name)
+            .get()
+            .singleOrNull()
+
+    @Test
+    fun `a notification rule is due at its time, within the day`() {
+        runBlocking { scheduler.scheduleRules(listOf(diary)) { null } }
+
+        val next = Instant.ofEpochMilli(rule(diary.workName)!!.nextScheduleTimeMillis).atZone(ZoneId.systemDefault())
+        assertThat(next.hour).isEqualTo(21)
+        assertThat(next.minute).isEqualTo(30)
+        assertThat(next.isBefore(ZonedDateTime.now().plusDays(1))).isTrue()
+    }
+
+    @Test
+    fun `a rule no vault says any more is stopped`() {
+        val log = VaultRule(2, diary.rule.copy(id = "log"))
+        runBlocking { scheduler.scheduleRules(listOf(diary, log)) { null } }
+
+        runBlocking { scheduler.scheduleRules(listOf(log)) { null } }
+
+        assertThat(rule(diary.workName)!!.state).isEqualTo(WorkInfo.State.CANCELLED)
+        assertThat(rule(log.workName)!!.state).isEqualTo(WorkInfo.State.ENQUEUED)
+    }
+
+    @Test
+    fun `a rule is checked at its next time, and now when it is only just late`() {
+        val at = LocalTime.of(21, 0)
+        val day = ZonedDateTime.of(2026, 11, 25, 0, 0, 0, 0, ZoneId.of("Europe/Madrid"))
+        val before = day.withHour(20)
+        val justLate = day.withHour(21).withMinute(4)
+        val late = day.withHour(22)
+
+        assertThat(SyncScheduler.nextCheck(at, before, null)).isEqualTo(day.withHour(21))
+        assertThat(SyncScheduler.nextCheck(at, justLate, null)).isEqualTo(justLate)
+        // Checked today already: tomorrow, however close.
+        assertThat(SyncScheduler.nextCheck(at, justLate, day.toLocalDate())).isEqualTo(day.plusDays(1).withHour(21))
+        assertThat(SyncScheduler.nextCheck(at, late, null)).isEqualTo(day.plusDays(1).withHour(21))
     }
 
     private class Quiet(

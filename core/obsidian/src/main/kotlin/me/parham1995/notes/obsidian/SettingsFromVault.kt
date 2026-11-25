@@ -201,6 +201,23 @@ object SettingsFromVault {
             "capture.hotkey" to text,
         )
 
+    /**
+     * The keys of a notification rule, `[notifications.rules.<id>]`. A vault
+     * may set every one: a rule reads one note of the vault and starts
+     * nothing. The note is checked as a path in the vault here; the rest are
+     * checked by [NotificationRule.all], so that a key that does not fit
+     * leaves the whole rule out rather than taking its default. A key a rule
+     * does not name is left alone, for a later kind of rule.
+     */
+    private val RULE_KEYS: Map<String, Rule> =
+        mapOf(
+            "note" to path,
+            "heading" to allowed { true },
+            "at" to allowed { true },
+            "title" to allowed { true },
+            "message" to allowed { true },
+        )
+
     const val ANDROID = "android"
 
     /** The platform tables a `.daftar.toml` may hold, each with the app's sections under it. */
@@ -309,6 +326,7 @@ object SettingsFromVault {
      */
     private fun rule(key: String): Rule? {
         RULES[key]?.let { return it }
+        NotificationRule.keyOf(key)?.let { (_, name) -> return RULE_KEYS[name] }
         val section = key.substringBeforeLast('.', "")
         val refused = if (section.isEmpty()) key in TOP else section in APP_SECTIONS && section !in OPEN_SECTIONS
         return if (refused) Rule.Never else null

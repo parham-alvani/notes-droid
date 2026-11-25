@@ -16,4 +16,5 @@
         <item quantity="one">و %1$d دیگر</item>
         <item quantity="other">و %1$d دیگر</item>
     </plurals>
+    <string name="rule_channel">قاعده‌های اعلان</string>
 </resources>

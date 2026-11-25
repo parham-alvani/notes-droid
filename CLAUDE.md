@@ -237,6 +237,14 @@ The settings are kept in the repository: the vault's `.daftar.toml` is read over
 - **Not in the vault, on purpose**: tokens and keys, the app lock, the repositories and transports, vault ids (they are this phone's row ids), the phone's calendar ids, the author and the verifier, a gallery picture, and the folded rail, which is a view's state and would make a commit of every fold.
 - **The file is read again** when the settings change and when `SettingsStore.vaultConfigChanged()` says so. `VaultConfigStore` keeps one text per vault by the file's time and size, and drops it then.
 
+## Notification rules
+
+`[notifications.rules.<id>]` in a vault's `.daftar.toml`: at `at`, a notification when a note has no heading for today. `notification-rules.md` in notes-linux's `docs/specs/`, which Daftar for Linux and the Mac follow too.
+
+- **`NotificationRule` (core/obsidian) is the pure rule**: `all` reads the rules from the resolved settings in file order and leaves out a rule with a key that does not fit, `expected`, `isMissing` (the parser's headings, trimmed, `startsWith`), `alertTitle` and `body`. `SettingsFromVault` allows the rule keys and checks `note` as an in-vault path; the others are checked by `all`, so a bad one drops the whole rule rather than taking a default.
+- **Every vault's rules, not only the one being read** (`NotificationRules`, core/data), and none on a device that does not follow its vaults' settings. Each is periodic work of its own, `notification-rule.<vaultId>.<id>`, armed outright at its next `at` by `SyncScheduler.scheduleRules` on launch and whenever the settings are read again (`NotesApplication.scheduleNotificationRules`); a rule no file says any more is cancelled by its tag.
+- **`NotificationRuleWorker`** syncs first when background sync may run now (a minute at most), reads the note from disk, posts on its own channel with the tag `rule.<id>` and the vault id as the number, and arms its own next run, since a daily period drifts. The day each rule was checked is kept on the phone, so it rings once a day, and arming it within ten minutes after its time on a day not yet checked runs it now instead of skipping the day.
+
 ## The Open Knowledge Format
 
 A note whose front matter has a `type` is a concept: `open-knowledge-format.md` in notes-linux's `docs/specs/`, sections 1 to 3. Sections 4 and 5 are `daftar-cli`'s.

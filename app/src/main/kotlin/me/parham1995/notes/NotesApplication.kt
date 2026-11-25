@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.parham1995.notes.data.CrashLog
 import me.parham1995.notes.data.HiddenFileStore
+import me.parham1995.notes.data.NotificationRules
 import me.parham1995.notes.data.PinStore
 import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.SyncScheduler
@@ -66,6 +67,9 @@ class NotesApplication :
     @Inject
     lateinit var hiddenFiles: Provider<HiddenFileStore>
 
+    @Inject
+    lateinit var notificationRules: Provider<NotificationRules>
+
     /**
      * Startup scheduling runs here, and a failure in it must not be fatal.
      *
@@ -98,6 +102,7 @@ class NotesApplication :
         }
         scheduleBackgroundSync()
         scheduleTaskDigest()
+        scheduleNotificationRules()
         watchCalendar()
         SyncWorker.afterSync = ::refreshWidgets
         // A task ticked in the app leaves the home screen a tick behind
@@ -223,6 +228,23 @@ class NotesApplication :
                 .collect { (enabled, hour) ->
                     if (enabled) scheduler.get().scheduleDigest(hour) else scheduler.get().cancelDigest()
                 }
+        }
+    }
+
+    /**
+     * Arms each vault's notification rules for their next check, on launch
+     * and whenever the settings are read again -- every sync, a vault added
+     * or removed, the vault switch -- and stops a rule no file says any more.
+     */
+    private fun scheduleNotificationRules() {
+        scope.launch {
+            val rules = notificationRules.get()
+            settings
+                .get()
+                .settings
+                .map { rules.all(it.fromVault.decline) }
+                .distinctUntilChanged()
+                .collect { scheduler.get().scheduleRules(it, rules::checkedOn) }
         }
     }
 

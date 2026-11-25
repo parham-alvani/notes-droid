@@ -17,8 +17,11 @@ import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import me.parham1995.notes.data.calendar.CalendarWatchWorker
 import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZonedDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -207,6 +210,51 @@ class SyncScheduler
             )
         }
 
+        /**
+         * Arms each notification rule for its next check, and stops the ones
+         * no vault says any more. Run on every launch and whenever the vault
+         * settings change. [checkedOn] is the day a rule was last checked.
+         *
+         * Periodic work per rule, set outright to the next `at` as the digest
+         * is; see [scheduleDigest] for why it is not an initial delay.
+         */
+        suspend fun scheduleRules(
+            rules: List<VaultRule>,
+            checkedOn: (VaultRule) -> LocalDate?,
+        ) {
+            rules.forEach { scheduleRule(it, checkedOn(it)) }
+            val kept = rules.map { it.workName }.toSet()
+            workManager
+                .getWorkInfosByTagFlow(NotificationRuleWorker.TAG)
+                .first()
+                .filterNot { it.state.isFinished }
+                .flatMap { it.tags }
+                .filter { it.startsWith(NotificationRuleWorker.TAG + ".") && it !in kept }
+                .forEach { workManager.cancelUniqueWork(it) }
+        }
+
+        /** Arms [rule] for its next check ([nextCheck]). */
+        fun scheduleRule(
+            rule: VaultRule,
+            checkedOn: LocalDate?,
+        ) {
+            val next = nextCheck(rule.rule.at, ZonedDateTime.now(), checkedOn)
+            workManager.enqueueUniquePeriodicWork(
+                rule.workName,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                PeriodicWorkRequestBuilder<NotificationRuleWorker>(Duration.ofDays(1))
+                    .setNextScheduleTimeOverride(next.toInstant().toEpochMilli())
+                    .addTag(NotificationRuleWorker.TAG)
+                    .addTag(rule.workName)
+                    .setInputData(
+                        workDataOf(
+                            NotificationRuleWorker.KEY_VAULT to rule.vaultId,
+                            NotificationRuleWorker.KEY_RULE to rule.rule.id,
+                        ),
+                    ).build(),
+            )
+        }
+
         /** The next time the clock reads [hour] o'clock, in epoch milliseconds. */
         private fun nextAt(hour: Int): Long {
             val now = ZonedDateTime.now()
@@ -239,13 +287,37 @@ class SyncScheduler
                 .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
                 .build()
 
-        private companion object {
-            const val PERIODIC_WORK = "vault-sync-periodic"
-            const val RESUME_WORK = "vault-sync-after-limit"
-            const val DIGEST_NOW_WORK = "task-digest-now"
-            const val PERIOD_HOURS = 6L
-            const val CALENDAR_MAX_DELAY_MINUTES = 10L
-            const val LAST_HOUR = 23
+        companion object {
+            /**
+             * When a rule checked at [at] is next checked, seen at [now]:
+             * today's `at` when it is still to come, else tomorrow's. A rule
+             * not checked today ([checkedOn]) whose `at` passed less than
+             * [LATE_MINUTES] ago is checked now, so that arming it again
+             * just after its time -- a launch, a sync that brought the file
+             * -- does not skip the day.
+             */
+            fun nextCheck(
+                at: LocalTime,
+                now: ZonedDateTime,
+                checkedOn: LocalDate?,
+            ): ZonedDateTime {
+                val today = now.with(at).withSecond(0).withNano(0)
+                return when {
+                    today.isAfter(now) -> today
+                    checkedOn != now.toLocalDate() && now.isBefore(today.plusMinutes(LATE_MINUTES)) -> now
+                    else -> today.plusDays(1)
+                }
+            }
+
+            /** How late a rule's check may still be on its day. */
+            const val LATE_MINUTES = 10L
+
+            private const val PERIODIC_WORK = "vault-sync-periodic"
+            private const val RESUME_WORK = "vault-sync-after-limit"
+            private const val DIGEST_NOW_WORK = "task-digest-now"
+            private const val PERIOD_HOURS = 6L
+            private const val CALENDAR_MAX_DELAY_MINUTES = 10L
+            private const val LAST_HOUR = 23
         }
     }
 

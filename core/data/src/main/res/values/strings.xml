@@ -22,4 +22,6 @@
         <item quantity="one">and %1$d more</item>
         <item quantity="other">and %1$d more</item>
     </plurals>
+    <!-- The channel of the notification rules a vault's .daftar.toml defines. -->
+    <string name="rule_channel">Notification rules</string>
 </resources>
