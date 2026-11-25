@@ -240,7 +240,7 @@ object Sections {
     /**
      * The text with the headings right under the one at [index] in the order
      * of their names, each with its section, numbers in a name by their value.
-     * The text before the first of them stays first. Null when they are in
+     * A name is the text the reader shows ([shownName]). The text before the first of them stays first. Null when they are in
      * order already or there are fewer than two.
      */
     fun sortChildren(
@@ -249,7 +249,7 @@ object Sections {
     ): String? {
         val start = headings(text)
         if (index !in start.indices) return null
-        val names = OutlineTree.children(start.map { it.level }, index).map { start[it].text }
+        val names = OutlineTree.children(start.map { it.level }, index).map { shownName(start[it].text) }
         val sorted = names.indices.sortedWith { a, b -> NATURAL.compare(names[a], names[b]) }
         if (names.size < 2 || sorted == names.indices.toList()) return null
         var out = text
@@ -265,6 +265,22 @@ object Sections {
         }
         return out
     }
+
+    /**
+     * A heading as the reader shows it: a link is its text (`[Ann](https://x.y)`
+     * is `Ann`, `[[Notes/Bo|Bo]]` is `Bo`), and the marks of emphasis,
+     * highlight and code are left out (`**Al**` is `Al`).
+     */
+    fun shownName(heading: String): String =
+        SHOWN.fold(heading) { name, (pattern, replacement) -> pattern.replace(name, replacement) }.trim()
+
+    private val SHOWN =
+        listOf(
+            Regex("""!?\[\[[^\]|]*\|([^\]]*)\]\]""") to "\$1",
+            Regex("""!?\[\[([^\]]*)\]\]""") to "\$1",
+            Regex("""!?\[([^\]]*)\]\([^)]*\)""") to "\$1",
+            Regex("""\*\*|__|==|~~|`""") to "",
+        )
 
     /** Names as Finder orders them: case aside, and numbers by their value. */
     private val NATURAL =

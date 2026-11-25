@@ -96,6 +96,19 @@ class SectionsTest {
     }
 
     @Test
+    fun `headings sort by the text the reader shows`() {
+        val text =
+            "# Models\n## [Zoe](https://x.y/zoe)\n## Bea\n## [[People/Cy|Cy]]\n" +
+                "## **Al**\n## [Dee](<https://x.y/d_(e)>)\n"
+        val sorted = Sections.sortChildren(text, 0)!!
+        assertThat(sorted).isEqualTo(
+            "# Models\n## **Al**\n## Bea\n## [[People/Cy|Cy]]\n" +
+                "## [Dee](<https://x.y/d_(e)>)\n## [Zoe](https://x.y/zoe)\n",
+        )
+        assertThat(Sections.sortChildren(sorted, 0)).isNull()
+    }
+
+    @Test
     fun `a heading picked in the outline is found in the file by its text`() {
         val headings = Sections.headings("# A\n## [[Plan|The plan]]\n## **Bold** `x`\n# B\n## [[Plan|The plan]]\n")
         assertThat(Sections.plain("[[Plan|The plan]]")).isEqualTo("The plan")
