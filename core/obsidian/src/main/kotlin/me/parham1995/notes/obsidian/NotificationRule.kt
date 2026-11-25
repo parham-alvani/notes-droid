@@ -69,11 +69,17 @@ data class NotificationRule(
         return changed == null || ChronoUnit.DAYS.between(changed, day) >= quiet
     }
 
-    /** A quiet rule's body: [message], else how long the note has been quiet. */
+    /**
+     * A quiet rule's body: [message], else how many days the note has been
+     * quiet; a note that is not there ([changed] null) says so.
+     */
     fun quietBody(
         changed: LocalDate?,
         day: LocalDate,
-    ): String = message ?: "No change for ${changed?.let { ChronoUnit.DAYS.between(it, day) } ?: quietDays} days"
+    ): String =
+        message
+            ?: changed?.let { "No change for ${ChronoUnit.DAYS.between(it, day)} days" }
+            ?: "No such note: $note"
 
     /**
      * A query rule's body for the open tasks the query found, by their text:
@@ -100,9 +106,9 @@ data class NotificationRule(
         return MarkdownParser.parseNote(text).headings.none { it.text.trim().startsWith(wanted) }
     }
 
-    /** The alert's title: [title], else the note's name without `.md`, else the rule's id. */
+    /** The alert's title: [title], else `Tasks` for a query rule, else the note's name without `.md`. */
     val alertTitle: String
-        get() = title ?: note.substringAfterLast('/').removeSuffix(".md").ifEmpty { id }
+        get() = title ?: if (query != null) QUERY_TITLE else note.substringAfterLast('/').removeSuffix(".md")
 
     /** The alert's body on [day]: [message], else what heading is missing. */
     fun body(day: LocalDate): String = message ?: "No heading for today yet: ${expected(day)}"
@@ -113,6 +119,7 @@ data class NotificationRule(
 
         private val ID = Regex("[A-Za-z0-9_-]+")
         private const val QUERY_LINES = 3
+        private const val QUERY_TITLE = "Tasks"
         private const val MAX_QUIET_DAYS = 3650L
         private val WEEK =
             mapOf(

@@ -112,5 +112,14 @@ class DaftarPlacesTest {
         assertThat(places("[templates]\nfolder = \"Templates/\"\n").templates("""{"folder": "Old"}""").folder)
             .isEqualTo("Templates")
         assertThat(places("").templates("""{"folder": "Old"}""").folder).isEqualTo("Old")
+        // The two formats move with the folder, and the plugin's file is not read beside them.
+        val formats =
+            places("[templates]\nfolder = \"T\"\ndate_format = \"D MMM YYYY\"\ntime_format = \"h:mm A\"\n")
+                .templates("""{"folder": "Old", "dateFormat": "YYYY"}""")
+        assertThat(listOf(formats.folder, formats.dateFormat, formats.timeFormat))
+            .containsExactly("T", "D MMM YYYY", "h:mm A")
+            .inOrder()
+        val dateOnly = places("[templates]\ndate_format = \"DD.MM.YYYY\"\n").templates("""{"timeFormat": "HH"}""")
+        assertThat(dateOnly.timeFormat).isEqualTo(Templates.DEFAULT_TIME)
     }
 }

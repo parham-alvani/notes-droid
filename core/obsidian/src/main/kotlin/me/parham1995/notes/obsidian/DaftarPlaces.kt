@@ -52,10 +52,14 @@ class DaftarPlaces(
         )
     }
 
-    /** The templates' folder: `templates.folder`, else the Templates plugin's file. */
+    /** The templates' folder and date and time formats: `[templates]`, else the Templates plugin's file. */
     fun templates(json: String?): Templates {
-        val folder = text("templates.folder") ?: return json?.let { Templates.parse(it) } ?: Templates()
-        return Templates(folder = folder.trim().trim('/'))
+        if (!any("templates.")) return json?.let { Templates.parse(it) } ?: Templates()
+        return Templates(
+            folder = text("templates.folder")?.trim()?.trim('/').orEmpty(),
+            dateFormat = text("templates.date_format")?.trim()?.ifEmpty { null } ?: Templates.DEFAULT_DATE,
+            timeFormat = text("templates.time_format")?.trim()?.ifEmpty { null } ?: Templates.DEFAULT_TIME,
+        )
     }
 
     /** Each property's type: `[properties.types]`, else `types.json`. */

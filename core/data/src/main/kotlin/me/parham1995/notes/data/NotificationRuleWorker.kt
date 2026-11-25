@@ -114,10 +114,11 @@ class NotificationRuleWorker
             path: String,
         ): LocalDate? {
             val zone = ZoneId.systemDefault()
+            // A note that is not there has no last change, whatever its history says.
+            val file = files.fileFor(vaultId, path).takeIf { it.isFile } ?: return null
             runCatchingUnlessCancelled { history.history(vaultId, path).firstOrNull()?.date }
                 .getOrNull()
                 ?.let { return it.atZone(zone).toLocalDate() }
-            val file = files.fileFor(vaultId, path).takeIf { it.isFile } ?: return null
             return Instant.ofEpochMilli(file.lastModified()).atZone(zone).toLocalDate()
         }
 

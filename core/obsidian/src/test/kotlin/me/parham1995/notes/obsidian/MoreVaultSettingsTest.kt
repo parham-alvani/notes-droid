@@ -93,6 +93,9 @@ class MoreVaultSettingsTest {
         val found = TasksQuery.parse(rule.query!!.joinToString("\n")).run(tasks, wednesday) { it }
         assertThat(rule.queryBody(found.map { it.text })).isEqualTo("2 tasks: Call the bank, Send the form")
         assertThat(rule.queryBody(emptyList())).isNull()
+        // Titled `Tasks` when it says no title, and `tasks` for one task too.
+        assertThat(rule.alertTitle).isEqualTo("Tasks")
+        assertThat(rule.queryBody(listOf("Call the bank"))).isEqualTo("1 tasks: Call the bank")
         // A query rule with a heading too has two kinds, and is no rule.
         assertThat(
             rules("[notifications.rules.x]\nquery = [\"not done\"]\nheading = \"D\"\nat = \"20:00\"\n"),
@@ -107,6 +110,9 @@ class MoreVaultSettingsTest {
         assertThat(rule.isQuiet(wednesday.minusDays(15), wednesday)).isTrue()
         assertThat(rule.quietBody(wednesday.minusDays(15), wednesday)).isEqualTo("No change for 15 days")
         assertThat(rule.isQuiet(wednesday.minusDays(13), wednesday)).isFalse()
+        // A note that is not there rings, and says so.
+        assertThat(rule.isQuiet(null, wednesday)).isTrue()
+        assertThat(rule.quietBody(null, wednesday)).isEqualTo("No such note: Log.md")
         // A quiet rule needs its note.
         assertThat(rules("[notifications.rules.log]\nquiet_days = 14\nat = \"09:00\"\n")).isEmpty()
     }
@@ -145,6 +151,8 @@ class MoreVaultSettingsTest {
             "files.ignore",
             "daily.format",
             "templates.folder",
+            "templates.date_format",
+            "templates.time_format",
             "home.greeting",
             "home.clock",
             "properties.types.job_next",
@@ -161,5 +169,37 @@ class MoreVaultSettingsTest {
             "folders.Companies.folded",
             "folders.Companies.template",
         ).forEach { assertWithMessage(it).that(SettingsFromVault.mayBeSet(it)).isTrue() }
+    }
+
+    @Test
+    fun `a message is the body of every kind of rule`() {
+        val said =
+            rules(
+                """
+                [notifications.rules.diary]
+                note = "Diary.md"
+                heading = "D MMM YYYY"
+                at = "21:00"
+                message = "Write it down."
+
+                [notifications.rules.late]
+                query = ["not done"]
+                at = "20:00"
+                message = "Write it down."
+                title = "Late"
+
+                [notifications.rules.log]
+                note = "Log.md"
+                quiet_days = 14
+                at = "09:00"
+                message = "Write it down."
+                """.trimIndent(),
+            )
+        assertThat(said).hasSize(3)
+        assertThat(said[0].body(wednesday)).isEqualTo("Write it down.")
+        assertThat(said[1].queryBody(listOf("a", "b"))).isEqualTo("Write it down.")
+        assertThat(said[1].alertTitle).isEqualTo("Late")
+        assertThat(said[2].quietBody(wednesday.minusDays(20), wednesday)).isEqualTo("Write it down.")
+        assertThat(said[2].quietBody(null, wednesday)).isEqualTo("Write it down.")
     }
 }

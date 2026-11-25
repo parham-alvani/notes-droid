@@ -210,6 +210,8 @@ object SettingsFromVault {
             "daily.folder" to path,
             "daily.template" to path,
             "templates.folder" to path,
+            "templates.date_format" to named,
+            "templates.time_format" to named,
             "home.greeting" to text,
             "home.clock" to oneOf(setOf("12-hour", "24-hour", "system")),
             "home.show_time" to flag,
