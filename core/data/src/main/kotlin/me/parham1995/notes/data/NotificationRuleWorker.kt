@@ -149,7 +149,7 @@ internal fun ruleNotification(
         .setContentTitle(rule.alertTitle)
         .setContentText(body)
         .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-        .setSmallIcon(android.R.drawable.ic_popup_reminder)
+        .setSmallIcon(R.drawable.ic_stat_daftar)
         .setCategory(NotificationCompat.CATEGORY_REMINDER)
         .setAutoCancel(true)
         .setContentIntent(open)

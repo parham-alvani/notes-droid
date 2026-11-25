@@ -189,6 +189,6 @@ private fun digest(
         .Builder(context, channel)
         .setContentTitle(context.getString(R.string.digest_title))
         .setContentText(headline)
-        .setSmallIcon(android.R.drawable.ic_popup_reminder)
+        .setSmallIcon(R.drawable.ic_stat_daftar)
         .setAutoCancel(true)
         .setContentIntent(open)
