@@ -35,10 +35,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
 import me.parham1995.notes.R
 import me.parham1995.notes.data.database.QueryTaskRow
+import me.parham1995.notes.data.database.toTaskState
 import me.parham1995.notes.markdown.MdBlock
-import me.parham1995.notes.markdown.QueryTask
 import me.parham1995.notes.markdown.TaskState
-import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.markdown.isFinished
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.LocalTaskStatuses
@@ -54,23 +53,6 @@ data class TasksQueryResult(
     /** Each row's groups, outermost first, in step with [rows]; empty when ungrouped. */
     val groups: List<List<String>> = emptyList(),
 )
-
-/** How the index's stored state reads as a [QueryTask], its status as [statuses] has it. */
-fun QueryTaskRow.toQueryTask(statuses: TaskStatuses = TaskStatuses.DEFAULT): QueryTask =
-    QueryTask(
-        text = text,
-        state = state.toTaskState(),
-        path = notePath,
-        section = section,
-        due = due,
-        scheduled = scheduled,
-        done = done,
-        recurring = recurring,
-        status = statuses.of(symbol),
-        reason = reason,
-    )
-
-private fun String.toTaskState(): TaskState = TaskState.entries.firstOrNull { it.name == this } ?: TaskState.UNCHECKED
 
 /**
  * A ` ```tasks ` query, answered: the tasks it selects, each a tap away from

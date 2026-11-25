@@ -451,10 +451,11 @@ class VaultWriteRepository
             section: String,
             text: String,
             created: String? = today(),
+            scheduled: String? = today(WriteSettings.DEFAULT_SCHEDULED_DAYS.toLong()),
         ): WriteResult {
             val vault = writableVault(vaultId) ?: return refusal(vaultId)
             val line =
-                TaskLine.written(TaskFields(text = text, created = created, scheduled = today(SCHEDULE_DAYS)))
+                TaskLine.written(TaskFields(text = text, created = created, scheduled = scheduled))
                     ?: return WriteResult.Unchanged
             // The commit names the task by its words, not its dates.
             val body =
@@ -1076,7 +1077,6 @@ class VaultWriteRepository
 
             /** How a multi-line replacement is held in one stored field. */
             const val LINES = "\n"
-            const val SCHEDULE_DAYS = 3L
 
             /** The status a tick sets. */
             const val DONE = 'x'

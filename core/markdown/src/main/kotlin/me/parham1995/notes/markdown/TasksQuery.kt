@@ -70,6 +70,16 @@ class TasksQuery private constructor(
     }
 
     /**
+     * Whether [task] passes every filter, with no sort or limit: how a
+     * list of filter lines narrows what the digest counts
+     * (`notifications.digest_filter`).
+     */
+    fun matches(
+        task: QueryTask,
+        today: LocalDate,
+    ): Boolean = filters.all { it.test(task, today) }
+
+    /**
      * The groups [task] is listed under, outermost first, one per `group by`
      * line. Empty for a query with none; a group may be named "" -- a task
      * with no heading, grouped by heading -- and is drawn without a title.
@@ -77,6 +87,22 @@ class TasksQuery private constructor(
     fun groupsOf(task: QueryTask): List<String> = groupers.map { it(task) }
 
     companion object {
+        /**
+         * [tasks] that every one of the filter [lines] keeps, in their own
+         * order: what the digest counts under `notifications.digest_filter`.
+         * A line this cannot read is left out; no lines keep every task.
+         */
+        fun <T> narrowed(
+            lines: List<String>,
+            tasks: List<T>,
+            today: LocalDate,
+            view: (T) -> QueryTask,
+        ): List<T> {
+            if (lines.isEmpty()) return tasks
+            val query = parse(lines.joinToString("\n"))
+            return tasks.filter { query.matches(view(it), today) }
+        }
+
         /**
          * Reads [source], the body of the fence.
          *

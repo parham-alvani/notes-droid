@@ -1,5 +1,6 @@
 package me.parham1995.notes.obsidian
 
+import me.parham1995.notes.markdown.StatusType
 import java.io.File
 
 /** Where a setting's value came from. */
@@ -128,6 +129,8 @@ object SettingsFromVault {
     private const val MIN_FONT_SIZE = 9L
     private const val MINUTES_IN_WEEK = 10_080L
     private const val MINUTES_IN_DAY = 1_440L
+    private const val MAX_SCHEDULED = 365L
+    private val STATUS_ID = Regex("[A-Za-z0-9_-]+")
 
     /** What a vault may say for one key. */
     private sealed interface Rule {
@@ -200,6 +203,44 @@ object SettingsFromVault {
             "files.hidden" to allowed { it is TomlValue.Texts },
             "files.show_hidden" to flag,
             "capture.hotkey" to text,
+            // Daftar's own homes of what `.obsidian/` held (`no-obsidian-folder.md`).
+            "files.attachments" to path,
+            "files.ignore" to allowed { it is TomlValue.Texts },
+            "daily.format" to named,
+            "daily.folder" to path,
+            "daily.template" to path,
+            "templates.folder" to path,
+            "home.greeting" to text,
+            "home.clock" to oneOf(setOf("12-hour", "24-hour", "system")),
+            "home.show_time" to flag,
+            "home.show_greeting" to flag,
+            "home.show_search" to flag,
+            "home.show_recent" to flag,
+            "home.show_bookmarks" to flag,
+            "home.show_quote" to flag,
+            // More of a vault's settings (`more-vault-settings.md`).
+            "calendar.working_day" to allowed { it is TomlValue.Text && WorkingHours.parse(it.value) != null },
+            "tasks.default_scheduled" to whole(0..MAX_SCHEDULED),
+            "notifications.digest_filter" to allowed { it is TomlValue.Texts },
+            "jobs.waiting" to allowed { it is TomlValue.Texts },
+            "jobs.closed" to allowed { it is TomlValue.Texts },
+        )
+
+    /** `[tasks.statuses.<id>]`: one of the vault's own task statuses. */
+    private val STATUS_KEYS: Map<String, Rule> =
+        mapOf(
+            "symbol" to allowed { it is TomlValue.Text && it.value.length == 1 },
+            "name" to text,
+            "next" to allowed { it is TomlValue.Text && it.value.length == 1 },
+            "type" to allowed { it is TomlValue.Text && StatusType.parse(it.value) != null },
+        )
+
+    /** `[folders."<folder>"]`: what a folder's notes do. */
+    private val FOLDER_KEYS: Map<String, Rule> =
+        mapOf(
+            "direction" to oneOf(setOf("rtl", "ltr", "auto")),
+            "folded" to flag,
+            "template" to path,
         )
 
     /**
@@ -217,6 +258,9 @@ object SettingsFromVault {
             "at" to allowed { true },
             "title" to allowed { true },
             "message" to allowed { true },
+            "days" to allowed { true },
+            "query" to allowed { true },
+            "quiet_days" to allowed { true },
         )
 
     const val ANDROID = "android"
@@ -328,6 +372,12 @@ object SettingsFromVault {
     private fun rule(key: String): Rule? {
         RULES[key]?.let { return it }
         NotificationRule.keyOf(key)?.let { (_, name) -> return RULE_KEYS[name] }
+        if (key.startsWith("properties.types.") && key.length > "properties.types.".length) return text
+        if (key.startsWith("tasks.statuses.")) {
+            val id = key.removePrefix("tasks.statuses.").substringBeforeLast('.', "")
+            if (STATUS_ID.matches(id)) STATUS_KEYS[key.substringAfterLast('.')]?.let { return it }
+        }
+        FolderRules.keyOf(key)?.let { (_, name) -> FOLDER_KEYS[name]?.let { return it } }
         val section = key.substringBeforeLast('.', "")
         val refused = if (section.isEmpty()) key in TOP else section in APP_SECTIONS && section !in OPEN_SECTIONS
         return if (refused) Rule.Never else null

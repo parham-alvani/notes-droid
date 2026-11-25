@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
+import me.parham1995.notes.data.WriteSettings
 import me.parham1995.notes.ui.icon.LucideGlyph
 import java.time.Instant
 import java.time.LocalDate
@@ -57,11 +58,13 @@ fun AddTaskDialog(
     initialPath: String,
     sectionsOf: (String) -> List<String>,
     onDismiss: () -> Unit,
-    onAdd: (path: String, section: String, text: String, created: String?) -> Unit,
+    onAdd: (path: String, section: String, text: String, created: String?, scheduled: String?) -> Unit,
     initialSection: String = "",
+    /** How many days after today ⏳ starts at; 0 starts with none (`tasks.default_scheduled`). */
+    scheduledDays: Int = WriteSettings.DEFAULT_SCHEDULED_DAYS,
 ) {
-    val form = remember { AddTaskState(initialPath, initialSection) }
-    val add = { onAdd(form.path, form.section, form.text, form.created?.toString()) }
+    val form = remember { AddTaskState(initialPath, initialSection, scheduledDays = scheduledDays) }
+    val add = { onAdd(form.path, form.section, form.text, form.created?.toString(), form.scheduled?.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -76,17 +79,26 @@ fun AddTaskDialog(
     )
 }
 
-/** What the New task form holds while it is open. */
+/**
+ * What the New task form holds while it is open: ➕ [today], and ⏳
+ * [scheduledDays] after it when that is more than 0 (`new-task.md`,
+ * `tasks.default_scheduled` in `more-vault-settings.md`).
+ */
 class AddTaskState(
     path: String,
     section: String = "",
+    today: LocalDate = LocalDate.now(),
+    scheduledDays: Int = WriteSettings.DEFAULT_SCHEDULED_DAYS,
 ) {
     var path by mutableStateOf(path)
     var section by mutableStateOf(section)
     var text by mutableStateOf("")
 
     /** The created day; null leaves ➕ off the line. */
-    var created by mutableStateOf<LocalDate?>(LocalDate.now())
+    var created by mutableStateOf<LocalDate?>(today)
+
+    /** The scheduled day; null leaves ⏳ off the line. */
+    var scheduled by mutableStateOf(today.takeIf { scheduledDays > 0 }?.plusDays(scheduledDays.toLong()))
 }
 
 /** The fields of [AddTaskDialog]; [onDone] is the keyboard's Done with something typed. */
@@ -105,6 +117,17 @@ internal fun AddTaskForm(
             onChoose = {
                 form.created = it
                 picking = false
+            },
+        )
+    }
+    var scheduling by remember { mutableStateOf(false) }
+    if (scheduling) {
+        CreatedPicker(
+            day = form.scheduled ?: LocalDate.now(),
+            onDismiss = { scheduling = false },
+            onChoose = {
+                form.scheduled = it
+                scheduling = false
             },
         )
     }
@@ -158,10 +181,25 @@ internal fun AddTaskForm(
                 }
             }
         }
+        Column {
+            Text(stringResource(R.string.tasks_add_scheduled), style = MaterialTheme.typography.labelMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { scheduling = true }) {
+                    LucideGlyph("hourglass", size = 16.dp, contentDescription = null)
+                    Text(
+                        form.scheduled?.toString() ?: stringResource(R.string.tasks_add_created_none),
+                        modifier = Modifier.weight(1f, false),
+                    )
+                }
+                if (form.scheduled != null) {
+                    TextButton(onClick = { form.scheduled = null }) { Text(stringResource(R.string.action_clear)) }
+                }
+            }
+        }
     }
 }
 
-/** The picker of a created day, starting on [day]. */
+/** The picker of a day, created or scheduled, starting on [day]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreatedPicker(

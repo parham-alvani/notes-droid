@@ -15,8 +15,13 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.withTimeoutOrNull
+import me.parham1995.notes.data.database.TaskDao
+import me.parham1995.notes.data.database.toQueryTask
+import me.parham1995.notes.markdown.TasksQuery
 import me.parham1995.notes.obsidian.NotificationRule
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 
 /**
@@ -44,6 +49,9 @@ class NotificationRuleWorker
         private val vaults: VaultRepository,
         private val sync: SyncRepository,
         private val scheduler: SyncScheduler,
+        private val history: NoteHistoryRepository,
+        private val tasks: TaskDao,
+        private val statuses: TaskStatusRules,
     ) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
             val vaultId = inputData.getLong(KEY_VAULT, 0L)
@@ -56,16 +64,61 @@ class NotificationRuleWorker
                     ?: return Result.success()
             val now = ZonedDateTime.now()
             val today = now.toLocalDate()
-            // Before its time is not its run, and a second run on one day rings nothing.
+            // Before its time is not its run, a second run on one day rings nothing, and
+            // a day the rule does not name is checked and passed over.
             if (now.toLocalTime() >= rule.rule.at && rules.checkedOn(rule) != today) {
                 rules.markChecked(rule, today)
-                val text = runCatchingUnlessCancelled { files.readText(vaultId, rule.rule.note) }.getOrNull()
-                if (rule.rule.isMissing(text, today)) {
-                    runCatching { notify(rule, today, vaults.vault(vaultId)?.label) }
+                if (rule.rule.ringsOn(today)) {
+                    val body = runCatchingUnlessCancelled { bodyOf(rule, today) }.getOrNull()
+                    if (body != null) runCatching { notify(rule, body, vaults.vault(vaultId)?.label) }
                 }
             }
             scheduler.scheduleRule(rule, rules.checkedOn(rule))
             return Result.success()
+        }
+
+        /** What the alert of [rule] says on [day], or null when it has nothing to say: the note is as it should be. */
+        private suspend fun bodyOf(
+            rule: VaultRule,
+            day: LocalDate,
+        ): String? {
+            val it = rule.rule
+            val query = it.query
+            return when {
+                query != null -> {
+                    // Open tasks only: the rule rings for what is still to do.
+                    val vaultStatuses = statuses.forVault(rule.vaultId)
+                    val found =
+                        TasksQuery
+                            .parse(query.joinToString("\n"))
+                            .run(tasks.openInVault(rule.vaultId), day) { row -> row.toQueryTask(vaultStatuses) }
+                    it.queryBody(found.map { row -> row.text })
+                }
+                it.quietDays != null -> {
+                    val changed = lastChange(rule.vaultId, it.note)
+                    if (it.isQuiet(changed, day)) it.quietBody(changed, day) else null
+                }
+                else -> {
+                    val text = files.readText(rule.vaultId, it.note)
+                    if (it.isMissing(text, day)) it.body(day) else null
+                }
+            }
+        }
+
+        /**
+         * The day [path] last changed: its last commit in the vault's history,
+         * else the file's modified time; null when there is no such note.
+         */
+        private suspend fun lastChange(
+            vaultId: Long,
+            path: String,
+        ): LocalDate? {
+            val zone = ZoneId.systemDefault()
+            runCatchingUnlessCancelled { history.history(vaultId, path).firstOrNull()?.date }
+                .getOrNull()
+                ?.let { return it.atZone(zone).toLocalDate() }
+            val file = files.fileFor(vaultId, path).takeIf { it.isFile } ?: return null
+            return Instant.ofEpochMilli(file.lastModified()).atZone(zone).toLocalDate()
         }
 
         /** A sync, when the app syncs on its own and the network it may use is there; a minute at most. */
@@ -81,7 +134,7 @@ class NotificationRuleWorker
 
         private fun notify(
             rule: VaultRule,
-            day: LocalDate,
+            body: String,
             vaultName: String?,
         ) {
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -92,8 +145,9 @@ class NotificationRuleWorker
                     NotificationManager.IMPORTANCE_DEFAULT,
                 ),
             )
-            val open = vaultName?.let { openNote(rule, it) }
-            manager.notify(tagOf(rule.rule), rule.vaultId.toInt(), ruleNotification(context, rule.rule, day, open))
+            // A query rule opens the tasks, as the digest does; the others their note.
+            val open = if (rule.rule.query != null) openTasks() else vaultName?.let { openNote(rule, it) }
+            manager.notify(tagOf(rule.rule), rule.vaultId.toInt(), ruleNotification(context, rule.rule, body, open))
         }
 
         /**
@@ -119,6 +173,19 @@ class NotificationRuleWorker
             )
         }
 
+        /** The app on the task list, as the digest opens it. */
+        private fun openTasks(): PendingIntent? {
+            val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
+            launch.putExtra(TaskDigestWorker.EXTRA_OPEN_TASKS, true)
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            return PendingIntent.getActivity(
+                context,
+                inputData.getString(KEY_RULE).hashCode(),
+                launch,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        }
+
         companion object {
             /** Every rule's job carries this tag, so the ones no file says any more can be found. */
             const val TAG = "notification-rule"
@@ -136,15 +203,14 @@ class NotificationRuleWorker
         }
     }
 
-/** The alert of [rule] on [day]: its title, and what it says is missing. */
+/** The alert of [rule]: its title, and [body], what it says. */
 internal fun ruleNotification(
     context: Context,
     rule: NotificationRule,
-    day: LocalDate,
+    body: String,
     open: PendingIntent?,
-): Notification {
-    val body = rule.body(day)
-    return NotificationCompat
+): Notification =
+    NotificationCompat
         .Builder(context, NotificationRuleWorker.CHANNEL_ID)
         .setContentTitle(rule.alertTitle)
         .setContentText(body)
@@ -154,4 +220,3 @@ internal fun ruleNotification(
         .setAutoCancel(true)
         .setContentIntent(open)
         .build()
-}

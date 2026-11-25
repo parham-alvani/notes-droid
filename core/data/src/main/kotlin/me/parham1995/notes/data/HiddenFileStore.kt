@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.mapLatest
 import me.parham1995.notes.data.database.BlobDao
 import me.parham1995.notes.data.database.NoteDao
 import me.parham1995.notes.data.database.VaultDao
+import me.parham1995.notes.obsidian.DaftarPlaces
 import me.parham1995.notes.obsidian.HiddenFiles
 import me.parham1995.notes.sync.VaultFilter
 import javax.inject.Inject
@@ -72,7 +73,9 @@ class HiddenFileStore
                 // The manifest's sha for `app.json` moves when the file does,
                 // which is the one moment its filters can have changed.
                 blobs.shaOf(vaultId, VaultFilter.APP).distinctUntilChanged(),
-            ) { reading, _ -> reading }
+                // And `.daftar.toml`'s, where `files.ignore` is.
+                blobs.shaOf(vaultId, VaultFilter.DAFTAR).distinctUntilChanged(),
+            ) { reading, _, _ -> reading }
                 .mapLatest { rules(vaultId, it) }
                 .distinctUntilChanged()
                 .flowOn(Dispatchers.IO)
@@ -108,11 +111,13 @@ class HiddenFileStore
             )
         }
 
+        /** `files.ignore` of the vault's `.daftar.toml`, else the excluded files of `.obsidian/app.json`. */
         private suspend fun ignoreFilters(vaultId: Long): List<String> {
-            val text = files.readText(vaultId, VaultFilter.APP) ?: return emptyList()
+            val daftar = files.readText(vaultId, VaultFilter.DAFTAR)
+            val app = files.readText(vaultId, VaultFilter.APP)
             // A file Obsidian changes the shape of should cost the filter,
             // not the lists.
-            return runCatching { HiddenFiles.ignoreFilters(text) }
+            return runCatching { DaftarPlaces.of(daftar).ignoreFilters(app) }
                 .onFailure { log.warn("could not read the excluded files of vault $vaultId: ${it.message}") }
                 .getOrDefault(emptyList())
         }

@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -157,6 +158,13 @@ data class RenderActions(
     val runBase: (suspend (MdBlock.BaseView) -> BaseAnswer?)? = null,
 )
 
+/**
+ * The direction every block of the note is set in, when its folder says one
+ * (`direction` under `[folders."…"]`, `more-vault-settings.md`); null is each
+ * block's own, from its first strong letter.
+ */
+val LocalNoteDirection = staticCompositionLocalOf<MdDirection?> { null }
+
 @Composable
 fun MdBlockView(
     block: MdBlock,
@@ -171,7 +179,7 @@ fun MdBlockView(
 ) {
     // Direction is per block, so a Persian paragraph and the Latin code block
     // under it each read correctly in the same note.
-    val rtl = block.direction == MdDirection.RTL
+    val rtl = (LocalNoteDirection.current ?: block.direction) == MdDirection.RTL
     CompositionLocalProvider(
         LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
         // Persian prose is set in Vazirmatn; the Latin paragraph after it, and

@@ -15,8 +15,9 @@ import me.parham1995.notes.obsidian.Beautitab
 import me.parham1995.notes.obsidian.Bookmark
 import me.parham1995.notes.obsidian.Bookmarks
 import me.parham1995.notes.obsidian.DaftarConfig
+import me.parham1995.notes.obsidian.DaftarPlaces
 import me.parham1995.notes.obsidian.DailyNotes
-import me.parham1995.notes.obsidian.TasksPlugin
+import me.parham1995.notes.obsidian.FolderRules
 import me.parham1995.notes.obsidian.Templates
 import me.parham1995.notes.sync.VaultFilter
 import javax.inject.Inject
@@ -84,7 +85,14 @@ class ObsidianConfigStore
                 .flowOn(Dispatchers.IO)
 
         suspend fun bookmarks(vaultId: Long): VaultBookmarks {
-            val items = read(vaultId, VaultFilter.BOOKMARKS, "bookmarks", Bookmarks::parse).orEmpty()
+            // `.daftar/bookmarks.json` first, the same JSON as Obsidian's, and never both.
+            val path =
+                if (files.readText(vaultId, VaultFilter.DAFTAR_BOOKMARKS) != null) {
+                    VaultFilter.DAFTAR_BOOKMARKS
+                } else {
+                    VaultFilter.BOOKMARKS
+                }
+            val items = read(vaultId, path, "bookmarks", Bookmarks::parse).orEmpty()
             val ids =
                 files(items).mapNotNull { path -> notes.idOf(vaultId, path)?.let { path to it } }.toMap()
             return VaultBookmarks(vaultId, items, ids)
@@ -99,7 +107,8 @@ class ObsidianConfigStore
 
         /** Where [vaultId] keeps its daily notes; the plugin's defaults when it has not said. */
         suspend fun dailyNotes(vaultId: Long): DailyNotes =
-            read(vaultId, VaultFilter.DAILY_NOTES, "daily notes settings", DailyNotes::parse) ?: DailyNotes()
+            places(vaultId, VaultFilter.DAILY_NOTES, "daily notes settings") { places, old -> places.dailyNotes(old) }
+                ?: DailyNotes()
 
         /** The Beautitab plugin's settings of whichever vault [vault] names, kept current across syncs. */
         @OptIn(ExperimentalCoroutinesApi::class)
@@ -109,12 +118,22 @@ class ObsidianConfigStore
                 .flowOn(Dispatchers.IO)
 
         /** What the home page shows for [vaultId]; the plugin's defaults when it has no settings. */
-        suspend fun beautitab(vaultId: Long): Beautitab =
-            read(vaultId, VaultFilter.BEAUTITAB, "Beautitab settings", Beautitab::parse) ?: Beautitab()
+        suspend fun beautitab(vaultId: Long): Beautitab {
+            val quotes = files.readText(vaultId, VaultFilter.DAFTAR_QUOTES)
+            return places(vaultId, VaultFilter.BEAUTITAB, "home page settings") { places, old ->
+                places.home(old, quotes)
+            }
+                ?: Beautitab()
+        }
 
         /** The Templates plugin's settings for [vaultId]; its defaults, with no folder, when it has none. */
         suspend fun templates(vaultId: Long): Templates =
-            read(vaultId, VaultFilter.TEMPLATES, "templates settings", Templates::parse) ?: Templates()
+            places(vaultId, VaultFilter.TEMPLATES, "templates settings") { places, old -> places.templates(old) }
+                ?: Templates()
+
+        /** The `[folders."…"]` rules of [vaultId]'s `.daftar.toml`: none when it has none. */
+        suspend fun folders(vaultId: Long): FolderRules =
+            runCatching { FolderRules.parse(files.readText(vaultId, VaultFilter.DAFTAR)) }.getOrDefault(FolderRules())
 
         /**
          * What [vaultId] says of itself in the `.daftar.toml` at its root:
@@ -137,7 +156,27 @@ class ObsidianConfigStore
          * has no settings, or settings that cannot be read.
          */
         override suspend fun forVault(vaultId: Long): TaskStatuses =
-            read(vaultId, VaultFilter.TASKS, "Tasks plugin settings", TasksPlugin::statuses) ?: TaskStatuses.DEFAULT
+            places(vaultId, VaultFilter.TASKS, "task statuses") { places, old -> places.statuses(old) }
+                ?: TaskStatuses.DEFAULT
+
+        /**
+         * A setting of [vaultId] read where Daftar keeps it, `.daftar.toml`,
+         * and from `.obsidian/`'s [obsidian] file when it is not there
+         * ([DaftarPlaces], `no-obsidian-folder.md`).
+         */
+        private suspend fun <T> places(
+            vaultId: Long,
+            obsidian: String,
+            what: String,
+            read: (DaftarPlaces, String?) -> T,
+        ): T? {
+            val daftar = files.readText(vaultId, VaultFilter.DAFTAR)
+            val old = files.readText(vaultId, obsidian)
+            // A file Obsidian changes the shape of should cost the feature, not the app.
+            return runCatching { read(DaftarPlaces.of(daftar), old) }
+                .onFailure { log.warn("could not read the $what of vault $vaultId: ${it.message}") }
+                .getOrNull()
+        }
 
         private suspend fun <T> read(
             vaultId: Long,

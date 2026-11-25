@@ -4,15 +4,19 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Rescheduling
+import me.parham1995.notes.data.SettingsStore
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskBuckets
 import me.parham1995.notes.data.VaultRepository
@@ -85,7 +89,11 @@ class TasksViewModel
         private val writes: VaultWriteRepository,
         private val savedState: SavedStateHandle,
         todayCalendar: TodayCalendarSource,
+        settings: SettingsStore,
     ) : ViewModel() {
+        /** How many days after today a new task's ⏳ starts at (`tasks.default_scheduled`). */
+        val scheduledDays: Flow<Int> = settings.settings.map { it.write.scheduledDays }.distinctUntilChanged()
+
         /** Today's meetings and free time, for the card at the top of the list. */
         val today: StateFlow<TodayCalendar> =
             todayCalendar
@@ -143,9 +151,10 @@ class TasksViewModel
             section: String,
             text: String,
             created: String?,
+            scheduled: String?,
         ) = viewModelScope.launch {
             val vaultId = repository.activeVaultId.first()
-            message.value = Notice(writes.addTask(vaultId, path, section, text, created).describe())
+            message.value = Notice(writes.addTask(vaultId, path, section, text, created, scheduled).describe())
         }
 
         fun switchTo(vaultId: Long) {

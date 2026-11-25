@@ -12,7 +12,11 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import me.parham1995.notes.data.database.TaskDao
 import me.parham1995.notes.data.database.TaskRow
+import me.parham1995.notes.data.database.toQueryTask
+import me.parham1995.notes.markdown.TaskStatuses
+import me.parham1995.notes.markdown.TasksQuery
 import java.time.LocalDate
 
 /**
@@ -43,6 +47,8 @@ class TaskDigestWorker
         @Assisted params: WorkerParameters,
         private val repository: VaultRepository,
         private val settings: SettingsStore,
+        private val tasks: TaskDao,
+        private val statuses: TaskStatusRules,
     ) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
             val current = settings.current()
@@ -50,9 +56,23 @@ class TaskDigestWorker
             // runs, so the check is here rather than only at arming time.
             if (!current.taskDigest) return Result.success()
 
-            val today = LocalDate.now().toString()
-            val overdue = repository.overdueCount(today)
-            val due = repository.dueToday(today)
+            val day = LocalDate.now()
+            val today = day.toString()
+            var overdue = repository.overdueCount(today)
+            var due = repository.dueToday(today)
+            // The vault's `notifications.digest_filter`: only the tasks every line keeps count.
+            val filter = current.taskDigestFilter
+            if (filter.isNotEmpty()) {
+                val rows = tasks.dueOrLate(today)
+                val byVault = rows.map { it.vaultId }.distinct().associateWith { statuses.forVault(it) }
+                val kept =
+                    TasksQuery.narrowed(filter, rows, day) { row ->
+                        row.toQueryTask(byVault[row.vaultId] ?: TaskStatuses.DEFAULT)
+                    }
+                overdue = kept.count { (it.actionableOn ?: today) < today }
+                val ids = kept.map { it.id }.toSet()
+                due = due.filter { it.id in ids }
+            }
 
             runCatching { notify(overdue, due) }
             return Result.success()

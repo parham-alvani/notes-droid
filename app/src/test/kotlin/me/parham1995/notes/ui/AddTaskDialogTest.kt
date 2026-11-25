@@ -1,11 +1,14 @@
 package me.parham1995.notes.ui
 
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import com.google.common.truth.Truth.assertThat
+import me.parham1995.notes.markdown.TaskFields
+import me.parham1995.notes.markdown.TaskLine
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,9 +59,38 @@ class AddTaskDialogTest {
     fun `the created day can be taken off`() {
         show()
         compose.onNodeWithText(LocalDate.now().toString()).assertExists()
-        compose.onNodeWithText("Clear").performClick()
+        // The first Clear is the created day's; the scheduled day has its own.
+        compose.onAllNodesWithText("Clear")[0].performClick()
 
         compose.onNodeWithText("No date").assertExists()
         assertThat(form.created).isNull()
+        assertThat(form.scheduled).isNotNull()
     }
+
+    /** `aNewTaskIsScheduled` of `more-vault-settings.md`: the form starts with ⏳ the vault's days after today. */
+    @Test
+    fun aNewTaskIsScheduled() {
+        val today = LocalDate.of(2026, 11, 25)
+        val scheduled = AddTaskState("Tasks/Work.md", today = today, scheduledDays = 3)
+        assertThat(scheduled.created).isEqualTo(today)
+        assertThat(scheduled.scheduled).isEqualTo(LocalDate.of(2026, 11, 28))
+        assertThat(line(scheduled)).isEqualTo("- [ ] Call ➕ 2026-11-25 ⏳ 2026-11-28")
+
+        val none = AddTaskState("Tasks/Work.md", today = today, scheduledDays = 0)
+        assertThat(none.scheduled).isNull()
+        assertThat(line(none)).isEqualTo("- [ ] Call ➕ 2026-11-25")
+    }
+
+    @Test
+    fun `the scheduled day can be taken off`() {
+        show()
+        compose.onNodeWithText(LocalDate.now().plusDays(3).toString()).assertExists()
+        compose.onAllNodesWithText("Clear")[1].performClick()
+        assertThat(form.scheduled).isNull()
+    }
+
+    private fun line(form: AddTaskState): String? =
+        TaskLine.written(
+            TaskFields(text = "Call", created = form.created?.toString(), scheduled = form.scheduled?.toString()),
+        )
 }

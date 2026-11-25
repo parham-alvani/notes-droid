@@ -221,6 +221,40 @@ interface TaskDao {
     fun inVault(vaultId: Long): Flow<List<QueryTaskRow>>
 
     /**
+     * The open tasks due today or late, in every vault, as a query reads
+     * them: what the digest counts when the vault narrows it with
+     * `notifications.digest_filter`. Joined to `notes` as the counts are.
+     */
+    @Query(
+        """
+        SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
+               t.actionableOn, t.recurring, t.scheduled, t.due, t.done,
+               n.path AS notePath, n.title AS noteTitle, n.vaultId AS vaultId,
+               t.priority, t.cancelled, t.status, t.reason
+        FROM tasks t
+        JOIN notes n ON n.id = t.noteId
+        WHERE t.open = 1 AND n.hidden = 0 AND t.actionableOn IS NOT NULL AND t.actionableOn <= :today
+        ORDER BY n.vaultId, n.path, t.ordinal
+        """,
+    )
+    suspend fun dueOrLate(today: String): List<QueryTaskRow>
+
+    /** Every open task in one vault, as a query reads them: what a query rule asks. */
+    @Query(
+        """
+        SELECT t.id, t.noteId, t.text, t.state, t.section, t.blockIndex, t.line,
+               t.actionableOn, t.recurring, t.scheduled, t.due, t.done,
+               n.path AS notePath, n.title AS noteTitle, n.vaultId AS vaultId,
+               t.priority, t.cancelled, t.status, t.reason
+        FROM tasks t
+        JOIN notes n ON n.id = t.noteId
+        WHERE n.vaultId = :vaultId AND n.hidden = 0 AND t.open = 1
+        ORDER BY n.path, t.ordinal
+        """,
+    )
+    suspend fun openInVault(vaultId: Long): List<QueryTaskRow>
+
+    /**
      * The tasks in one note, for ticking one off where it is written rather
      * than only from the list.
      */

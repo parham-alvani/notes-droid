@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
+import me.parham1995.notes.markdown.QueryTask
 import me.parham1995.notes.markdown.TaskState
+import me.parham1995.notes.markdown.TaskStatuses
 import me.parham1995.notes.markdown.symbol
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.LocalState
@@ -495,3 +497,21 @@ private fun symbolOf(
     status: String,
     state: String,
 ): Char = status.singleOrNull() ?: (TaskState.entries.firstOrNull { it.name == state } ?: TaskState.UNCHECKED).symbol
+
+/** How the index's stored state reads as a [QueryTask], its status as [statuses] has it. */
+fun QueryTaskRow.toQueryTask(statuses: TaskStatuses = TaskStatuses.DEFAULT): QueryTask =
+    QueryTask(
+        text = text,
+        state = state.toTaskState(),
+        path = notePath,
+        section = section,
+        due = due,
+        scheduled = scheduled,
+        done = done,
+        recurring = recurring,
+        status = statuses.of(symbol),
+        reason = reason,
+    )
+
+/** A stored state's name as the state; unchecked when it is no state's. */
+fun String.toTaskState(): TaskState = TaskState.entries.firstOrNull { it.name == this } ?: TaskState.UNCHECKED

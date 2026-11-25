@@ -20,7 +20,7 @@ class NotificationRuleAlertTest {
 
     @Test
     fun `the alert names the note and the heading it lacks, on the rules' own channel`() {
-        val notification = ruleNotification(context, rule, day, open = null)
+        val notification = ruleNotification(context, rule, rule.body(day), open = null)
 
         assertThat(notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()).isEqualTo("Diary")
         assertThat(notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
@@ -33,7 +33,7 @@ class NotificationRuleAlertTest {
     fun `a rule's own title and message are what the alert says`() {
         val said = rule.copy(title = "Food", message = "Nothing is logged in the diary today.")
 
-        val notification = ruleNotification(context, said, day, open = null)
+        val notification = ruleNotification(context, said, said.body(day), open = null)
 
         assertThat(notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()).isEqualTo("Food")
         assertThat(notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString())

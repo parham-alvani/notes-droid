@@ -203,6 +203,13 @@ The shared keys this app has a setting for, written in the spec's unit when the 
 | `capture.target` | the scratchpad's path, when it is a note's path |
 | `files.hidden`, `files.show_hidden` | the files left out of the lists; the switch writes the app's four names or none, and where the vault's list is one a person wrote, it writes `android.files.hidden` and leaves that list as it is |
 | `home.image` | the home page's picture, a file in the vault; read, never written, since the app's own picker takes a photo from outside the vault |
+| `calendar.working_day` | the working day the timeline counts free time in, `HH:MM-HH:MM`, over the app's own whole hours; read, never written |
+| `tasks.default_scheduled` | how many days after today a new task's ⏳ starts at, 0 for none; the app gives three when the vault does not say; read, never written |
+| `notifications.digest_filter` | Tasks query lines the daily digest counts a task by; read, never written |
+| `notifications.rules.<id>`: `days`, `query`, `quiet_days` | a rule only on some days; a rule that rings when a Tasks query has open tasks; a rule that rings when a note has not changed for that many days (its last commit, else the file's time) |
+| `folders."<folder>"`: `direction`, `folded`, `template` | the notes of a folder: set right to left or left to right in the reader, opened folded or not, and a note made from a link to nothing there starts from the template; the nearest folder wins, key by key |
+
+What the vault's `.obsidian/` said is read from Daftar's own places first, and from `.obsidian/` only when the new place is not there; the two are never put together (`no-obsidian-folder.md`): `files.ignore`, `[daily]`, `templates.folder`, `[properties.types]`, `[tasks.statuses.<id>]` and `home.*` in `.daftar.toml`, and `.daftar/icons.json`, `.daftar/quotes.json` and `.daftar/bookmarks.json`. Nothing else in `.daftar/` reaches the phone.
 
 The settings only this app has live in `[android]`:
 

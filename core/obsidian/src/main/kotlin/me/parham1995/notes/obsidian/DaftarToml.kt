@@ -48,12 +48,12 @@ object DaftarToml {
             if (line.isEmpty()) continue
             if (line.startsWith("[")) {
                 // `[[array.of.tables]]` is a table of its own name too.
-                table = line.trim('[', ']').split('.').joinToString(".") { unquoted(it) }
+                table = dotted(line.trim('[', ']'))
                 continue
             }
             val equals = line.indexOf('=')
             if (equals <= 0) continue
-            val key = line.substring(0, equals).split('.').joinToString(".") { unquoted(it) }
+            val key = dotted(line.substring(0, equals))
             if (key.isEmpty()) continue
             var value = line.substring(equals + 1).trim()
             // An array left open runs on to the line that closes it.
@@ -103,13 +103,13 @@ object DaftarToml {
             at++
             if (bare.isEmpty()) continue
             if (bare.startsWith("[")) {
-                table = bare.trim('[', ']').split('.').joinToString(".") { unquoted(it) }
+                table = dotted(bare.trim('[', ']'))
                 if (table == section) last = start
                 continue
             }
             val equals = line.indexOf('=')
             if (equals <= 0) continue
-            val path = line.substring(0, equals).split('.').joinToString(".") { unquoted(it) }
+            val path = dotted(line.substring(0, equals))
             // An array left open runs on to the line that closes it.
             var held = uncommented(line.substring(equals + 1)).trim()
             while (held.startsWith("[") && !closed(held) && at < lines.size) {
@@ -284,6 +284,36 @@ object DaftarToml {
     }
 
     private fun unquoted(name: String): String = name.trim().trim('"', '\'').trim()
+
+    /**
+     * A dotted name with each part unquoted, split only at a dot outside
+     * quotes: `folders."v1.2"` is `folders` and `v1.2`, so a folder's name
+     * may hold a dot.
+     */
+    private fun dotted(name: String): String {
+        val parts = mutableListOf<String>()
+        val part = StringBuilder()
+        var quote: Char? = null
+        name.forEach { c ->
+            when {
+                quote != null -> {
+                    if (c == quote) quote = null
+                    part.append(c)
+                }
+                c == '"' || c == '\'' -> {
+                    quote = c
+                    part.append(c)
+                }
+                c == '.' -> {
+                    parts += part.toString()
+                    part.clear()
+                }
+                else -> part.append(c)
+            }
+        }
+        parts += part.toString()
+        return parts.joinToString(".") { unquoted(it) }
+    }
 
     private val WHOLE = Regex("""[+-]?\d[\d_]*""")
 }

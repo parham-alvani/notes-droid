@@ -246,6 +246,17 @@ The settings are kept in the repository: the vault's `.daftar.toml` is read over
 - **Not in the vault, on purpose**: tokens and keys, the app lock, the repositories and transports, vault ids (they are this phone's row ids), the phone's calendar ids, the author and the verifier, a gallery picture, and the folded rail, which is a view's state and would make a commit of every fold.
 - **The file is read again** when the settings change and when `SettingsStore.vaultConfigChanged()` says so. `VaultConfigStore` keeps one text per vault by the file's time and size, and drops it then.
 
+## Daftar's own places instead of `.obsidian/`
+
+`no-obsidian-folder.md` in notes-linux's `docs/specs/`, which Daftar for Linux and the Mac follow too.
+
+- **`DaftarPlaces` (core/obsidian) is the rule**: given the `.daftar.toml`'s keys (through the allow-list) and the old file's text, each function answers from the new place, else the old file, never both. `ObsidianConfigStore`, `IconStore`, `HiddenFileStore` and `BaseRepository` read through it. `.daftar/icons.json`, `quotes.json` and `bookmarks.json` are the only files of `.daftar/` that sync (`VaultFilter` `VERSION` 12).
+- **The phone writes none of these**, so section 3 (writing) has nothing to do here, and `files.attachments` is read (`DaftarPlaces.attachments`) but no feature uses it.
+
+## More of a vault's settings
+
+`more-vault-settings.md` there. `calendar.working_day`, `tasks.default_scheduled` and `notifications.digest_filter` are read-only bindings in `VaultOverlay` (never stored, no control). A new task's ⏳ is three days by default on the phone, as it always was, not the spec's 0. The rule kinds `days`, `query` and `quiet_days` are `NotificationRule`'s; a quiet rule's last change is `NoteHistoryRepository`'s newest commit (JGit for a clone, GitHub for REST), else the file's time. `[folders."…"]` is `FolderRules`: `direction` is `LocalNoteDirection` in the reader (not the editor), `folded` is in `NoteViewModel.opensFolded`, and `template` starts a note made from a link to nothing (`NoteTemplates.startOf`). The phone has no job board, so `jobs.*` are only on the allow-list.
+
 ## Notification rules
 
 `[notifications.rules.<id>]` in a vault's `.daftar.toml`: at `at`, a notification when a note has no heading for today. `notification-rules.md` in notes-linux's `docs/specs/`, which Daftar for Linux and the Mac follow too.

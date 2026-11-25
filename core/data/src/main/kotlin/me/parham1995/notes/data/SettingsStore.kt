@@ -329,6 +329,12 @@ data class ReadingSettings(
 data class WriteSettings(
     val authorName: String = "",
     val authorEmail: String = "",
+    /**
+     * How many days after today a new task's ⏳ is, 0 for none: the vault's
+     * `tasks.default_scheduled` (`more-vault-settings.md`), else the three
+     * days this app has always given it. Read from the vault, never stored.
+     */
+    val scheduledDays: Int = DEFAULT_SCHEDULED_DAYS,
     /** Where a captured thought lands, relative to the vault's root. */
     val scratchpadPath: String = DEFAULT_SCRATCHPAD,
     /** Which vault holds it. Zero means the one being read. */
@@ -362,6 +368,9 @@ data class WriteSettings(
 
     companion object {
         const val DEFAULT_SCRATCHPAD = "Scratchpad.md"
+
+        /** A new task's ⏳, in days after today, when the vault does not say. */
+        const val DEFAULT_SCHEDULED_DAYS = 3
     }
 }
 
@@ -383,10 +392,17 @@ data class CalendarSettings(
     val workStart: Int = WorkingHours.DEFAULT_START,
     /** The hour it ends. Always after [workStart]; the store refuses anything else. */
     val workEnd: Int = WorkingHours.DEFAULT_END,
+    /**
+     * The vault's `calendar.working_day`, `HH:MM-HH:MM`, which is to the
+     * minute and wins over [workStart] and [workEnd] when it fits. Read
+     * from the vault, never stored.
+     */
+    val workingDay: String = "",
 ) {
     val exports: Boolean get() = exportVaultId != 0L && calendars.isNotEmpty()
 
-    val hours: WorkingHours get() = WorkingHours(LocalTime.of(workStart, 0), LocalTime.of(workEnd, 0))
+    val hours: WorkingHours
+        get() = WorkingHours.parse(workingDay) ?: WorkingHours(LocalTime.of(workStart, 0), LocalTime.of(workEnd, 0))
 
     companion object {
         val START_CHOICES = listOf(7, 8, 9, 10, 11)
@@ -439,6 +455,12 @@ data class VaultSettings(
     val taskDigest: Boolean = false,
     /** Local hour to post it, 0-23. */
     val taskDigestHour: Int = DEFAULT_DIGEST_HOUR,
+    /**
+     * Tasks query lines the digest counts a task by: every one must match
+     * (`notifications.digest_filter`). Empty counts every task. Read from
+     * the vault, never stored.
+     */
+    val taskDigestFilter: List<String> = emptyList(),
     val reading: ReadingSettings = ReadingSettings(),
     /**
      * The vault being read. Zero means "whichever is first", which is what a

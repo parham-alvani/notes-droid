@@ -36,6 +36,8 @@ data class Beautitab(
      * addresses, in the plugin's order. Blank ones are dropped.
      */
     val backgrounds: List<String> = emptyList(),
+    /** Whether a quote of the person's own is asked for, whether or not there is one to show. */
+    val quoteAsked: Boolean = false,
 ) {
     data class Quote(
         val text: String,
@@ -87,6 +89,7 @@ data class Beautitab(
                     Quote(text, quote["author"].string()?.trim().orEmpty())
                 }
             val source = string("quoteSource")
+            val asked = (flag("showQuote") ?: false) && (source == null || source == MY_QUOTES)
             val local =
                 (root["localBackgrounds"] as? JsonArray).orEmpty().mapNotNull { item ->
                     item.string()
@@ -107,8 +110,8 @@ data class Beautitab(
                 showSearch = flag("showInlineSearch") ?: true,
                 showRecentFiles = flag("showRecentFiles") ?: true,
                 showBookmarks = flag("showBookmarks") ?: false,
-                showQuote =
-                    (flag("showQuote") ?: false) && (source == null || source == MY_QUOTES) && quotes.isNotEmpty(),
+                showQuote = asked && quotes.isNotEmpty(),
+                quoteAsked = asked,
                 quotes = quotes,
                 backgrounds =
                     (

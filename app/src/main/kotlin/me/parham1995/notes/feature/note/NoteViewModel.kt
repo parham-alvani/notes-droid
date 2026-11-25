@@ -25,6 +25,7 @@ import me.parham1995.notes.data.BaseRepository
 import me.parham1995.notes.data.ConceptNotice
 import me.parham1995.notes.data.Destinations
 import me.parham1995.notes.data.IconStore
+import me.parham1995.notes.data.NoteTemplates
 import me.parham1995.notes.data.ObsidianConfigStore
 import me.parham1995.notes.data.PeriodNeighbours
 import me.parham1995.notes.data.ReadOnlyRules
@@ -43,6 +44,7 @@ import me.parham1995.notes.data.WriteResult
 import me.parham1995.notes.data.database.BacklinkRow
 import me.parham1995.notes.data.database.HeadingEntity
 import me.parham1995.notes.data.database.QueryTaskRow
+import me.parham1995.notes.data.database.toQueryTask
 import me.parham1995.notes.feature.browser.AttemptEnd
 import me.parham1995.notes.feature.browser.AttemptWatch
 import me.parham1995.notes.feature.browser.syncFailureMessage
@@ -61,12 +63,12 @@ import me.parham1995.notes.markdown.Transclusion
 import me.parham1995.notes.markdown.VaultEdits
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.markdown.plainText
+import me.parham1995.notes.obsidian.FolderDirection
 import me.parham1995.notes.obsidian.Templates
 import me.parham1995.notes.ui.UiText
 import me.parham1995.notes.ui.VaultRowItem
 import me.parham1995.notes.ui.render.TasksQueryResult
 import me.parham1995.notes.ui.render.Transcluded
-import me.parham1995.notes.ui.render.toQueryTask
 import java.io.File
 import java.time.LocalDate
 import javax.inject.Inject
@@ -119,6 +121,8 @@ data class NoteUiState(
      * always or never.
      */
     val opensFolded: Boolean = false,
+    /** The note's base direction, from its folder's `direction` (`[folders."…"]`); auto is each block's own. */
+    val direction: FolderDirection = FolderDirection.AUTO,
     /**
      * Headings closed in the outline, as `level:text` ([OutlineTree.key]).
      * The outline only: the note is not folded. Kept with the note.
@@ -152,8 +156,12 @@ class NoteViewModel
         private val config: ObsidianConfigStore,
         private val readOnly: ReadOnlyRules,
         private val settingsWriter: SettingsWriter,
+        private val noteTemplates: NoteTemplates,
     ) : ViewModel() {
         val tabs: StateFlow<TabsState> = openTabs.state
+
+        /** How many days after today a new task's ⏳ starts at (`tasks.default_scheduled`). */
+        val scheduledDays: Flow<Int> = settings.settings.map { it.write.scheduledDays }.distinctUntilChanged()
 
         /** The notes whose reader has been told the vault is read-only: it is said once per note. */
         private val toldReadOnly = mutableSetOf<Long>()
@@ -308,12 +316,18 @@ class NoteViewModel
             viewModelScope.launch { repository.rememberFolds(id, folded, explicit) }
         }
 
-        /** Whether the notes of [vaultId] open folded: the vault's word, and the app's over it. */
-        private suspend fun opensFolded(vaultId: Long): Boolean =
+        /**
+         * Whether the note at [path] of [vaultId] opens folded: its folder's
+         * `folded` (`[folders."…"]`), else the vault's word, and the app's over both.
+         */
+        private suspend fun opensFolded(
+            vaultId: Long,
+            path: String,
+        ): Boolean =
             settings
                 .current()
                 .reading.foldSections
-                .folds(config.daftar(vaultId).folded)
+                .folds(config.folders(vaultId).forNote(path).folded ?: config.daftar(vaultId).folded)
 
         /**
          * Draws the note on screen as the settings now say, when they moved
@@ -322,7 +336,13 @@ class NoteViewModel
          */
         private suspend fun followFoldSetting() {
             val vaultId = _state.value.note?.vaultId ?: return
-            val opens = opensFolded(vaultId)
+            val opens =
+                opensFolded(
+                    vaultId,
+                    _state.value.note
+                        ?.path
+                        .orEmpty(),
+                )
             _state.update {
                 val note = it.note
                 when {
@@ -429,9 +449,10 @@ class NoteViewModel
             section: String,
             text: String,
             created: String?,
+            scheduled: String?,
         ) = viewModelScope.launch {
             val note = _state.value.note ?: return@launch
-            val result = writes.addTask(note.vaultId, note.path, section, text, created)
+            val result = writes.addTask(note.vaultId, note.path, section, text, created, scheduled)
             _state.update { it.copy(message = result.describe()) }
             if (result == WriteResult.Pushed || result is WriteResult.Queued) reload()
         }
@@ -473,7 +494,8 @@ class NoteViewModel
                 _state.update { it.copy(message = UiText.Resource(R.string.link_cannot_create)) }
                 return@launch
             }
-            val result = writes.createNote(note.vaultId, path, "")
+            // Its folder's template, when the vault names one; empty, as ever, when not.
+            val result = writes.createNote(note.vaultId, path, noteTemplates.startOf(note.vaultId, path))
             val made = result == WriteResult.Pushed || result is WriteResult.Queued
             if (made) reload()
             val opened = path.takeIf { made }?.let { repository.resolve(note.vaultId, it) }
@@ -595,7 +617,8 @@ class NoteViewModel
                 val pullsOnly = readOnly.isReadOnly(note.vaultId)
                 val notice = repository.conceptNotice(note.vaultId, note.path)
                 // The sync may have brought another `.daftar.toml`.
-                val opensFolded = opensFolded(note.vaultId)
+                val opensFolded = opensFolded(note.vaultId, note.path)
+                val direction = config.folders(note.vaultId).forNote(note.path).direction ?: FolderDirection.AUTO
                 _state.update {
                     if (it.note?.id != id) {
                         it
@@ -615,6 +638,7 @@ class NoteViewModel
                                     opensFolded,
                                 ),
                             opensFolded = opensFolded,
+                            direction = direction,
                             outlineClosed = current.outlineClosed,
                         )
                     }
@@ -669,7 +693,8 @@ class NoteViewModel
                     val writable = writes.canWrite(note.vaultId).first()
                     val pullsOnly = readOnly.isReadOnly(note.vaultId)
                     val notice = repository.conceptNotice(note.vaultId, note.path)
-                    val opensFolded = opensFolded(note.vaultId)
+                    val opensFolded = opensFolded(note.vaultId, note.path)
+                    val direction = config.folders(note.vaultId).forNote(note.path).direction ?: FolderDirection.AUTO
                     _state.value =
                         NoteUiState(
                             loading = false,
@@ -685,6 +710,7 @@ class NoteViewModel
                             folded = HeadingFolds.opening(note.blocks, note.folded, opensFolded),
                             foldsKept = note.folded != null,
                             opensFolded = opensFolded,
+                            direction = direction,
                             outlineClosed = note.outlineClosed,
                             periodic = destinations.neighbours(note.vaultId, note.path),
                             syncing = _state.value.syncing,

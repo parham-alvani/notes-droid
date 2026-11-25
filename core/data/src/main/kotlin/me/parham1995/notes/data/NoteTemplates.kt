@@ -59,4 +59,21 @@ class NoteTemplates
             val text = configs.templates(vaultId).fill(source, name, at)
             return writes.createNote(vaultId, path, text) to path
         }
+
+        /**
+         * What a new note at [path] starts with when nothing else is chosen:
+         * the `template` of the nearest folder above it that names one
+         * (`[folders."…"]`, `more-vault-settings.md`), its variables filled;
+         * empty when none does, or the template is not there.
+         */
+        suspend fun startOf(
+            vaultId: Long,
+            path: String,
+            at: LocalDateTime = LocalDateTime.now(),
+        ): String {
+            val template = configs.folders(vaultId).forNote(path).template ?: return ""
+            val source = files.readText(vaultId, template) ?: return ""
+            val title = path.substringAfterLast('/').removeSuffix(".md")
+            return configs.templates(vaultId).fill(source, title, at)
+        }
     }

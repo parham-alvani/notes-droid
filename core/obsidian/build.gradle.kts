@@ -7,6 +7,7 @@ dependencies {
     api(projects.core.markdown)
     implementation(libs.kotlinx.serialization.json)
 
+    testImplementation(projects.core.icons)
     testImplementation(libs.junit)
     testImplementation(libs.truth)
 }

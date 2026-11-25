@@ -139,4 +139,17 @@ class VaultFilterTest {
         assertThat(filter.kindOf("Shops/Shops.base")).isEqualTo(BlobKind.CONFIG)
         assertThat(filter.kindOf(".obsidian/Hidden.base")).isNull()
     }
+
+    /** `theFolderIsSkipped` of `no-obsidian-folder.md`: Daftar's folder is no notes, and only its three files sync. */
+    @Test
+    fun theFolderIsSkipped() {
+        val filter = VaultFilter()
+        assertThat(filter.kindOf(".daftar/Note.md")).isNull()
+        assertThat(filter.kindOf(".daftar/other.json")).isNull()
+        assertThat(filter.kindOf(".daftar/icons.json")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.kindOf(".daftar/quotes.json")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.kindOf(".daftar/bookmarks.json")).isEqualTo(BlobKind.CONFIG)
+        assertThat(filter.mayContain(".daftar")).isTrue()
+        assertThat(filter.kindOf("notes/.daftar/icons.json")).isNull()
+    }
 }

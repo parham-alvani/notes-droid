@@ -18,7 +18,7 @@ import me.parham1995.notes.markdown.FrontMatter
 import me.parham1995.notes.markdown.LinkKind
 import me.parham1995.notes.markdown.LinkResolver
 import me.parham1995.notes.markdown.PropertyNames
-import me.parham1995.notes.obsidian.PropertyTypes
+import me.parham1995.notes.obsidian.DaftarPlaces
 import me.parham1995.notes.sync.BlobKind
 import me.parham1995.notes.sync.VaultFilter
 import java.io.File
@@ -85,19 +85,18 @@ class BaseRepository
             return run(vaultId, source, from.ifEmpty { path }).copy(path = path)
         }
 
-        /** `.obsidian/types.json` of [vaultId]: each property's type, by name. Empty when there is none. */
+        /**
+         * Each property's type in [vaultId], by name: `[properties.types]` of
+         * its `.daftar.toml`, else `.obsidian/types.json`. Empty when neither says.
+         */
         suspend fun propertyTypes(vaultId: Long): Map<String, String> =
             withContext(Dispatchers.IO) {
-                files
-                    .readText(vaultId, VaultFilter.PROPERTY_TYPES)
-                    ?.let { text ->
-                        runCatching { PropertyTypes.parse(text) }
-                            .onFailure {
-                                log.warn(
-                                    "could not read the property types of vault $vaultId: ${it.message}",
-                                )
-                            }.getOrNull()
-                    }.orEmpty()
+                val daftar = files.readText(vaultId, VaultFilter.DAFTAR)
+                val old = files.readText(vaultId, VaultFilter.PROPERTY_TYPES)
+                runCatching { DaftarPlaces.of(daftar).propertyTypes(old) }
+                    .onFailure { log.warn("could not read the property types of vault $vaultId: ${it.message}") }
+                    .getOrNull()
+                    .orEmpty()
             }
 
         /**

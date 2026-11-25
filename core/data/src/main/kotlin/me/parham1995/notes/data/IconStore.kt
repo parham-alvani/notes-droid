@@ -64,7 +64,11 @@ class IconStore
         private suspend fun load(): VaultIcons {
             val byVault =
                 vaults.all().mapNotNull { vault ->
-                    val text = files.readText(vault.id, VaultFilter.ICONIC_CONFIG) ?: return@mapNotNull null
+                    // Daftar's own `.daftar/icons.json` first, the same JSON as Iconic's; never both.
+                    val text =
+                        files.readText(vault.id, VaultFilter.DAFTAR_ICONS)
+                            ?: files.readText(vault.id, VaultFilter.ICONIC_CONFIG)
+                            ?: return@mapNotNull null
                     val parsed =
                         runCatching { IconicConfig.parse(text) }
                             .onFailure {

@@ -10,6 +10,7 @@ import me.parham1995.notes.obsidian.ResolvedSettings
 import me.parham1995.notes.obsidian.SettingsFromVault
 import me.parham1995.notes.obsidian.TomlValue
 import me.parham1995.notes.obsidian.VaultSettingsDecline
+import me.parham1995.notes.obsidian.WorkingHours
 import me.parham1995.notes.sync.VaultFilter
 import java.io.File
 import javax.inject.Inject
@@ -196,6 +197,9 @@ object VaultOverlay {
     const val TEXT_SIZE = "appearance.text_size"
     const val TEXT_WIDTH = "appearance.text_width"
     const val BLOCK_WIDTH = "appearance.block_width"
+    const val WORKING_DAY = "calendar.working_day"
+    const val DEFAULT_SCHEDULED = "tasks.default_scheduled"
+    const val DIGEST_FILTER = "notifications.digest_filter"
     const val REMOTE_IMAGES = SettingsFromVault.REMOTE_IMAGES
     const val FOLD_SECTIONS = "appearance.fold_sections"
 
@@ -595,6 +599,36 @@ object VaultOverlay {
             )
         }
 
+    /** The working day to the minute; read, never written: the phone's own choices are whole hours. */
+    val workingDay =
+        SettingBinding(
+            WORKING_DAY,
+            { it, _ -> it.text(WORKING_DAY)?.takeIf { day -> WorkingHours.parse(day) != null } },
+            { it.calendar.workingDay },
+            { s, v -> s.copy(calendar = s.calendar.copy(workingDay = v)) },
+            { _, _ -> null },
+        ) { _, _ -> }
+
+    /** A new task's ⏳, in days after today; read, never written: the phone has no control for it. */
+    val defaultScheduled =
+        SettingBinding(
+            DEFAULT_SCHEDULED,
+            { it, _ -> it.whole(DEFAULT_SCHEDULED)?.toInt() },
+            { it.write.scheduledDays },
+            { s, v -> s.copy(write = s.write.copy(scheduledDays = v)) },
+            { _, _ -> null },
+        ) { _, _ -> }
+
+    /** The digest's filter lines; read, never written. */
+    val digestFilter =
+        SettingBinding<List<String>>(
+            DIGEST_FILTER,
+            { it, _ -> it.texts(DIGEST_FILTER) },
+            { it.taskDigestFilter },
+            { s, v -> s.copy(taskDigestFilter = v) },
+            { _, _ -> null },
+        ) { _, _ -> }
+
     /** Every setting of the app that a vault may hold. */
     val BINDINGS: List<SettingBinding<*>> =
         listOf(
@@ -629,6 +663,9 @@ object VaultOverlay {
             imagePolicy,
             workStart,
             workEnd,
+            workingDay,
+            defaultScheduled,
+            digestFilter,
         )
 
     /** Every key the declined list may name: the settings', and the author's two. */

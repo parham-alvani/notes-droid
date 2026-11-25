@@ -59,6 +59,20 @@ data class WorkingHours(
     companion object {
         const val DEFAULT_START = 9
         const val DEFAULT_END = 18
+
+        private val SPAN = Regex("""([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)""")
+
+        /**
+         * `calendar.working_day`, `HH:MM-HH:MM` (`more-vault-settings.md`):
+         * null when it does not fit or ends before it starts, which is the
+         * default day then.
+         */
+        fun parse(text: String): WorkingHours? {
+            val (h1, m1, h2, m2) = SPAN.matchEntire(text.trim())?.destructured ?: return null
+            val start = LocalTime.of(h1.toInt(), m1.toInt())
+            val end = LocalTime.of(h2.toInt(), m2.toInt())
+            return if (start.isBefore(end)) WorkingHours(start, end) else null
+        }
     }
 }
 

@@ -236,6 +236,10 @@
     <string name="tasks_add_created">تاریخ ایجاد</string>
     <string name="tasks_add_created_none">بدون تاریخ</string>
     <string name="tasks_add_created_set">تأیید</string>
+    <string name="tasks_add_scheduled">زمان‌بندی</string>
+    <string name="settings_working_day">ساعت‌های کاری</string>
+    <string name="settings_default_scheduled">روز زمان‌بندی کار تازه</string>
+    <string name="settings_digest_filter">کارهایی که خلاصهٔ روزانه می‌شمارد</string>
     <string name="capture_paste_markdown">چسباندن به‌صورت Markdown</string>
     <string name="capture_title">یادداشت سریع</string>
     <string name="capture_hint">یک فکر، یک لینک، هر چیزی</string>

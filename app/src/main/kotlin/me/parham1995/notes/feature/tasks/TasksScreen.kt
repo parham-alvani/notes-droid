@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.parham1995.notes.R
 import me.parham1995.notes.data.TaskBucket
 import me.parham1995.notes.data.TaskReminders
+import me.parham1995.notes.data.WriteSettings
 import me.parham1995.notes.data.database.TaskRow
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
@@ -90,6 +91,7 @@ fun TasksScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val today by viewModel.today.collectAsStateWithLifecycle()
+    val scheduledDays by viewModel.scheduledDays.collectAsStateWithLifecycle(WriteSettings.DEFAULT_SCHEDULED_DAYS)
     val snackbar = remember { SnackbarHostState() }
     var adding by remember { mutableStateOf(false) }
 
@@ -134,8 +136,9 @@ fun TasksScreen(
             initialPath = state.selectedPath ?: state.sources.first().path,
             sectionsOf = { state.sectionsByPath[it].orEmpty() },
             onDismiss = { adding = false },
-            onAdd = { path, section, text, created ->
-                viewModel.addTask(path, section, text, created)
+            scheduledDays = scheduledDays,
+            onAdd = { path, section, text, created, scheduled ->
+                viewModel.addTask(path, section, text, created, scheduled)
                 adding = false
             },
         )

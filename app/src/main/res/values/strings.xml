@@ -236,6 +236,10 @@
     <string name="tasks_add_created">Created</string>
     <string name="tasks_add_created_none">No date</string>
     <string name="tasks_add_created_set">Set</string>
+    <string name="tasks_add_scheduled">Scheduled</string>
+    <string name="settings_working_day">Working day</string>
+    <string name="settings_default_scheduled">A new task\'s scheduled day</string>
+    <string name="settings_digest_filter">Which tasks the digest counts</string>
     <string name="capture_title">Capture</string>
     <string name="widget_capture_glyph" translatable="false">+</string>
     <string name="shortcut_capture_short">Capture</string>

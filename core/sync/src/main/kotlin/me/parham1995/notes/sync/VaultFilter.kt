@@ -91,8 +91,9 @@ class VaultFilter(
          * 9: AVIF pictures, which Obsidian shows and Android 12 decodes.
          * 10: the Tasks plugin's settings, for the vault's own task statuses.
          * 11: the vault's `.daftar.toml`, for whether its notes open folded.
+         * 12: Daftar's own folder, `.daftar/`: its icons, quotes and bookmarks.
          */
-        const val VERSION = 11
+        const val VERSION = 12
 
         val DEFAULT_EXCLUDED_ROOTS = setOf("node_modules")
 
@@ -164,8 +165,31 @@ class VaultFilter(
          */
         const val DAFTAR = ".daftar.toml"
 
+        /**
+         * Daftar's own homes of what `.obsidian/` held, for data too long for
+         * `.daftar.toml` (`no-obsidian-folder.md`): read before the old files.
+         * Only these three of `.daftar/` reach the device; a note there is
+         * no note of the vault.
+         */
+        const val DAFTAR_ICONS = ".daftar/icons.json"
+        const val DAFTAR_QUOTES = ".daftar/quotes.json"
+        const val DAFTAR_BOOKMARKS = ".daftar/bookmarks.json"
+
         val DEFAULT_CONFIG_PATHS =
-            setOf(ICONIC_CONFIG, BOOKMARKS, DAILY_NOTES, PROPERTY_TYPES, TEMPLATES, BEAUTITAB, APP, TASKS, DAFTAR)
+            setOf(
+                ICONIC_CONFIG,
+                BOOKMARKS,
+                DAILY_NOTES,
+                PROPERTY_TYPES,
+                TEMPLATES,
+                BEAUTITAB,
+                APP,
+                TASKS,
+                DAFTAR,
+                DAFTAR_ICONS,
+                DAFTAR_QUOTES,
+                DAFTAR_BOOKMARKS,
+            )
 
         /**
          * Formats the reader draws itself. Everything else it can offer is in

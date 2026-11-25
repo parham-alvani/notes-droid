@@ -49,6 +49,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -94,6 +95,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import me.parham1995.notes.R
 import me.parham1995.notes.data.Pin
 import me.parham1995.notes.data.RenderedNote
+import me.parham1995.notes.data.WriteSettings
 import me.parham1995.notes.data.runCatchingUnlessCancelled
 import me.parham1995.notes.feature.define.DefineActivity
 import me.parham1995.notes.feature.drawer.FileDrawerSheet
@@ -102,10 +104,12 @@ import me.parham1995.notes.feature.editor.EditorScreen
 import me.parham1995.notes.markdown.Base
 import me.parham1995.notes.markdown.FootnoteEntry
 import me.parham1995.notes.markdown.MdBlock
+import me.parham1995.notes.markdown.MdDirection
 import me.parham1995.notes.markdown.ReadingTime
 import me.parham1995.notes.markdown.SpokenText
 import me.parham1995.notes.markdown.footnotes
 import me.parham1995.notes.obsidian.CalendarWeeks
+import me.parham1995.notes.obsidian.FolderDirection
 import me.parham1995.notes.reminder.ReminderViewModel
 import me.parham1995.notes.reminder.forReading
 import me.parham1995.notes.ui.AddTaskDialog
@@ -123,6 +127,7 @@ import me.parham1995.notes.ui.readingPadding
 import me.parham1995.notes.ui.render.Attachments
 import me.parham1995.notes.ui.render.FootnoteSheet
 import me.parham1995.notes.ui.render.InlineActions
+import me.parham1995.notes.ui.render.LocalNoteDirection
 import me.parham1995.notes.ui.render.MarkdownDocument
 import me.parham1995.notes.ui.render.RenderActions
 import me.parham1995.notes.ui.render.Transcluded
@@ -240,6 +245,7 @@ fun NoteScreen(
     var headingIn by remember(noteId, heading) { mutableStateOf(heading?.let { noteId to it }) }
 
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
+    val scheduledDays by viewModel.scheduledDays.collectAsStateWithLifecycle(WriteSettings.DEFAULT_SCHEDULED_DAYS)
 
     // The open notes as pages, so a swipe moves between them the way it does
     // in a browser. The strip and the pager say the same thing: a tap on the
@@ -1158,35 +1164,44 @@ fun NoteScreen(
                                                     onRefresh = viewModel::sync,
                                                     modifier = Modifier.fillMaxSize(),
                                                 ) {
-                                                    MarkdownDocument(
-                                                        blocks = note.blocks,
-                                                        brokenLinks = state.brokenLinks,
-                                                        listState = listState,
-                                                        contentPadding = margins,
-                                                        wideRoom = room,
-                                                        onPinch = viewModel::pinchTextScale,
-                                                        actions = noteActions ?: RenderActions(),
-                                                        spoken = spokenBlock,
-                                                        folded = state.folded,
-                                                        onToggleFold = viewModel::toggleFold,
-                                                        onTapPage =
-                                                            if (tapForFullScreen) {
-                                                                { fullScreen.on = !fullScreen.on }
-                                                            } else {
-                                                                null
+                                                    CompositionLocalProvider(
+                                                        LocalNoteDirection provides state.direction.asBlocks(),
+                                                    ) {
+                                                        MarkdownDocument(
+                                                            blocks = note.blocks,
+                                                            brokenLinks = state.brokenLinks,
+                                                            listState = listState,
+                                                            contentPadding = margins,
+                                                            wideRoom = room,
+                                                            onPinch = viewModel::pinchTextScale,
+                                                            actions = noteActions ?: RenderActions(),
+                                                            spoken = spokenBlock,
+                                                            folded = state.folded,
+                                                            onToggleFold = viewModel::toggleFold,
+                                                            onTapPage =
+                                                                if (tapForFullScreen) {
+                                                                    { fullScreen.on = !fullScreen.on }
+                                                                } else {
+                                                                    null
+                                                                },
+                                                            onFindHit = {
+                                                                top,
+                                                                bottom,
+                                                                ->
+                                                                findHit.value = top to bottom
                                                             },
-                                                        onFindHit = { top, bottom -> findHit.value = top to bottom },
-                                                        find =
-                                                            if (finding) {
-                                                                findTarget(
-                                                                    state.findQuery,
-                                                                    state.matches.map { it.blockIndex },
-                                                                    findAt,
-                                                                )
-                                                            } else {
-                                                                null
-                                                            },
-                                                    )
+                                                            find =
+                                                                if (finding) {
+                                                                    findTarget(
+                                                                        state.findQuery,
+                                                                        state.matches.map { it.blockIndex },
+                                                                        findAt,
+                                                                    )
+                                                                } else {
+                                                                    null
+                                                                },
+                                                        )
+                                                    }
                                                 }
                                             }
                                     }
@@ -1397,8 +1412,9 @@ fun NoteScreen(
                 sectionsOf = { draft.sections },
                 initialSection = draft.section,
                 onDismiss = { taskDraft = null },
-                onAdd = { _, section, text, created ->
-                    viewModel.addTask(section, text, created)
+                scheduledDays = scheduledDays,
+                onAdd = { _, section, text, created, scheduled ->
+                    viewModel.addTask(section, text, created, scheduled)
                     taskDraft = null
                 },
             )
@@ -1511,3 +1527,11 @@ private class ReadAt(
     val heading: Int,
     val before: RenderedNote?,
 )
+
+/** A folder's direction as the blocks are set: null is each block's own. */
+private fun FolderDirection.asBlocks(): MdDirection? =
+    when (this) {
+        FolderDirection.RTL -> MdDirection.RTL
+        FolderDirection.LTR -> MdDirection.LTR
+        FolderDirection.AUTO -> null
+    }
