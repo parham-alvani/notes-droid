@@ -1,0 +1,3 @@
+Notification rules: a [notifications.rules.<id>] section in the vault's .daftar.toml rings at a time of the day when a note has no heading for that day, such as a diary with no entry yet. A tap opens the note.
+The rule alert and the morning digest show the Daftar panda in the status bar.
+Sort Headings sorts a heading that starts with a link by its shown text, among the plain headings.
