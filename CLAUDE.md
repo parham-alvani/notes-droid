@@ -207,6 +207,15 @@ A vault says its notes open with every section shut, each heading saying what is
 - **The hint is `FoldHint` (core/markdown)**: `parts` cuts the beginning and decides which counts are said, `say()` is the spec's English, which the spec's table is tested against, and `of` counts a section from the parsed blocks. `FoldHintLine` in `Blocks.kt` draws it on a line of its own under the heading's text, not on the heading's line as the desktop apps do: a phone's line holds a heading and little else. The counts are said through plurals, so a Persian phone reads them in Persian. It is its own semantics node after the heading, described with commas for TalkBack, and outside the selection; `MdBlock.Heading.text`, which links, the outline and the printed note go by, never holds it.
 - **The words are counted from the blocks, not from a drawn page**, so a section holding an embed, a query or a diagram can count a few words fewer than the Mac does for the same note.
 
+## Wide blocks
+
+A table, a code block, a diagram, display math, a picture alone on its line and a `[!figure]` callout may grow past the line width on a window wider than it: `wide-blocks.md` in notes-linux's `docs/specs/`, which Daftar for Linux and the Mac follow too; change a rule here and theirs have to follow.
+
+- **The measure is the line width**, `LineWidth.maxDp` (560 or 680 dp, not scaled by the text size), and `R` is the reader's 16 dp margin. `appearance.block_width` (`ReadingSettings.blockWidth`, 60 em by default) counts in em of the body text (`bodyLarge` times the text scale). Full width has no measure, so nothing grows; a phone held upright has no room beside the column, so nothing moves.
+- **`WideBlock` (core/markdown) is the rule**: `place` is the spec's function, `isWide` says which top-level blocks may grow. A picture lifted out of a sentence is still a block here (`MdBlock.Image.inSentence`), and is not wide.
+- **`growPast` (`WideBlocks.kt`) does the layout** on a top-level item of `MarkdownDocument`: `N` is the block's max intrinsic width, and the item says it is wider than the column, which Compose centres on the column by itself. A picture or a diagram answers intrinsics with the width it was drawn at, so `naturalWidth` says its own instead (the size asked for, the bitmap's header, the SVG's `width` or `viewBox`); a picture from the web says only the size asked for. A figure's title and caption say 0 and stay within the column.
+- **No control in Settings yet**: the value is read from the vault and kept on the phone.
+
 ## A read-only vault
 
 A clone that pulls and never writes. The rules are `read-only-vault.md` in notes-linux's `docs/specs/`, which Daftar for Linux and the Mac follow too; change one here and theirs have to follow.

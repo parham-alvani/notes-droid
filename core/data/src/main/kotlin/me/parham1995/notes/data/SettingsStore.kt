@@ -217,6 +217,13 @@ data class ReadingSettings(
     val browserSort: BrowserSort = BrowserSort.NAME,
     val lineWidth: LineWidth = LineWidth.COMFORTABLE,
     /**
+     * The widest a table, a code block, a diagram or a picture may grow past
+     * the line width, in em of the text size; 0 keeps them inside it.
+     * `appearance.block_width`, `wide-blocks.md` in notes-linux's
+     * `docs/specs/`. Only a window wider than the line width has room for it.
+     */
+    val blockWidth: Int = DEFAULT_BLOCK_WIDTH,
+    /**
      * Hold the screen awake while a note is open.
      *
      * Off by default: it costs battery, and most notes are read in less time
@@ -303,6 +310,10 @@ data class ReadingSettings(
         val TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
         val LINE_SPACINGS = listOf(1f, 1.15f, 1.35f, 1.6f)
         val WIDGET_OPACITIES = listOf(100, 75, 50, 25, 0)
+
+        /** `appearance.block_width`'s default and its widest, in em, as in the other apps. */
+        const val DEFAULT_BLOCK_WIDTH = 60
+        const val MAX_BLOCK_WIDTH = 400
     }
 }
 
@@ -553,6 +564,11 @@ class SettingsStore
                             startScreen = StartScreen.parse(preferences[START_SCREEN]),
                             browserSort = BrowserSort.parse(preferences[BROWSER_SORT]),
                             lineWidth = LineWidth.parse(preferences[LINE_WIDTH]),
+                            blockWidth =
+                                (preferences[BLOCK_WIDTH] ?: ReadingSettings.DEFAULT_BLOCK_WIDTH).coerceIn(
+                                    0,
+                                    ReadingSettings.MAX_BLOCK_WIDTH,
+                                ),
                             keepScreenOn = preferences[KEEP_SCREEN_ON] ?: false,
                             tapForFullScreen = preferences[TAP_FULL_SCREEN] ?: true,
                             hideRail = preferences[HIDE_RAIL] ?: false,
@@ -752,6 +768,10 @@ class SettingsStore
             context.settingsDataStore.edit { it[LINE_WIDTH] = width.name }
         }
 
+        suspend fun setBlockWidth(em: Int) {
+            context.settingsDataStore.edit { it[BLOCK_WIDTH] = em.coerceIn(0, ReadingSettings.MAX_BLOCK_WIDTH) }
+        }
+
         suspend fun setTheme(theme: ThemeChoice) {
             context.settingsDataStore.edit { it[THEME] = theme.name }
         }
@@ -876,6 +896,7 @@ class SettingsStore
             val TEXT_SCALE = floatPreferencesKey("reading_text_scale")
             val LINE_SPACING = floatPreferencesKey("reading_line_spacing")
             val LINE_WIDTH = stringPreferencesKey("reading_line_width")
+            val BLOCK_WIDTH = intPreferencesKey("reading_block_width")
             val THEME = stringPreferencesKey("reading_theme")
             val PERSIAN_FONT = booleanPreferencesKey("reading_persian_font")
             val STYLUS_SPOTLIGHT = booleanPreferencesKey("reading_stylus_spotlight")

@@ -467,6 +467,7 @@
     <string name="link_unknown_note">No note called %1$s in this vault</string>
     <string name="link_not_followed">That link cannot be opened here</string>
     <string name="settings_line_width">Line width</string>
+    <string name="settings_block_width">Width of tables, code and pictures</string>
     <string name="width_narrow">narrow</string>
     <string name="width_comfortable">comfortable</string>
     <string name="width_full">full</string>

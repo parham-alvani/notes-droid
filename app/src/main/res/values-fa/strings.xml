@@ -466,6 +466,7 @@
     <string name="link_unknown_note">یادداشتی به نام %1$s در این دفتر نیست</string>
     <string name="link_not_followed">این پیوند اینجا باز نمی‌شود</string>
     <string name="settings_line_width">پهنای خط</string>
+    <string name="settings_block_width">پهنای جدول‌ها، کدها و تصویرها</string>
     <string name="width_narrow">باریک</string>
     <string name="width_comfortable">راحت</string>
     <string name="width_full">تمام‌عرض</string>

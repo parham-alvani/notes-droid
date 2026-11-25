@@ -2,6 +2,7 @@ package me.parham1995.notes.ui.render
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -66,56 +67,62 @@ fun VaultImage(
         (if (width != null) Modifier.widthIn(max = width.dp).fillMaxWidth() else Modifier.fillMaxWidth())
             .let { base -> if (shape != null) base.aspectRatio(shape) else base }
 
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        when {
-            file != null ->
-                AsyncImage(
-                    // The file, not its bytes: Coil caches it by path and
-                    // decodes it at the size it is drawn, instead of the whole
-                    // image being read into memory each time it scrolls in.
-                    model =
-                        ImageRequest
-                            .Builder(context)
-                            .data(file)
-                            .onPage(dark)
-                            .build(),
-                    contentDescription = alt,
-                    contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,
-                    modifier =
-                        sized
-                            // The same picture the viewer shows, so opening it
-                            // moves it rather than replacing it.
-                            .sharedElementIn(imageKey(vaultId, path))
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(onClick = onClick),
-                )
-
-            else ->
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
-                ) {
-                    Text(
-                        text =
-                            if (failed) {
-                                stringResource(R.string.image_unavailable, path.substringAfterLast('/'))
-                            } else {
-                                stringResource(R.string.image_loading)
-                            },
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.labelMedium.inScript(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    // One column, the picture over its caption, so a page that lays a block
+    // out in a box does not draw the caption on the picture. Its own width is
+    // the one asked for, else the file's: what a wide block grows to.
+    val natural = width?.dp ?: image.naturalWidth?.dp ?: 0.dp
+    Column(modifier.naturalWidth(natural).fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            when {
+                file != null ->
+                    AsyncImage(
+                        // The file, not its bytes: Coil caches it by path and
+                        // decodes it at the size it is drawn, instead of the whole
+                        // image being read into memory each time it scrolls in.
+                        model =
+                            ImageRequest
+                                .Builder(context)
+                                .data(file)
+                                .onPage(dark)
+                                .build(),
+                        contentDescription = alt,
+                        contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,
+                        modifier =
+                            sized
+                                // The same picture the viewer shows, so opening it
+                                // moves it rather than replacing it.
+                                .sharedElementIn(imageKey(vaultId, path))
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(onClick = onClick),
                     )
-                }
+
+                else ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
+                    ) {
+                        Text(
+                            text =
+                                if (failed) {
+                                    stringResource(R.string.image_unavailable, path.substringAfterLast('/'))
+                                } else {
+                                    stringResource(R.string.image_loading)
+                                },
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.labelMedium.inScript(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+            }
         }
-    }
-    alt?.takeIf { it.isNotBlank() }?.let {
-        Text(
-            text = it,
-            style = MaterialTheme.typography.labelSmall.inScript(),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        )
+        alt?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelSmall.inScript(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            )
+        }
     }
 }

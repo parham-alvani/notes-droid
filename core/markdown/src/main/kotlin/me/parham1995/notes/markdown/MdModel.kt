@@ -290,6 +290,12 @@ sealed interface MdBlock {
         val alt: String? = null,
         val width: Int? = null,
         val height: Int? = null,
+        /**
+         * Written inside a sentence, `see ![[x.png]] here`, rather than alone
+         * on its line. Lifted out to a block all the same, since a picture
+         * cannot be a run of text, but it is no wide block ([WideBlock]).
+         */
+        val inSentence: Boolean = false,
     ) : MdBlock
 
     /** An embed pointing at something that cannot be shown inline. */

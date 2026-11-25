@@ -191,6 +191,7 @@ The shared keys this app has a setting for, written in the spec's unit when the 
 | `appearance.theme` | the theme |
 | `appearance.text_size` | the text size, as a scale of the desktop's 14; a scale that is no whole size is `android.appearance.text_scale` |
 | `appearance.text_width` | the line width: 0 is the whole window; the narrow and the comfortable one are `android.appearance.line_width` |
+| `appearance.block_width` | how far a table, a code block, a diagram, display math or a picture alone on its line may grow past the line width, in em of the text size (60 by default, 0 keeps them inside it); only a window wider than the line width has room for it; read, there is no control for it here |
 | `appearance.remote_images` | pictures from the web; a vault can only turn them off |
 | `appearance.fold_sections` | whether notes open folded |
 | `appearance.dark_palette` | the dark theme's colours: naz, or naz with its colour strength capped |

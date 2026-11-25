@@ -271,7 +271,7 @@ class BlockFlattener(
         node.children().forEach { child ->
             if (isBreakout(child)) {
                 flush()
-                out += breakout(child)
+                out += breakout(child, inSentence = !aloneOnItsLine(child))
             } else {
                 run += child
             }
@@ -302,25 +302,41 @@ class BlockFlattener(
             (node is WikiLinkNode && node.embed) ||
             node is Image
 
-    private fun breakout(node: Node): MdBlock =
+    private fun breakout(
+        node: Node,
+        inSentence: Boolean,
+    ): MdBlock =
         when (node) {
             is DisplayMathNode -> {
                 hasMath = true
                 MdBlock.MathBlock(id(), node.latex)
             }
 
-            is WikiLinkNode -> embed(node)
+            is WikiLinkNode -> embed(node, inSentence)
 
             is Image -> {
                 val sized = Sized.of(plainTextOf(node))
                 links += ParsedLink(LinkKind.IMAGE, node.destination, sized.alt)
-                MdBlock.Image(id(), imageResolver(node.destination), sized.alt, sized.width, sized.height)
+                MdBlock.Image(id(), imageResolver(node.destination), sized.alt, sized.width, sized.height, inSentence)
             }
 
             else -> error("not a breakout: $node")
         }
 
-    private fun embed(node: WikiLinkNode): MdBlock {
+    /** Whether [node] has nothing but spaces beside it on its line, in its paragraph. */
+    private fun aloneOnItsLine(node: Node): Boolean {
+        fun Node.blank() = this is Text && literal.isBlank()
+        var before = node.previous
+        while (before != null && before.blank()) before = before.previous
+        var after = node.next
+        while (after != null && after.blank()) after = after.next
+        return (before == null || before.isBreak()) && (after == null || after.isBreak())
+    }
+
+    private fun embed(
+        node: WikiLinkNode,
+        inSentence: Boolean,
+    ): MdBlock {
         links += ParsedLink(LinkKind.WIKI_EMBED, node.target, node.alias)
         val extension = node.target.substringAfterLast('.', "").lowercase()
         return when {
@@ -329,7 +345,7 @@ class BlockFlattener(
 
             extension in RENDERABLE_IMAGES -> {
                 val sized = Sized.of(node.alias.orEmpty())
-                MdBlock.Image(id(), imageResolver(node.target), sized.alt, sized.width, sized.height)
+                MdBlock.Image(id(), imageResolver(node.target), sized.alt, sized.width, sized.height, inSentence)
             }
 
             // No extension, or `.md`: another note, which Obsidian draws in

@@ -132,6 +132,7 @@ import me.parham1995.notes.ui.sharedElementIn
 import me.parham1995.notes.ui.sheetProperties
 import me.parham1995.notes.ui.text
 import me.parham1995.notes.ui.theme.Markup
+import me.parham1995.notes.ui.wideRoom
 import me.parham1995.notes.widget.NoteWidget
 import java.io.File
 import java.time.Instant
@@ -1124,7 +1125,13 @@ fun NoteScreen(
                             } else {
                                 // The column held to a reading width on a wide window.
                                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                                    val readingWidth = LocalReading.current.lineWidth
+                                    val look = LocalReading.current
+                                    val readingWidth = look.lineWidth
+                                    // An em of the note's text, which `block_width` counts in.
+                                    val em =
+                                        with(LocalDensity.current) {
+                                            (MaterialTheme.typography.bodyLarge.fontSize * look.textScale).toDp()
+                                        }
                                     when {
                                         // The same page the swipe showed, rather than a
                                         // spinner in its place for the moment the note
@@ -1142,6 +1149,7 @@ fun NoteScreen(
                                         else ->
                                             state.note?.let { note ->
                                                 val margins = readingPadding(maxWidth, readingWidth)
+                                                val room = wideRoom(maxWidth, readingWidth, look.blockWidth, em)
                                                 // Pulled down from the top of the note, the
                                                 // way the file list is; the note re-reads
                                                 // itself when the sync is over.
@@ -1155,6 +1163,7 @@ fun NoteScreen(
                                                         brokenLinks = state.brokenLinks,
                                                         listState = listState,
                                                         contentPadding = margins,
+                                                        wideRoom = room,
                                                         onPinch = viewModel::pinchTextScale,
                                                         actions = noteActions ?: RenderActions(),
                                                         spoken = spokenBlock,

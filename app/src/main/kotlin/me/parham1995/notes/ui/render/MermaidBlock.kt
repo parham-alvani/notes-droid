@@ -28,8 +28,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import me.parham1995.notes.R
 import me.parham1995.notes.di.RendererEntryPoint
+import me.parham1995.notes.markdown.WideBlock
 import me.parham1995.notes.ui.image.ZoomableViewer
 import me.parham1995.notes.ui.inScript
 import me.parham1995.notes.ui.mermaid.MermaidRenderer
@@ -75,10 +78,18 @@ fun MermaidBlockView(
 
     var svg by remember(code, theme) { mutableStateOf<File?>(null) }
     var error by remember(code, theme) { mutableStateOf<String?>(null) }
+    // The diagram's own width, from its SVG: what it grows to on a wide window.
+    var natural by remember(code, theme) { mutableStateOf<Float?>(null) }
 
     LaunchedEffect(code, theme) {
         when (val result = renderer.render(code, theme)) {
-            is MermaidRenderer.Result.Svg -> svg = result.file
+            is MermaidRenderer.Result.Svg -> {
+                natural =
+                    withContext(Dispatchers.IO) {
+                        runCatching { WideBlock.svgWidth(result.file.readText()) }.getOrNull()
+                    }
+                svg = result.file
+            }
             is MermaidRenderer.Result.Failed -> error = result.message
         }
     }
@@ -90,7 +101,7 @@ fun MermaidBlockView(
     var opened by remember(code) { mutableStateOf(false) }
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.naturalWidth((natural ?: 0f).dp).fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
     ) {

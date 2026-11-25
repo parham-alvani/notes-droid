@@ -638,6 +638,8 @@ class ReadOnlyVaultTest {
 
             assertThat(followed.reading.theme).isEqualTo(ThemeChoice.LIGHT)
             assertThat(followed.reading.lineWidth).isEqualTo(LineWidth.FULL)
+            // `appearance.block_width` is the spec's em here too.
+            assertThat(followed.reading.blockWidth).isEqualTo(80)
             assertThat(followed.reading.remoteImages).isFalse()
             assertThat(followed.reading.foldSections).isEqualTo(FoldSections.ALWAYS)
             // `editor.live_preview`, which the phone's editor reads: on with no setting.
@@ -663,6 +665,7 @@ class ReadOnlyVaultTest {
             settings.setFollowVault(false)
             val own = settings.current()
             assertThat(own.reading.theme).isEqualTo(ThemeChoice.DARK)
+            assertThat(own.reading.blockWidth).isEqualTo(ReadingSettings.DEFAULT_BLOCK_WIDTH)
             assertThat(own.syncIntervalHours).isEqualTo(6)
             assertThat(own.reading.remoteImages).isTrue()
             assertThat(own.reading.livePreview).isTrue()
@@ -694,6 +697,7 @@ class ReadOnlyVaultTest {
             theme = "light"
             text_size = 16
             text_width = 0
+            block_width = 80
             remote_images = false
             fold_sections = "always"
             font = "Inter"

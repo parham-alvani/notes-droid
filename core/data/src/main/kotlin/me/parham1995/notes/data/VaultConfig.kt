@@ -195,6 +195,7 @@ object VaultOverlay {
     const val FORMAT_BAR = "editor.format_bar"
     const val TEXT_SIZE = "appearance.text_size"
     const val TEXT_WIDTH = "appearance.text_width"
+    const val BLOCK_WIDTH = "appearance.block_width"
     const val REMOTE_IMAGES = SettingsFromVault.REMOTE_IMAGES
     const val FOLD_SECTIONS = "appearance.fold_sections"
 
@@ -309,6 +310,16 @@ object VaultOverlay {
                 }
             },
         ) { store, v -> store.setLineWidth(v) }
+
+    /** How far past the line width a wide block may grow, in em; the same number here as in the spec. */
+    val blockWidth =
+        SettingBinding(
+            BLOCK_WIDTH,
+            { it, _ -> it.whole(BLOCK_WIDTH)?.toInt() },
+            { it.reading.blockWidth },
+            { s, v -> s.reading { copy(blockWidth = v) } },
+            { v, _ -> BLOCK_WIDTH to TomlValue.Whole(v.toLong()) },
+        ) { store, v -> store.setBlockWidth(v) }
 
     // Only ever `false` from a vault, and only `false` is written to one; the rule is the list's.
     val remoteImages =
@@ -590,6 +601,7 @@ object VaultOverlay {
             theme,
             textSize,
             lineWidth,
+            blockWidth,
             remoteImages,
             softDark,
             livePreview,

@@ -170,6 +170,7 @@ internal fun vaultKeyLabel(key: String): Int =
         VaultOverlay.FORMAT_BAR -> R.string.settings_format_bar
         VaultOverlay.TEXT_SIZE -> R.string.settings_size
         VaultOverlay.TEXT_WIDTH -> R.string.settings_line_width
+        VaultOverlay.BLOCK_WIDTH -> R.string.settings_block_width
         VaultOverlay.REMOTE_IMAGES -> R.string.settings_remote_images
         VaultOverlay.FOLD_SECTIONS -> R.string.settings_fold_sections
         VaultOverlay.SYNC_INTERVAL -> R.string.settings_schedule

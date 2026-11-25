@@ -29,8 +29,11 @@ import androidx.compose.ui.unit.dp
 import me.parham1995.notes.markdown.FoldHint
 import me.parham1995.notes.markdown.HeadingFolds
 import me.parham1995.notes.markdown.MdBlock
+import me.parham1995.notes.markdown.WideBlock
 import me.parham1995.notes.ui.LocalReading
+import me.parham1995.notes.ui.LocalWideRoom
 import me.parham1995.notes.ui.StylusSpotlight
+import me.parham1995.notes.ui.WideRoom
 
 /**
  * A whole note.
@@ -48,6 +51,12 @@ fun MarkdownDocument(
     brokenLinks: Set<String> = emptySet(),
     listState: LazyListState = rememberLazyListState(),
     contentPadding: PaddingValues = PaddingValues(16.dp),
+    /**
+     * The room beside the column [contentPadding] makes, for a table, code, a
+     * diagram, math or a picture wider than it (`wide-blocks.md`). Null, and
+     * every block keeps the column.
+     */
+    wideRoom: WideRoom? = null,
     /**
      * Pinching the page resizes the text. Null leaves the gesture alone, for
      * the places a document is shown but not read as one.
@@ -169,11 +178,22 @@ fun MarkdownDocument(
                         } else {
                             null
                         }
+                    // Only a block of the note itself grows; one inside a list,
+                    // a quote or a callout is drawn by its container.
+                    val wide =
+                        if (wideRoom != null &&
+                            WideBlock.isWide(block)
+                        ) {
+                            Modifier.growPast(wideRoom)
+                        } else {
+                            Modifier
+                        }
                     CompositionLocalProvider(
                         LocalFind provides FindMarks.forBlock(find, index, block),
                         LocalFindReport provides findReport,
+                        LocalWideRoom provides wideRoom,
                     ) {
-                        Box(tint) { MdBlockView(block, actions, brokenLinks, fold = fold) }
+                        Box(tint.then(wide)) { MdBlockView(block, actions, brokenLinks, fold = fold) }
                     }
                 }
             }

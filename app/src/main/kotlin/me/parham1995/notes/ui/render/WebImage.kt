@@ -68,26 +68,30 @@ fun WebImage(
                 }
             }
 
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        if (shown) {
-            AsyncImage(
-                model = src,
-                contentDescription = alt,
-                contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,
-                modifier = sized.clip(RoundedCornerShape(12.dp)),
-            )
-        } else {
-            RemoteImagePlaceholder(src, alt, onLoad = { asked = true })
+    // The picture over its caption, as a vault's picture is. Its own width
+    // is only the one asked for: a picture from the web is not read for it.
+    Column(modifier.naturalWidth(width?.dp ?: 0.dp).fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (shown) {
+                AsyncImage(
+                    model = src,
+                    contentDescription = alt,
+                    contentScale = if (height != null) ContentScale.Fit else ContentScale.FillWidth,
+                    modifier = sized.clip(RoundedCornerShape(12.dp)),
+                )
+            } else {
+                RemoteImagePlaceholder(src, alt, onLoad = { asked = true })
+            }
         }
-    }
-    if (shown) {
-        alt?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.labelSmall.inScript(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            )
+        if (shown) {
+            alt?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall.inScript(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+            }
         }
     }
 }

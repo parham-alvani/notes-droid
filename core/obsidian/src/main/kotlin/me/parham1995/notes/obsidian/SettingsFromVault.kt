@@ -166,6 +166,7 @@ object SettingsFromVault {
             "appearance.font" to named,
             "appearance.code_font" to named,
             "appearance.text_width" to whole(0..MAX_TEXT_WIDTH),
+            "appearance.block_width" to whole(0..MAX_TEXT_WIDTH),
             "appearance.reading_line" to whole(0..PERCENT),
             "appearance.fold_sections" to oneOf(FOLDS),
             "appearance.persian_calendar" to flag,

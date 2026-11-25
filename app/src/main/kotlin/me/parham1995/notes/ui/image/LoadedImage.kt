@@ -13,6 +13,7 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.parham1995.notes.di.RendererEntryPoint
+import me.parham1995.notes.markdown.WideBlock
 import java.io.File
 
 /**
@@ -36,6 +37,12 @@ class LoadedImage internal constructor(
      * be reserved and the note does not jump when the picture lands.
      */
     val aspectRatio: Float? = null,
+    /**
+     * The picture's own width in pixels, which a wide block counts as dp: the
+     * header's for a bitmap, the root's `width` or `viewBox` for an SVG.
+     * Null when neither says.
+     */
+    val naturalWidth: Float? = null,
 ) {
     val loading: Boolean get() = file == null && !failed
 }
@@ -77,7 +84,13 @@ fun rememberVaultImage(
     LaunchedEffect(key) {
         if (state.value.file != null) return@LaunchedEffect
         val file = source.localFile(vaultId, path)
-        val loaded = LoadedImage(file = file, failed = file == null, aspectRatio = file?.let { aspectRatioOf(it) })
+        val loaded =
+            LoadedImage(
+                file = file,
+                failed = file == null,
+                aspectRatio = file?.let { aspectRatioOf(it) },
+                naturalWidth = file?.let { widthOf(it) },
+            )
         if (file != null) found.put(key, loaded)
         state.value = loaded
     }
@@ -94,6 +107,18 @@ private suspend fun aspectRatioOf(file: File): Float? =
             bounds.outWidth.toFloat() / bounds.outHeight
         } else {
             null
+        }
+    }
+
+/** The picture's own width, from a bitmap's header or an SVG's root, without decoding a pixel. */
+private suspend fun widthOf(file: File): Float? =
+    withContext(Dispatchers.IO) {
+        if (file.extension.equals("svg", ignoreCase = true)) {
+            runCatching { WideBlock.svgWidth(file.readText()) }.getOrNull()
+        } else {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            runCatching { BitmapFactory.decodeFile(file.path, bounds) }
+            bounds.outWidth.takeIf { it > 0 }?.toFloat()
         }
     }
 

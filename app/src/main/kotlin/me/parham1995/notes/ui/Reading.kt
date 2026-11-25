@@ -3,6 +3,7 @@ package me.parham1995.notes.ui
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
@@ -40,6 +41,43 @@ fun readingPadding(
 }
 
 private val READING_MARGIN = 16.dp
+
+/**
+ * The room a wide block -- a table, code, a diagram, display math, a picture
+ * alone on its line -- may take past the reading column, in dp: `wide-blocks.md`
+ * in notes-linux's `docs/specs/`, with [measure] the column (the line width),
+ * [pane] the window it sits in, [side] the margin kept at each side and [limit]
+ * `appearance.block_width` em at the text size.
+ */
+@Immutable
+data class WideRoom(
+    val measure: Dp,
+    val pane: Dp,
+    val side: Dp,
+    val limit: Dp,
+)
+
+/**
+ * The room past the column [width] in a window [available] wide, with blocks
+ * allowed [blockWidth] em of [em]. Null when there is no column to grow past
+ * (the whole window) or the setting is off; a window with no room beside the
+ * column (a phone held upright) gets a room that [me.parham1995.notes.markdown.WideBlock.place]
+ * turns down for every block.
+ */
+fun wideRoom(
+    available: Dp,
+    width: LineWidth,
+    blockWidth: Int,
+    em: Dp,
+    margin: Dp = READING_MARGIN,
+): WideRoom? {
+    val measure = width.maxDp?.dp ?: return null
+    if (blockWidth <= 0) return null
+    return WideRoom(measure = measure, pane = available, side = margin, limit = em * blockWidth)
+}
+
+/** The page's [WideRoom], for a block that grows to read: a figure keeps its caption in the column. */
+val LocalWideRoom = staticCompositionLocalOf<WideRoom?> { null }
 
 /**
  * A style as the reader asked for it: their size, their line spacing, and the

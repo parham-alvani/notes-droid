@@ -85,6 +85,7 @@ import me.parham1995.notes.markdown.UnsupportedKind
 import me.parham1995.notes.markdown.isFinishedAndEmpty
 import me.parham1995.notes.ui.LocalReading
 import me.parham1995.notes.ui.LocalTaskStatuses
+import me.parham1995.notes.ui.LocalWideRoom
 import me.parham1995.notes.ui.TaskReasonLine
 import me.parham1995.notes.ui.TaskStatusBadge
 import me.parham1995.notes.ui.icon.LucideGlyph
@@ -491,6 +492,18 @@ private fun CalloutView(
     val scale = LocalReading.current.textScale
     val expandedLabel = stringResource(R.string.state_expanded)
     val collapsedLabel = stringResource(R.string.state_collapsed)
+    // A figure's panel grows to hold its picture on a wide window, and its
+    // title and caption neither widen it nor leave the column.
+    val figure = block.kind == CalloutKind.FIGURE
+    val room = LocalWideRoom.current
+    val words =
+        if (figure) {
+            Modifier
+                .naturalWidth(0.dp)
+                .then(room?.let { Modifier.widthIn(max = it.measure - CALLOUT_PADDING * 2) } ?: Modifier)
+        } else {
+            Modifier
+        }
 
     // A bar down the side rather than a tinted box alone. Obsidian's own
     // callouts read as a margin note, and the bar is what does that: the tint
@@ -506,7 +519,7 @@ private fun CalloutView(
             .height(IntrinsicSize.Min),
     ) {
         Column(
-            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            Modifier.padding(horizontal = CALLOUT_PADDING, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
@@ -515,6 +528,7 @@ private fun CalloutView(
                 // be shut.
                 modifier =
                     Modifier
+                        .then(if (figure) Modifier.naturalWidth(0.dp) else Modifier)
                         .fillMaxWidth()
                         .then(
                             if (block.foldable) {
@@ -572,7 +586,11 @@ private fun CalloutView(
             }
             if (expanded) {
                 block.children.forEach { child ->
-                    MdBlockView(child, actions, brokenLinks)
+                    if (figure && child !is MdBlock.Image) {
+                        MdBlockView(child, actions, brokenLinks, words.align(Alignment.CenterHorizontally))
+                    } else {
+                        MdBlockView(child, actions, brokenLinks)
+                    }
                 }
             }
         }
@@ -1088,6 +1106,9 @@ private const val HAIRLINE_ALPHA = 0.26f
 private const val CHIP_ALPHA = 0.16f
 private const val STRIPE_ALPHA = 0.35f
 private val CALLOUT_ICON = 16.dp
+
+/** The room inside a callout's panel at each side. */
+private val CALLOUT_PADDING = 12.dp
 private val CHIP_ICON = 11.dp
 private val REASON_ICON = 13.dp
 private val ATTACHMENT_ICON = 22.dp
