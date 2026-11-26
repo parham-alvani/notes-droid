@@ -8,7 +8,7 @@ ktlint = "14.2.0"
 # BasicTextField and VisualTransformation that the editor, the search field and
 # the token field use, and -Werror fails the build. It also needs compileSdk
 # 37.1. Move both after the editor moves to TextFieldState.
-composeBom = "2026.09.00"
+composeBom = "2026.11.01"
 # Ahead of the BOM, which still pins 1.4: Material 3 Expressive (the motion
 # scheme, LoadingIndicator, the floating toolbar, the search app bar) is
 # internal there and public from 1.5. Drop this once the BOM pins 1.5.
