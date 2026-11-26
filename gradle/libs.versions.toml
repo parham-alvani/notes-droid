@@ -1,14 +1,18 @@
 [versions]
-agp = "9.5.1"
+agp = "9.5.3"
 kotlin = "2.4.21"
 ksp = "2.3.14"
 ktlint = "14.2.0"
 
+# Held on 2026.09.00: Compose 1.13 (2026.11.01) deprecates the value-based
+# BasicTextField and VisualTransformation that the editor, the search field and
+# the token field use, and -Werror fails the build. It also needs compileSdk
+# 37.1. Move both after the editor moves to TextFieldState.
 composeBom = "2026.09.00"
 # Ahead of the BOM, which still pins 1.4: Material 3 Expressive (the motion
 # scheme, LoadingIndicator, the floating toolbar, the search app bar) is
-# internal there and public from 1.5.
-material3 = "1.5.0-rc01"
+# internal there and public from 1.5. Drop this once the BOM pins 1.5.
+material3 = "1.5.0"
 adaptive = "1.3.0"
 benchmark = "1.5.0"
 profileinstaller = "1.4.1"
@@ -17,7 +21,7 @@ androidxTestExt = "1.3.0"
 activity = "1.13.0"
 splashscreen = "1.2.0"
 coreKtx = "1.19.1"
-lifecycle = "2.11.0"
+lifecycle = "2.11.1"
 navigation = "2.10.2"
 
 room = "2.8.5"
@@ -32,7 +36,7 @@ coroutines = "1.11.0"
 serialization = "1.13.0"
 
 okhttp = "5.5.1"
-commonmark = "0.32.0"
+commonmark = "0.33.0"
 coil = "3.6.3"
 # Pinch, double tap and fling about the fingers, and a large picture read in
 # tiles as it is zoomed so it stays sharp. 0.19.0 asks for Coil 3.2 and
