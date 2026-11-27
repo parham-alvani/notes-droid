@@ -4,14 +4,19 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.OutputTransformation
+import androidx.compose.foundation.text.input.TextFieldBuffer
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -37,10 +42,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.unit.dp
@@ -105,7 +107,7 @@ internal fun rememberToday(): LocalDate {
  *
  * [value] is the file's text and nothing else. The sizes, the colours, the
  * hidden marks, the callout's panel and the quote's bar are all drawn: the
- * text is styled by a visual transformation ([EditorStyler]) and the rest is
+ * text is styled by an output transformation ([EditorStyler]) and the rest is
  * painted behind it. With [livePreview] off every mark shows, and no box or
  * chip is drawn.
  *
@@ -134,6 +136,7 @@ internal fun NoteEditor(
             styler.draw(value.text, value.selection, look, livePreview, today, statuses)
         }
     val transformation = remember(drawn) { EditorTransformation(drawn.text) }
+    val state = rememberEditorState(value, onValueChange)
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val lucide = LocalLucide.current
     val measurer = rememberTextMeasurer()
@@ -142,8 +145,7 @@ internal fun NoteEditor(
     val taps = rememberUpdatedState(TaskTaps(layout, drawn, look, onTask, onTaskMenu))
 
     BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
+        state = state,
         modifier =
             modifier
                 .testTag(EDITOR_TAG)
@@ -160,32 +162,76 @@ internal fun NoteEditor(
         // The caret is the accent.
         cursorBrush = SolidColor(look.accent),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-        visualTransformation = transformation,
-        onTextLayout = { layout = it },
+        outputTransformation = transformation,
+        onTextLayout = { result -> layout = result() },
     )
 }
 
 /**
- * The note's text as [EditorStyler] drew it: the same characters at the same
- * places, and one more at the end, which is no place in the note.
+ * The text field's state, kept the same as [value] both ways: what is typed
+ * goes to [onValueChange], and a change made by the owner (a button, undo, a
+ * task's box, a file read again) is put in the field.
+ *
+ * A value can come back from the owner after more was typed. The field does
+ * not take it: it is one the field sent, not a change of the owner's.
+ */
+@Composable
+private fun rememberEditorState(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+): TextFieldState {
+    val state = remember { TextFieldState(value.text, value.selection) }
+    // What the field sent and the owner has not given back yet, oldest first.
+    val sent = remember { ArrayDeque<TextFieldValue>() }
+    val owner by rememberUpdatedState(value)
+    val change by rememberUpdatedState(onValueChange)
+    LaunchedEffect(value) {
+        val echo = sent.indexOfFirst { it.sameAs(value) }
+        if (echo >= 0) {
+            repeat(echo + 1) { sent.removeFirst() }
+            return@LaunchedEffect
+        }
+        sent.clear()
+        if (!state.text.contentEquals(value.text) || state.selection != value.selection) {
+            state.edit {
+                replace(0, length, value.text)
+                selection = value.selection
+            }
+        }
+    }
+    LaunchedEffect(state) {
+        snapshotFlow { TextFieldValue(state.text.toString(), state.selection, state.composition) }
+            .collect { next ->
+                if (next.sameAs(owner)) return@collect
+                sent.addLast(next)
+                change(next)
+            }
+    }
+    return state
+}
+
+private fun TextFieldValue.sameAs(other: TextFieldValue) = text == other.text && selection == other.selection
+
+/**
+ * The note's text as [EditorStyler] drew it: the same places, a line break
+ * drawn as the character that ends its paragraph, one more character at the
+ * end, which is no place in the note, and the drawn styles. Only the
+ * characters that differ are replaced, one for one, so every place in the
+ * note is the same place in the drawn text.
  */
 internal class EditorTransformation(
     private val drawn: AnnotatedString,
-) : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
+) : OutputTransformation {
+    override fun TextFieldBuffer.transformOutput() {
         // Drawn from another text than the field's: show the field's, plain.
-        if (drawn.length != text.length + 1) return TransformedText(text, OffsetMapping.Identity)
-        return TransformedText(drawn, EditorOffsets(text.length))
+        if (drawn.length != length + 1) return
+        for (at in 0 until length) {
+            if (charAt(at) != drawn[at]) replace(at, at + 1, drawn.subSequence(at, at + 1))
+        }
+        append(drawn, length, drawn.length)
+        for (style in drawn.paragraphStyles) addStyle(style.item, style.start, style.end)
+        for (style in drawn.spanStyles) addStyle(style.item, style.start, style.end)
     }
-}
-
-/** A place in the note is the same place in the drawn text; the drawn text's last place is the note's end. */
-internal class EditorOffsets(
-    private val length: Int,
-) : OffsetMapping {
-    override fun originalToTransformed(offset: Int): Int = offset
-
-    override fun transformedToOriginal(offset: Int): Int = minOf(offset, length)
 }
 
 /** What a tap on a task's box needs: where the boxes are, and what a tap and a long press do. */

@@ -21,17 +21,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -264,10 +264,10 @@ private fun Clock(
  */
 @Composable
 private fun SearchField(onSearch: (String) -> Unit) {
-    var text by rememberSaveable { mutableStateOf("") }
+    val text = rememberTextFieldState()
     val submit = {
-        onSearch(text.trim())
-        text = ""
+        onSearch(text.text.trim().toString())
+        text.clearText()
     }
     Surface(
         shape = CircleShape,
@@ -286,7 +286,7 @@ private fun SearchField(onSearch: (String) -> Unit) {
                     MaterialTheme.typography.bodyLarge.inScript().copy(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                if (text.isEmpty()) {
+                if (text.text.isEmpty()) {
                     Text(
                         stringResource(R.string.home_search_hint),
                         style = style,
@@ -294,13 +294,12 @@ private fun SearchField(onSearch: (String) -> Unit) {
                     )
                 }
                 BasicTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    singleLine = true,
+                    state = text,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     textStyle = style,
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { submit() }),
+                    onKeyboardAction = { submit() },
                     modifier = Modifier.fillMaxWidth().testTag(SEARCH_TAG),
                 )
             }

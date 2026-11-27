@@ -6,13 +6,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -27,8 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.parham1995.notes.R
@@ -175,30 +175,25 @@ internal fun TokenCard(
     state: SyncUiState,
     viewModel: SyncViewModel,
 ) {
-    var token by remember { mutableStateOf("") }
+    val token = rememberTextFieldState()
 
     SectionCard(stringResource(R.string.card_token)) {
         Text(
             stringResource(R.string.help_token),
             style = MaterialTheme.typography.bodySmall,
         )
-        OutlinedTextField(
-            value = token,
-            onValueChange = { token = it },
+        OutlinedSecureTextField(
+            state = token,
             label = { Text(stringResource(if (state.hasToken) R.string.token_replace else R.string.token_label)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions =
-                KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(
                 onClick = {
-                    viewModel.saveToken(token)
-                    token = ""
+                    viewModel.saveToken(token.text.toString())
+                    token.clearText()
                 },
-                enabled = token.isNotBlank(),
+                enabled = token.text.isNotBlank(),
             ) {
                 Text(stringResource(R.string.action_save))
             }
