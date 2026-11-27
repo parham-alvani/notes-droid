@@ -33,7 +33,7 @@ just verify-apk
 
 - **JDK 17, and nothing newer.** AGP 9.4.0 requires it and rejects later JDKs with an unhelpful error. Gradle will happily pick a newer JDK if one is on the path first.
 - **AGP 9 has Kotlin built in.** Never apply `org.jetbrains.kotlin.android`, and there is no `kotlin { }` extension to configure. The convention plugins in `build-logic/` are where compiler settings live.
-- `compileSdk`/`targetSdk` 37, `minSdk` 29, all declared once in `AndroidSdk` in `build-logic/`.
+- `compileSdk` 37.2, `targetSdk` 37, `minSdk` 29, all declared once in `AndroidSdk` in `build-logic/` (the `baselineprofile` module repeats them). Compose 1.13 needs API 37.1 or later to compile against.
 - Unaccepted SDK licences fail every build with a message that does not mention licences. `just sdk` accepts them.
 
 ## Modules

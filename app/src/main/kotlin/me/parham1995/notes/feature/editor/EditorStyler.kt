@@ -92,7 +92,7 @@ internal class EditorDrawn(
  * direction and room at the side. A text field draws a paragraph break as a
  * line of its own, so the line break of each line is drawn as a zero-width
  * space that ends its paragraph, and one more ends the last line: the drawn
- * text is one character longer than the note ([EditorOffsets]). Nothing of
+ * text is one character longer than the note ([EditorTransformation]). Nothing of
  * that is in the note's text.
  *
  * A line that did not change and that the selection does not touch keeps the

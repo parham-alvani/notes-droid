@@ -75,7 +75,7 @@ All seven milestones are implemented, and the app has been running against a rea
 ## Requirements
 
 - JDK 17 — AGP 9 requires it and rejects anything newer
-- Android SDK platform `android-37.0` and build-tools `37.0.0`
+- Android SDK platform `android-37.2` and build-tools `37.0.0`
 - [`just`](https://github.com/casey/just)
 
 On a fresh machine:
