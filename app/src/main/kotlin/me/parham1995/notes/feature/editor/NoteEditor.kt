@@ -4,12 +4,14 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -136,7 +138,7 @@ internal fun NoteEditor(
             styler.draw(value.text, value.selection, look, livePreview, today, statuses)
         }
     val transformation = remember(drawn) { EditorTransformation(drawn.text) }
-    val state = rememberEditorState(value, onValueChange)
+    val field = rememberEditorField(value, onValueChange)
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val lucide = LocalLucide.current
     val measurer = rememberTextMeasurer()
@@ -145,7 +147,8 @@ internal fun NoteEditor(
     val taps = rememberUpdatedState(TaskTaps(layout, drawn, look, onTask, onTaskMenu))
 
     BasicTextField(
-        state = state,
+        state = field.state,
+        inputTransformation = field.input,
         modifier =
             modifier
                 .testTag(EDITOR_TAG)
@@ -171,27 +174,57 @@ internal fun NoteEditor(
  * The text field's state, kept the same as [value] both ways: what is typed
  * goes to [onValueChange], and a change made by the owner (a button, undo, a
  * task's box, a file read again) is put in the field.
- *
- * A value can come back from the owner after more was typed. The field does
- * not take it: it is one the field sent, not a change of the owner's.
  */
 @Composable
-private fun rememberEditorState(
+private fun rememberEditorField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
-): TextFieldState {
-    val state = remember { TextFieldState(value.text, value.selection) }
-    // What the field sent and the owner has not given back yet, oldest first.
-    val sent = remember { ArrayDeque<TextFieldValue>() }
-    val owner by rememberUpdatedState(value)
-    val change by rememberUpdatedState(onValueChange)
-    LaunchedEffect(value) {
+): EditorField {
+    val field = remember { EditorField(value) }
+    SideEffect { field.onValueChange = onValueChange }
+    LaunchedEffect(value) { field.receive(value) }
+    // A change the input transformation did not see, such as one the platform made.
+    LaunchedEffect(field) {
+        snapshotFlow { TextFieldValue(field.state.text.toString(), field.state.selection) }.collect(field::send)
+    }
+    return field
+}
+
+/**
+ * A text field's state and its owner's [TextFieldValue]. A user's edit goes
+ * to the owner as it is made ([input]), so the owner has it before the next
+ * frame. A value can come back from the owner after more was typed: it is
+ * one the field sent, and the field does not take it again.
+ */
+internal class EditorField(
+    value: TextFieldValue,
+) {
+    val state = TextFieldState(value.text, value.selection)
+    var onValueChange: (TextFieldValue) -> Unit = {}
+
+    /** The value the field and the owner last agreed on, or the field last sent. */
+    private var known = value
+
+    /** What the field sent and the owner has not given back yet, oldest first. */
+    private val sent = ArrayDeque<TextFieldValue>()
+
+    val input = InputTransformation { send(TextFieldValue(asCharSequence().toString(), selection)) }
+
+    fun send(next: TextFieldValue) {
+        if (next.sameAs(known)) return
+        known = next
+        sent.addLast(next)
+        onValueChange(next)
+    }
+
+    fun receive(value: TextFieldValue) {
         val echo = sent.indexOfFirst { it.sameAs(value) }
         if (echo >= 0) {
             repeat(echo + 1) { sent.removeFirst() }
-            return@LaunchedEffect
+            return
         }
         sent.clear()
+        known = value
         if (!state.text.contentEquals(value.text) || state.selection != value.selection) {
             state.edit {
                 replace(0, length, value.text)
@@ -199,15 +232,6 @@ private fun rememberEditorState(
             }
         }
     }
-    LaunchedEffect(state) {
-        snapshotFlow { TextFieldValue(state.text.toString(), state.selection, state.composition) }
-            .collect { next ->
-                if (next.sameAs(owner)) return@collect
-                sent.addLast(next)
-                change(next)
-            }
-    }
-    return state
 }
 
 private fun TextFieldValue.sameAs(other: TextFieldValue) = text == other.text && selection == other.selection
